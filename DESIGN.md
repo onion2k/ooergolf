@@ -89,7 +89,11 @@ and the first nine holes do without them. They come with a later course.
 
 This is the work of a new version of `artshape-physics`, from v0.3.0, made
 in that repo to that repo's own definition of done, and taken in here with a
-version bump. The game moves from v0.1.0 to it in one step.
+version bump. While it is made the game moves to v0.3.0, already
+released, for its floor heights, its bottom, its boxes and its belts, which
+the water, the raised green, the barrier, the windmill and the conveyor are
+built on; every new option in 0.4.0 defaults to what 0.3.0 does, so they
+carry over, and are retuned for 0.4.0's bounce when it comes.
 
 ## The course
 
