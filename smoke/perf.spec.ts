@@ -52,7 +52,7 @@ test('boots, draws and downloads within budget, and as it did before', async ({ 
   const bundle = bundleKb();
   await start(page, { seed: 11, paused: true });
   const boot = await page.evaluate(() => window.game!.bootMs);
-  // the standard view: the arena settled, seen from the look picture's camera
+  // the standard view: the course settled, seen from the look picture's camera
   const frame = await page.evaluate(async () => {
     const g = window.game!;
     g.step(180);

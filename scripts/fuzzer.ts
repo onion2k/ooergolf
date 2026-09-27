@@ -1,10 +1,9 @@
 /**
- * The game played by a monkey: the real game, without the picture, driven
- * at random and made to do at random everything a player can make happen —
- * driving about, stopping, lining up on a ball and shoving it in, saving and
- * loading —
- * and checked after every few frames for anything that must always hold and
- * does not (`invariants.ts`), and for anything thrown.
+ * The game played by a monkey: the real game, without the picture, made to
+ * do at random everything a player can make happen, and checked after every
+ * few frames for anything that must always hold and does not
+ * (`invariants.ts`), and for anything thrown. On an empty course a player
+ * can wait, and can reload, and that is all there is here yet.
  *
  * Only what a player could do. A monkey that did what no player can would
  * find bugs no player will. A new thing a player can do gets an action here.
@@ -12,7 +11,6 @@
  * From a seed, so a failure can be played again exactly: `npm run fuzz --
  * --seed N` does, and prints what was done before it went wrong.
  */
-import { FLOOR, HOLE } from '../src/arena';
 import { Game, type GameEvents } from '../src/game';
 import { checkInvariants } from '../src/invariants';
 import { Progress, memoryStore } from '../src/progress';
@@ -67,7 +65,6 @@ export function fuzz(seed: number, frames: number): FuzzResult {
   try {
     let store = memoryStore();
     let game = new Game(new Progress(store), events, { random: seeded(seed) });
-    let drive = { throttle: 0, steer: 0 };
     let busy = 0;
     const between = (a: number, b: number) => a + random() * (b - a);
     const did = (what: string) => {
@@ -77,61 +74,22 @@ export function fuzz(seed: number, frames: number): FuzzResult {
     /** Everything a player can make happen, each as often as it is weighted. */
     const actions: [number, () => void][] = [
       [
-        8,
+        4,
         () => {
-          drive = { throttle: random() < 0.8 ? 1 : -1, steer: between(-1, 1) };
-          busy = Math.floor(between(20, 120));
-          did('drive');
-        },
-      ],
-      [
-        2,
-        () => {
-          drive = { throttle: 0, steer: 0 };
-          busy = Math.floor(between(10, 60));
-          did('stop');
+          busy = Math.floor(between(10, 120));
+          did('wait');
         },
       ],
       [
         1,
         () => {
-          // a player can drive anywhere on the floor, so the monkey may simply be there
-          game.sled.x = between(FLOOR.minX + 6, FLOOR.maxX - 6);
-          game.sled.y = between(FLOOR.minY + 6, FLOOR.maxY - 6);
-          game.sled.yaw = between(0, Math.PI * 2);
-          game.sled.speed = 0;
-          did('teleport');
-        },
-      ],
-      [
-        2,
-        () => {
-          // lined up behind a ball from the hole and driving at it, as a player pushing one in does
-          const { world, sled } = game;
-          const live = [...Array(world.count).keys()].filter((i) => world.alive[i]);
-          if (!live.length) return;
-          const i = live[Math.floor(random() * live.length)];
-          const away = Math.hypot(world.x[i] - HOLE.x, world.y[i] - HOLE.y) || 1;
-          const ux = (world.x[i] - HOLE.x) / away,
-            uy = (world.y[i] - HOLE.y) / away;
-          sled.x = Math.max(FLOOR.minX + 6, Math.min(FLOOR.maxX - 6, world.x[i] + ux * 6));
-          sled.y = Math.max(FLOOR.minY + 6, Math.min(FLOOR.maxY - 6, world.y[i] + uy * 6));
-          sled.yaw = Math.atan2(-uy, -ux);
-          sled.speed = 0;
-          drive = { throttle: 1, steer: 0 };
-          busy = Math.floor(between(60, 240));
-          did('aim');
-        },
-      ],
-      [
-        1,
-        () => {
-          // saved, and loaded again into a new game as a reload would: what was banked must be kept
-          const bank = game.progress.bank;
+          // saved, and loaded again into a new game as a reload would: what was kept must come back as it went
           game.persist();
+          const kept = JSON.stringify(game.progress.save);
           store = memoryStore(store.json);
           game = new Game(new Progress(store), events, { random: seeded(seed + frame) });
-          if (game.progress.bank !== bank) throw new Error(`the bank was ${bank} and loaded as ${game.progress.bank}`);
+          const loaded = JSON.stringify(game.progress.save);
+          if (loaded !== kept) throw new Error(`the save was ${kept} and loaded as ${loaded}`);
           did('reload');
         },
       ],
@@ -147,7 +105,7 @@ export function fuzz(seed: number, frames: number): FuzzResult {
     for (frame = 1; frame <= frames; frame++) {
       if (busy > 0) busy--;
       else act();
-      game.step(DT, drive);
+      game.step(DT);
       if (frame % CHECK_EVERY === 0) {
         const problems = checkInvariants(game);
         if (problems.length) return fail(problems);

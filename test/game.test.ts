@@ -1,53 +1,47 @@
 import { describe, expect, it } from 'vitest';
-import { BALLS, HOLE } from '../src/arena';
+import { BALL, KIND_RADIUS } from '../src/arena';
 import { checkInvariants } from '../src/invariants';
-import { DT, newGame, settle, still } from './helpers';
+import { DT, newGame, settle } from './helpers';
 
 describe('the game', () => {
-  it('starts with its balls on the floor, and nothing that must hold broken', () => {
+  it('starts as an empty course: nothing on it, and nothing that must hold broken', () => {
+    const { game, told } = newGame();
+    expect(game.world.live).toBe(0);
+    settle(game);
+    expect(game.world.live).toBe(0);
+    expect(told).toEqual([]);
+    expect(checkInvariants(game)).toEqual([]);
+  });
+
+  it('has nothing of the stub left in it: no sled, and no bank in the save', () => {
     const { game } = newGame();
-    expect(game.world.live).toBe(BALLS);
-    settle(game);
-    expect(game.world.live).toBe(BALLS);
+    expect('sled' in game).toBe(false);
+    expect(game.progress.save).toEqual({});
+  });
+
+  it('keeps time a step at a time', () => {
+    const { game } = newGame();
+    for (let f = 0; f < 60; f++) game.step(DT);
+    expect(game.t).toBeCloseTo(1, 9);
+  });
+
+  it('holds a ball put on the course: it lands on the floor and stays there', () => {
+    const { game } = newGame(2);
+    const slot = game.world.spawn(BALL, 3, -4, 6);
+    expect(slot).toBeGreaterThanOrEqual(0);
+    settle(game, 300);
+    expect(game.world.live).toBe(1);
+    expect(game.world.x[slot]).toBeCloseTo(3, 0);
+    expect(game.world.y[slot]).toBeCloseTo(-4, 0);
+    expect(game.world.z[slot]).toBeCloseTo(KIND_RADIUS[BALL], 1);
     expect(checkInvariants(game)).toEqual([]);
   });
 
-  it('banks a ball down the hole, drops another, and tells of both', () => {
-    const { game, told } = newGame(2);
-    settle(game);
-    const slot = [...Array(game.world.count).keys()].find((i) => game.world.alive[i])!;
-    game.world.x[slot] = HOLE.x;
-    game.world.y[slot] = HOLE.y;
-    game.world.z[slot] = 2;
-    game.world.wake(slot);
-    settle(game, 180);
-    expect(game.progress.bank).toBe(1);
-    expect(game.progress.save.banked).toBe(1);
-    expect(told.some((t) => t.startsWith('banked'))).toBe(true);
-    expect(told.some((t) => t.startsWith('dropped'))).toBe(true);
-    expect(game.world.live, 'the floor keeps its balls').toBe(BALLS);
-    expect(checkInvariants(game)).toEqual([]);
-  });
-
-  it('writes the save when the bank changes, and not before', () => {
+  it('writes the save when asked, and not before', () => {
     const { game, store } = newGame(3);
     settle(game);
     expect(store.json).toBe(null);
-    game.progress.deposit(1);
-    game.step(DT, still);
-    expect(store.json).toBe(JSON.stringify({ bank: 1, banked: 1 }));
-  });
-
-  it('shoves a ball with the sled', () => {
-    const { game } = newGame(4);
-    settle(game);
-    const slot = [...Array(game.world.count).keys()].find((i) => game.world.alive[i])!;
-    Object.assign(game.sled, { x: -20, y: 0, yaw: 0, speed: 0 });
-    game.world.x[slot] = -12;
-    game.world.y[slot] = 0;
-    game.world.wake(slot);
-    for (let f = 0; f < 90; f++) game.step(DT, { throttle: 1, steer: 0 });
-    expect(game.world.x[slot]).toBeGreaterThan(-8);
-    expect(checkInvariants(game)).toEqual([]);
+    game.persist();
+    expect(store.json).toBe('{}');
   });
 });

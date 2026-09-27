@@ -1,7 +1,7 @@
 /**
  * A long game played through, watching the things that must not keep
- * growing: the bodies on the floor and the slots they sit in, the save, and
- * the heap.
+ * growing: the bodies on the course and the slots they sit in, the save,
+ * and the heap.
  *
  * A map that is added to and never emptied does not throw, break a rule, or
  * move any gate's figure. It shows up an hour into a game as a machine that
@@ -17,7 +17,6 @@
  * `WATCH` and a reading in `sizes`.
  */
 import { BODY_CAPACITY } from '../src/arena';
-import { Autopilot } from '../src/autopilot';
 import { Game } from '../src/game';
 import { Progress, memoryStore } from '../src/progress';
 import { seeded } from '../src/random';
@@ -103,9 +102,8 @@ export function leakRun({ seed, minutes }: LeakOptions): LeakRun {
   const samples: Record<string, number[]> = {};
   try {
     const game = new Game(new Progress(memoryStore()), {}, { random: seeded(seed) });
-    const pilot = new Autopilot(game);
     for (let minute = 0; minute < minutes; minute++) {
-      for (let f = 0; f < 3600; f++) pilot.step(DT);
+      for (let f = 0; f < 3600; f++) game.step(DT);
       for (const [key, n] of Object.entries(sizes(game))) (samples[key] ??= []).push(n);
     }
     return { seed, minutes, samples, problems: trouble(samples), seconds: (performance.now() - started) / 1000 };

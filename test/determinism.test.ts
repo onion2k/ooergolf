@@ -5,34 +5,37 @@
  */
 import { describe, expect, it } from 'vitest';
 import { hashGame, playTwice } from '../scripts/determinism';
+import { BALL } from '../src/arena';
 import { DT, newGame } from './helpers';
 
 describe('the same seed gives the same game', () => {
-  it('plays out the same, twice from a seed, all the way down to the last ball', () => {
+  it('plays out the same, twice from a seed', () => {
     const run = playTwice({ seed: 3, frames: 1200, every: 100 });
     expect(run.diverged, run.note).toBe(null);
     expect(run.checkpoints.length).toBe(12);
   });
 
   it('hashes what a game is, so anything moved shows', () => {
-    const drive = { throttle: 1, steer: 0.2 };
     const one = newGame(5).game;
     const two = newGame(5).game;
+    const slot = one.world.spawn(BALL, 2, 3, 4);
+    two.world.spawn(BALL, 2, 3, 4);
     for (let f = 0; f < 60; f++) {
-      one.step(DT, drive);
-      two.step(DT, drive);
+      one.step(DT);
+      two.step(DT);
     }
     const hash = hashGame(one);
     expect(hashGame(two)).toBe(hash);
-    // a ball nudged by a thousandth, the sled a shade round, a ball banked: all different games
-    one.world.x[0] += 0.001;
+    // a ball nudged by a thousandth, the clock a shade on, a ball more: all different games
+    const x = one.world.x[slot];
+    one.world.x[slot] += 0.001;
     expect(hashGame(one)).not.toBe(hash);
-    one.world.x[0] -= 0.001;
+    one.world.x[slot] = x;
     expect(hashGame(one)).toBe(hash);
-    one.sled.yaw += 1e-6;
+    one.t += 1e-9;
     expect(hashGame(one)).not.toBe(hash);
-    one.sled.yaw -= 1e-6;
-    one.progress.deposit(1);
+    one.t = two.t;
+    one.world.spawn(BALL, -2, -3, 4);
     expect(hashGame(one)).not.toBe(hash);
   });
 
@@ -42,9 +45,9 @@ describe('the same seed gives the same game', () => {
       seed: 4,
       frames: 400,
       every: 100,
-      // a second run that nudges a ball part way through: the check must catch it, and say when
+      // a second run with a ball dropped in part way through: the check must catch it, and say when
       meddle: (game, pass) => {
-        if (pass === 1 && ++frame === 250) game.world.x[0] += 0.01;
+        if (pass === 1 && ++frame === 250) game.world.spawn(BALL, 0, 0, 4);
       },
     });
     expect(run.diverged).toBe(300);

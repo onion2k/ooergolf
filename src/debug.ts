@@ -12,7 +12,7 @@
  * The types are shared with the smoke tests, so a test that calls something
  * that is not here does not compile.
  */
-import { BALLS, FLOOR, HOLE, KIND_NAME } from './arena';
+import { FLOOR, KIND_NAME } from './arena';
 import type { Game } from './game';
 import { checkInvariants } from './invariants';
 import { seeded } from './random';
@@ -28,14 +28,11 @@ export interface GameState {
   t: number;
   frame: number;
   paused: boolean;
-  bank: number;
-  banked: number;
-  /** How many bodies are on the floor. */
+  /** How many bodies are on the course. */
   live: number;
-  sled: { x: number; y: number; yaw: number; speed: number };
 }
 
-/** A body on the floor. */
+/** A body on the course. */
 export interface Body {
   slot: number;
   kind: string;
@@ -47,9 +44,7 @@ export interface Body {
 
 /** Where things are, for setting a scene without importing the game's source. */
 export interface Content {
-  hole: { x: number; y: number; radius: number };
   floor: { minX: number; minY: number; maxX: number; maxY: number };
-  balls: number;
 }
 
 export interface GameApi {
@@ -69,19 +64,13 @@ export interface GameApi {
   state(): GameState;
   bodies(kind?: string): Body[];
   content(): Content;
-  /** What has happened since this was last asked, a line each: "banked 12.0,4.0". */
+  /** What has happened since this was last asked, a line each. */
   events(): string[];
   /** The rules that must always hold, broken; empty when all is well. */
   invariants(): string[];
 
-  /** Drive as if the controls were held so, until `release`. */
-  drive(throttle: number, steer: number): void;
-  release(): void;
-  /** The sled put at a point facing `yaw`, stopped. */
-  teleport(x: number, y: number, yaw?: number): void;
   /** A body moved to a point, still, and woken. */
   place(slot: number, x: number, y: number, z?: number): void;
-  deposit(value: number): void;
   /** The save written now, and what it is. */
   save(): string;
 
@@ -91,7 +80,7 @@ export interface GameApi {
   measureFrame(): Promise<number>;
 }
 
-/** What the page gives the API that is not the game's: time, the controls, the camera and the renderer. */
+/** What the page gives the API that is not the game's: time, the camera and the renderer. */
 export interface DebugHost {
   game: Game;
   ready(): boolean;
@@ -102,7 +91,6 @@ export interface DebugHost {
   simulate(dt: number): void;
   draw(dt: number): void;
   frame(): number;
-  setDrive(drive: { throttle: number; steer: number } | null): void;
   look(x: number, y: number, view: { azimuth?: number; polar?: number; radius?: number }): void;
   measureFrame(): Promise<number>;
   events: string[];
@@ -110,7 +98,7 @@ export interface DebugHost {
 
 export function createApi(host: DebugHost): GameApi {
   const { game } = host;
-  const { world, progress, sled } = game;
+  const { world, progress } = game;
   return {
     version: 1,
     get ready() {
@@ -134,10 +122,7 @@ export function createApi(host: DebugHost): GameApi {
         t: game.t,
         frame: host.frame(),
         paused: host.paused(),
-        bank: progress.save.bank,
-        banked: progress.save.banked,
         live: world.live,
-        sled: { x: sled.x, y: sled.y, yaw: sled.yaw, speed: sled.speed },
       };
     },
     bodies(kind) {
@@ -150,18 +135,12 @@ export function createApi(host: DebugHost): GameApi {
       }
       return out;
     },
-    content: () => ({ hole: { x: HOLE.x, y: HOLE.y, radius: HOLE.radius }, floor: { ...FLOOR }, balls: BALLS }),
+    content: () => ({ floor: { ...FLOOR } }),
     events() {
       return host.events.splice(0);
     },
     invariants: () => checkInvariants(game),
 
-    drive: (throttle, steer) => host.setDrive({ throttle, steer }),
-    release: () => host.setDrive(null),
-    teleport(x, y, yaw) {
-      Object.assign(sled, { x, y, speed: 0, yawRate: 0 });
-      if (yaw !== undefined) sled.yaw = yaw;
-    },
     place(slot, x, y, z) {
       if (!world.alive[slot]) return;
       world.x[slot] = x;
@@ -170,7 +149,6 @@ export function createApi(host: DebugHost): GameApi {
       world.vx[slot] = world.vy[slot] = world.vz[slot] = 0;
       world.wake(slot);
     },
-    deposit: (value) => progress.deposit(value),
     save() {
       game.persist();
       return JSON.stringify(progress.save);

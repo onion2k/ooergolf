@@ -7,6 +7,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { WATCH, grew, sizes, trouble } from '../scripts/leaks';
+import { BALL } from '../src/arena';
 import { newGame } from './helpers';
 
 describe('what must stay bounded', () => {
@@ -18,8 +19,11 @@ describe('what must stay bounded', () => {
       expect(Number.isFinite(now[key])).toBe(true);
       expect(Object.keys(WATCH), `a ceiling for ${key}`).toContain(key);
     }
-    game.progress.deposit(1000);
-    expect(sizes(game)['save bytes']).toBeGreaterThan(now['save bytes']);
+    expect(now.bodies).toBe(0);
+    expect(now['save bytes']).toBe(2);
+    game.world.spawn(BALL, 0, 0, 2);
+    expect(sizes(game).bodies).toBe(1);
+    expect(sizes(game).slots).toBe(1);
   });
 
   it('knows a size that grows from one that wanders', () => {

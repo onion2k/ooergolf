@@ -11,7 +11,6 @@
       "Bash(npm run fuzz:*)",
       "Bash(npm run determinism:*)",
       "Bash(npm run leaks:*)",
-      "Bash(npm run pace:*)",
       "Bash(npm run bench:*)",
       "Bash(npm run smoke:*)",
       "Bash(npm run look:*)",

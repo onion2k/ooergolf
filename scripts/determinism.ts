@@ -12,10 +12,10 @@
  * that is not the same twice — and none of that shows as a failure anywhere
  * else, only as figures that wander.
  *
- * The autopilot drives, so the two runs are played the same way without a
- * recording.
+ * Nothing plays the game yet, so the two runs are the course left to
+ * itself. Whatever comes to play it for the gates drives both runs here, so
+ * they are played the same way without a recording.
  */
-import { Autopilot } from '../src/autopilot';
 import { Game } from '../src/game';
 import { Progress, memoryStore } from '../src/progress';
 import { seeded } from '../src/random';
@@ -44,11 +44,11 @@ export interface TwiceResult {
 /**
  * Everything the game is at this moment, as one number in hex: where every
  * body is and how fast it is going, what kind it is and whether it is asleep,
- * where the sled is, and the save. Two games with the same hash are the same
- * game, down to the last bit of every float.
+ * the time, and the save. Two games with the same hash are the same game,
+ * down to the last bit of every float.
  */
 export function hashGame(game: Game): string {
-  const { world, sled } = game;
+  const { world } = game;
   // FNV-1a over the bits, which is enough to catch a ball a thousandth out of place
   let h = 0x811c9dc5;
   const bits = new DataView(new ArrayBuffer(8));
@@ -73,10 +73,6 @@ export function hashGame(game: Game): string {
     eat(world.vz[i]);
     eat(world.asleep[i]);
   }
-  eat(sled.x);
-  eat(sled.y);
-  eat(sled.yaw);
-  eat(sled.speed);
   eat(game.t);
   for (const c of JSON.stringify(game.progress.save)) h = Math.imul(h ^ c.charCodeAt(0), 0x01000193);
   return (h >>> 0).toString(16).padStart(8, '0');
@@ -87,10 +83,9 @@ export function playTwice({ seed, frames, every = 300, meddle }: TwiceOptions): 
   const passes: string[][] = [];
   for (let pass = 0; pass < 2; pass++) {
     const game = new Game(new Progress(memoryStore()), {}, { random: seeded(seed) });
-    const pilot = new Autopilot(game);
     const hashes: string[] = [];
     for (let f = 1; f <= frames; f++) {
-      pilot.step(DT);
+      game.step(DT);
       meddle?.(game, pass);
       if (f % every === 0) hashes.push(hashGame(game));
     }

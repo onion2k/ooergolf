@@ -28,7 +28,7 @@ async function hideStats(page: Page) {
 }
 
 test.describe('what it looks like', () => {
-  test('the arena, from the start', async ({ page }) => {
+  test('the course, from the start', async ({ page }) => {
     const problems = watch(page);
     await start(page, { seed: 11, paused: true });
     await page.evaluate(() => {
@@ -38,7 +38,7 @@ test.describe('what it looks like', () => {
       g.step(1);
     });
     await hideStats(page);
-    await expect(page.locator('#view')).toHaveScreenshot('arena.png', TOLERANCE);
+    await expect(page.locator('#view')).toHaveScreenshot('course.png', TOLERANCE);
     expect(problems).toEqual([]);
   });
 });

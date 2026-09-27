@@ -4,9 +4,10 @@
  *   npm run bench              measure, and fail if any scenario has got slower by more than the tolerance
  *   npm run bench -- --update  write what it takes now as the new baseline
  *
- * Two scenarios: the floor at rest, which is what most frames are; and the
- * autopilot pushing balls in, which is what a busy frame is. A game adds a
- * scenario for each way its frames get costly.
+ * Two scenarios: the course at rest with nothing on it, which is what the
+ * game is now; and the course full of balls falling onto it, which is the
+ * most the physics can be asked for. A game adds a scenario for each way its
+ * frames get costly.
  *
  * A time on one machine is not a time on another, or on the same one with
  * something else running. So each scenario is run several times, fresh, in a
@@ -18,7 +19,7 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
-import { Autopilot } from '../src/autopilot';
+import { BALL, BODY_CAPACITY, FLOOR } from '../src/arena';
 import { Game } from '../src/game';
 import { Progress, memoryStore } from '../src/progress';
 import { seeded } from '../src/random';
@@ -56,26 +57,40 @@ interface Scenario {
 /** A game from a seed, settled. */
 function settled(seed: number): Game {
   const game = new Game(new Progress(memoryStore()), {}, { random: seeded(seed) });
-  for (let f = 0; f < 180; f++) game.step(DT, { throttle: 0, steer: 0 });
+  for (let f = 0; f < 180; f++) game.step(DT);
+  return game;
+}
+
+/** A game with as many balls as the world holds, dropped from above all over the floor, from the game's own chance. */
+function full(seed: number): Game {
+  const game = new Game(new Progress(memoryStore()), {}, { random: seeded(seed) });
+  const margin = 4;
+  for (let k = 0; k < BODY_CAPACITY; k++)
+    game.world.spawn(
+      BALL,
+      FLOOR.minX + margin + game.random() * (FLOOR.maxX - FLOOR.minX - margin * 2),
+      FLOOR.minY + margin + game.random() * (FLOOR.maxY - FLOOR.minY - margin * 2),
+      4 + game.random() * 8,
+    );
   return game;
 }
 
 const SCENARIOS: Scenario[] = [
   {
-    name: 'the floor at rest',
+    name: 'the course at rest',
     frames: 600,
     setup: () => {
       const game = settled(1);
-      return { game, frame: () => game.step(DT, { throttle: 0, steer: 0 }) };
+      return { game, frame: () => game.step(DT) };
     },
   },
   {
-    name: 'the autopilot pushing balls in',
-    frames: 600,
+    name: 'the course full of falling balls',
+    // as long as they are falling and landing: by a hundred frames every one is asleep, and a frame costs nothing again
+    frames: 45,
     setup: () => {
-      const game = settled(1);
-      const pilot = new Autopilot(game);
-      return { game, frame: () => pilot.step(DT) };
+      const game = full(1);
+      return { game, frame: () => game.step(DT) };
     },
   },
 ];

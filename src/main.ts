@@ -1,6 +1,6 @@
 /**
  * The page: the game drawn, and what the player does to it. Everything that
- * happens in the arena happens in `game.ts`; this turns its events into
+ * happens on the course happens in `game.ts`; this turns its events into
  * words on the screen and draws the frame, on the game path of
  * artshape-render. There is no game logic here.
  */
@@ -9,11 +9,9 @@ import { Orbit } from 'artshape-render/gpu/camera';
 import { bakeEnvironment } from 'artshape-render/render/env';
 import { LightPool } from 'artshape-render/game/lights';
 import { GameRenderer } from 'artshape-render/game/renderer';
-import { HOLE } from './arena';
 import { createApi } from './debug';
 import { frameCost } from './frame-cost';
 import { Game, type GameEvents } from './game';
-import { Input } from './input';
 import { Progress } from './progress';
 import { seeded } from './random';
 import { ARENA_BOX, Scene } from './scene';
@@ -29,8 +27,6 @@ const EVENTS_KEPT = 500;
 const canvas = document.getElementById('view') as HTMLCanvasElement;
 const boot = document.getElementById('boot')!;
 const bootMsg = document.getElementById('bootMsg')!;
-const bankPanel = document.getElementById('bank')!;
-const bankText = bankPanel.querySelector('b')!;
 const stats = document.getElementById('stats')!;
 const help = document.getElementById('help')!;
 
@@ -64,29 +60,33 @@ async function main() {
 
   const query = new URLSearchParams(location.search);
   const progress = new Progress();
-  const input = new Input();
   /** What has happened, a line each, for the test API. */
   const eventLog: string[] = [];
   const log = (line: string) => {
     eventLog.push(line);
     if (eventLog.length > EVENTS_KEPT) eventLog.splice(0, eventLog.length - EVENTS_KEPT);
   };
-  const showBank = () => {
-    bankText.textContent = String(progress.save.bank);
-  };
-  const events: GameEvents = {
-    banked(_kind, x, y) {
-      log(`banked ${x.toFixed(1)},${y.toFixed(1)}`);
-      showBank();
+  // Every event the game tells of is noted by its name and its numbers, so a
+  // new one reaches the test API without being wired here. What the player
+  // sees of an event is added beside this, by name, as each comes.
+  const events: GameEvents = new Proxy(
+    {},
+    {
+      get:
+        (_, name: string) =>
+        (...args: unknown[]) =>
+          log(
+            `${name} ${args
+              .filter((a) => typeof a === 'number')
+              .map((a) => a.toFixed(1))
+              .join(',')}`.trim(),
+          ),
     },
-    dropped(_kind, x, y) {
-      log(`dropped ${x.toFixed(1)},${y.toFixed(1)}`);
-    },
-  };
-  // ?seed=N makes chance the same from before the first ball drops, for a test that wants the same arena every run
+  );
+  // ?seed=N makes chance the same from before the game is built, for a test that wants the same course every run
   const seed = query.get('seed');
   const game = new Game(progress, events, seed !== null ? { random: seeded(+seed) } : {});
-  const { world, sled } = game;
+  const { world } = game;
 
   // ---- the scene ----
 
@@ -94,7 +94,7 @@ async function main() {
   renderer.setStatic(scene.static(world.solid));
   renderer.setDynamic(scene.dynamic());
   const lights = new LightPool(LIGHT_CAPACITY);
-  lights.add({ position: [HOLE.x, HOLE.y, 14], radius: 40, colour: [1, 0.85, 0.6], intensity: 30 });
+  lights.add({ position: [0, 0, 14], radius: 40, colour: [1, 0.85, 0.6], intensity: 30 });
   renderer.setLights(lights);
 
   const cam = renderer.camera;
@@ -127,9 +127,7 @@ async function main() {
   resize();
 
   function upload() {
-    const balls = scene.write(world, sled);
-    renderer.move(0, scene.balls, balls);
-    renderer.move(1, scene.sled, 1);
+    renderer.move(0, scene.balls, scene.write(world));
   }
 
   /** What a frame of the scene as it stands costs, drawn to a texture of our own rather than the canvas, so no wait to be shown is counted. */
@@ -154,10 +152,8 @@ async function main() {
 
   await renderer.ready;
   boot.classList.add('gone');
-  bankPanel.hidden = false;
   stats.hidden = false;
   help.hidden = false;
-  showBank();
 
   // ---- each frame ----
 
@@ -165,7 +161,7 @@ async function main() {
   let smoothed = 0;
   function simulate(dt: number) {
     frames++;
-    game.step(dt, input.read());
+    game.step(dt);
   }
   function draw(dt: number) {
     orbit.update();
@@ -174,13 +170,13 @@ async function main() {
     const t = performance.now();
     renderer.frame(ctx.context.getCurrentTexture().createView(), 'redraw', dt);
     smoothed += (performance.now() - t - smoothed) * 0.05;
-    if (frames % 30 === 0) stats.textContent = `${smoothed.toFixed(1)} ms · ${world.live} on the floor`;
+    if (frames % 30 === 0) stats.textContent = `${smoothed.toFixed(1)} ms · ${world.live} on the course`;
   }
 
   // ---- the test API, and the frame loop ----
 
   // ?paused=1 starts the game stopped where it was built, so a test sees the
-  // same arena every run: no frame of its own has run, and every one after is
+  // same course every run: no frame of its own has run, and every one after is
   // the test's, of a length it chose
   let paused = query.has('paused');
   let ready = false;
@@ -196,9 +192,6 @@ async function main() {
     simulate,
     draw,
     frame: () => frames,
-    setDrive: (d) => {
-      input.override = d;
-    },
     look(x, y, view) {
       cam.target = [x, y, 0];
       orbit.setSpherical(view);

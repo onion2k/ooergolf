@@ -2,14 +2,14 @@
  * What must always be true of the game, however it has been played: the
  * rules that, broken, are a bug whatever the feature was.
  *
- * Every body is a number and out of the rock. The floor has its balls, no
- * more and no fewer. The bank is a whole number that only ever grew. The
- * sled is on the floor.
+ * Every body is of a kind the game knows, is a number, and is out of the
+ * rock; and the world's count of them is right. That is all there is to
+ * hold of an empty course: each thing the golf adds brings its rule here.
  *
  * Checked by the fuzzer after everything it does, by the test API on asking,
  * and by the unit tests. Each broken rule is a line saying what and where.
  */
-import { BALLS, FLOOR, KINDS, KIND_NAME, onFloor } from './arena';
+import { KINDS, KIND_NAME, onFloor } from './arena';
 import type { Game } from './game';
 
 /** How many broken rules of one sort are reported before the rest are only counted. */
@@ -17,7 +17,7 @@ const EACH = 3;
 
 export function checkInvariants(game: Game): string[] {
   const out: string[] = [];
-  const { world, sled, progress } = game;
+  const { world } = game;
   const report = (sort: string, found: string[]) => {
     if (!found.length) return;
     out.push(...found.slice(0, EACH).map((f) => `${sort}: ${f}`));
@@ -43,15 +43,6 @@ export function checkInvariants(game: Game): string[] {
   report('not a number', notNumbers);
   report('in the rock', buried);
   if (live !== world.live) out.push(`the world counts ${world.live} live, and has ${live}`);
-  if (live !== BALLS) out.push(`the floor has ${live} balls, not ${BALLS}`);
-
-  const { bank, banked } = progress.save;
-  if (!Number.isInteger(bank) || bank < 0) out.push(`the bank is ${bank}`);
-  if (!Number.isInteger(banked) || banked < bank) out.push(`banked ${banked} in all, with ${bank} in the bank`);
-
-  if (![sled.x, sled.y, sled.yaw, sled.speed].every(Number.isFinite))
-    out.push(`the sled is at ${sled.x},${sled.y} facing ${sled.yaw} at ${sled.speed}`);
-  else if (sled.x < FLOOR.minX || sled.x > FLOOR.maxX || sled.y < FLOOR.minY || sled.y > FLOOR.maxY)
-    out.push(`the sled is off the floor at ${sled.x.toFixed(1)},${sled.y.toFixed(1)}`);
+  if (!Number.isFinite(game.t) || game.t < 0) out.push(`the time is ${game.t}`);
   return out;
 }

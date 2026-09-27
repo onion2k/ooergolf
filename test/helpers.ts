@@ -4,7 +4,6 @@ import { Progress, memoryStore } from '../src/progress';
 import { seeded } from '../src/random';
 
 export const DT = 1 / 60;
-export const still = { throttle: 0, steer: 0 };
 
 export function newGame(seed = 1, json: string | null = null) {
   const store = memoryStore(json);
@@ -22,7 +21,7 @@ export function newGame(seed = 1, json: string | null = null) {
   return { game, store, told };
 }
 
-/** Play `frames` frames still. */
+/** Play `frames` frames. */
 export function settle(game: Game, frames = 120) {
-  for (let f = 0; f < frames; f++) game.step(DT, still);
+  for (let f = 0; f < frames; f++) game.step(DT);
 }

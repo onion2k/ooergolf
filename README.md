@@ -13,13 +13,11 @@ fast, draws fast and has no bugs.
 
 ## How it is played
 
-Not yet as golf. What is here is the template's stub, which stays until the
-first features replace it: a sled on a square floor walled in by rock, a
-dozen balls, and a hole in the middle. Drive with **W A S D** or the arrows
-and shove a ball into the hole to bank it; another drops to take its place.
-Drag to orbit the camera, wheel to zoom. The bank is saved in the browser.
+Not yet at all. The template's stub game has been taken out, and what is
+here is an empty course: a square floor walled in by rock, with nothing on
+it. Drag to orbit the camera, wheel to zoom.
 
-The game it gives way to: look down on the hole, drag back from the ball to
+The game that goes in: look down on the hole, drag back from the ball to
 aim and set the power, release to strike, and count the strokes until the
 ball drops in the cup.
 
@@ -42,13 +40,13 @@ and dear to retrofit:
 - **A file of always-true rules**, `src/invariants.ts`, checked by the
   fuzzer after everything it does.
 
-And every gate:
+And every gate, but for the pace gate, which comes back when there is
+something to play:
 
     npm run check:quick    formatting, types, lint, unit tests (the pre-commit hook)
     npm run fuzz           a monkey plays it, and the rules are checked
     npm run determinism    the same seed played twice, hashed
     npm run leaks          a long game, watching what must stay bounded
-    npm run pace:check     how it plays, held to a baseline both ways
     npm run bench          what the physics costs a frame, held to a baseline
     npm run perf           boot time, a frame's cost and the download, held to a budget and a baseline
     npm run smoke          the real thing in headless Chromium on the GPU
@@ -68,12 +66,10 @@ fixed, and no baseline is moved to make it green.
     src/main.ts        the page: events into words, the frame drawn
     src/debug.ts       window.game, the test API
     src/invariants.ts  what must always hold
-    src/autopilot.ts   the game played by itself, for the gates
-    src/arena.ts       content: the floor, the hole, the balls
+    src/arena.ts       content: the floor, the rock, the kinds of body
     src/progress.ts    the save, and where it is kept
     src/physics.ts     the game's side of artshape-physics
-    src/scene.ts       the arena as it is drawn
-    src/sled.ts        the player's machine
+    src/scene.ts       the course as it is drawn
     scripts/           the gates, each with its baseline beside it
     test/              unit tests, and a corpus of every save shape
     smoke/             Playwright: boots, drives, plays through, looks right

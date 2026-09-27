@@ -6,9 +6,10 @@ Vite, and WebGPU through
 [artshape-render](https://github.com/onion2k/artshape-render), with the
 physics from [artshape-physics](https://github.com/onion2k/artshape-physics).
 The README says what the game is; this file says how it is made. The house
-rules in `~/.claude/CLAUDE.md` apply too. The game in `src/` is still the
-template's stub, and what this file says of the sled, the balls and the
-arena is true of the stub until a feature replaces it.
+rules in `~/.claude/CLAUDE.md` apply too. The template's stub game has been
+taken out: what is in `src/` is an empty course, a floor walled in by rock
+with nothing on it and nothing to do, and every gate but the pace gate
+wired to it. The golf goes in a feature at a time from there.
 
 ## The factory
 
@@ -39,50 +40,78 @@ The three properties, and what holds each:
 
 Numbers, held by gates, on this machine at 1280×800:
 
-| Property                                               | Budget                         | Held by      |
-| ------------------------------------------------------ | ------------------------------ | ------------ |
-| Boot, page start to the frame loop running             | 3000 ms                        | `perf`       |
-| Download, scripts and styles gzipped                   | 400 kB                         | `perf`       |
-| A frame drawn, lower quartile at the standard view     | 8 ms                           | `perf`       |
-| The physics, a frame, against the reference arithmetic | baseline ± 20%                 | `bench`      |
-| Pace, the autopilot's minutes to bank ten balls        | baseline ± 20%                 | `pace:check` |
-| Anything kept: bodies, slots, save bytes, heap         | ceilings in `scripts/leaks.ts` | `leaks`      |
+| Property                                               | Budget                         | Held by |
+| ------------------------------------------------------ | ------------------------------ | ------- |
+| Boot, page start to the frame loop running             | 3000 ms                        | `perf`  |
+| Download, scripts and styles gzipped                   | 400 kB                         | `perf`  |
+| A frame drawn, lower quartile at the standard view     | 8 ms                           | `perf`  |
+| The physics, a frame, against the reference arithmetic | baseline ± 20%                 | `bench` |
+| Anything kept: bodies, slots, save bytes, heap         | ceilings in `scripts/leaks.ts` | `leaks` |
 
 A budget is what the game may cost at all; a baseline is what it cost at
 the last commit, held both ways, so a step toward a budget is noticed as
 much as a step over it. The perf tolerances are the measured wobble of a
 headless boot and a GPU frame, and say so in the file.
 
+There is no pace gate: it went with the stub, there being nothing to play
+and so no pace to hold. It comes back with the first thing that can be
+played, as a figure in the game's own terms (strokes to hole out, say),
+played by an autopilot of its own. The shape to copy is in the template and
+in this repo's first commit: `src/autopilot.ts`, `scripts/pace.ts`,
+`scripts/pace-check.ts` and their tests, and `pace:check` in `check`.
+
+## What the gates hold now
+
+An empty course gives a gate little to hold, and a gate that holds little
+looks like one that holds a lot. What each holds today, and what the first
+features must hand it:
+
+- **Unit tests, smoke, look, perf:** the real thing, at the size of an empty
+  course. They grow as any feature's tests do.
+- **Fuzz:** the monkey can wait and reload, and no more. Each thing a player
+  can do is an action in `scripts/fuzzer.ts`.
+- **Invariants:** bodies are of a kind, are numbers and are out of the rock,
+  the world's count is right, and the time is a time. No body exists until
+  a feature makes one, so only the tests, which spawn a ball, exercise the
+  first three.
+- **Determinism:** the course left to itself, twice. It will catch chance
+  taken from outside the seed when the game is built, and nothing in play
+  until something plays.
+- **Leaks:** ten minutes of nothing. The sizes and ceilings are right, and
+  nothing yet grows to test them.
+- **Bench:** the course at rest, which costs next to nothing, and the course
+  full of falling balls, which is the physics at `BODY_CAPACITY`. A frame
+  of either is far under the gate's 0.05 ms of slack, so the gate cannot
+  fail until the physics costs several times what it does.
+
 ## Commands
 
     npm run dev            the game at http://localhost:5200
     npm run check:quick    formatting, types, lint, unit tests (the pre-commit hook; ~10 s)
-    npm run check          all of it: check:quick, fuzz, determinism, leaks, pace, bench, smoke with perf and look (~20 s)
+    npm run check          all of it: check:quick, fuzz, determinism, leaks, bench, smoke with perf and look (~20 s)
     npm test               unit tests (Vitest, test/)
     npm run fuzz           the game played at random, rules checked; -- --seed N plays one failure again
     npm run determinism    the same seed played twice, hashed, to catch chance not from the seed
     npm run leaks          an hour of play, watching what must stay bounded (10 min of it in check)
-    npm run pace           the autopilot's pace, seed by seed; pace:check holds it to its baseline
     npm run bench          the physics' frame time held to scripts/bench-baseline.json
     npm run perf           boot, frame and download held to smoke/perf-baseline.json and the budget
     npm run smoke          the game in headless Chromium on the real GPU (Playwright, smoke/)
     npm run look           the scenes held to the pictures in smoke/screens
 
-`--update` on `pace:check` or `bench`, `npm run perf:update` and `npm run
-look:update` write a baseline again. Only through `/gate-moved`, only for a
+`--update` on `bench`, `npm run perf:update` and `npm run look:update`
+write a baseline again. Only through `/gate-moved`, only for a
 change meant to move it, and the commit says why. Look at every picture.
 
 ## How the code is laid out
 
-- `src/game.ts` is the game without the picture: everything that happens in
-  the arena, a step at a time. It tells what happened through `GameEvents`,
+- `src/game.ts` is the game without the picture: everything that happens on
+  the course, a step at a time. It tells what happened through `GameEvents`,
   and knows nothing of the renderer or the page.
 - `src/main.ts` is the page. It turns those events into words on the screen
   and draws the frame. There is no game logic here.
 - `src/debug.ts` is `window.game`, the test API. `src/invariants.ts` lists
-  the rules that must always hold. `src/autopilot.ts` plays the game by
-  itself, for the gates.
-- Content (the floor, the hole, the balls) lives in `arena.ts`. The save
+  the rules that must always hold.
+- Content (the floor, the rock, the kinds of body) lives in `arena.ts`. The save
   lives in `progress.ts`. Chance comes from `random.ts`, handed in.
 - `src/physics.ts` is the game's side of artshape-physics, and nothing else
   imports the package directly. A change a package needs goes in that repo,
@@ -97,29 +126,43 @@ before anything is written; **/commit** commits in the house style.
 
 ## Model features
 
-What to copy the shape of, when building something new:
+There are none of the game's own yet. Until the first lands, the shape to
+copy is what is left of the template's, and the template itself in
+`~/projects/artshape-game-template` for what was taken out:
 
-- **In the arena:** the ball and the hole. The ball is a body kind in
-  `arena.ts`, drawn by `scene.ts`, banked by `game.ts`, counted by
-  `invariants.ts`, read by `debug.ts`, and pictured in `smoke/look.spec.ts`.
-  These are the stub's, left until the first feature lands: the golf ball
-  and the first obstacle take their place here once they exist.
-- **Tools:** the fuzzer (`scripts/fuzzer.ts`) and the pace gate
-  (`scripts/pace.ts`). Each has unit tests of its own working parts.
+- **On the course:** the ball, the one body kind. It is a radius and a name
+  in `arena.ts`, a mesh and a pool in `scene.ts`, held by `invariants.ts`
+  and read by `debug.ts`'s `bodies`. Nothing spawns one yet. The first
+  feature a player can see replaces this entry.
+- **Tools:** the fuzzer (`scripts/fuzzer.ts`) and the bench
+  (`scripts/bench.ts`). The fuzzer has unit tests of its own working parts.
 - **Test helpers:** `newGame(seed)` in `test/helpers.ts`, and `memoryStore`
   in `src/progress.ts` for a save that is not the player's.
 
-## Replacing the stub
+## The test API
 
-The stub gives way one feature at a time, through `/feature`, every gate
-green at each step. `arena.ts` is the content and usually goes first; the
-tile grid, the rock and the hole are the physics package's terms and can
-stay. The ball is the one body kind: a new kind is a radius and a name in
-the content, a mesh and a group in `scene.ts`, and a line in the invariants.
-The sled is the player's machine and goes last, since the autopilot, the
-fuzzer's `aim` and the smoke tests all drive it. When a thing a gate holds
-goes, the gate is handed its replacement in the same change: a gate that
-holds nothing is worse than none, because it looks like it does.
+`window.game`, in `src/debug.ts`, typed, and the smoke tests compile against
+it. Time: `pause`, `resume`, `step(frames)`, `seed(n)`, and `?seed=N` and
+`?paused=1` on the page. Reading: `state`, `bodies`, `content`, `events`,
+`invariants`. Setting a scene: `place` for a body that exists, `save`, and
+`start(page, { save })` in `smoke/game.ts` for a save that is not the
+player's. Looking: `look` and `measureFrame`. There is nothing to drive
+yet: the shot, when it comes, gets its calls here.
+
+## What is not there yet
+
+Each of these is the first feature's to bring, with every gate green at
+each step, and a gate handed what it needs in the same change:
+
+- The player's ball, and somewhere for it to start.
+- The shot: the aim and the power, and the input that sets them.
+- The cup, and holing out. `makeWorld` in `physics.ts` takes no holes now.
+- Events. `GameEvents` is empty; the page notes every event by name for the
+  test API, and shows the player nothing of any.
+- Anything saved. `Save` is empty and `Progress` reads no field; the first
+  field is read in its constructor, with a default, and a save in the new
+  shape goes in `test/saves/`.
+- The pace gate and its autopilot.
 
 ## Rules for the code
 
@@ -156,17 +199,15 @@ a picture in `smoke/look.spec.ts`. `npm run check` green, and
 
 ## Edge-case checklist
 
-For anything new in the arena, check what it does:
+For anything new on the course, check what it does:
 
-- **the hole:** pushed down it
-- **the sled:** shoved by it, driven over, pinned against the rock
 - **save:** saved, reloaded, and loaded from an old save without the field
 - **rock:** against the wall and in the corners; never left in rock
 - **scale:** many at once, at capacity (`BODY_CAPACITY`); and what it costs
   a frame at that many
 - **phone:** narrow screen, and a slower GPU: which rung it steps down to
 
-And the game's own, for anything new on a hole. These name things the stub
+And the game's own, for anything new on a hole. These name things the game
 does not have yet; each applies from the feature that brings it:
 
 - **the ball in flight:** struck by it, struck into it at full power, and
