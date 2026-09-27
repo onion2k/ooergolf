@@ -28,7 +28,7 @@ export interface HoleDef {
  * decides how fast a ball can be going and still drop, and was chosen by
  * measuring that: see `test/cup.test.ts`.
  */
-export const CUP = { radius: 1.6, depth: 6 };
+export const CUP = { radius: 1.45, depth: 6 };
 
 export const COURSE: readonly HoleDef[] = [
   {

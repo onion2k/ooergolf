@@ -107,7 +107,7 @@ today, and what the next features must hand it:
     npm run bench          the physics' frame time held to scripts/bench-baseline.json
     npm run perf           boot, frame and download held to smoke/perf-baseline.json and the budget
     npm run smoke          the game in headless Chromium on the real GPU (Playwright, smoke/)
-    npm run look           the scenes held to the pictures in smoke/screens
+    npm run look           the scenes, and the models' showcase, held to the pictures in smoke/screens
 
 `--update` on `pace:check` or `bench`, `npm run perf:update` and `npm run
 look:update` write a baseline again. `look:update` leaves a picture that is
@@ -130,8 +130,21 @@ change meant to move it, and the commit says why. Look at every picture.
   camera is. `src/quality.ts` is the ladder the picture steps down on a slow
   machine, and the governor that chooses the rung from the time between
   frames. All are arithmetic, tested without a page.
-- `src/scene.ts` is the course as it is drawn, and its palette. The look is
-  toon daylight on artshape-render v0.18.0, set up at the top of `main.ts`.
+- `src/scene.ts` is a hole as it is drawn: the grass, the rail, the cup and
+  flag, the tee's markers and the scenery, from the models. Each hole stands
+  on the rough as a raised green: the rough lies `ROUGH_DEPTH` below the
+  grass, under the bottom of the cup, so the cup is seen into, and the rail
+  comes down to meet it. The look is toon daylight on artshape-render
+  v0.18.0, in `src/look.ts`, shared by the game and the showcase.
+- `src/models.ts` and `src/models/` are the models: the cup, collar, flag
+  and tee markers; the obstacles at the sizes the physics will give them
+  (bumper, barrier, windmill with its turning blades, water, bunker,
+  conveyor); and the decoration. Each returns its parts, a mesh and a
+  material each, for `group` to turn into a renderer group; each has a
+  triangle budget in `BUDGET`. `showcase.html` draws every one
+  (`/showcase.html`, with `?model=name`), for building and looking at them.
+- `src/scenery.ts` scatters the decoration round a hole, on the rough and
+  clear of the course, from the hole's name and never the game's chance.
 - `src/debug.ts` is `window.game`, the test API. `src/invariants.ts` lists
   the rules that must always hold. `src/autopilot.ts` plays the game by
   itself, for the gates and for par.
@@ -173,6 +186,10 @@ What to copy the shape of, when building something new:
   `scene.static(layout)` and shown by `hud.ts`. Each is held by
   `invariants.ts`, read by `debug.ts`, driven by a real pointer in
   `smoke/progress.spec.ts`, and pictured in `smoke/look.spec.ts`.
+- **What is drawn:** a model is a function of the sizes that matter to play,
+  in `src/models/`, with unit tests of its size, its normals and its
+  triangle budget in `test/models.test.ts`, a place in the showcase, and a
+  picture in `smoke/models.spec.ts`; the scene places it with `group`.
 - **Tools:** the autopilot (`src/autopilot.ts`), and the gates built on it:
   pace (`scripts/pace.ts`), the fuzzer (`scripts/fuzzer.ts`) and the bench
   (`scripts/bench.ts`). Each has unit tests of its own working parts; the
@@ -211,11 +228,14 @@ ball down at a lie.
 Each of these is the first feature's to bring, with every gate green at
 each step, and a gate handed what it needs in the same change:
 
-- A cup that lets a ball run over or lip out. The package now in the game
-  takes nearly every ball whose middle crosses the cup, at any speed (see
-  `test/cup.test.ts`), so the first hole is a hole in one for the autopilot
-  every time. 0.4.0's rim brings it, with a table to choose the cup's width
-  from; the cup test and the pars are set again then.
+- A cup with a rim. The package now in the game catches a ball slow enough
+  to fall below the floor before it has crossed the hole, up to about 19 a
+  second through the middle, and pulls in a slow one passing near (see
+  `test/cup.test.ts`, on an open green); nothing throws a ball back out or
+  turns it at the lip. On the first hole a ball that runs over banks off the
+  rail a tile behind the cup and rolls back in, so the autopilot holes it in
+  one every time. 0.4.0's rim brings lip-outs, with a table to choose the
+  cup's width from; the cup test and the pars are set again then.
 - Holes 3 to 9, which need bunkers, water, barriers, bumpers, the windmill
   and the conveyor.
 - The physics the golf needs, from artshape-physics' next version: see

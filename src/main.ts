@@ -6,7 +6,6 @@
  * here.
  */
 import { createContext } from 'artshape-render/gpu/context';
-import { bakeEnvironment } from 'artshape-render/render/env';
 import { LightPool } from 'artshape-render/game/lights';
 import { GameRenderer } from 'artshape-render/game/renderer';
 import { HARDEST_SHOT } from './arena';
@@ -16,6 +15,7 @@ import { createApi } from './debug';
 import { frameCost } from './frame-cost';
 import { Game, type GameEvents } from './game';
 import { Hud } from './hud';
+import { daylight } from './look';
 import { Progress } from './progress';
 import { seeded } from './random';
 import { Scene, boxOf } from './scene';
@@ -45,25 +45,13 @@ main().catch((err: unknown) => {
 });
 
 async function main() {
-  // ---- the renderer: a cartoon in daylight, as bearing's sweet world is ----
+  // ---- the renderer ----
 
   const ctx = await createContext(canvas);
   bootMsg.textContent = 'compiling shaders…';
   const renderer = new GameRenderer(ctx, LIGHT_CAPACITY, EFFECT_CAPACITY, PARTICLE_CAPACITY, MM_PER_UNIT);
-  renderer.look = {
-    ...renderer.look,
-    sunDir: [0.35, -0.3, 0.89],
-    // toon light is at a colour's full strength, so the sun is bright and the colours are shown straight
-    sunColour: [2.5, 2.45, 2.35],
-    exposure: 1,
-    ambient: 1,
-    background: [0.45, 0.72, 0.98],
-    shading: 'toon',
-  };
-  // a bright day: no darkened corners, which against a pale sky read as a grey haze
-  renderer.post = { ...renderer.post, vignette: 0, tone: 'clamp' };
-  const env = bakeEnvironment(ctx, 'daylight', { size: 128, mips: 6 });
-  renderer.setEnvironment(env.specular, env.brdf, env.mips);
+  // the daylight look, the same one the models' showcase is drawn in
+  daylight(renderer, ctx);
   renderer.camera.near = 2;
   renderer.camera.far = 800;
 
@@ -104,7 +92,7 @@ async function main() {
     started(index, par) {
       if (!game) return;
       const { layout } = game;
-      renderer.setStatic(scene.static(layout));
+      renderer.setStatic(scene.static(layout, game.course[index].name));
       renderer.setSunShadow(boxOf(layout));
       rig.jump(layout.tee.x, layout.tee.y);
       hud.started({ index, count: game.course.length, name: game.course[index].name, par });

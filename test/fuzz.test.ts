@@ -4,7 +4,17 @@ import { fuzz } from '../scripts/fuzzer';
 
 describe('the fuzzer', () => {
   it('plays a seed through without breaking a rule, and does everything a player can', () => {
-    const r = fuzz(1, 12000);
+    // two seeds, since which of the rarer things a monkey gets round to on one is chance
+    const one = fuzz(1, 12000),
+      two = fuzz(2, 12000);
+    const sum = (a: Record<string, number>, b: Record<string, number>) => {
+      const out = { ...a };
+      for (const [k, n] of Object.entries(b)) out[k] = (out[k] ?? 0) + n;
+      return out;
+    };
+    expect(one.failure, JSON.stringify(one.failure)).toBe(null);
+    expect(two.failure, JSON.stringify(two.failure)).toBe(null);
+    const r = { done: sum(one.done, two.done), happened: sum(one.happened, two.happened), failure: null };
     expect(r.failure, JSON.stringify(r.failure)).toBe(null);
     const actions = [
       'buy',

@@ -10,7 +10,7 @@ import { MeshBuilder, type Mesh } from 'artshape-render/mesh/types';
 type V3 = [number, number, number];
 
 /** One flat-shaded quad, wound counter-clockwise seen from the normal. */
-function face(b: MeshBuilder, p0: V3, p1: V3, p2: V3, p3: V3) {
+export function face(b: MeshBuilder, p0: V3, p1: V3, p2: V3, p3: V3) {
   const ux = p1[0] - p0[0],
     uy = p1[1] - p0[1],
     uz = p1[2] - p0[2];
@@ -31,7 +31,7 @@ function face(b: MeshBuilder, p0: V3, p1: V3, p2: V3, p3: V3) {
   b.quad(a, a + 1, a + 2, a + 3);
 }
 
-function tri(b: MeshBuilder, p0: V3, p1: V3, p2: V3) {
+export function tri(b: MeshBuilder, p0: V3, p1: V3, p2: V3) {
   const ux = p1[0] - p0[0],
     uy = p1[1] - p0[1],
     uz = p1[2] - p0[2];

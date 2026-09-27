@@ -175,7 +175,14 @@ and all the words in the page, not the picture.
 - **Water** is opaque, blue and glossy, with a splash of particles, the
   game path having no transparency.
 - **Decoration** is for fun and the physics knows nothing of it: trees,
-  hedges, flowers, bunting, a flag in every cup.
+  hedges, flowers, bunting, a flag in every cup. Each hole has its own
+  scatter of it on the rough, the same every time.
+- **The green is raised.** Each hole stands on the rough on timber sides,
+  the rough below the bottom of the cup, so the cup is a hole seen into.
+- **The cup** is 1.45 across its middle, a little wider than the ball, so
+  that its opening fits inside one tile of grass; its gold rim lies over the
+  grass round it. Through the middle it catches a putt up to about 19 a
+  second, measured, and the width is chosen again from 0.4.0's table.
 
 ## The camera
 

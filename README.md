@@ -13,7 +13,8 @@ fast, draws fast and has no bugs.
 
 ## How it is played
 
-A round of holes, each a striped green walled in by a rail, from a tee to a
+A round of holes, each a striped green raised on timber sides, with trees,
+hedges and flowers round it, from a tee between two markers to a gold-rimmed
 cup with a flag in it. Drag anywhere, back from where the ball should go,
 and let go to putt: the dots show the way and how hard. The ball rolls,
 banks off the rail and comes to rest, and then it can be struck again, until
@@ -80,7 +81,11 @@ fixed, and no baseline is moved to make it green.
     src/hud.ts         the words over the course, the card and the shop
     src/progress.ts    the save, and where it is kept
     src/physics.ts     the game's side of artshape-physics
-    src/scene.ts       the course as it is drawn
+    src/scene.ts       a hole as it is drawn, from the models
+    src/models/        the models: the cup and flag, the obstacles, the decoration
+    src/scenery.ts     the decoration scattered round a hole
+    src/look.ts        the daylight toon look
+    showcase.html      every model, drawn, for looking at
     src/shot.ts        a drag turned into a shot
     src/gesture.ts     what the pointers mean: a shot, or a pinch
     src/quality.ts     the picture stepped down on a slow machine
