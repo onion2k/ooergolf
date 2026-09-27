@@ -5,7 +5,8 @@ a physics game through obstacles, fewest strokes to the cup. TypeScript,
 Vite, and WebGPU through
 [artshape-render](https://github.com/onion2k/artshape-render), with the
 physics from [artshape-physics](https://github.com/onion2k/artshape-physics).
-The README says what the game is; this file says how it is made. The house
+The README says what the game is, and `DESIGN.md` what it is to be; this
+file says how it is made. The house
 rules in `~/.claude/CLAUDE.md` apply too. The template's stub game has been
 taken out: what is in `src/` is an empty course, a floor walled in by rock
 with nothing on it and nothing to do, and every gate but the pace gate
