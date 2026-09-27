@@ -124,8 +124,12 @@ change meant to move it, and the commit says why. Look at every picture.
   a drag into a shot through `shot.ts`, and draws the frame. There is no
   game logic here.
 - `src/shot.ts` is the shot as the player makes it: a drag into a direction
-  and a power, and the pointer onto the ground. `src/camera.ts` says where
-  the camera is. Both are arithmetic, tested without a page.
+  and a power, and the pointer onto the ground. `src/gesture.ts` says what
+  the pointers mean: one pulled back is a shot, two are a pinch, and a
+  second finger mid-drag takes the shot back. `src/camera.ts` says where the
+  camera is. `src/quality.ts` is the ladder the picture steps down on a slow
+  machine, and the governor that chooses the rung from the time between
+  frames. All are arithmetic, tested without a page.
 - `src/scene.ts` is the course as it is drawn, and its palette. The look is
   toon daylight on artshape-render v0.18.0, set up at the top of `main.ts`.
 - `src/debug.ts` is `window.game`, the test API. `src/invariants.ts` lists
@@ -194,8 +198,12 @@ where the ball lies, `startHole(index)`, `newRound()`, `buy(id)`,
 `smoke/game.ts` for a real mouse or finger, pressed where `project(x, y,
 z)` says a point on the course is on the page. Setting a scene: `place` for
 a body that exists, `save`, and `start(page, { save })` for a save that is
-not the player's. Looking: `look(x, y, distance)` parks the camera until
-`follow`, and `measureFrame`. In unit tests, `game.place(x, y)` puts the
+not the player's, and `touches(page, steps)` for fingers, several at once.
+Looking: `look(x, y, distance)` parks the camera until `follow`, `view()`
+says how far back it stands and which rung of the quality ladder the
+picture is on, and `measureFrame`. `?rung=N` on the page puts the picture
+on a rung and holds it; paused, the governor never moves it, so pictures are
+always taken at the top rung unless a test asks. In unit tests, `game.place(x, y)` puts the
 ball down at a lie.
 
 ## What is not there yet

@@ -148,6 +148,15 @@ test.describe('what it looks like', () => {
       expect(problems).toEqual([]);
     });
 
+    test('the lowest rung of the quality ladder: no shadows and no post', async ({ page }) => {
+      const problems = watch(page);
+      await page.goto('/?rung=3&seed=11&paused=1');
+      await expect.poll(() => page.evaluate(() => window.game?.ready ?? false), { timeout: 60_000 }).toBe(true);
+      await page.evaluate(() => window.game!.step(60));
+      await expect(page).toHaveScreenshot('phone-lowest.png', TOLERANCE);
+      expect(problems).toEqual([]);
+    });
+
     test('the card, on a phone', async ({ page }) => {
       const problems = watch(page);
       await start(page, { seed: 11, paused: true });

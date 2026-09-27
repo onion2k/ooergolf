@@ -7,7 +7,7 @@
  */
 import { expect, test, type Page } from '@playwright/test';
 import { PNG } from 'pngjs';
-import { drag, start, watch } from './game';
+import { drag, start, touches, watch } from './game';
 
 /** How many frames the page draws in a second. */
 function framesInASecond(page: Page) {
@@ -175,6 +175,67 @@ test.describe('on a phone', () => {
     const after = await putt(page, 0.6, true);
     expect(after.state.strokes).toBe(1);
     expect(after.ball.speed).toBeGreaterThan(10);
+    expect(problems).toEqual([]);
+  });
+
+  test('two fingers spread bring the camera nearer, and never strike the ball', async ({ page }) => {
+    const problems = watch(page);
+    await start(page, { seed: 1, paused: true });
+    const before = await page.evaluate(() => window.game!.view().distance);
+    await touches(page, [
+      [{ id: 1, x: 200, y: 500 }],
+      [
+        { id: 1, x: 200, y: 500 },
+        { id: 2, x: 220, y: 500 },
+      ],
+      [
+        { id: 1, x: 150, y: 500 },
+        { id: 2, x: 270, y: 500 },
+      ],
+      [
+        { id: 1, x: 100, y: 500 },
+        { id: 2, x: 320, y: 500 },
+      ],
+      [{ id: 2, x: 320, y: 500 }],
+      [],
+    ]);
+    await page.evaluate(() => window.game!.step(1));
+    expect(await page.evaluate(() => window.game!.view().distance)).toBeLessThan(before - 10);
+    expect((await page.evaluate(() => window.game!.state())).strokes, 'no shot from a pinch').toBe(0);
+    expect(problems).toEqual([]);
+  });
+
+  test('a second finger landing mid-drag takes the shot back', async ({ page }) => {
+    const problems = watch(page);
+    await start(page, { seed: 1, paused: true });
+    const ball = await page.evaluate(() => {
+      const b = window.game!.ball();
+      return window.game!.project(b.x, b.y, b.z);
+    });
+    await touches(page, [
+      [{ id: 1, ...ball }],
+      [{ id: 1, x: ball.x, y: ball.y + 150 }],
+      [
+        { id: 1, x: ball.x, y: ball.y + 150 },
+        { id: 2, x: 60, y: 200 },
+      ],
+      [{ id: 2, x: 60, y: 200 }],
+      [],
+    ]);
+    expect((await page.evaluate(() => window.game!.state())).strokes).toBe(0);
+    expect(problems).toEqual([]);
+  });
+
+  test('on the lowest rung of the quality ladder, asked for, it boots and plays with no errors', async ({ page }) => {
+    const problems = watch(page);
+    await page.goto('/?rung=3&seed=1&paused=1');
+    await expect.poll(() => page.evaluate(() => window.game?.ready ?? false), { timeout: 60_000 }).toBe(true);
+    expect(await page.evaluate(() => window.game!.view())).toMatchObject({ rung: 3, held: true });
+    await page.evaluate(() => {
+      window.game!.shoot(Math.PI / 2, 0.5);
+      window.game!.step(120);
+    });
+    expect(await page.evaluate(() => window.game!.invariants())).toEqual([]);
     expect(problems).toEqual([]);
   });
 

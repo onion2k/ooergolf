@@ -126,6 +126,8 @@ export interface GameApi {
   /** The save written now, and what it is. */
   save(): string;
 
+  /** How far back the camera stands, and which rung of the quality ladder the picture is on, and whether it was asked for. */
+  view(): { distance: number; rung: number; held: boolean };
   /** The camera parked looking at a point, `distance` back, at once, and not following the ball until `follow`. */
   look(x: number, y: number, distance?: number): void;
   /** The camera following the ball again. */
@@ -151,6 +153,7 @@ export interface DebugHost {
   follow(): void;
   project(x: number, y: number, z: number): { x: number; y: number };
   aiming(): { angle: number; power: number } | null;
+  view(): { distance: number; rung: number; held: boolean };
   measureFrame(): Promise<number>;
   events: string[];
 }
@@ -255,6 +258,7 @@ export function createApi(host: DebugHost): GameApi {
     buy: (id) => game.buy(id),
     equip: (id) => game.equip(id),
     aiming: () => host.aiming(),
+    view: () => host.view(),
     save() {
       game.persist();
       return JSON.stringify(progress.save);

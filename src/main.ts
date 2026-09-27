@@ -19,7 +19,9 @@ import { Hud } from './hud';
 import { Progress } from './progress';
 import { seeded } from './random';
 import { Scene, boxOf } from './scene';
-import { groundAt, shotFromDrag, type Shot } from './shot';
+import { Gesture } from './gesture';
+import { Governor, RUNGS } from './quality';
+import { groundAt } from './shot';
 
 /** How many millimetres a world unit is: the renderer fixes a few real sizes by it. */
 const MM_PER_UNIT = 100;
@@ -132,6 +134,11 @@ async function main() {
 
   // ---- the scene and the camera ----
 
+  // ?rung=N puts the picture on a rung of the quality ladder and holds it there; without it, the governor chooses
+  const asked = query.get('rung');
+  const governor = new Governor(asked !== null ? Math.max(0, Math.min(RUNGS.length - 1, +asked || 0)) : undefined);
+  renderer.economy = governor.economy;
+
   renderer.setDynamic(scene.dynamic());
   renderer.setLights(new LightPool(LIGHT_CAPACITY));
   const cam = renderer.camera;
@@ -152,37 +159,31 @@ async function main() {
   addEventListener('resize', resize);
   resize();
 
-  // ---- the shot: a drag anywhere, pulled back and let go ----
+  // ---- the pointers: one pulled back and let go is a shot, two are a pinch ----
 
-  /** The drag under way: where it began, on the screen and the ground, and the shot it makes now. */
-  let drag: { id: number; px: [number, number]; ground: [number, number] | null; shot: Shot | null } | null = null;
-  /** The point on the ground under a pointer, from where it is on the canvas. */
-  const groundUnder = (e: PointerEvent) => {
-    const r = canvas.getBoundingClientRect();
-    return groundAt(cam, ((e.clientX - r.left) / r.width) * 2 - 1, 1 - ((e.clientY - r.top) / r.height) * 2, 0);
-  };
-  const shortSide = () => {
-    const r = canvas.getBoundingClientRect();
-    return Math.max(1, Math.min(r.width, r.height));
+  const gesture = new Gesture({
+    shortSide() {
+      const r = canvas.getBoundingClientRect();
+      return Math.max(1, Math.min(r.width, r.height));
+    },
+    ground(x, y) {
+      const r = canvas.getBoundingClientRect();
+      return groundAt(cam, ((x - r.left) / r.width) * 2 - 1, 1 - ((y - r.top) / r.height) * 2, 0);
+    },
+  });
+  const act = (g: ReturnType<Gesture['up']>) => {
+    if (g.kind === 'shoot') played.shoot(g.shot.angle, g.shot.power);
+    else if (g.kind === 'zoom') rig.zoom(g.by);
   };
   canvas.addEventListener('pointerdown', (e) => {
-    if (drag || !e.isPrimary || e.button !== 0) return;
+    // the mouse's other buttons are not a shot
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
     canvas.setPointerCapture(e.pointerId);
-    drag = { id: e.pointerId, px: [e.clientX, e.clientY], ground: groundUnder(e), shot: null };
+    act(gesture.down(e.pointerId, e.clientX, e.clientY));
   });
-  canvas.addEventListener('pointermove', (e) => {
-    if (!drag || e.pointerId !== drag.id) return;
-    drag.shot = shotFromDrag(drag.px, [e.clientX, e.clientY], drag.ground, groundUnder(e), shortSide());
-  });
-  canvas.addEventListener('pointerup', (e) => {
-    if (!drag || e.pointerId !== drag.id) return;
-    const shot = shotFromDrag(drag.px, [e.clientX, e.clientY], drag.ground, groundUnder(e), shortSide());
-    drag = null;
-    if (shot) played.shoot(shot.angle, shot.power);
-  });
-  canvas.addEventListener('pointercancel', (e) => {
-    if (drag && e.pointerId === drag.id) drag = null;
-  });
+  canvas.addEventListener('pointermove', (e) => act(gesture.move(e.pointerId, e.clientX, e.clientY)));
+  canvas.addEventListener('pointerup', (e) => act(gesture.up(e.pointerId, e.clientX, e.clientY)));
+  canvas.addEventListener('pointercancel', (e) => gesture.cancel(e.pointerId));
   canvas.addEventListener(
     'wheel',
     (e) => {
@@ -200,7 +201,7 @@ async function main() {
     // the aim shows only while a shot can be taken
     // a finer club's aim reaches further, as it strikes harder
     const reach = played.hardest / HARDEST_SHOT;
-    const dots = played.ready ? scene.writeAim(world.x[ball], world.y[ball], drag?.shot ?? null, reach) : 0;
+    const dots = played.ready ? scene.writeAim(world.x[ball], world.y[ball], gesture.aim, reach) : 0;
     renderer.move(1, scene.aim, dots);
     if (dots) renderer.tint(1, scene.aimLooks);
   }
@@ -289,7 +290,8 @@ async function main() {
       const r = canvas.getBoundingClientRect();
       return { x: r.left + ((nx + 1) / 2) * r.width, y: r.top + ((1 - ny) / 2) * r.height };
     },
-    aiming: () => (played.ready && drag?.shot ? { ...drag.shot } : null),
+    aiming: () => (played.ready && gesture.aim ? { ...gesture.aim } : null),
+    view: () => ({ distance: rig.distance, rung: governor.rung, held: governor.held }),
     measureFrame,
     events: eventLog,
   });
@@ -297,12 +299,15 @@ async function main() {
   let last = performance.now();
   const frame = (now: number) => {
     requestAnimationFrame(frame);
-    const dt = Math.min((now - last) / 1000, 1 / 20);
+    const gap = now - last;
+    const dt = Math.min(gap / 1000, 1 / 20);
     last = now;
     if (paused) {
       draw(0);
       return;
     }
+    // a slow machine steps the picture down: judged on the time between frames, which is what a player sees
+    if (governor.frame(gap)) renderer.economy = governor.economy;
     simulate(dt);
     draw(dt);
   };

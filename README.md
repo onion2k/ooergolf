@@ -22,7 +22,8 @@ begins, and after the last the card is shown, with a button for another
 round. A hole pays coins, more for beating par, and a hole in one pays a
 gem; the shop sells finer putters that strike harder. The coins, the clubs
 and the best score on each hole are kept in the browser. The camera follows
-the ball, and on a desktop the wheel zooms.
+the ball; the wheel zooms on a desktop, and two fingers pinch on a phone. A
+machine that cannot keep up has the picture stepped down a rung at a time.
 
 Two holes so far: a straight putt and a dog-leg. The other seven of the
 first nine have obstacles in them, and wait for the physics those need.
@@ -81,6 +82,8 @@ fixed, and no baseline is moved to make it green.
     src/physics.ts     the game's side of artshape-physics
     src/scene.ts       the course as it is drawn
     src/shot.ts        a drag turned into a shot
+    src/gesture.ts     what the pointers mean: a shot, or a pinch
+    src/quality.ts     the picture stepped down on a slow machine
     src/camera.ts      where the camera is, following the ball
     scripts/           the gates, each with its baseline beside it
     test/              unit tests, and a corpus of every save shape

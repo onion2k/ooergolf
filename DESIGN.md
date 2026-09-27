@@ -186,11 +186,16 @@ shot.
 
 ## Phone and desktop
 
-- One pointer input for both, and nothing that needs a keyboard.
+- One pointer input for both, and nothing that needs a keyboard. Two
+  fingers pinch the camera nearer or further; a second finger landing
+  mid-drag takes the shot back.
 - The page in the upright and the sideways shape, nothing wider than the
   screen.
 - The pixel ratio capped, and the renderer's economy stepped down a rung at
-  a time on a slower GPU: particles, then shadows, then post.
+  a time on a slower GPU: particles, then shadows, then post. The governor
+  judges on the mean time between frames over two seconds, against 20 ms,
+  leaves out a stall or a hidden page, waits two seconds after each step,
+  and never steps back up by itself.
 - The budgets in `CLAUDE.md` hold on both.
 
 ## The save

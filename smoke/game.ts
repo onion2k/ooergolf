@@ -80,6 +80,25 @@ export async function drag(
   if (!hold) await send('touchEnd');
 }
 
+/**
+ * Fingers on the page, through Chrome's own touch events: each step a list
+ * of where every finger down is, by its id, and an empty list to lift them
+ * all. A finger missing from a step has lifted. The page must have been
+ * opened with touch on.
+ */
+export async function touches(page: Page, steps: { id: number; x: number; y: number }[][]) {
+  const cdp = await page.context().newCDPSession(page);
+  let down = new Set<number>();
+  for (const points of steps) {
+    const now = new Set(points.map((p) => p.id));
+    const lifted = [...down].some((id) => !now.has(id));
+    const added = points.some((p) => !down.has(p.id));
+    const type = points.length === 0 ? 'touchEnd' : added ? 'touchStart' : lifted ? 'touchEnd' : 'touchMove';
+    await cdp.send('Input.dispatchTouchEvent', { type, touchPoints: points });
+    down = now;
+  }
+}
+
 /** Wait until the game is booted and its frame loop running, or say what the boot screen was stuck on. */
 export async function ready(page: Page) {
   try {
