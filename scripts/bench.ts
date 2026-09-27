@@ -19,7 +19,8 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
-import { BALL, BODY_CAPACITY, FLOOR } from '../src/arena';
+import { BALL, BODY_CAPACITY, layoutOf } from '../src/arena';
+import type { HoleDef } from '../src/course';
 import { Game } from '../src/game';
 import { Progress, memoryStore } from '../src/progress';
 import { seeded } from '../src/random';
@@ -54,16 +55,35 @@ interface Scenario {
   setup: () => { game: Game; frame: () => void };
 }
 
-/** A game from a seed, settled. */
+/**
+ * The green the physics is measured on: a square of 22 tiles of grass, the
+ * size the course was before it had holes, so the figures are the physics'
+ * and do not move when a hole of the course is redrawn.
+ */
+const GREEN: HoleDef = {
+  name: 'bench',
+  par: 3,
+  map: [
+    '########################',
+    '#C.....................#',
+    ...Array.from({ length: 19 }, () => '#......................#'),
+    '#..........T...........#',
+    '#......................#',
+    '########################',
+  ],
+};
+const FLOOR = layoutOf(GREEN.map).bounds;
+
+/** A game on the green from a seed, settled. */
 function settled(seed: number): Game {
-  const game = new Game(new Progress(memoryStore()), {}, { random: seeded(seed) });
+  const game = new Game(new Progress(memoryStore()), {}, { random: seeded(seed), course: [GREEN] });
   for (let f = 0; f < 180; f++) game.step(DT);
   return game;
 }
 
 /** A game with as many balls as the world holds, dropped from above all over the floor, from the game's own chance. */
 function full(seed: number): Game {
-  const game = new Game(new Progress(memoryStore()), {}, { random: seeded(seed) });
+  const game = new Game(new Progress(memoryStore()), {}, { random: seeded(seed), course: [GREEN] });
   const margin = 4;
   for (let k = 0; k < BODY_CAPACITY; k++)
     game.world.spawn(

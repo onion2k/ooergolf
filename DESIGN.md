@@ -52,11 +52,15 @@ courses after, as content.
 ## The rules
 
 - **Par** is per hole, and is set from what the autopilot takes with the
-  starting club and ball.
+  starting club and ball, slipping as a player does (`npm run pace`), and is
+  never less than two.
 - **Water and out of bounds** cost one stroke, and the ball is put back
   where it last lay at rest.
 - **The limit** on a hole is par and five more. At the limit the hole is
   picked up, scored at the limit, and the next begins.
+- **Between holes,** the score is named over the course for two seconds, and
+  then the next hole begins. After the last, the card stays until the player
+  asks for another round.
 - **A hole in one** pays a gem.
 - **Every hole can be finished** with the starting club and ball. An
   upgrade makes a hole easier, never possible.

@@ -1,9 +1,12 @@
 /** The camera that follows the ball: the ball is always in view, on a phone as on a desktop. */
 import { Camera } from 'artshape-render/gpu/camera';
 import { describe, expect, it } from 'vitest';
-import { FLOOR, TEE } from '../src/arena';
+import { layoutOf } from '../src/arena';
 import { CameraRig } from '../src/camera';
 import { groundAt } from '../src/shot';
+import { GREEN } from './helpers';
+
+const { bounds: FLOOR, tee: TEE } = layoutOf(GREEN.map);
 
 function ndc(c: Camera, x: number, y: number, z: number): [number, number] {
   const m = c.viewProjection;

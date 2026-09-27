@@ -17,9 +17,12 @@
  * `WATCH` and a reading in `sizes`.
  */
 import { BODY_CAPACITY } from '../src/arena';
+import { Autopilot } from '../src/autopilot';
+import { COURSE } from '../src/course';
 import { Game } from '../src/game';
 import { Progress, memoryStore } from '../src/progress';
 import { seeded } from '../src/random';
+import { PLAYER } from './pace';
 
 const DT = 1 / 60;
 
@@ -32,6 +35,8 @@ export const WATCH: Partial<Record<string, { ceiling: number; steady?: boolean }
   bodies: { ceiling: BODY_CAPACITY },
   slots: { ceiling: BODY_CAPACITY },
   'save bytes': { ceiling: 2_000 },
+  // emptied at every new round: never more than a score a hole
+  'card scores': { ceiling: COURSE.length },
   // the catch-all for what is leaking and has no name here; noisy, so it is given a lot of room
   'heap MB': { ceiling: 300, steady: true },
 };
@@ -43,6 +48,7 @@ export function sizes(game: Game): Record<string, number> {
     bodies: world.live,
     slots: world.count,
     'save bytes': JSON.stringify(progress.save).length,
+    'card scores': game.card.length,
     'heap MB': Math.round(process.memoryUsage().heapUsed / 1e5) / 10,
   };
 }
@@ -102,8 +108,10 @@ export function leakRun({ seed, minutes }: LeakOptions): LeakRun {
   const samples: Record<string, number[]> = {};
   try {
     const game = new Game(new Progress(memoryStore()), {}, { random: seeded(seed) });
+    // round after round, as a player who never stops would
+    const pilot = new Autopilot(game, { skill: PLAYER, random: seeded(seed * 17 + 3), replay: true });
     for (let minute = 0; minute < minutes; minute++) {
-      for (let f = 0; f < 3600; f++) game.step(DT);
+      for (let f = 0; f < 3600; f++) pilot.step(DT);
       for (const [key, n] of Object.entries(sizes(game))) (samples[key] ??= []).push(n);
     }
     return { seed, minutes, samples, problems: trouble(samples), seconds: (performance.now() - started) / 1000 };

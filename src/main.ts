@@ -13,9 +13,10 @@ import { CameraRig } from './camera';
 import { createApi } from './debug';
 import { frameCost } from './frame-cost';
 import { Game, type GameEvents } from './game';
+import { Hud } from './hud';
 import { Progress } from './progress';
 import { seeded } from './random';
-import { COURSE_BOX, Scene } from './scene';
+import { Scene, boxOf } from './scene';
 import { groundAt, shotFromDrag, type Shot } from './shot';
 
 /** How many millimetres a world unit is: the renderer fixes a few real sizes by it. */
@@ -31,8 +32,6 @@ const WHEEL = 0.05;
 const canvas = document.getElementById('view') as HTMLCanvasElement;
 const boot = document.getElementById('boot')!;
 const bootMsg = document.getElementById('bootMsg')!;
-const strokesPanel = document.getElementById('strokes')!;
-const strokesText = strokesPanel.querySelector('b')!;
 const stats = document.getElementById('stats')!;
 const help = document.getElementById('help')!;
 
@@ -63,7 +62,6 @@ async function main() {
   renderer.setEnvironment(env.specular, env.brdf, env.mips);
   renderer.camera.near = 2;
   renderer.camera.far = 800;
-  renderer.setSunShadow(COURSE_BOX);
 
   // ---- the game, and what it says has happened ----
 
@@ -83,12 +81,26 @@ async function main() {
         .map((a) => a.toFixed(1))
         .join(',')}`.trim(),
     );
-  const showStrokes = () => {
-    strokesText.textContent = String(game.strokes);
-  };
+  // the game tells of its first hole as it is built, before it is here to be read: that one is shown once it is
+  let game: Game | undefined = undefined;
+  const hud = new Hud(() => game?.newRound());
+  const scene = new Scene();
+  const rig = new CameraRig();
   /** What the player sees of each event, beside the note of it. */
   const shown: GameEvents = {
-    struck: showStrokes,
+    // a hole begun: drawn afresh, the sun's shadow fitted to it, and the camera on its tee
+    started(index, par) {
+      if (!game) return;
+      const { layout } = game;
+      renderer.setStatic(scene.static(layout));
+      renderer.setSunShadow(boxOf(layout));
+      rig.jump(layout.tee.x, layout.tee.y);
+      hud.started({ index, count: game.course.length, name: game.course[index].name, par });
+    },
+    struck: () => hud.setStrokes(game?.strokes ?? 0),
+    holed: (strokes, par) => hud.done(strokes, par, false),
+    pickedUp: (strokes, par) => hud.done(strokes, par, true),
+    finished: () => game && hud.finished(game.course, game.card),
   };
   const events: GameEvents = new Proxy(shown, {
     get:
@@ -100,19 +112,15 @@ async function main() {
   });
   // ?seed=N makes chance the same from before the game is built, for a test that wants the same course every run
   const seed = query.get('seed');
-  const game = new Game(progress, events, seed !== null ? { random: seeded(+seed) } : {});
-  const { world } = game;
+  const played = new Game(progress, events, seed !== null ? { random: seeded(+seed) } : {});
+  game = played;
+  shown.started!(played.hole, played.def.par);
 
   // ---- the scene and the camera ----
 
-  const scene = new Scene();
-  renderer.setStatic(scene.static(world.solid));
   renderer.setDynamic(scene.dynamic());
   renderer.setLights(new LightPool(LIGHT_CAPACITY));
-
   const cam = renderer.camera;
-  const rig = new CameraRig();
-  rig.jump(world.x[game.ball], world.y[game.ball]);
   /** Whether the test API has parked the camera where it wants it, and it is not to follow the ball. */
   let parked = false;
 
@@ -156,7 +164,7 @@ async function main() {
     if (!drag || e.pointerId !== drag.id) return;
     const shot = shotFromDrag(drag.px, [e.clientX, e.clientY], drag.ground, groundUnder(e), shortSide());
     drag = null;
-    if (shot) game.shoot(shot.angle, shot.power);
+    if (shot) played.shoot(shot.angle, shot.power);
   });
   canvas.addEventListener('pointercancel', (e) => {
     if (drag && e.pointerId === drag.id) drag = null;
@@ -171,10 +179,12 @@ async function main() {
   );
 
   function upload() {
-    scene.writeBall(world, game.ball);
-    renderer.move(0, scene.ball, 1);
+    const { world, ball } = played;
+    scene.writeBall(world, ball);
+    // a ball gone into the cup is not drawn
+    renderer.move(0, scene.ball, world.alive[ball] ? 1 : 0);
     // the aim shows only while a shot can be taken
-    const dots = game.ready ? scene.writeAim(world.x[game.ball], world.y[game.ball], drag?.shot ?? null) : 0;
+    const dots = played.ready ? scene.writeAim(world.x[ball], world.y[ball], drag?.shot ?? null) : 0;
     renderer.move(1, scene.aim, dots);
     if (dots) renderer.tint(1, scene.aimLooks);
   }
@@ -201,10 +211,9 @@ async function main() {
 
   await renderer.ready;
   boot.classList.add('gone');
-  strokesPanel.hidden = false;
+  hud.show();
   stats.hidden = false;
   help.hidden = false;
-  showStrokes();
 
   // ---- each frame ----
 
@@ -212,9 +221,10 @@ async function main() {
   let smoothed = 0;
   function simulate(dt: number) {
     frames++;
-    game.step(dt);
+    played.step(dt);
     // the camera keeps game time, so a test stepping the game sees it follow the same way every run
-    if (!parked) rig.follow(world.x[game.ball], world.y[game.ball], dt);
+    const { world, ball } = played;
+    if (!parked && world.alive[ball]) rig.follow(world.x[ball], world.y[ball], dt);
   }
   function draw(dt: number) {
     rig.place(cam);
@@ -235,7 +245,7 @@ async function main() {
   let ready = false;
   let bootMs = 0;
   window.game = createApi({
-    game,
+    game: played,
     ready: () => ready,
     bootMs: () => bootMs,
     paused: () => paused,
@@ -263,7 +273,7 @@ async function main() {
       const r = canvas.getBoundingClientRect();
       return { x: r.left + ((nx + 1) / 2) * r.width, y: r.top + ((1 - ny) / 2) * r.height };
     },
-    aiming: () => (game.ready && drag?.shot ? { ...drag.shot } : null),
+    aiming: () => (played.ready && drag?.shot ? { ...drag.shot } : null),
     measureFrame,
     events: eventLog,
   });

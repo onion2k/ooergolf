@@ -13,14 +13,16 @@ fast, draws fast and has no bugs.
 
 ## How it is played
 
-A ball on a tee on one striped green, walled in by a rail. Drag anywhere,
-back from where the ball should go, and let go to putt: the dots show the
-way and how hard. The ball rolls, banks off the rail and comes to rest, and
-then it can be struck again. The strokes are counted. The camera follows the
-ball, and on a desktop the wheel zooms.
+A round of holes, each a striped green walled in by a rail, from a tee to a
+cup with a flag in it. Drag anywhere, back from where the ball should go,
+and let go to putt: the dots show the way and how hard. The ball rolls,
+banks off the rail and comes to rest, and then it can be struck again, until
+it drops. The score is named against par (a birdie, a bogey), the next hole
+begins, and after the last the card is shown, with a button for another
+round. The camera follows the ball, and on a desktop the wheel zooms.
 
-There is no cup yet. The game that goes in: a cup on every hole, obstacles
-in the way, nine holes, and the strokes counted against par.
+Two holes so far: a straight putt and a dog-leg. The other seven of the
+first nine have obstacles in them, and wait for the physics those need.
 
 ## What is here
 
@@ -41,13 +43,13 @@ and dear to retrofit:
 - **A file of always-true rules**, `src/invariants.ts`, checked by the
   fuzzer after everything it does.
 
-And every gate, but for the pace gate, which comes back when there is
-something to play:
+And every gate:
 
     npm run check:quick    formatting, types, lint, unit tests (the pre-commit hook)
     npm run fuzz           a monkey plays it, and the rules are checked
     npm run determinism    the same seed played twice, hashed
     npm run leaks          a long game, watching what must stay bounded
+    npm run pace:check     how many strokes a round takes, held to a baseline both ways
     npm run bench          what the physics costs a frame, held to a baseline
     npm run perf           boot time, a frame's cost and the download, held to a budget and a baseline
     npm run smoke          the real thing in headless Chromium on the GPU
@@ -67,7 +69,10 @@ fixed, and no baseline is moved to make it green.
     src/main.ts        the page: events into words, the frame drawn
     src/debug.ts       window.game, the test API
     src/invariants.ts  what must always hold
-    src/arena.ts       content: the floor, the rock, the kinds of body
+    src/course.ts      the holes: a map and a par each
+    src/arena.ts       a hole's map read into a layout; the kinds of body, the hardest shot
+    src/autopilot.ts   the game played by itself, for the gates and for par
+    src/hud.ts         the words over the course, and the card
     src/progress.ts    the save, and where it is kept
     src/physics.ts     the game's side of artshape-physics
     src/scene.ts       the course as it is drawn

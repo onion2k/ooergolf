@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { BALL, HARDEST_SHOT, ORIGIN_X, ORIGIN_Y } from '../src/arena';
+import { BALL, HARDEST_SHOT } from '../src/arena';
 import { checkInvariants } from '../src/invariants';
-import { newGame, settle } from './helpers';
+import { onGreen as newGame, settle } from './helpers';
 
 describe('what must always hold', () => {
   it('holds of a new game, and of one played on a little', () => {
@@ -15,8 +15,8 @@ describe('what must always hold', () => {
   it('reports a ball in the rock, and a ball that is not a number', () => {
     const { game } = newGame();
     const { world, ball } = game;
-    world.x[ball] = ORIGIN_X + 1;
-    world.y[ball] = ORIGIN_Y + 1;
+    world.x[ball] = game.layout.originX + 1;
+    world.y[ball] = game.layout.originY + 1;
     expect(checkInvariants(game).join('\n')).toMatch(/in the rock: ball/);
     world.x[ball] = NaN;
     expect(checkInvariants(game).join('\n')).toMatch(/not a number: ball/);
@@ -43,6 +43,22 @@ describe('what must always hold', () => {
     game.world.remove(other);
     game.world.remove(game.ball);
     expect(checkInvariants(game).join('\n')).toMatch(/the ball is gone/);
+  });
+
+  it('reports a card with a score too many or too few, a score out of bounds, and strokes over the limit', () => {
+    const { game } = newGame();
+    game.card.push(2);
+    expect(checkInvariants(game).join('\n')).toMatch(/the card has 1 scores, with 0 holes finished/);
+    game.card.length = 0;
+    game.phase = 'done';
+    expect(checkInvariants(game).join('\n')).toMatch(/the card has 0 scores, with 1 holes finished/);
+    game.card.push(0);
+    expect(checkInvariants(game).join('\n')).toMatch(/hole 1 is scored 0/);
+    game.card[0] = 3;
+    game.phase = 'play';
+    game.card.length = 0;
+    game.strokes = 99;
+    expect(checkInvariants(game).join('\n')).toMatch(/99 strokes on hole 1, over its limit/);
   });
 
   it('reports a ball faster than the hardest shot, and strokes that are not a count', () => {

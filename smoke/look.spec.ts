@@ -38,8 +38,20 @@ async function aim(page: Page, share: number, across = 0) {
   await page.evaluate(() => window.game!.step(1));
 }
 
+/** The whole round played by the autopilot's shots, to the card. */
+async function playRound(page: Page) {
+  await page.evaluate(() => {
+    const g = window.game!;
+    for (let s = 0; s < 40 && g.state().phase !== 'over'; s++) {
+      const shot = g.suggest();
+      if (shot) g.shoot(shot.angle, shot.power);
+      for (let f = 0; f < 900 && g.state().phase !== 'over' && !g.state().ready; f += 10) g.step(10);
+    }
+  });
+}
+
 test.describe('what it looks like', () => {
-  test('the course, with the ball on the tee', async ({ page }) => {
+  test('the first hole, with the ball on the tee', async ({ page }) => {
     const problems = watch(page);
     await start(page, { seed: 11, paused: true });
     await page.evaluate(() => window.game!.step(60));
@@ -60,6 +72,44 @@ test.describe('what it looks like', () => {
     expect(problems).toEqual([]);
   });
 
+  test('the dog-leg, from its tee', async ({ page }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true });
+    await page.evaluate(() => {
+      window.game!.startHole(1);
+      window.game!.step(60);
+    });
+    await hideStats(page);
+    await expect(page.locator('#view')).toHaveScreenshot('dog-leg.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
+  test('a hole done: its score over the course', async ({ page }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true });
+    await page.evaluate(() => {
+      const g = window.game!;
+      for (let s = 0; s < 6 && g.state().phase === 'play'; s++) {
+        const shot = g.suggest();
+        if (shot) g.shoot(shot.angle, shot.power);
+        for (let f = 0; f < 720 && g.state().phase === 'play' && !g.state().ready; f += 10) g.step(10);
+      }
+      g.step(10);
+    });
+    await hideStats(page);
+    await expect(page).toHaveScreenshot('holed.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
+  test('the card, at the end of the round', async ({ page }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true });
+    await playRound(page);
+    await hideStats(page);
+    await expect(page).toHaveScreenshot('card.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
   test.describe('on a phone', () => {
     test.use({ viewport: { width: 400, height: 860 }, hasTouch: true, isMobile: true });
 
@@ -68,6 +118,14 @@ test.describe('what it looks like', () => {
       await start(page, { seed: 11, paused: true });
       await page.evaluate(() => window.game!.step(60));
       await expect(page).toHaveScreenshot('phone.png', TOLERANCE);
+      expect(problems).toEqual([]);
+    });
+
+    test('the card, on a phone', async ({ page }) => {
+      const problems = watch(page);
+      await start(page, { seed: 11, paused: true });
+      await playRound(page);
+      await expect(page).toHaveScreenshot('phone-card.png', TOLERANCE);
       expect(problems).toEqual([]);
     });
   });

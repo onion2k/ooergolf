@@ -12,14 +12,15 @@
  * that is not the same twice — and none of that shows as a failure anywhere
  * else, only as figures that wander.
  *
- * Both runs are played the same way without a recording: whenever the ball
- * is at rest it is struck, the way and as hard as a player's own chance
- * says, from a source apart from the game's. When there is an autopilot, it
- * plays here instead.
+ * The autopilot plays, with a player's slips from a chance of its own, so
+ * the two runs are played the same way without a recording, round after
+ * round.
  */
+import { Autopilot } from '../src/autopilot';
 import { Game } from '../src/game';
 import { Progress, memoryStore } from '../src/progress';
 import { seeded } from '../src/random';
+import { PLAYER } from './pace';
 
 const DT = 1 / 60;
 
@@ -76,6 +77,8 @@ export function hashGame(game: Game): string {
   }
   eat(game.t);
   eat(game.strokes);
+  eat(game.hole);
+  for (const score of game.card) eat(score);
   for (const c of JSON.stringify(game.progress.save)) h = Math.imul(h ^ c.charCodeAt(0), 0x01000193);
   return (h >>> 0).toString(16).padStart(8, '0');
 }
@@ -85,11 +88,10 @@ export function playTwice({ seed, frames, every = 300, meddle }: TwiceOptions): 
   const passes: string[][] = [];
   for (let pass = 0; pass < 2; pass++) {
     const game = new Game(new Progress(memoryStore()), {}, { random: seeded(seed) });
-    const player = seeded(seed * 13 + 5);
+    const pilot = new Autopilot(game, { skill: PLAYER, random: seeded(seed * 13 + 5), replay: true });
     const hashes: string[] = [];
     for (let f = 1; f <= frames; f++) {
-      if (game.ready) game.shoot(player() * Math.PI * 2, 0.2 + player() * 0.8);
-      game.step(DT);
+      pilot.step(DT);
       meddle?.(game, pass);
       if (f % every === 0) hashes.push(hashGame(game));
     }

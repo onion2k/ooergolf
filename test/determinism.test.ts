@@ -40,6 +40,13 @@ describe('the same seed gives the same game', () => {
     one.strokes++;
     expect(hashGame(one)).not.toBe(hash);
     one.strokes--;
+    one.hole++;
+    expect(hashGame(one), 'another hole').not.toBe(hash);
+    one.hole--;
+    one.card.push(2);
+    expect(hashGame(one), 'a score on the card').not.toBe(hash);
+    one.card.pop();
+    expect(hashGame(one)).toBe(hash);
     one.world.spawn(BALL, -2, -3, 4);
     expect(hashGame(one)).not.toBe(hash);
   });

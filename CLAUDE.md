@@ -7,10 +7,12 @@ Vite, and WebGPU through
 physics from [artshape-physics](https://github.com/onion2k/artshape-physics).
 The README says what the game is, and `DESIGN.md` what it is to be; this
 file says how it is made. The house
-rules in `~/.claude/CLAUDE.md` apply too. What is in `src/` is one course:
-a floor walled in by a rail, a ball on a tee, and the shot, a drag pulled
-back and let go. There is no cup yet, and no pace gate. The golf goes in a
-feature at a time from there, in the order `DESIGN.md` gives.
+rules in `~/.claude/CLAUDE.md` apply too. What is in `src/` is a round of
+the course: holes drawn as maps, each played from its tee to its cup with a
+drag pulled back and let go, scored against par, and the card at the end.
+Only the holes made of grass and rail are here; the rest wait for the
+physics their obstacles need (artshape-physics 0.4.0). The golf goes in a
+feature at a time, in the order `DESIGN.md` gives.
 
 ## The factory
 
@@ -54,38 +56,43 @@ the last commit, held both ways, so a step toward a budget is noticed as
 much as a step over it. The perf tolerances are the measured wobble of a
 headless boot and a GPU frame, and say so in the file.
 
-There is no pace gate: it went with the stub, there being nothing to play
-and so no pace to hold. It comes back with the first thing that can be
-played, as a figure in the game's own terms (strokes to hole out, say),
-played by an autopilot of its own. The shape to copy is in the template and
-in this repo's first commit: `src/autopilot.ts`, `scripts/pace.ts`,
-`scripts/pace-check.ts` and their tests, and `pace:check` in `check`.
+The pace gate holds the strokes a round takes, the mean over sixteen seeds,
+played by the autopilot with a player's slips: a few degrees of aim, a
+tenth of the power. A median was tried and jumps a whole stroke between
+sets of seeds; the mean held within 5%, so the tolerance of a fifth is four
+times its wobble. Par is set from the same player: `npm run pace` prints
+each hole's median against its par.
 
 ## What the gates hold now
 
-A course with a ball and a shot and no cup gives some gates little to hold,
-and a gate that holds little looks like one that holds a lot. What each
-holds today, and what the next features must hand it:
+A gate that holds little looks like one that holds a lot. What each holds
+today, and what the next features must hand it:
 
 - **Unit tests, smoke, look, perf:** the real thing. They grow as any
   feature's tests do.
-- **Fuzz:** the monkey strikes the ball any way at any power, tries to
-  strike it while it rolls, waits, and reloads. Each thing a player can do
-  is an action in `scripts/fuzzer.ts`.
+- **Fuzz:** the monkey strikes the ball any way at any power, strikes it
+  well at the cup (the autopilot's shot, slipped), tries to strike it while
+  it rolls or between holes, waits, reloads, and asks for another round when
+  one is over. It gets round the whole course. Each thing a player can do is
+  an action in `scripts/fuzzer.ts`.
 - **Invariants:** bodies are of a kind, are numbers and are out of the rock;
-  the world's count is right; the time is a time; the ball is there, alone,
-  and never faster than the hardest shot; the strokes are a count. The speed
-  rule holds only while nothing on the course adds speed: a bumper changes
-  it, and must say by how much.
-- **Determinism:** seeded shots, struck whenever the ball is at rest, from
-  a player's chance apart from the game's. The autopilot takes over here
-  when there is one.
-- **Leaks:** ten minutes of the ball at rest on the tee, since nothing plays
-  it. The sizes and ceilings are right, and nothing yet grows to test them.
-- **Bench:** the course at rest, which costs next to nothing, and the course
-  full of falling balls, which is the physics at `BODY_CAPACITY`. A frame
-  of either is far under the gate's 0.05 ms of slack, so the gate cannot
-  fail until the physics costs several times what it does.
+  the world's count is right; the time is a time; the ball is there while a
+  hole is played, alone, and never faster than the hardest shot (or than its
+  fall into the cup); the strokes are a count within the hole's limit; the
+  card has a score for each hole finished and no other, each between one and
+  the limit. The speed rule holds only while nothing on the course adds
+  speed: a bumper changes it, and must say by how much.
+- **Determinism:** the autopilot plays, with a player's slips from its own
+  chance, round after round, and the hash takes in the hole and the card.
+- **Pace:** the strokes a round takes; see above.
+- **Leaks:** ten minutes of the autopilot playing round after round. The
+  card is emptied each round and watched against the number of holes.
+- **Bench:** the physics on a green of its own, the size the course was
+  before it had holes, so its figures are the physics' and not the
+  content's: at rest, which costs next to nothing, and full of falling balls
+  at `BODY_CAPACITY`. A frame of either is far under the gate's 0.05 ms of
+  slack, so the gate cannot fail until the physics costs several times what
+  it does.
 
 ## Commands
 
@@ -96,13 +103,16 @@ holds today, and what the next features must hand it:
     npm run fuzz           the game played at random, rules checked; -- --seed N plays one failure again
     npm run determinism    the same seed played twice, hashed, to catch chance not from the seed
     npm run leaks          an hour of play, watching what must stay bounded (10 min of it in check)
+    npm run pace           the strokes a round takes, seed by seed, and each hole's median against its par; pace:check holds it
     npm run bench          the physics' frame time held to scripts/bench-baseline.json
     npm run perf           boot, frame and download held to smoke/perf-baseline.json and the budget
     npm run smoke          the game in headless Chromium on the real GPU (Playwright, smoke/)
     npm run look           the scenes held to the pictures in smoke/screens
 
-`--update` on `bench`, `npm run perf:update` and `npm run look:update`
-write a baseline again. Only through `/gate-moved`, only for a
+`--update` on `pace:check` or `bench`, `npm run perf:update` and `npm run
+look:update` write a baseline again. `look:update` leaves a picture that is
+within tolerance as it was; `npx playwright test smoke/look.spec.ts
+--update-snapshots=all` writes every one. Only through `/gate-moved`, only for a
 change meant to move it, and the commit says why. Look at every picture.
 
 ## How the code is laid out
@@ -119,9 +129,16 @@ change meant to move it, and the commit says why. Look at every picture.
 - `src/scene.ts` is the course as it is drawn, and its palette. The look is
   toon daylight on artshape-render v0.18.0, set up at the top of `main.ts`.
 - `src/debug.ts` is `window.game`, the test API. `src/invariants.ts` lists
-  the rules that must always hold.
-- Content (the floor, the rock, the tee, the kinds of body, the hardest shot
-  and how the ball rolls) lives in `arena.ts`. The save
+  the rules that must always hold. `src/autopilot.ts` plays the game by
+  itself, for the gates and for par.
+- `src/hud.ts` is the words over the course: the hole and strokes, the
+  score's name when a hole is done, and the card. `src/score.ts` names a
+  score. Both are given what to show and never read the game.
+- The holes are content in `course.ts`: each a map drawn as seen from the
+  tee (`#` rail, `.` grass, `T` tee, `C` cup, space for off the course) and
+  a par, and the cup's size. `arena.ts` reads a map into a layout, and holds
+  the kinds of body, the hardest shot and how the ball rolls. Each hole is a
+  world of its own, made when it begins: nothing may keep `game.world`. The save
   lives in `progress.ts`. Chance comes from `random.ts`, handed in.
 - `src/physics.ts` is the game's side of artshape-physics, and nothing else
   imports the package directly. A change a package needs goes in that repo,
@@ -138,25 +155,34 @@ before anything is written; **/commit** commits in the house style.
 
 What to copy the shape of, when building something new:
 
-- **What the player sees and does:** the ball and the shot. The ball is a
-  kind in `arena.ts`, spawned and struck by `game.ts`, which tells of it
-  through `struck` and `stopped`. A drag becomes a shot in `shot.ts`. The
-  ball and the aim are drawn by `scene.ts`, held by `invariants.ts`, read
-  by `debug.ts`'s `ball` and `state`, driven by a real pointer in
+- **What the player sees and does:** the ball and the shot, and the round.
+  The ball is a kind in `arena.ts`, spawned and struck by `game.ts`, which
+  tells of it through `struck` and `stopped`. A drag becomes a shot in
+  `shot.ts`. A hole is a map in `course.ts`, begun by `game.begin`, told of
+  through `started`, `holed`, `pickedUp` and `finished`, drawn by
+  `scene.static(layout)` and shown by `hud.ts`. Each is held by
+  `invariants.ts`, read by `debug.ts`, driven by a real pointer in
   `smoke/progress.spec.ts`, and pictured in `smoke/look.spec.ts`.
-- **Tools:** the fuzzer (`scripts/fuzzer.ts`) and the bench
-  (`scripts/bench.ts`). The fuzzer has unit tests of its own working parts.
-- **Test helpers:** `newGame(seed)` in `test/helpers.ts`, and `memoryStore`
-  in `src/progress.ts` for a save that is not the player's.
+- **Tools:** the autopilot (`src/autopilot.ts`), and the gates built on it:
+  pace (`scripts/pace.ts`), the fuzzer (`scripts/fuzzer.ts`) and the bench
+  (`scripts/bench.ts`). Each has unit tests of its own working parts; the
+  autopilot's say how far a shot rolls, that it sees round a corner, and
+  that it finishes every hole.
+- **Test helpers:** `newGame(seed)` in `test/helpers.ts`, `onGreen()` for a
+  practice green whose cup is out of the way of tests of the ball, and
+  `memoryStore` in `src/progress.ts` for a save that is not the player's.
 
 ## The test API
 
 `window.game`, in `src/debug.ts`, typed, and the smoke tests compile against
 it. Time: `pause`, `resume`, `step(frames)`, `seed(n)`, and `?seed=N` and
 `?paused=1` on the page. Reading: `state` (with `strokes` and `ready`),
-`ball`, `bodies`, `content` (with the tee and the hardest shot), `events`,
-`invariants`, and `aiming`, the shot a drag under way would make. Playing:
-`shoot(angle, power)`, and `drag(page, from, to, { touch, hold })` in
+`ball`, `bodies`, `content` (the hole's grass, tee and cup, the hardest
+shot, and every hole's name and par), `events`, `invariants`, and `aiming`,
+the shot a drag under way would make. `state` has the hole, its par, the
+phase (`play`, `done`, `over`) and the card. Playing: `shoot(angle,
+power)`, `suggest()` for the autopilot's shot from where the ball lies,
+`startHole(index)`, `newRound()`, and `drag(page, from, to, { touch, hold })` in
 `smoke/game.ts` for a real mouse or finger, pressed where `project(x, y,
 z)` says a point on the course is on the page. Setting a scene: `place` for
 a body that exists, `save`, and `start(page, { save })` for a save that is
@@ -169,14 +195,19 @@ ball down at a lie.
 Each of these is the first feature's to bring, with every gate green at
 each step, and a gate handed what it needs in the same change:
 
-- The cup, and holing out. `makeWorld` in `physics.ts` takes no holes now.
+- A cup that lets a ball run over or lip out. The package now in the game
+  takes nearly every ball whose middle crosses the cup, at any speed (see
+  `test/cup.test.ts`), so the first hole is a hole in one for the autopilot
+  every time. 0.4.0's rim brings it, with a table to choose the cup's width
+  from; the cup test and the pars are set again then.
+- Holes 3 to 9, which need bunkers, water, barriers, bumpers, the windmill
+  and the conveyor.
 - The physics the golf needs, from artshape-physics' next version: see
   `DESIGN.md`. Until it comes, a ball meets the rail with almost no bounce,
   and slows by drag, not by rolling resistance.
 - Anything saved. `Save` is empty and `Progress` reads no field; the first
   field is read in its constructor, with a default, and a save in the new
   shape goes in `test/saves/`.
-- The pace gate and its autopilot.
 
 ## Rules for the code
 

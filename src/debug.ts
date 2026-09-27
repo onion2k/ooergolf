@@ -12,7 +12,9 @@
  * The types are shared with the smoke tests, so a test that calls something
  * that is not here does not compile.
  */
-import { FLOOR, HARDEST_SHOT, KIND_NAME, TEE } from './arena';
+import { HARDEST_SHOT, KIND_NAME } from './arena';
+import { Autopilot } from './autopilot';
+import { CUP } from './course';
 import type { Game } from './game';
 import { checkInvariants } from './invariants';
 import { seeded } from './random';
@@ -34,6 +36,13 @@ export interface GameState {
   strokes: number;
   /** Whether a shot can be taken: the ball at rest. */
   ready: boolean;
+  /** Which hole, from nought, and its par. */
+  hole: number;
+  par: number;
+  /** A hole in play, a hole done and the next about to begin, or the round over. */
+  phase: 'play' | 'done' | 'over';
+  /** Each hole finished this round, what it was scored. */
+  card: number[];
 }
 
 /** The ball, where it is and how fast it is going. */
@@ -56,11 +65,16 @@ export interface Body {
 }
 
 /** Where things are, for setting a scene without importing the game's source. */
+/** The hole being played, for setting a scene without importing the game's source. */
 export interface Content {
+  /** The box round the grass. */
   floor: { minX: number; minY: number; maxX: number; maxY: number };
   tee: { x: number; y: number };
+  cup: { x: number; y: number; radius: number };
   /** The hardest shot, in units a second. */
   hardest: number;
+  /** Every hole of the course: its name and par. */
+  holes: { name: string; par: number }[];
 }
 
 export interface GameApi {
@@ -92,6 +106,12 @@ export interface GameApi {
   shoot(angle: number, power: number): boolean;
   /** The shot the drag under way would make if let go now, or null for none. */
   aiming(): { angle: number; power: number } | null;
+  /** The shot the autopilot would take from where the ball lies, or null when none can be taken. */
+  suggest(): { angle: number; power: number } | null;
+  /** Hole `index` begun, from its tee, with the card as if the holes before it had not been played. */
+  startHole(index: number): void;
+  /** A new round, as the card's button asks for. */
+  newRound(): void;
   /** The save written now, and what it is. */
   save(): string;
 
@@ -126,7 +146,8 @@ export interface DebugHost {
 
 export function createApi(host: DebugHost): GameApi {
   const { game } = host;
-  const { world, progress } = game;
+  // the world is the hole's, made again for each: read it through the game every time, never kept
+  const { progress } = game;
   return {
     version: 1,
     get ready() {
@@ -150,46 +171,71 @@ export function createApi(host: DebugHost): GameApi {
         t: game.t,
         frame: host.frame(),
         paused: host.paused(),
-        live: world.live,
+        live: game.world.live,
         strokes: game.strokes,
         ready: game.ready,
+        hole: game.hole,
+        par: game.def.par,
+        phase: game.phase,
+        card: [...game.card],
       };
     },
     ball() {
       const i = game.ball;
       return {
-        x: world.x[i],
-        y: world.y[i],
-        z: world.z[i],
-        speed: Math.hypot(world.vx[i], world.vy[i], world.vz[i]),
+        x: game.world.x[i],
+        y: game.world.y[i],
+        z: game.world.z[i],
+        speed: Math.hypot(game.world.vx[i], game.world.vy[i], game.world.vz[i]),
         ready: game.ready,
       };
     },
     bodies(kind) {
       const out: Body[] = [];
-      for (let i = 0; i < world.count; i++) {
-        if (!world.alive[i]) continue;
-        const name = KIND_NAME[world.kind[i]];
+      for (let i = 0; i < game.world.count; i++) {
+        if (!game.world.alive[i]) continue;
+        const name = KIND_NAME[game.world.kind[i]];
         if (kind !== undefined && name !== kind) continue;
-        out.push({ slot: i, kind: name, x: world.x[i], y: world.y[i], z: world.z[i], asleep: !!world.asleep[i] });
+        out.push({
+          slot: i,
+          kind: name,
+          x: game.world.x[i],
+          y: game.world.y[i],
+          z: game.world.z[i],
+          asleep: !!game.world.asleep[i],
+        });
       }
       return out;
     },
-    content: () => ({ floor: { ...FLOOR }, tee: { ...TEE }, hardest: HARDEST_SHOT }),
+    content: () => ({
+      floor: { ...game.layout.bounds },
+      tee: { ...game.layout.tee },
+      cup: { ...game.layout.cup, radius: CUP.radius },
+      hardest: HARDEST_SHOT,
+      holes: game.course.map((h) => ({ name: h.name, par: h.par })),
+    }),
     events() {
       return host.events.splice(0);
     },
     invariants: () => checkInvariants(game),
 
     place(slot, x, y, z) {
-      if (!world.alive[slot]) return;
-      world.x[slot] = x;
-      world.y[slot] = y;
-      if (z !== undefined) world.z[slot] = z;
-      world.vx[slot] = world.vy[slot] = world.vz[slot] = 0;
-      world.wake(slot);
+      if (!game.world.alive[slot]) return;
+      game.world.x[slot] = x;
+      game.world.y[slot] = y;
+      if (z !== undefined) game.world.z[slot] = z;
+      game.world.vx[slot] = game.world.vy[slot] = game.world.vz[slot] = 0;
+      game.world.wake(slot);
     },
     shoot: (angle, power) => game.shoot(angle, power),
+    suggest: () => (game.ready ? new Autopilot(game).plan() : null),
+    startHole(index) {
+      game.newRound();
+      // the card as if the holes before had been played at par: a card of the right length, so the rules hold
+      for (let h = 0; h < index; h++) game.card.push(game.course[h].par);
+      game.begin(index);
+    },
+    newRound: () => game.newRound(),
     aiming: () => host.aiming(),
     save() {
       game.persist();

@@ -67,6 +67,69 @@
     color: var(--gold);
     font-variant-numeric: tabular-nums;
   }
+  #strokes small {
+    display: block;
+    color: var(--dim);
+    font-size: 12px;
+  }
+  #toast {
+    top: 22%;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 30px;
+    font-weight: 700;
+    padding: 12px 26px;
+    color: var(--gold);
+    white-space: nowrap;
+  }
+  #card {
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: min(360px, calc(100vw - 32px));
+    padding: 18px 20px;
+    pointer-events: auto;
+  }
+  #card h2 {
+    margin: 0 0 10px;
+    font-size: 20px;
+  }
+  #card table {
+    width: 100%;
+    border-collapse: collapse;
+    font-variant-numeric: tabular-nums;
+  }
+  #card th,
+  #card td {
+    text-align: left;
+    padding: 4px 6px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  #card th {
+    color: var(--dim);
+    font-weight: 400;
+  }
+  #card td:nth-child(n + 3),
+  #card th:nth-child(n + 3) {
+    text-align: right;
+  }
+  #card tfoot td {
+    font-weight: 700;
+    color: var(--gold);
+    border: 0;
+  }
+  #again {
+    margin-top: 14px;
+    width: 100%;
+    padding: 10px;
+    font: inherit;
+    font-weight: 700;
+    color: #1a1420;
+    background: var(--gold);
+    border: 0;
+    border-radius: 8px;
+    cursor: pointer;
+  }
   #stats {
     top: 16px;
     right: 16px;
@@ -102,7 +165,29 @@
   }
 </style>
 <div id="stage"><canvas id="view"></canvas></div>
-<div class="panel" id="strokes" hidden><b>0</b>strokes</div>
+<div class="panel" id="strokes" hidden><small id="holeName"></small><b>0</b>strokes <span id="holePar"></span></div>
+<div class="panel" id="toast" hidden></div>
+<div class="panel" id="card" hidden>
+  <h2>The card</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Hole</th>
+        <th>Par</th>
+        <th>Score</th>
+      </tr>
+    </thead>
+    <tbody id="cardRows"></tbody>
+    <tfoot>
+      <tr>
+        <td colspan="3">Total</td>
+        <td id="cardTotal"></td>
+      </tr>
+    </tfoot>
+  </table>
+  <button id="again">Play again</button>
+</div>
 <div class="panel" id="stats" hidden></div>
 <div class="panel" id="help" hidden>drag back and let go to putt</div>
 <div id="boot">

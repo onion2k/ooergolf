@@ -3,7 +3,10 @@
  * do at random everything a player can make happen, and checked after every
  * few frames for anything that must always hold and does not
  * (`invariants.ts`), and for anything thrown. A player can strike the ball
- * any way at any power, try to strike it while it rolls, wait, and reload.
+ * any way at any power, strike it well at the cup, try to strike it while it
+ * rolls or between holes, wait, reload, and ask for another round when one
+ * is over. Random shots reach each hole's limit, and good ones hole out, so
+ * the monkey gets round the whole course.
  *
  * Only what a player could do. A monkey that did what no player can would
  * find bugs no player will. A new thing a player can do gets an action here.
@@ -11,6 +14,7 @@
  * From a seed, so a failure can be played again exactly: `npm run fuzz --
  * --seed N` does, and prints what was done before it went wrong.
  */
+import { Autopilot } from '../src/autopilot';
 import { Game, type GameEvents } from '../src/game';
 import { checkInvariants } from '../src/invariants';
 import { Progress, memoryStore } from '../src/progress';
@@ -83,19 +87,40 @@ export function fuzz(seed: number, frames: number): FuzzResult {
         },
       ],
       [
+        4,
+        () => {
+          // a player who can play: the autopilot's shot at the cup, slipped a little
+          const shot = new Autopilot(game).plan();
+          if (!shot) return;
+          if (game.shoot(shot.angle + between(-0.08, 0.08), shot.power * between(0.85, 1.15))) did('shoot well');
+          busy = Math.floor(between(10, 90));
+        },
+      ],
+      [
         2,
         () => {
-          // a player can let go of a drag while the ball rolls: it must be refused, and not counted
+          // a player can let go of a drag while the ball rolls, or between holes: it must be refused, and not counted
           if (game.ready) return;
           const { world, ball } = game;
           const strokes = game.strokes,
             vx = world.vx[ball],
             vy = world.vy[ball];
           if (game.shoot(between(-Math.PI, Math.PI), 1))
-            throw new Error(`a shot was taken with the ball moving at ${Math.hypot(vx, vy).toFixed(2)}`);
+            throw new Error(
+              `a shot was taken with the ball moving at ${Math.hypot(vx, vy).toFixed(2)}, in ${game.phase}`,
+            );
           if (game.strokes !== strokes || world.vx[ball] !== vx || world.vy[ball] !== vy)
             throw new Error('a refused shot changed the ball or the strokes');
           did('shoot while rolling');
+        },
+      ],
+      [
+        2,
+        () => {
+          // the card's button, when the round is over
+          if (game.phase !== 'over') return;
+          game.newRound();
+          did('play again');
         },
       ],
       [

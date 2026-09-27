@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { BALL, FLOOR, HARDEST_SHOT, KIND_RADIUS, TEE } from '../src/arena';
+import { BALL, HARDEST_SHOT, KIND_RADIUS } from '../src/arena';
 import { checkInvariants } from '../src/invariants';
-import { DT, newGame, settle } from './helpers';
+import { DT, onGreen as newGame, settle } from './helpers';
 
 /** Play until the ball is ready to be struck again, or `seconds` pass; the time it took, or Infinity. */
 function untilReady(game: ReturnType<typeof newGame>['game'], seconds = 20): number {
@@ -17,20 +17,22 @@ describe('the game', () => {
   it('starts with one ball at rest on the tee, ready, and no strokes taken', () => {
     const { game, told } = newGame();
     const { world, ball } = game;
+    const tee = game.layout.tee;
     expect(world.live).toBe(1);
     expect(world.alive[ball]).toBe(1);
     expect(world.kind[ball]).toBe(BALL);
-    expect(world.x[ball]).toBeCloseTo(TEE.x, 1);
-    expect(world.y[ball]).toBeCloseTo(TEE.y, 1);
+    expect(world.x[ball]).toBeCloseTo(tee.x, 1);
+    expect(world.y[ball]).toBeCloseTo(tee.y, 1);
     expect(world.z[ball]).toBeCloseTo(KIND_RADIUS[BALL], 1);
     expect(game.ready).toBe(true);
     expect(game.strokes).toBe(0);
-    expect(told).toEqual([]);
+    expect(told).toEqual(['started 0 3']);
     expect(checkInvariants(game)).toEqual([]);
   });
 
   it('strikes the ball the way it is aimed, at its share of the hardest shot, and counts the stroke', () => {
     const { game, told } = newGame();
+    const tee = game.layout.tee;
     expect(game.shoot(Math.PI / 2, 0.5)).toBe(true);
     const { world, ball } = game;
     expect(world.vx[ball]).toBeCloseTo(0, 6);
@@ -38,7 +40,7 @@ describe('the game', () => {
     expect(world.vz[ball]).toBe(0);
     expect(game.strokes).toBe(1);
     expect(game.ready).toBe(false);
-    expect(told).toEqual([`struck 0.5 ${TEE.x} ${TEE.y}`]);
+    expect(told).toEqual(['started 0 3', `struck 0.5 ${tee.x} ${tee.y}`]);
   });
 
   it('holds power to between none and the hardest shot', () => {
@@ -79,7 +81,7 @@ describe('the game', () => {
       const { game } = newGame();
       game.shoot(Math.PI / 2, power);
       untilReady(game);
-      return game.world.y[game.ball] - TEE.y;
+      return game.world.y[game.ball] - game.layout.tee.y;
     };
     const short = dist(0.2),
       mid = dist(0.5);
@@ -88,11 +90,12 @@ describe('the game', () => {
   });
 
   it('stays out of the rock after the hardest shot into a wall and into a corner', () => {
+    const { bounds } = newGame().game.layout;
     for (const [x, y, angle] of [
       [0, 0, 0],
       [0, 0, Math.PI],
-      [FLOOR.maxX - 6, FLOOR.maxY - 6, Math.PI / 4],
-      [FLOOR.minX + 6, FLOOR.minY + 6, (-3 * Math.PI) / 4],
+      [bounds.maxX - 6, bounds.maxY - 12, Math.PI / 4],
+      [bounds.minX + 12, bounds.minY + 6, (-3 * Math.PI) / 4],
     ]) {
       const { game } = newGame();
       game.place(x, y);
