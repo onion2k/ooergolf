@@ -140,9 +140,10 @@ test.describe('what it looks like', () => {
       for (let s = 0; s < 6 && g.state().phase === 'play'; s++) {
         const shot = g.suggest();
         if (shot) g.shoot(shot.angle, shot.power);
-        for (let f = 0; f < 720 && g.state().phase === 'play' && !g.state().ready; f += 10) g.step(10);
+        for (let f = 0; f < 720 && g.state().phase === 'play' && !g.state().ready; f += 1) g.step(1);
       }
-      g.step(10);
+      // the confetti up in the air over the cup: a frame at a time, since the particles move only as they are drawn
+      for (let f = 0; f < 24; f++) g.step(1);
     });
     await hideStats(page);
     await expect(page).toHaveScreenshot('holed.png', TOLERANCE);

@@ -8,7 +8,7 @@
 import { createContext } from 'artshape-render/gpu/context';
 import { LightPool } from 'artshape-render/game/lights';
 import { GameRenderer } from 'artshape-render/game/renderer';
-import { HARDEST_SHOT } from './arena';
+import { BALL, HARDEST_SHOT, KIND_RADIUS } from './arena';
 import { CameraRig } from './camera';
 import { CLUBS } from './clubs';
 import { createApi } from './debug';
@@ -19,7 +19,9 @@ import { Hud } from './hud';
 import { daylight } from './look';
 import { Progress } from './progress';
 import { seeded } from './random';
+import { roll } from './roll';
 import { Scene, boxOf } from './scene';
+import { cupBurst, splash, strikePuff } from './bursts';
 import { Gesture } from './gesture';
 import { glint } from './glints';
 import { EFFECT_STRIDE } from 'artshape-render/game/renderer';
@@ -55,6 +57,9 @@ async function main() {
   const renderer = new GameRenderer(ctx, LIGHT_CAPACITY, EFFECT_CAPACITY, PARTICLE_CAPACITY, MM_PER_UNIT);
   // the daylight look, the same one the models' showcase is drawn in
   daylight(renderer, ctx);
+  // the particles' gravity, in world units a second squared: a real 9.8 m/s² here pulls confetti back into the cup
+  // before it is out of it, so a lighter one, as Miner has, and the bursts' own gravity scales it
+  renderer.gravity = 30;
   renderer.camera.near = 2;
   renderer.camera.far = 800;
 
@@ -96,32 +101,25 @@ async function main() {
       if (!game) return;
       const { layout } = game;
       renderer.setStatic(scene.static(layout, game.course[index].name, game.obstacles));
-      renderer.setDynamic(scene.dynamic(game.obstacles));
+      renderer.setDynamic(scene.dynamic(game.obstacles, layout, game.course[index].name));
       renderer.setSunShadow(boxOf(layout));
       rig.jump(layout.tee.x, layout.tee.y);
       hud.started({ index, count: game.course.length, name: game.course[index].name, par });
     },
-    struck: () => hud.setStrokes(game?.strokes ?? 0),
+    struck(power, x, y) {
+      hud.setStrokes(game?.strokes ?? 0);
+      for (const e of strikePuff(x, y, power)) renderer.emit(e);
+    },
     // into the water: a splash where it went in, and a word, and the stroke it cost
     splash(x, y) {
       hud.setStrokes(game?.strokes ?? 0);
       hud.splash();
-      renderer.emit({
-        position: [x, y, 0],
-        velocity: [0, 0, 9],
-        spread: 5,
-        count: 60,
-        life: 0.9,
-        lifeSpread: 0.3,
-        size: 0.22,
-        growth: 0.6,
-        colour: [0.75, 0.9, 1],
-        alpha: 0.8,
-        gravity: 1,
-        floor: -0.1,
-      });
+      for (const e of splash(x, y)) renderer.emit(e);
     },
-    holed: (strokes, par) => hud.done(strokes, par, false),
+    holed(strokes, par) {
+      hud.done(strokes, par, false);
+      if (game) for (const e of cupBurst(game.layout.cup.x, game.layout.cup.y, strokes === 1)) renderer.emit(e);
+    },
     pickedUp: (strokes, par) => hud.done(strokes, par, true),
     finished: () => game && hud.finished(game.course, game.card),
     paid: showPurse,
@@ -214,7 +212,7 @@ async function main() {
     const dots = played.ready ? scene.writeAim(world.x[ball], world.y[ball], gesture.aim, reach) : 0;
     renderer.move(1, scene.aim, dots);
     if (dots) renderer.tint(1, scene.aimLooks);
-    scene.writeMoving().forEach((m, k) => renderer.move(2 + k, m.matrices, m.count));
+    scene.writeMoving(played.t).forEach((m, k) => renderer.move(2 + k, m.matrices, m.count));
     shine();
   }
 
@@ -289,9 +287,12 @@ async function main() {
   function simulate(dt: number) {
     frames++;
     played.step(dt);
-    // the camera keeps game time, so a test stepping the game sees it follow the same way every run
     const { world, ball } = played;
-    if (!parked && world.alive[ball]) rig.follow(world.x[ball], world.y[ball], dt);
+    if (!world.alive[ball]) return;
+    // the ball seen to roll, as far as it went this frame
+    roll(scene.ballTurn, world.vx[ball], world.vy[ball], KIND_RADIUS[BALL], dt);
+    // the camera keeps game time, so a test stepping the game sees it follow the same way every run
+    if (!parked) rig.follow(world.x[ball], world.y[ball], dt);
   }
   function draw(dt: number) {
     rig.place(cam);

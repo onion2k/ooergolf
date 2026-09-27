@@ -143,6 +143,14 @@ change meant to move it, and the commit says why. Look at every picture.
   dark: at the sky's own colour it washed the whole course white.
   `src/glints.ts` says when the gold of the cup and the pin twinkles, from
   game time, and the page draws it as one of the renderer's glow quads.
+- What moves only to be seen, all from game time so a picture is the same
+  every run: `src/roll.ts` turns the ball as it rolls (the physics eases a
+  ball at rest toward flat, as a coin, so its turn is no good for this),
+  and the ball wears a band so the roll shows; `src/sway.ts` swings the
+  flag, leans the trees and swells the ripples; `src/bursts.ts` is the
+  particles for a stroke, the cup and water. The particles move only as a
+  frame is drawn, so a test that pictures them steps a frame at a time, and
+  their gravity is set on the renderer in world units (30, as Miner has).
 - `src/models.ts` and `src/models/` are the models: the cup, collar, flag
   and tee markers; the obstacles at the sizes the physics will give them
   (bumper, barrier, windmill with its turning blades, water, bunker,

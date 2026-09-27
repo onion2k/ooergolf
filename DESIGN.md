@@ -192,6 +192,10 @@ and all the words in the page, not the picture.
   clubs and the balls.
 - **Water** is opaque, blue and glossy, with a splash of particles, the
   game path having no transparency.
+- **Movement** that is only to be seen: the ball turns as it rolls, with a
+  red band round it to show it; the flag swings, the trees lean and the
+  ripples swell in a breeze; a puff of grass at a stroke, confetti and
+  sparkles out of the cup, and a splash in water.
 - **Decoration** is for fun and the physics knows nothing of it: trees,
   hedges, flowers, bunting, a flag in every cup. Each hole has its own
   scatter of it on the rough, the same every time.

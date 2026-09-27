@@ -15,7 +15,7 @@
  * The models are `models.ts`'s.
  */
 import type { GameGroup } from 'artshape-render/game/renderer';
-import { MATERIAL_STRIDE } from 'artshape-render/game/renderer';
+import { MATERIAL_STRIDE, PATTERN_STRIDE } from 'artshape-render/game/renderer';
 import { BALL, KIND_RADIUS, TILE, tileAt, type Layout } from './arena';
 import { CUP } from './course';
 import { place } from './matrix';
@@ -41,7 +41,9 @@ import {
 } from './models';
 import { BARRIER, WINDMILL, type Obstacles } from './obstacles';
 import type { World } from './physics';
+import { placeRolling } from './roll';
 import { scatter, type Piece, type SceneryKind } from './scenery';
+import { flagTurn, lean, ripple } from './sway';
 import type { Shot } from './shot';
 
 /** How tall the rail stands above the grass: a little over the ball, so it reads as the thing the ball banks off. */
@@ -65,6 +67,8 @@ export const PALETTE = {
   /** The sides of grass raised on a step: the earth under the turf. */
   bank: [0.2, 0.3, 0.08, 0.9],
   ball: [0.98, 0.98, 0.96, 0.25],
+  /** The band round the ball's middle, so it is seen to roll. */
+  ballBand: [0.9, 0.16, 0.12],
   /** The aim's dots, from a gentle putt to the hardest shot. */
   aimSoft: [0.35, 0.95, 0.4],
   aimHard: [1.0, 0.25, 0.15],
@@ -82,7 +86,35 @@ const SCENERY_MODELS: Record<Exclude<SceneryKind, 'flowers'>, Model> = {
   hedge: hedge(4, 1.6, 1.8),
   rock: rock(1.4),
 };
+/** The kinds of scenery that lean in the breeze. */
+const TREES = new Set<SceneryKind>(['round tree', 'pine']);
 const FLOWER_MODELS = FLOWER_COLOURS.slice(0, 3).map((c, k) => flowers(c, { seed: k + 1 }));
+
+/** Which way the flag flies when the breeze is still: across the course, never at the camera. */
+const FLAG_YAW = Math.PI / 6;
+
+/**
+ * Placement `i` of `out`: turned `yaw` about Z and scaled by `scale`, then
+ * leaned `lx` across X and `ly` along Y about its foot, and put at (x, y, z).
+ * For a tree in the breeze.
+ */
+function placeLeaning(
+  out: Float32Array,
+  i: number,
+  x: number,
+  y: number,
+  z: number,
+  yaw: number,
+  scale: number,
+  lx: number,
+  ly: number,
+) {
+  const cy = Math.cos(yaw) * scale,
+    sy = Math.sin(yaw) * scale;
+  // a small lean: the up axis tipped by (lx, ly), and the others kept square to it near enough
+  const o = i * 16;
+  out.set([cy, sy, -lx * scale, 0, -sy, cy, -ly * scale, 0, lx * scale, ly * scale, scale, 0, x, y, z, 1], o);
+}
 
 /** Every part of a model as a group, all placed by the same matrices. */
 function groups(model: Model, matrices: Float32Array): GameGroup[] {
@@ -94,8 +126,10 @@ export class Scene {
   readonly ball = new Float32Array(16);
   readonly aim = new Float32Array(AIM_DOTS * 16);
   readonly aimLooks = new Float32Array(AIM_DOTS * MATERIAL_STRIDE);
-  /** The pools of what moves on the hole, each a group after the ball and the aim, written each frame. */
-  private moving: { matrices: Float32Array; count: number; write: (out: Float32Array) => void }[] = [];
+  /** The ball's turn as it rolls, kept here since the physics does not keep one for drawing a rolling ball. */
+  readonly ballTurn = new Float32Array([0, 0, 0, 1]);
+  /** The pools of what moves on the hole, each a group after the ball and the aim, written each frame at a time. */
+  private moving: { matrices: Float32Array; count: number; write: (out: Float32Array, t: number) => void }[] = [];
 
   /** What does not move on this hole, which is called `name`, with what stands still of what moves on it. */
   static(layout: Layout, name = '', obstacles?: Obstacles): GameGroup[] {
@@ -158,8 +192,7 @@ export class Scene {
     place(atCup, 0, at.x, at.y, 0);
     const [collarPart] = collar(TILE, CUP.radius).parts;
     const flagAt = new Float32Array(16);
-    // the flag flies across the course, never at the camera
-    place(flagAt, 0, at.x, at.y, 0, Math.PI / 6);
+    place(flagAt, 0, at.x, at.y, 0, FLAG_YAW);
     const teeAt = new Float32Array(16);
     place(teeAt, 0, tee.x, tee.y, 0);
 
@@ -173,7 +206,8 @@ export class Scene {
       { mesh: box(TILE, TILE, 1), matrices: rails, ...look(PALETTE.rail) },
       { mesh: square(), matrices: rough, ...look(PALETTE.rough) },
       ...groups(cup(CUP.radius), atCup),
-      ...groups(flag(FLAG_COLOURS.red), flagAt),
+      // the pin and its knob stand still; the flag's cloth swings in the breeze, and is among what moves
+      ...groups({ parts: flag(FLAG_COLOURS.red).parts.filter((p) => p.name !== 'flag') } as Model, flagAt),
       ...groups(teeMarkers(TEE_SPACING), teeAt),
       ...this.scenery(scatter(layout, name)),
       ...this.ponds(layout),
@@ -199,9 +233,27 @@ export class Scene {
    * shallows round its own edge, and not a grid of puddles.
    */
   private ponds(layout: Layout): GameGroup[] {
+    return this.eachPond(layout).flatMap(({ model, at }) => groups(model, at));
+  }
+
+  /** Each pond's ripples, swelling and settling, among what moves. */
+  private ripples(
+    layout: Layout,
+    pool: (model: { parts: Model['parts'] }, write: (out: Float32Array, t: number) => void) => void,
+  ) {
+    this.eachPond(layout).forEach(({ model, x, y }, k) =>
+      pool({ parts: model.moving }, (m, t) => {
+        const s = ripple(t, k);
+        place(m, 0, x, y, 0, 0, s, s, 1);
+      }),
+    );
+  }
+
+  /** The ponds of a hole: each the largest rectangle of water tiles from the first not yet in one. */
+  private eachPond(layout: Layout): { model: Model; at: Float32Array; x: number; y: number }[] {
     const { cols, rows, originX, originY, water: isWater } = layout;
     const used = new Uint8Array(cols * rows);
-    const out: GameGroup[] = [];
+    const out: { model: Model; at: Float32Array; x: number; y: number }[] = [];
     for (let t = 0; t < cols * rows; t++) {
       if (!isWater[t] || used[t]) continue;
       const tx = t % cols,
@@ -216,8 +268,10 @@ export class Scene {
       }
       for (let j = 0; j < h; j++) for (let k = 0; k < w; k++) used[t + j * cols + k] = 1;
       const at = new Float32Array(16);
-      place(at, 0, originX + (tx + w / 2) * TILE, originY + (ty + h / 2) * TILE, 0);
-      out.push(...groups(water(w * TILE, h * TILE, { seed: t + 1 }), at));
+      const x = originX + (tx + w / 2) * TILE,
+        y = originY + (ty + h / 2) * TILE;
+      place(at, 0, x, y, 0);
+      out.push({ model: water(w * TILE, h * TILE, { seed: t + 1 }), at, x, y });
     }
     return out;
   }
@@ -231,11 +285,13 @@ export class Scene {
       of.forEach((p, k) => place(at, k, p.x, p.y, -ROUGH_DEPTH, p.yaw, p.scale));
       out.push(...groups(model, at));
     };
+    // the trees lean in the breeze, and are among what moves
     for (const [kind, model] of Object.entries(SCENERY_MODELS))
-      draw(
-        model,
-        pieces.filter((p) => p.kind === kind),
-      );
+      if (!TREES.has(kind as SceneryKind))
+        draw(
+          model,
+          pieces.filter((p) => p.kind === kind),
+        );
     FLOWER_MODELS.forEach((model, k) =>
       draw(
         model,
@@ -250,20 +306,50 @@ export class Scene {
    * this hole: a barrier's, a windmill's blades, a conveyor's chevrons. Made
    * again for each hole; the ball is group 0 and the aim group 1.
    */
-  dynamic(obstacles?: Obstacles): GameGroup[] {
+  dynamic(obstacles?: Obstacles, layout?: Layout, name = ''): GameGroup[] {
     const [br, bg, bb, brough] = PALETTE.ball;
+    // one band round the middle: the bands pattern is a wave along the mesh's own Z, a quarter turn on so it peaks at
+    // nought, and at this scale positive only within a third of the radius of the middle
+    const band = new Float32Array(PATTERN_STRIDE);
+    band.set([2, 0.64, 0.25, 0, ...PALETTE.ballBand, 0]);
     const out: GameGroup[] = [
-      { mesh: ball(KIND_RADIUS[BALL], 8, 14), matrices: this.ball, albedo: [br, bg, bb], roughness: brough },
+      {
+        mesh: ball(KIND_RADIUS[BALL], 8, 14),
+        matrices: this.ball,
+        albedo: [br, bg, bb],
+        roughness: brough,
+        patterns: band,
+      },
       { mesh: ball(AIM_RADIUS, 4, 8), matrices: this.aim, count: 0, materials: this.aimLooks },
     ];
     this.moving = [];
-    const pool = (model: { parts: Model['parts'] }, write: (out: Float32Array) => void) => {
-      const matrices = new Float32Array(16);
+    const pool = (model: { parts: Model['parts'] }, write: (out: Float32Array, t: number) => void, count = 1) => {
+      const matrices = new Float32Array(16 * count);
       for (const part of model.parts) {
-        this.moving.push({ matrices, count: 1, write });
-        out.push(group(part, matrices));
+        this.moving.push({ matrices, count, write });
+        out.push(group(part, matrices, count));
       }
     };
+    if (layout) {
+      const { cup } = layout;
+      const cloth = flag(FLAG_COLOURS.red).parts.filter((p) => p.name === 'flag');
+      pool({ parts: cloth }, (m, t) => place(m, 0, cup.x, cup.y, 0, FLAG_YAW + flagTurn(t)));
+      const pieces = scatter(layout, name);
+      for (const kind of TREES) {
+        const trees = pieces.filter((p) => p.kind === kind);
+        if (!trees.length) continue;
+        pool(
+          SCENERY_MODELS[kind as Exclude<SceneryKind, 'flowers'>],
+          (m, t) =>
+            trees.forEach((p, k) => {
+              const [lx, ly] = lean(t, k + p.x);
+              placeLeaning(m, k, p.x, p.y, -ROUGH_DEPTH, p.yaw, p.scale, lx, ly);
+            }),
+          trees.length,
+        );
+      }
+      this.ripples(layout, pool);
+    }
     obstacles?.barriers.forEach((b, k) => {
       const pusher = obstacles.pushers[k];
       pool(barrier(b.hx, BARRIER.hy, BARRIER.hz), (m) => place(m, 0, pusher.x, pusher.y, BARRIER.hz));
@@ -284,15 +370,15 @@ export class Scene {
     return out;
   }
 
-  /** What moves on the hole where it is this frame, into its pools: how many groups there are after the aim. */
-  writeMoving(): { matrices: Float32Array; count: number }[] {
-    for (const m of this.moving) m.write(m.matrices);
+  /** What moves on the hole where it is at game time `t`, into its pools, in the order of the groups after the aim. */
+  writeMoving(t: number): { matrices: Float32Array; count: number }[] {
+    for (const m of this.moving) m.write(m.matrices, t);
     return this.moving;
   }
 
-  /** The ball where it is this frame. */
+  /** The ball where it is this frame, turned as it has rolled. */
   writeBall(world: World, slot: number) {
-    place(this.ball, 0, world.x[slot], world.y[slot], world.z[slot]);
+    placeRolling(this.ball, 0, this.ballTurn, world.x[slot], world.y[slot], world.z[slot]);
   }
 
   /**
