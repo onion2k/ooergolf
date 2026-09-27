@@ -13,6 +13,8 @@ describe('the same seed gives the same game', () => {
     const run = playTwice({ seed: 3, frames: 1200, every: 100 });
     expect(run.diverged, run.note).toBe(null);
     expect(run.checkpoints.length).toBe(12);
+    // and the ball was played: the checkpoints are not all one still course
+    expect(new Set(run.checkpoints).size).toBeGreaterThan(6);
   });
 
   it('hashes what a game is, so anything moved shows', () => {
@@ -26,7 +28,7 @@ describe('the same seed gives the same game', () => {
     }
     const hash = hashGame(one);
     expect(hashGame(two)).toBe(hash);
-    // a ball nudged by a thousandth, the clock a shade on, a ball more: all different games
+    // a ball nudged by a thousandth, the clock a shade on, a stroke more, a ball more: all different games
     const x = one.world.x[slot];
     one.world.x[slot] += 0.001;
     expect(hashGame(one)).not.toBe(hash);
@@ -35,6 +37,9 @@ describe('the same seed gives the same game', () => {
     one.t += 1e-9;
     expect(hashGame(one)).not.toBe(hash);
     one.t = two.t;
+    one.strokes++;
+    expect(hashGame(one)).not.toBe(hash);
+    one.strokes--;
     one.world.spawn(BALL, -2, -3, 4);
     expect(hashGame(one)).not.toBe(hash);
   });

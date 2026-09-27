@@ -52,11 +52,11 @@ test('boots, draws and downloads within budget, and as it did before', async ({ 
   const bundle = bundleKb();
   await start(page, { seed: 11, paused: true });
   const boot = await page.evaluate(() => window.game!.bootMs);
-  // the standard view: the course settled, seen from the look picture's camera
+  // the standard view: the whole course, seen from the far end of the zoom, the most of it there is to draw
   const frame = await page.evaluate(async () => {
     const g = window.game!;
     g.step(180);
-    g.look(0, 0, { azimuth: 0.9, polar: 0.95, radius: 90 });
+    g.look(0, 0, 110);
     g.step(1);
     return g.measureFrame();
   });

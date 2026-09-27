@@ -7,10 +7,10 @@ Vite, and WebGPU through
 physics from [artshape-physics](https://github.com/onion2k/artshape-physics).
 The README says what the game is, and `DESIGN.md` what it is to be; this
 file says how it is made. The house
-rules in `~/.claude/CLAUDE.md` apply too. The template's stub game has been
-taken out: what is in `src/` is an empty course, a floor walled in by rock
-with nothing on it and nothing to do, and every gate but the pace gate
-wired to it. The golf goes in a feature at a time from there.
+rules in `~/.claude/CLAUDE.md` apply too. What is in `src/` is one course:
+a floor walled in by a rail, a ball on a tee, and the shot, a drag pulled
+back and let go. There is no cup yet, and no pace gate. The golf goes in a
+feature at a time from there, in the order `DESIGN.md` gives.
 
 ## The factory
 
@@ -63,23 +63,25 @@ in this repo's first commit: `src/autopilot.ts`, `scripts/pace.ts`,
 
 ## What the gates hold now
 
-An empty course gives a gate little to hold, and a gate that holds little
-looks like one that holds a lot. What each holds today, and what the first
-features must hand it:
+A course with a ball and a shot and no cup gives some gates little to hold,
+and a gate that holds little looks like one that holds a lot. What each
+holds today, and what the next features must hand it:
 
-- **Unit tests, smoke, look, perf:** the real thing, at the size of an empty
-  course. They grow as any feature's tests do.
-- **Fuzz:** the monkey can wait and reload, and no more. Each thing a player
-  can do is an action in `scripts/fuzzer.ts`.
-- **Invariants:** bodies are of a kind, are numbers and are out of the rock,
-  the world's count is right, and the time is a time. No body exists until
-  a feature makes one, so only the tests, which spawn a ball, exercise the
-  first three.
-- **Determinism:** the course left to itself, twice. It will catch chance
-  taken from outside the seed when the game is built, and nothing in play
-  until something plays.
-- **Leaks:** ten minutes of nothing. The sizes and ceilings are right, and
-  nothing yet grows to test them.
+- **Unit tests, smoke, look, perf:** the real thing. They grow as any
+  feature's tests do.
+- **Fuzz:** the monkey strikes the ball any way at any power, tries to
+  strike it while it rolls, waits, and reloads. Each thing a player can do
+  is an action in `scripts/fuzzer.ts`.
+- **Invariants:** bodies are of a kind, are numbers and are out of the rock;
+  the world's count is right; the time is a time; the ball is there, alone,
+  and never faster than the hardest shot; the strokes are a count. The speed
+  rule holds only while nothing on the course adds speed: a bumper changes
+  it, and must say by how much.
+- **Determinism:** seeded shots, struck whenever the ball is at rest, from
+  a player's chance apart from the game's. The autopilot takes over here
+  when there is one.
+- **Leaks:** ten minutes of the ball at rest on the tee, since nothing plays
+  it. The sizes and ceilings are right, and nothing yet grows to test them.
 - **Bench:** the course at rest, which costs next to nothing, and the course
   full of falling balls, which is the physics at `BODY_CAPACITY`. A frame
   of either is far under the gate's 0.05 ms of slack, so the gate cannot
@@ -108,11 +110,18 @@ change meant to move it, and the commit says why. Look at every picture.
 - `src/game.ts` is the game without the picture: everything that happens on
   the course, a step at a time. It tells what happened through `GameEvents`,
   and knows nothing of the renderer or the page.
-- `src/main.ts` is the page. It turns those events into words on the screen
-  and draws the frame. There is no game logic here.
+- `src/main.ts` is the page. It turns those events into words on the screen,
+  a drag into a shot through `shot.ts`, and draws the frame. There is no
+  game logic here.
+- `src/shot.ts` is the shot as the player makes it: a drag into a direction
+  and a power, and the pointer onto the ground. `src/camera.ts` says where
+  the camera is. Both are arithmetic, tested without a page.
+- `src/scene.ts` is the course as it is drawn, and its palette. The look is
+  toon daylight on artshape-render v0.18.0, set up at the top of `main.ts`.
 - `src/debug.ts` is `window.game`, the test API. `src/invariants.ts` lists
   the rules that must always hold.
-- Content (the floor, the rock, the kinds of body) lives in `arena.ts`. The save
+- Content (the floor, the rock, the tee, the kinds of body, the hardest shot
+  and how the ball rolls) lives in `arena.ts`. The save
   lives in `progress.ts`. Chance comes from `random.ts`, handed in.
 - `src/physics.ts` is the game's side of artshape-physics, and nothing else
   imports the package directly. A change a package needs goes in that repo,
@@ -127,14 +136,14 @@ before anything is written; **/commit** commits in the house style.
 
 ## Model features
 
-There are none of the game's own yet. Until the first lands, the shape to
-copy is what is left of the template's, and the template itself in
-`~/projects/artshape-game-template` for what was taken out:
+What to copy the shape of, when building something new:
 
-- **On the course:** the ball, the one body kind. It is a radius and a name
-  in `arena.ts`, a mesh and a pool in `scene.ts`, held by `invariants.ts`
-  and read by `debug.ts`'s `bodies`. Nothing spawns one yet. The first
-  feature a player can see replaces this entry.
+- **What the player sees and does:** the ball and the shot. The ball is a
+  kind in `arena.ts`, spawned and struck by `game.ts`, which tells of it
+  through `struck` and `stopped`. A drag becomes a shot in `shot.ts`. The
+  ball and the aim are drawn by `scene.ts`, held by `invariants.ts`, read
+  by `debug.ts`'s `ball` and `state`, driven by a real pointer in
+  `smoke/progress.spec.ts`, and pictured in `smoke/look.spec.ts`.
 - **Tools:** the fuzzer (`scripts/fuzzer.ts`) and the bench
   (`scripts/bench.ts`). The fuzzer has unit tests of its own working parts.
 - **Test helpers:** `newGame(seed)` in `test/helpers.ts`, and `memoryStore`
@@ -144,22 +153,26 @@ copy is what is left of the template's, and the template itself in
 
 `window.game`, in `src/debug.ts`, typed, and the smoke tests compile against
 it. Time: `pause`, `resume`, `step(frames)`, `seed(n)`, and `?seed=N` and
-`?paused=1` on the page. Reading: `state`, `bodies`, `content`, `events`,
-`invariants`. Setting a scene: `place` for a body that exists, `save`, and
-`start(page, { save })` in `smoke/game.ts` for a save that is not the
-player's. Looking: `look` and `measureFrame`. There is nothing to drive
-yet: the shot, when it comes, gets its calls here.
+`?paused=1` on the page. Reading: `state` (with `strokes` and `ready`),
+`ball`, `bodies`, `content` (with the tee and the hardest shot), `events`,
+`invariants`, and `aiming`, the shot a drag under way would make. Playing:
+`shoot(angle, power)`, and `drag(page, from, to, { touch, hold })` in
+`smoke/game.ts` for a real mouse or finger, pressed where `project(x, y,
+z)` says a point on the course is on the page. Setting a scene: `place` for
+a body that exists, `save`, and `start(page, { save })` for a save that is
+not the player's. Looking: `look(x, y, distance)` parks the camera until
+`follow`, and `measureFrame`. In unit tests, `game.place(x, y)` puts the
+ball down at a lie.
 
 ## What is not there yet
 
 Each of these is the first feature's to bring, with every gate green at
 each step, and a gate handed what it needs in the same change:
 
-- The player's ball, and somewhere for it to start.
-- The shot: the aim and the power, and the input that sets them.
 - The cup, and holing out. `makeWorld` in `physics.ts` takes no holes now.
-- Events. `GameEvents` is empty; the page notes every event by name for the
-  test API, and shows the player nothing of any.
+- The physics the golf needs, from artshape-physics' next version: see
+  `DESIGN.md`. Until it comes, a ball meets the rail with almost no bounce,
+  and slows by drag, not by rolling resistance.
 - Anything saved. `Save` is empty and `Progress` reads no field; the first
   field is read in its constructor, with a default, and a save in the new
   shape goes in `test/saves/`.
@@ -208,8 +221,9 @@ For anything new on the course, check what it does:
   a frame at that many
 - **phone:** narrow screen, and a slower GPU: which rung it steps down to
 
-And the game's own, for anything new on a hole. These name things the game
-does not have yet; each applies from the feature that brings it:
+And the game's own, for anything new on a hole. The aim, the strokes and
+the ball at rest are here now; the rest apply from the feature that brings
+each:
 
 - **the ball in flight:** struck by it, struck into it at full power, and
   landed on from above; never passed through at the fastest shot there is

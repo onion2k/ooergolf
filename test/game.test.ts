@@ -1,22 +1,108 @@
 import { describe, expect, it } from 'vitest';
-import { BALL, KIND_RADIUS } from '../src/arena';
+import { BALL, FLOOR, HARDEST_SHOT, KIND_RADIUS, TEE } from '../src/arena';
 import { checkInvariants } from '../src/invariants';
 import { DT, newGame, settle } from './helpers';
 
+/** Play until the ball is ready to be struck again, or `seconds` pass; the time it took, or Infinity. */
+function untilReady(game: ReturnType<typeof newGame>['game'], seconds = 20): number {
+  const start = game.t;
+  for (let f = 0; f < seconds * 60; f++) {
+    game.step(DT);
+    if (game.ready) return game.t - start;
+  }
+  return Infinity;
+}
+
 describe('the game', () => {
-  it('starts as an empty course: nothing on it, and nothing that must hold broken', () => {
+  it('starts with one ball at rest on the tee, ready, and no strokes taken', () => {
     const { game, told } = newGame();
-    expect(game.world.live).toBe(0);
-    settle(game);
-    expect(game.world.live).toBe(0);
+    const { world, ball } = game;
+    expect(world.live).toBe(1);
+    expect(world.alive[ball]).toBe(1);
+    expect(world.kind[ball]).toBe(BALL);
+    expect(world.x[ball]).toBeCloseTo(TEE.x, 1);
+    expect(world.y[ball]).toBeCloseTo(TEE.y, 1);
+    expect(world.z[ball]).toBeCloseTo(KIND_RADIUS[BALL], 1);
+    expect(game.ready).toBe(true);
+    expect(game.strokes).toBe(0);
     expect(told).toEqual([]);
     expect(checkInvariants(game)).toEqual([]);
   });
 
-  it('has nothing of the stub left in it: no sled, and no bank in the save', () => {
+  it('strikes the ball the way it is aimed, at its share of the hardest shot, and counts the stroke', () => {
+    const { game, told } = newGame();
+    expect(game.shoot(Math.PI / 2, 0.5)).toBe(true);
+    const { world, ball } = game;
+    expect(world.vx[ball]).toBeCloseTo(0, 6);
+    expect(world.vy[ball]).toBeCloseTo(HARDEST_SHOT * 0.5, 6);
+    expect(world.vz[ball]).toBe(0);
+    expect(game.strokes).toBe(1);
+    expect(game.ready).toBe(false);
+    expect(told).toEqual([`struck 0.5 ${TEE.x} ${TEE.y}`]);
+  });
+
+  it('holds power to between none and the hardest shot', () => {
     const { game } = newGame();
-    expect('sled' in game).toBe(false);
-    expect(game.progress.save).toEqual({});
+    game.shoot(0, 7);
+    expect(Math.hypot(game.world.vx[game.ball], game.world.vy[game.ball])).toBeCloseTo(HARDEST_SHOT, 6);
+    const other = newGame().game;
+    expect(other.shoot(0, -1), 'a shot of no power is no shot').toBe(false);
+    expect(other.strokes).toBe(0);
+    expect(other.ready).toBe(true);
+  });
+
+  it('refuses a shot while the ball moves, and does not count it', () => {
+    const { game } = newGame();
+    game.shoot(Math.PI / 2, 0.6);
+    for (let f = 0; f < 30; f++) game.step(DT);
+    const vy = game.world.vy[game.ball];
+    expect(game.shoot(0, 1)).toBe(false);
+    expect(game.strokes).toBe(1);
+    expect(game.world.vy[game.ball]).toBe(vy);
+  });
+
+  it('comes to rest within eight seconds of the hardest shot, says where, and is ready again', () => {
+    for (const angle of [Math.PI / 2, Math.PI / 4, 0, -Math.PI / 2 + 0.3]) {
+      const { game, told } = newGame(3);
+      game.shoot(angle, 1);
+      const took = untilReady(game);
+      expect(took, `at ${angle.toFixed(2)}`).toBeLessThanOrEqual(8);
+      expect(told[told.length - 1]).toMatch(/^stopped -?\d/);
+      expect(game.shoot(angle + Math.PI, 0.3)).toBe(true);
+      expect(game.strokes).toBe(2);
+      expect(checkInvariants(game)).toEqual([]);
+    }
+  });
+
+  it('rolls further the harder it is struck', () => {
+    const dist = (power: number) => {
+      const { game } = newGame();
+      game.shoot(Math.PI / 2, power);
+      untilReady(game);
+      return game.world.y[game.ball] - TEE.y;
+    };
+    const short = dist(0.2),
+      mid = dist(0.5);
+    expect(short).toBeGreaterThan(2);
+    expect(mid).toBeGreaterThan(short * 2);
+  });
+
+  it('stays out of the rock after the hardest shot into a wall and into a corner', () => {
+    for (const [x, y, angle] of [
+      [0, 0, 0],
+      [0, 0, Math.PI],
+      [FLOOR.maxX - 6, FLOOR.maxY - 6, Math.PI / 4],
+      [FLOOR.minX + 6, FLOOR.minY + 6, (-3 * Math.PI) / 4],
+    ]) {
+      const { game } = newGame();
+      game.place(x, y);
+      game.shoot(angle, 1);
+      for (let f = 0; f < 8 * 60; f++) {
+        game.step(DT);
+        expect(checkInvariants(game), `from ${x},${y} at frame ${f}`).toEqual([]);
+      }
+      expect(game.ready).toBe(true);
+    }
   });
 
   it('keeps time a step at a time', () => {
@@ -25,20 +111,10 @@ describe('the game', () => {
     expect(game.t).toBeCloseTo(1, 9);
   });
 
-  it('holds a ball put on the course: it lands on the floor and stays there', () => {
-    const { game } = newGame(2);
-    const slot = game.world.spawn(BALL, 3, -4, 6);
-    expect(slot).toBeGreaterThanOrEqual(0);
-    settle(game, 300);
-    expect(game.world.live).toBe(1);
-    expect(game.world.x[slot]).toBeCloseTo(3, 0);
-    expect(game.world.y[slot]).toBeCloseTo(-4, 0);
-    expect(game.world.z[slot]).toBeCloseTo(KIND_RADIUS[BALL], 1);
-    expect(checkInvariants(game)).toEqual([]);
-  });
-
   it('writes the save when asked, and not before', () => {
     const { game, store } = newGame(3);
+    settle(game);
+    game.shoot(1, 1);
     settle(game);
     expect(store.json).toBe(null);
     game.persist();

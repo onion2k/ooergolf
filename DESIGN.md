@@ -26,18 +26,28 @@ courses after, as content.
 
 ## The shot
 
-- **The drag.** Press on or near the ball, drag back, and let go, as with a
-  slingshot. The shot goes the way opposite to the drag, and the length of
-  the drag is its power, up to the club's most. One pointer, so a finger and
-  a mouse are the same input.
+- **The drag.** Press anywhere on the course, drag back, and let go, as with
+  a slingshot. The shot goes the way opposite to the drag, on the ground,
+  and the length of the drag is its power, up to the club's most: full at
+  35% of the screen's shorter side, and linear, so half the drag is half the
+  shot. Anywhere and not on the ball, since on a phone a finger on the ball
+  hides it (agreed when the shot was built). One pointer, so a finger and a
+  mouse are the same input.
 - **The aim line.** Drawn from the ball along the shot, as long as the club
   allows, and showing the power.
-- **Cancelling.** A drag brought back to the ball and let go is no shot, and
-  costs no stroke.
+- **Cancelling.** A drag brought back to where it began, within 4% of the
+  screen's shorter side, and let go is no shot, and costs no stroke.
 - **While the ball moves,** no shot can be taken. The ball is at rest when
   the physics puts it to sleep.
 - **No input is 3D.** A shot gives the ball a speed along the ground and
   none upward. Height comes only from what the ball meets.
+- **The figures,** measured and agreed when the shot was built. A world unit
+  is 10 cm. The hardest shot of the starting club is 40 units a second,
+  about 48 units of roll: three quarters of the course. The upgrades take it
+  to about 60. The physics is to hold against tunnelling up to 120, for
+  bumpers that add speed. Until the physics has rolling resistance, the
+  ball slows by the world's drag at 0.8 a second, so a putt of 20 a second
+  rolls 24 units over about four seconds.
 
 ## The rules
 

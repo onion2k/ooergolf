@@ -12,9 +12,10 @@
  * that is not the same twice — and none of that shows as a failure anywhere
  * else, only as figures that wander.
  *
- * Nothing plays the game yet, so the two runs are the course left to
- * itself. Whatever comes to play it for the gates drives both runs here, so
- * they are played the same way without a recording.
+ * Both runs are played the same way without a recording: whenever the ball
+ * is at rest it is struck, the way and as hard as a player's own chance
+ * says, from a source apart from the game's. When there is an autopilot, it
+ * plays here instead.
  */
 import { Game } from '../src/game';
 import { Progress, memoryStore } from '../src/progress';
@@ -74,6 +75,7 @@ export function hashGame(game: Game): string {
     eat(world.asleep[i]);
   }
   eat(game.t);
+  eat(game.strokes);
   for (const c of JSON.stringify(game.progress.save)) h = Math.imul(h ^ c.charCodeAt(0), 0x01000193);
   return (h >>> 0).toString(16).padStart(8, '0');
 }
@@ -83,8 +85,10 @@ export function playTwice({ seed, frames, every = 300, meddle }: TwiceOptions): 
   const passes: string[][] = [];
   for (let pass = 0; pass < 2; pass++) {
     const game = new Game(new Progress(memoryStore()), {}, { random: seeded(seed) });
+    const player = seeded(seed * 13 + 5);
     const hashes: string[] = [];
     for (let f = 1; f <= frames; f++) {
+      if (game.ready) game.shoot(player() * Math.PI * 2, 0.2 + player() * 0.8);
       game.step(DT);
       meddle?.(game, pass);
       if (f % every === 0) hashes.push(hashGame(game));

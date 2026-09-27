@@ -7,12 +7,12 @@
  * door, and a change it needs goes in its own repo with a version bump here.
  */
 import { World, type WorldOptions } from 'artshape-physics/world';
-import { BODY_CAPACITY, COLS, KIND_RADIUS, ORIGIN_X, ORIGIN_Y, ROWS, TILE } from './arena';
+import { BODY_CAPACITY, COLS, KIND_RADIUS, ORIGIN_X, ORIGIN_Y, ROLL, ROWS, TILE } from './arena';
 import type { Random } from './random';
 
 export { World } from 'artshape-physics/world';
 
-/** A world for this course: its grid, the radius of each kind, and chance from the game's own source. */
+/** A world for this course: its grid, the radius of each kind, how a ball rolls on it, and chance from the game's own source. */
 export function makeWorld(solid: Uint8Array, random: Random): World {
   const options: WorldOptions = {
     capacity: BODY_CAPACITY,
@@ -20,6 +20,7 @@ export function makeWorld(solid: Uint8Array, random: Random): World {
     solid,
     radii: KIND_RADIUS,
     random,
+    tuning: { floorDrag: ROLL.floorDrag },
   };
   return new World(options);
 }

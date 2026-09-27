@@ -13,13 +13,14 @@ fast, draws fast and has no bugs.
 
 ## How it is played
 
-Not yet at all. The template's stub game has been taken out, and what is
-here is an empty course: a square floor walled in by rock, with nothing on
-it. Drag to orbit the camera, wheel to zoom.
+A ball on a tee on one striped green, walled in by a rail. Drag anywhere,
+back from where the ball should go, and let go to putt: the dots show the
+way and how hard. The ball rolls, banks off the rail and comes to rest, and
+then it can be struck again. The strokes are counted. The camera follows the
+ball, and on a desktop the wheel zooms.
 
-The game that goes in: look down on the hole, drag back from the ball to
-aim and set the power, release to strike, and count the strokes until the
-ball drops in the cup.
+There is no cup yet. The game that goes in: a cup on every hole, obstacles
+in the way, nine holes, and the strokes counted against par.
 
 ## What is here
 
@@ -70,6 +71,8 @@ fixed, and no baseline is moved to make it green.
     src/progress.ts    the save, and where it is kept
     src/physics.ts     the game's side of artshape-physics
     src/scene.ts       the course as it is drawn
+    src/shot.ts        a drag turned into a shot
+    src/camera.ts      where the camera is, following the ball
     scripts/           the gates, each with its baseline beside it
     test/              unit tests, and a corpus of every save shape
     smoke/             Playwright: boots, drives, plays through, looks right

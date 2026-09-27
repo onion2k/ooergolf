@@ -1,5 +1,5 @@
 /**
- * The course: for now a square floor walled in by rock, and nothing on it.
+ * The course: for now a square floor walled in by rock, a tee, and the ball.
  * Content, not logic: the game reads it and the page draws it. The holes of
  * the course, their cups and their obstacles go here as they are made, and
  * the lower modules go on knowing nothing of them.
@@ -26,6 +26,25 @@ export const FLOOR = {
   maxX: ORIGIN_X + (COLS - WALL) * TILE,
   maxY: ORIGIN_Y + (ROWS - WALL) * TILE,
 };
+
+/** Where the ball is put down at the start: the tee, toward the south wall, the camera's end. */
+export const TEE = { x: 0, y: FLOOR.minY + 8 };
+
+/**
+ * The hardest the starting club strikes, in units a second along the ground.
+ * At the roll below it carries about three quarters of the course, measured
+ * before it was chosen; the upgrades take it to about 60.
+ */
+export const HARDEST_SHOT = 40;
+
+/**
+ * How the course holds back a rolling ball: the physics' drag on anything
+ * touching the floor, as a rate a second. The package's own 5.5 stops a putt
+ * in under a second; at 0.8 a putt of 20 a second rolls 24 units over about
+ * four. It is a world-wide figure until the physics has rolling resistance by
+ * surface, and then it goes.
+ */
+export const ROLL = { floorDrag: 0.8 };
 
 /** The rock, one byte a tile, 1 where it is: the border, and nothing else. */
 export function buildRock(): Uint8Array {

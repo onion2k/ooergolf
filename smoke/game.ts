@@ -47,6 +47,35 @@ export async function start(page: Page, options: { save?: Partial<Save>; seed?: 
   await ready(page);
 }
 
+/**
+ * A drag on the page, as a finger or a mouse makes it: pressed at `from`,
+ * moved to `to` in `steps` moves, and let go unless told to hold it. Touch
+ * goes through Chrome's own touch events, so the page gets the pointer events
+ * a phone gives it; the page must have been opened with touch on.
+ */
+export async function drag(
+  page: Page,
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  options: { touch?: boolean; hold?: boolean; steps?: number } = {},
+) {
+  const { touch, hold, steps = 6 } = options;
+  const at = (k: number) => ({ x: from.x + ((to.x - from.x) * k) / steps, y: from.y + ((to.y - from.y) * k) / steps });
+  if (!touch) {
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    for (let k = 1; k <= steps; k++) await page.mouse.move(at(k).x, at(k).y);
+    if (!hold) await page.mouse.up();
+    return;
+  }
+  const cdp = await page.context().newCDPSession(page);
+  const send = (type: 'touchStart' | 'touchMove' | 'touchEnd', p?: { x: number; y: number }) =>
+    cdp.send('Input.dispatchTouchEvent', { type, touchPoints: p ? [{ x: p.x, y: p.y }] : [] });
+  await send('touchStart', from);
+  for (let k = 1; k <= steps; k++) await send('touchMove', at(k));
+  if (!hold) await send('touchEnd');
+}
+
 /** Wait until the game is booted and its frame loop running, or say what the boot screen was stuck on. */
 export async function ready(page: Page) {
   try {

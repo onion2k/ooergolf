@@ -6,9 +6,11 @@ describe('the fuzzer', () => {
   it('plays a seed through without breaking a rule, and does everything a player can', () => {
     const r = fuzz(1, 1500);
     expect(r.failure, JSON.stringify(r.failure)).toBe(null);
-    expect(Object.keys(r.done).sort(), 'every action there is, and no other').toEqual(['reload', 'wait']);
-    for (const action of ['wait', 'reload']) expect(r.done[action], action).toBeGreaterThan(0);
-    expect(r.happened, 'nothing happens on an empty course').toEqual({});
+    const actions = ['reload', 'shoot', 'shoot while rolling', 'wait'];
+    expect(Object.keys(r.done).sort(), 'every action there is, and no other').toEqual(actions);
+    for (const action of actions) expect(r.done[action], action).toBeGreaterThan(0);
+    expect(r.happened.struck, 'the ball struck').toBe(r.done.shoot);
+    expect(r.happened.stopped, 'and come to rest').toBeGreaterThan(0);
   });
 
   it('plays the same way twice from a seed', () => {

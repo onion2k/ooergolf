@@ -2,8 +2,8 @@
  * The game played by a monkey: the real game, without the picture, made to
  * do at random everything a player can make happen, and checked after every
  * few frames for anything that must always hold and does not
- * (`invariants.ts`), and for anything thrown. On an empty course a player
- * can wait, and can reload, and that is all there is here yet.
+ * (`invariants.ts`), and for anything thrown. A player can strike the ball
+ * any way at any power, try to strike it while it rolls, wait, and reload.
  *
  * Only what a player could do. A monkey that did what no player can would
  * find bugs no player will. A new thing a player can do gets an action here.
@@ -74,7 +74,32 @@ export function fuzz(seed: number, frames: number): FuzzResult {
     /** Everything a player can make happen, each as often as it is weighted. */
     const actions: [number, () => void][] = [
       [
-        4,
+        6,
+        () => {
+          // any way at all, at any power, as a drag can: the least shots too, and the hardest
+          const power = random() < 0.15 ? 1 : random();
+          if (game.shoot(between(-Math.PI, Math.PI), power)) did('shoot');
+          busy = Math.floor(between(10, 90));
+        },
+      ],
+      [
+        2,
+        () => {
+          // a player can let go of a drag while the ball rolls: it must be refused, and not counted
+          if (game.ready) return;
+          const { world, ball } = game;
+          const strokes = game.strokes,
+            vx = world.vx[ball],
+            vy = world.vy[ball];
+          if (game.shoot(between(-Math.PI, Math.PI), 1))
+            throw new Error(`a shot was taken with the ball moving at ${Math.hypot(vx, vy).toFixed(2)}`);
+          if (game.strokes !== strokes || world.vx[ball] !== vx || world.vy[ball] !== vy)
+            throw new Error('a refused shot changed the ball or the strokes');
+          did('shoot while rolling');
+        },
+      ],
+      [
+        3,
         () => {
           busy = Math.floor(between(10, 120));
           did('wait');
