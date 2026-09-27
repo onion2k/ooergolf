@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { TILE, layoutOf, tileAt } from '../src/arena';
 import { COURSE } from '../src/course';
-import { DRESSING, SCENERY, dress, scatter } from '../src/scenery';
+import { DRESSING, SCENERY, TUFTS, dress, scatter, tufts } from '../src/scenery';
 
 describe('the scenery', () => {
   for (const hole of COURSE) {
@@ -107,5 +107,27 @@ describe('the dressing of a hole', () => {
   it('is the same for a hole every time', () => {
     const l = layoutOf(COURSE[2].map);
     expect(dress(l, COURSE[2].name)).toEqual(dress(l, COURSE[2].name));
+  });
+});
+
+describe('the grass of the rough', () => {
+  for (const hole of COURSE) {
+    it(`round ${hole.name}: tufts thick on the rough, and none on the course, its rail or its water`, () => {
+      const l = layoutOf(hole.map);
+      const t = tufts(l, hole.name);
+      expect(t.length).toBeGreaterThan(1000);
+      expect(t.length).toBeLessThanOrEqual(TUFTS.most);
+      for (const p of t) {
+        const at = tileAt(l, p.x, p.y);
+        expect(at < 0 || (l.solid[at] === 1 && l.rail[at] === 0), `a tuft at ${p.x.toFixed(1)},${p.y.toFixed(1)}`).toBe(
+          true,
+        );
+      }
+    });
+  }
+
+  it('is the same for a hole every time', () => {
+    const l = layoutOf(COURSE[0].map);
+    expect(tufts(l, COURSE[0].name)).toEqual(tufts(l, COURSE[0].name));
   });
 });

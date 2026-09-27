@@ -183,7 +183,10 @@ and all the words in the page, not the picture.
   light on. Lamps only where a hole wants one. The shade where things meet
   from screen-space occlusion, a thin haze that pales the far rough, and a
   glint now and then on the gold of the cup and the pin.
-- **Grass** is rough and green, mown in bands by the `bands` pattern.
+- **Grass** is rough and green, mown in stripes with a fine grain of darker
+  turf through them, and the rough grows tufts of blades. A rolling ball
+  presses a darker track in the grass behind it, which fades in six
+  seconds.
   **Bunkers** are pale, matte and speckled.
 - **Obstacles** are bright glossy plastic: the windmill, the bumpers, the
   barriers, the flags.

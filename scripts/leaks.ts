@@ -19,6 +19,7 @@
 import { BODY_CAPACITY } from '../src/arena';
 import { Autopilot } from '../src/autopilot';
 import { COURSE } from '../src/course';
+import { TRAIL, Trail, trailFrom } from '../src/trail';
 import { Game } from '../src/game';
 import { Progress, memoryStore } from '../src/progress';
 import { seeded } from '../src/random';
@@ -37,18 +38,21 @@ export const WATCH: Partial<Record<string, { ceiling: number; steady?: boolean }
   'save bytes': { ceiling: 2_000 },
   // emptied at every new round: never more than a score a hole
   'card scores': { ceiling: COURSE.length },
+  // the ball's track, as the page keeps it: strips reused oldest first, and emptied at every hole
+  'track strips': { ceiling: TRAIL.capacity },
   // the catch-all for what is leaking and has no name here; noisy, so it is given a lot of room
   'heap MB': { ceiling: 300, steady: true },
 };
 
 /** Every size worth watching, read off a game as it stands. */
-export function sizes(game: Game): Record<string, number> {
+export function sizes(game: Game, trail: Trail = new Trail()): Record<string, number> {
   const { world, progress } = game;
   return {
     bodies: world.live,
     slots: world.count,
     'save bytes': JSON.stringify(progress.save).length,
     'card scores': game.card.length,
+    'track strips': trail.count,
     'heap MB': Math.round(process.memoryUsage().heapUsed / 1e5) / 10,
   };
 }
@@ -110,9 +114,21 @@ export function leakRun({ seed, minutes }: LeakOptions): LeakRun {
     const game = new Game(new Progress(memoryStore()), {}, { random: seeded(seed) });
     // round after round, as a player who never stops would
     const pilot = new Autopilot(game, { skill: PLAYER, random: seeded(seed * 17 + 3), replay: true });
+    // the track, laid as the page lays it, and cleared as the page clears it, when a hole begins
+    const trail = new Trail();
+    let hole = -1;
     for (let minute = 0; minute < minutes; minute++) {
-      for (let f = 0; f < 3600; f++) pilot.step(DT);
-      for (const [key, n] of Object.entries(sizes(game))) (samples[key] ??= []).push(n);
+      for (let f = 0; f < 3600; f++) {
+        pilot.step(DT);
+        if (game.hole !== hole || game.phase !== 'play') {
+          hole = game.phase === 'play' ? game.hole : -1;
+          trail.clear();
+        }
+        const at = trailFrom(game);
+        if (at) trail.lay(at.x, at.y, at.z, game.t);
+        else trail.lift();
+      }
+      for (const [key, n] of Object.entries(sizes(game, trail))) (samples[key] ??= []).push(n);
     }
     return { seed, minutes, samples, problems: trouble(samples), seconds: (performance.now() - started) / 1000 };
   } catch (err) {

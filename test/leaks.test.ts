@@ -14,7 +14,7 @@ describe('what must stay bounded', () => {
   it('reads the sizes off a game, and has a ceiling for every one', () => {
     const { game } = newGame();
     const now = sizes(game);
-    for (const key of ['bodies', 'slots', 'save bytes', 'card scores', 'heap MB']) {
+    for (const key of ['bodies', 'slots', 'save bytes', 'card scores', 'track strips', 'heap MB']) {
       expect(Object.keys(now), `${key} measured`).toContain(key);
       expect(Number.isFinite(now[key])).toBe(true);
       expect(Object.keys(WATCH), `a ceiling for ${key}`).toContain(key);

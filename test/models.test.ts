@@ -37,6 +37,7 @@ import {
   rock,
   teeMarkers,
   tree,
+  tuft,
   triangles,
   water,
   windmill,
@@ -79,6 +80,8 @@ function catalogue(): [string, Model][] {
     ['rock', rock(1.5)],
     ['bunting', bunting(12)],
     ['fence', fence(6)],
+    ['tuft', tuft()],
+    ['tall tuft', tuft({ height: 1.4, blades: 7, seed: 5 })],
   ];
 }
 
@@ -102,6 +105,8 @@ const OPEN = new Set([
   'belt',
   'frame',
   'chevrons',
+  // a tuft's blades are single thin triangles, faced out from its foot
+  'blades',
 ]);
 
 /** The signed volume a mesh encloses about the origin: positive when every face is wound to face out. */
@@ -518,6 +523,7 @@ describe('every model keeps to its triangle budget', () => {
       ['rock', rock(3)],
       ['bunting', bunting(24)],
       ['fence', fence(12)],
+      ['tuft', tuft()],
     ];
     for (const [name, m] of at) expect(triangles(m), name).toBeLessThanOrEqual(BUDGET[name]);
   });

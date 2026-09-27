@@ -88,7 +88,8 @@ today, and what the next features must hand it:
   chance, round after round, and the hash takes in the hole and the card.
 - **Pace:** the strokes a round takes; see above.
 - **Leaks:** ten minutes of the autopilot playing round after round. The
-  card is emptied each round and watched against the number of holes.
+  card is emptied each round and watched against the number of holes, and
+  the ball's track, laid as the page lays it, against its capacity.
 - **Bench:** the physics on a green of its own, the size the course was
   before it had holes, so its figures are the physics' and not the
   content's: at rest, which costs next to nothing, and full of falling balls
@@ -146,7 +147,11 @@ change meant to move it, and the commit says why. Look at every picture.
 - What moves only to be seen, all from game time so a picture is the same
   every run: `src/roll.ts` turns the ball as it rolls (the physics eases a
   ball at rest toward flat, as a coin, so its turn is no good for this),
-  and the ball wears a band so the roll shows; `src/sway.ts` swings the
+  and the ball wears a band so the roll shows; `src/trail.ts` is the track
+  the ball presses in the grass as it rolls, a ring of thin strips laid a
+  half-unit apart and faded back to the turf under them in six seconds,
+  emptied at every hole (the leak gate lays one alongside the autopilot and
+  watches its size); `src/sway.ts` swings the
   flag, leans the trees and swells the ripples; `src/bursts.ts` is the
   particles for a stroke, the cup and water. The particles move only as a
   frame is drawn, so a test that pictures them steps a frame at a time, and
@@ -162,9 +167,11 @@ change meant to move it, and the commit says why. Look at every picture.
   clear of the course, from the hole's name and never the game's chance;
   and dresses the hole, with bunting on tall posts round three sides just
   outside the rail, beds of flowers at the rail's foot, and rocks in
-  clusters, the scattered trees kept off the bunting. The rough is one
-  full-size square speckled with darker grass, the pattern drawn in world
-  units.
+  clusters, the scattered trees kept off the bunting; and grows tufts of
+  grass thick across the rough, a few thousand of five triangles each. The
+  rough is one full-size square speckled with darker grass, the pattern
+  drawn in world units, and each tile of the green has a fine grain of
+  darker turf, from a seed of its own.
 - `src/debug.ts` is `window.game`, the test API. `src/invariants.ts` lists
   the rules that must always hold. `src/autopilot.ts` plays the game by
   itself, for the gates and for par.

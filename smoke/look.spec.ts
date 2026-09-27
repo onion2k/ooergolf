@@ -132,6 +132,20 @@ test.describe('what it looks like', () => {
     expect(problems).toEqual([]);
   });
 
+  test('a putt a second on, its track pressed in the grass behind it', async ({ page }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true });
+    await page.evaluate(() => {
+      const g = window.game!;
+      g.step(30);
+      g.shoot(Math.PI / 2 + 0.12, 0.55);
+      g.step(60);
+    });
+    await hideStats(page);
+    await expect(page.locator('#view')).toHaveScreenshot('track.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
   test('a hole done: its score over the course', async ({ page }) => {
     const problems = watch(page);
     await start(page, { seed: 11, paused: true });

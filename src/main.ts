@@ -20,6 +20,7 @@ import { daylight } from './look';
 import { Progress } from './progress';
 import { seeded } from './random';
 import { roll } from './roll';
+import { Trail, trailFrom } from './trail';
 import { Scene, boxOf } from './scene';
 import { cupBurst, splash, strikePuff } from './bursts';
 import { Gesture } from './gesture';
@@ -94,6 +95,8 @@ async function main() {
   const showPurse = () => game && hud.setPurse(game.progress.save);
   const scene = new Scene();
   const rig = new CameraRig();
+  /** The ball's track in the grass: only drawing, kept here, and emptied when a hole begins. */
+  const trail = new Trail();
   /** What the player sees of each event, beside the note of it. */
   const shown: GameEvents = {
     // a hole begun: drawn afresh, the sun's shadow fitted to it, and the camera on its tee
@@ -102,6 +105,7 @@ async function main() {
       const { layout } = game;
       renderer.setStatic(scene.static(layout, game.course[index].name, game.obstacles));
       renderer.setDynamic(scene.dynamic(game.obstacles, layout, game.course[index].name));
+      trail.clear();
       renderer.setSunShadow(boxOf(layout));
       rig.jump(layout.tee.x, layout.tee.y);
       hud.started({ index, count: game.course.length, name: game.course[index].name, par });
@@ -212,7 +216,10 @@ async function main() {
     const dots = played.ready ? scene.writeAim(world.x[ball], world.y[ball], gesture.aim, reach) : 0;
     renderer.move(1, scene.aim, dots);
     if (dots) renderer.tint(1, scene.aimLooks);
-    scene.writeMoving(played.t).forEach((m, k) => renderer.move(2 + k, m.matrices, m.count));
+    const strips = scene.writeTrack(trail, played.t);
+    renderer.move(2, scene.track, strips);
+    if (strips) renderer.tint(2, scene.trackLooks);
+    scene.writeMoving(played.t).forEach((m, k) => renderer.move(3 + k, m.matrices, m.count));
     shine();
   }
 
@@ -287,6 +294,10 @@ async function main() {
   function simulate(dt: number) {
     frames++;
     played.step(dt);
+    // the track laid where the ball rolls on the grass, and broken wherever it is not
+    const at = trailFrom(played);
+    if (at) trail.lay(at.x, at.y, at.z, played.t);
+    else trail.lift();
     const { world, ball } = played;
     if (!world.alive[ball]) return;
     // the ball seen to roll, as far as it went this frame

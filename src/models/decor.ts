@@ -10,6 +10,7 @@ import { PALETTE, PENNANT_COLOURS, ROUGH } from './palette';
 import { PATTERN, matte, type Colour, type Model, type Part } from './part';
 import { at, built, frustum, lump, prism, rod, roundedBox, slab } from './shapes';
 import { seeded } from '../random';
+import { tri } from '../meshes';
 
 /**
  * A tree `height` tall, standing on the grass at its origin: a trunk and a
@@ -120,6 +121,26 @@ export function flowers(colour: Colour, { seed = 1, count = 5 } = {}): Model {
 }
 
 /** A rock about `size` across each way from its middle, sunk a little into the grass at its origin, its own shape for its seed. */
+/**
+ * A tuft of grass: a few thin blades fanned out from a point, leaning out
+ * and up, a hand high. Cheap, since there are thousands of them on the
+ * rough: five triangles.
+ */
+export function tuft({ height = 0.8, blades = 5, seed = 1 } = {}): Model {
+  const random = seeded(seed * 104729 + 7);
+  const mesh = built((b) => {
+    for (let k = 0; k < blades; k++) {
+      const a = (k / blades) * Math.PI * 2 + random() * 0.6;
+      const lean = 0.25 + random() * 0.35;
+      const h = height * (0.7 + random() * 0.5);
+      const w = 0.07;
+      const [c, s] = [Math.cos(a), Math.sin(a)];
+      tri(b, [-s * w, c * w, 0], [s * w, -c * w, 0], [c * lean * h, s * lean * h, h]);
+    }
+  });
+  return { name: 'tuft', parts: [{ name: 'blades', mesh, material: matte(PALETTE.leaves, ROUGH.leaves) }], moving: [] };
+}
+
 export function rock(size: number, { seed = 1 } = {}): Model {
   const random = seeded(seed * 7727 + 1);
   const mesh = built((b) =>
