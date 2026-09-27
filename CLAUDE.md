@@ -10,8 +10,10 @@ file says how it is made. The house
 rules in `~/.claude/CLAUDE.md` apply too. What is in `src/` is a round of
 the course: holes drawn as maps, each played from its tee to its cup with a
 drag pulled back and let go, scored against par, and the card at the end.
-Only the holes made of grass and rail are here; the rest wait for the
-physics their obstacles need (artshape-physics 0.4.0). The golf goes in a
+Seven holes are here, on artshape-physics v0.3.0: grass, rail, water,
+raised grass, sliding barriers, a windmill and a conveyor. The bunker and
+the bumpers wait for 0.4.0's sand and bounce, and everything is retuned for
+0.4.0 when it comes. The golf goes in a
 feature at a time, in the order `DESIGN.md` gives.
 
 ## The factory
@@ -153,8 +155,14 @@ change meant to move it, and the commit says why. Look at every picture.
   shop. `src/score.ts` names a
   score. Both are given what to show and never read the game.
 - The holes are content in `course.ts`: each a map drawn as seen from the
-  tee (`#` rail, `.` grass, `T` tee, `C` cup, space for off the course) and
-  a par, and the cup's size. `arena.ts` reads a map into a layout, and holds
+  tee (`#` rail, `.` grass, `T` tee, `C` cup on level grass, `~` water, a
+  digit for grass raised that many steps of 0.4, space for off the course),
+  a par, and what moves on it, by map tile; and the cup's size. A step the
+  ball rolls up; three (1.2) are a wall to it. Water is a floor below the
+  world's bottom: a ball in it is lost, a stroke is added, and it is put back
+  where it was struck from. `src/obstacles.ts` says where a barrier, a
+  windmill's gate and a belt are at any moment of game time, as the physics'
+  boxes and belts. `arena.ts` reads a map into a layout, and holds
   the kinds of body, the hardest shot and how the ball rolls. Each hole is a
   world of its own, made when it begins: nothing may keep `game.world`.
 - The clubs, what they cost and what a hole pays are content in `clubs.ts`.
@@ -236,8 +244,23 @@ each step, and a gate handed what it needs in the same change:
   rail a tile behind the cup and rolls back in, so the autopilot holes it in
   one every time. 0.4.0's rim brings lip-outs, with a table to choose the
   cup's width from; the cup test and the pars are set again then.
-- Holes 3 to 9, which need bunkers, water, barriers, bumpers, the windmill
-  and the conveyor.
+- The bunker and the bumpers, and their holes, which need 0.4.0's sand and
+  bounce.
+- Pars that are what the autopilot takes. It times its shots past what
+  moves exactly, and v0.3.0 pulls a gentle ball into the cup from 2.5 past
+  its rim, so it holes the obstacle holes in one on the median; each par is
+  the hole's intent until 0.4.0 turns the pull off and the pars are set
+  from the autopilot again.
+- Where in the round a player is, in the save: a reload starts the round
+  again, which is also why the fuzzer starts each seed part way round.
+- Three things the game does for v0.3.0 that go with 0.4.0. It steps the
+  physics a step at a time and takes a ball as holed the step before it
+  drops below the grass inside the cup, because v0.3.0, given the floor's
+  heights, takes a ball below its own tile's floor for one in rock and puts
+  it out on the nearest lower tile, which is water if there is some near.
+  A ball kept moving by the course for ten seconds may be struck where it
+  lies, because v0.3.0's moving boxes carry a ball touching their face along
+  with them for ever. And the autopilot's foresight of what moves.
 - The physics the golf needs, from artshape-physics' next version: see
   `DESIGN.md`. Until it comes, a ball meets the rail with almost no bounce,
   and slows by drag, not by rolling resistance.

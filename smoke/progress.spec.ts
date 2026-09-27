@@ -132,7 +132,8 @@ test('the round finished to the card, and begun again from its button', async ({
   await start(page, { seed: 1, paused: true });
   const { holes } = await page.evaluate(() => window.game!.content());
   await page.evaluate((last) => window.game!.startHole(last), holes.length - 1);
-  for (let stroke = 1; stroke <= 8; stroke++) {
+  // played to the cup or to the limit, whichever comes first: either finishes the hole, and the round
+  for (let stroke = 1; stroke <= 12; stroke++) {
     await page.evaluate(() => {
       const shot = window.game!.suggest();
       if (shot) window.game!.shoot(shot.angle, shot.power);
@@ -156,5 +157,29 @@ test('the round finished to the card, and begun again from its button', async ({
   expect(again.card).toEqual([]);
   expect(again.ready).toBe(true);
   await expect(page.locator('#card')).toBeHidden();
+  expect(problems).toEqual([]);
+});
+
+test('a ball putted into the water costs a stroke, is splashed, and comes back to where it was struck from', async ({
+  page,
+}) => {
+  const problems = watch(page);
+  await start(page, { seed: 1, paused: true });
+  const pond = (await page.evaluate(() => window.game!.content())).holes.findIndex((h) => h.name === 'Pond');
+  await page.evaluate((i) => window.game!.startHole(i), pond);
+  const tee = await page.evaluate(() => window.game!.content().tee);
+  // straight up the hole from the tee, into the pond across it
+  await page.evaluate(() => window.game!.shoot(Math.PI / 2 + 0.25, 0.45));
+  let splashed = false;
+  for (let f = 0; f < 300 && !splashed; f += 10) {
+    await play(page, 10, 'rolling into the pond');
+    splashed = (await page.evaluate(() => window.game!.state().strokes)) === 2;
+  }
+  expect(splashed, 'a stroke more for the water').toBe(true);
+  await expect(page.locator('#toast')).toHaveText('In the water! +1');
+  const back = await page.evaluate(() => window.game!.ball());
+  expect(back.x).toBeCloseTo(tee.x, 0);
+  expect(back.y).toBeCloseTo(tee.y, 0);
+  await expect(page.locator('#strokes b')).toHaveText('2');
   expect(problems).toEqual([]);
 });

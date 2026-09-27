@@ -113,8 +113,17 @@ export class Hud {
     this.shop.hidden = true;
   }
 
+  /** The strokes taken; a new stroke takes away any word left over the course by the last. */
   setStrokes(n: number) {
+    if (this.strokes.textContent !== String(n) && this.toast.textContent === 'In the water! +1')
+      this.toast.hidden = true;
     this.strokes.textContent = String(n);
+  }
+
+  /** The ball into the water: a word for it, until the next stroke. */
+  splash() {
+    this.toast.textContent = 'In the water! +1';
+    this.toast.hidden = false;
   }
 
   /** A hole done: what the score is called, until the next begins. */

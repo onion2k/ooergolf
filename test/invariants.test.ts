@@ -78,6 +78,28 @@ describe('what must always hold', () => {
     expect(checkInvariants(game).join('\n')).toMatch(/the starting putter is not owned/);
   });
 
+  it('reports a ball inside something that moves', () => {
+    const { game } = newGame();
+    const { world, ball } = game;
+    expect(checkInvariants(game)).toEqual([]);
+    game.obstacles.pushers.push({
+      x: world.x[ball],
+      y: world.y[ball],
+      z: world.z[ball],
+      yaw: 0,
+      hx: 2,
+      hy: 2,
+      hz: 2,
+      vx: 0,
+      vy: 0,
+      spin: 0,
+      px: 0,
+      py: 0,
+      owner: 0,
+    });
+    expect(checkInvariants(game).join('\n')).toMatch(/inside a moving box/);
+  });
+
   it('reports a ball faster than the hardest shot, and strokes that are not a count', () => {
     const { game } = newGame();
     game.shoot(0, 1);

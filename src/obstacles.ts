@@ -1,0 +1,218 @@
+/**
+ * The things on a hole that move: a barrier sliding to and fro across the
+ * way up it, a windmill whose blades sweep across its door, and a conveyor
+ * that carries the ball along. Content says where each is and how it moves;
+ * this says where each is at any moment of game time, as the boxes and
+ * belts the physics shoves the ball with.
+ *
+ * Where a thing is comes from the time alone, never from where it was, so
+ * the same seed and the same strokes give the same round, and a test can ask
+ * where the barrier is at any moment without playing up to it. How fast it
+ * goes is the same sum a frame earlier, taken away: the physics needs it, to
+ * shove a ball with it rather than through it.
+ *
+ * The physics' boxes turn about the vertical only. A windmill's blades turn
+ * in an upright plane, so what the physics is given is the gate they make:
+ * the slice of whichever blade is down through the door, at the height of the
+ * ball, and nothing when none is.
+ */
+import { BALL, KIND_RADIUS, TILE, type Layout } from './arena';
+import type { Pusher, Belt } from './physics';
+
+/** A tile of a hole's map, as the map is drawn: its column, and its row from the top. */
+export type MapTile = readonly [number, number];
+
+export type ObstacleDef =
+  | {
+      kind: 'barrier';
+      /** The tile it slides through the middle of. */
+      at: MapTile;
+      /** How long it is, in tiles, across the hole. */
+      length: number;
+      /** How far it goes either way of its middle, in units. */
+      travel: number;
+      /** How long it takes to go and come back, in seconds, and how far through that it starts, from 0 to 1. */
+      period: number;
+      phase?: number;
+    }
+  | {
+      kind: 'windmill';
+      /** The tile of the door the ball goes through, in a row of rail. */
+      at: MapTile;
+      /** How long a blade takes to go round, in seconds, and how far round it starts, from 0 to 1. */
+      period: number;
+      phase?: number;
+    }
+  | {
+      kind: 'conveyor';
+      /** The first tile of the belt and the last: it carries from the one toward the other. */
+      from: MapTile;
+      to: MapTile;
+      /** How fast it carries, in units a second. */
+      speed: number;
+    };
+
+/** A barrier's size other than its length: how deep along the hole, and how tall, as halves. */
+export const BARRIER = { hy: 0.6, hz: 0.8 } as const;
+
+/**
+ * A windmill's figures, the same the model is drawn to: its door the width
+ * of a tile, its blades' length, width and thickness, and where they turn,
+ * from the middle of the door: in front of the tower, toward the tee, and
+ * high enough that a blade pointing down just clears the grass.
+ */
+export const WINDMILL = {
+  gap: TILE,
+  bladeLength: 5.5,
+  bladeWidth: 1.4,
+  bladeThickness: 0.6,
+  hub: [0, -2.65, 5.85] as const,
+} as const;
+
+/** The height of the top of the ball: a blade below it is in the ball's way. */
+const BALL_TOP = KIND_RADIUS[BALL] * 2;
+/** Where a gate with no blade in the door is put: far above, out of everything's way. */
+const PARKED = 100;
+
+/** Where a barrier is along its travel at time `t`, from its middle. */
+function slide(def: Extract<ObstacleDef, { kind: 'barrier' }>, t: number): number {
+  return def.travel * Math.sin(Math.PI * 2 * (t / def.period + (def.phase ?? 0)));
+}
+
+/** How far a windmill's blades have turned at time `t`: nought with a blade straight down. */
+function turnAt(def: Extract<ObstacleDef, { kind: 'windmill' }>, t: number): number {
+  return Math.PI * 2 * (t / def.period + (def.phase ?? 0));
+}
+
+/**
+ * The gate a windmill's blades make in its door at a turn: the box, across
+ * the door, that the blade most down fills at the height of the ball, as
+ * its middle along X from the door's, its half width, and its bottom and
+ * top; or null when no blade is in the door.
+ */
+function gate(turn: number): { x: number; hx: number; z0: number; z1: number } | null {
+  const { bladeLength: L, bladeWidth: w, hub, gap } = WINDMILL;
+  let best: { x: number; hx: number; z0: number; z1: number } | null = null;
+  for (let k = 0; k < 4; k++) {
+    const phi = turn + (k * Math.PI) / 2;
+    const down = Math.cos(phi),
+      out = Math.sin(phi);
+    if (down <= 0) continue;
+    // how far out along the blade it comes down to the top of the ball: beyond its tip, it never does
+    const s1 = (hub[2] - BALL_TOP) / down;
+    if (s1 >= L) continue;
+    const across = (w / 2) * down;
+    let x0 = hub[0] + Math.min(s1 * out, L * out) - across,
+      x1 = hub[0] + Math.max(s1 * out, L * out) + across;
+    // only what is in the door: either side of it is the tower
+    x0 = Math.max(x0, -gap / 2);
+    x1 = Math.min(x1, gap / 2);
+    if (x1 <= x0) continue;
+    const z0 = Math.max(0, hub[2] - L * down - (w / 2) * Math.abs(out));
+    if (z0 >= BALL_TOP) continue;
+    if (!best || z0 < best.z0) best = { x: (x0 + x1) / 2, hx: (x1 - x0) / 2, z0, z1: BALL_TOP };
+  }
+  return best;
+}
+
+export class Obstacles {
+  /** The boxes the physics shoves with: a barrier's own, and each windmill's gate. */
+  readonly pushers: Pusher[] = [];
+  readonly belts: Belt[] = [];
+  /** Where each barrier's middle is, for drawing. */
+  readonly barriers: { x: number; y: number; hx: number; def: Extract<ObstacleDef, { kind: 'barrier' }> }[] = [];
+  /** Where each windmill's door is, and how far its blades have turned, for drawing. */
+  readonly windmills: { x: number; y: number; turn: number; def: Extract<ObstacleDef, { kind: 'windmill' }> }[] = [];
+  /** Where each conveyor lies, which way it carries, how long it is, and how far it has carried, for drawing. */
+  readonly conveyors: { x: number; y: number; angle: number; length: number; travel: number; speed: number }[] = [];
+
+  constructor(defs: readonly ObstacleDef[], layout: Layout) {
+    const tileX = (col: number) => layout.originX + (col + 0.5) * TILE;
+    const tileY = (row: number) => layout.originY + (layout.rows - 1 - row + 0.5) * TILE;
+    const box = (): Pusher => ({
+      x: 0,
+      y: 0,
+      z: 0,
+      yaw: 0,
+      hx: 0,
+      hy: 0,
+      hz: 0,
+      vx: 0,
+      vy: 0,
+      spin: 0,
+      px: 0,
+      py: 0,
+      owner: 0,
+    });
+    for (const def of defs) {
+      if (def.kind === 'barrier') {
+        const x = tileX(def.at[0]),
+          y = tileY(def.at[1]);
+        const pusher = { ...box(), x, y, z: BARRIER.hz, hx: (def.length * TILE) / 2, hy: BARRIER.hy, hz: BARRIER.hz };
+        this.pushers.push(pusher);
+        this.barriers.push({ x, y, hx: pusher.hx, def });
+      } else if (def.kind === 'windmill') {
+        const x = tileX(def.at[0]),
+          y = tileY(def.at[1]);
+        this.pushers.push({ ...box(), x, y: y + WINDMILL.hub[1], hy: WINDMILL.bladeThickness / 2, z: PARKED });
+        this.windmills.push({ x, y, turn: 0, def });
+      } else {
+        const x0 = tileX(def.from[0]),
+          y0 = tileY(def.from[1]),
+          x1 = tileX(def.to[0]),
+          y1 = tileY(def.to[1]);
+        const d = Math.hypot(x1 - x0, y1 - y0) || 1;
+        const length = d + TILE;
+        this.belts.push({
+          cx: (x0 + x1) / 2,
+          cy: (y0 + y1) / 2,
+          half: length / 2,
+          // the whole of the tile across: the physics takes this as the belt's full width
+          width: TILE,
+          dx: (x1 - x0) / d,
+          dy: (y1 - y0) / d,
+          speed: def.speed,
+        });
+        this.conveyors.push({
+          x: (x0 + x1) / 2,
+          y: (y0 + y1) / 2,
+          angle: Math.atan2(y1 - y0, x1 - x0),
+          length,
+          travel: 0,
+          speed: def.speed,
+        });
+      }
+    }
+  }
+
+  /** Everything where it is at game time `t`, and going as fast as it went over the `dt` before it. */
+  update(t: number, dt: number) {
+    let p = 0;
+    for (const b of this.barriers) {
+      const pusher = this.pushers[p++];
+      const now = slide(b.def, t);
+      pusher.x = b.x + now;
+      pusher.px = pusher.x;
+      pusher.vx = dt > 0 ? (now - slide(b.def, t - dt)) / dt : 0;
+    }
+    for (const w of this.windmills) {
+      const pusher = this.pushers[p++];
+      w.turn = turnAt(w.def, t);
+      const g = gate(w.turn);
+      if (!g) {
+        pusher.z = PARKED;
+        pusher.hx = pusher.hz = 0.5;
+        pusher.x = pusher.px = w.x;
+        pusher.vx = 0;
+        continue;
+      }
+      pusher.x = pusher.px = w.x + g.x;
+      pusher.hx = g.hx;
+      pusher.z = (g.z0 + g.z1) / 2;
+      pusher.hz = (g.z1 - g.z0) / 2;
+      const was = dt > 0 ? gate(turnAt(w.def, t - dt)) : null;
+      pusher.vx = was ? (g.x - was.x) / dt : 0;
+    }
+    for (const c of this.conveyors) c.travel = c.speed * t;
+  }
+}

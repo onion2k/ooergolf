@@ -15,7 +15,7 @@
  * Checked by the fuzzer after everything it does, by the test API on asking,
  * and by the unit tests. Each broken rule is a line saying what and where.
  */
-import { KINDS, KIND_NAME, onFloor } from './arena';
+import { KINDS, KIND_NAME, tileAt } from './arena';
 import { CLUBS } from './clubs';
 import { LIMIT_OVER_PAR, type Game } from './game';
 
@@ -45,7 +45,11 @@ export function checkInvariants(game: Game): string[] {
     }
     const values = [world.x[i], world.y[i], world.z[i], world.vx[i], world.vy[i], world.vz[i]];
     if (!values.every(Number.isFinite)) notNumbers.push(at(i));
-    else if (!world.carried[i] && !onFloor(layout, world.x[i], world.y[i])) buried.push(at(i));
+    else if (!world.carried[i]) {
+      // water is not rock: a ball is over it as it falls in
+      const t = tileAt(layout, world.x[i], world.y[i]);
+      if (t < 0 || layout.solid[t]) buried.push(at(i));
+    }
   }
   report('not a number', notNumbers);
   report('in the rock', buried);
@@ -56,10 +60,19 @@ export function checkInvariants(game: Game): string[] {
   if (!Number.isInteger(hole) || hole < 0 || hole >= course.length) out.push(`the hole is ${hole}`);
   if (phase === 'play' && !world.alive[ball]) out.push('the ball is gone, with the hole still in play');
   if (world.alive[ball]) {
-    const speed = Math.hypot(world.vx[ball], world.vy[ball], world.vz[ball]);
-    // a hair over, for the float arithmetic of a shot at full power; a ball dropping into the cup gains speed falling
-    const most = game.hardest * 1.001 + Math.max(0, -world.z[ball]) * 20;
-    if (speed > most) out.push(`the ball is going ${speed.toFixed(2)}, faster than the hardest shot`);
+    // along the ground: a fall into the cup, into water or off raised grass gains speed downward, and only downward
+    const speed = Math.hypot(world.vx[ball], world.vy[ball]);
+    // a hair over, for the float arithmetic of a shot at full power; nothing that moves goes as fast as that
+    if (speed > game.hardest * 1.001)
+      out.push(`the ball is going ${speed.toFixed(2)} along the ground, faster than the hardest shot`);
+    // inside a barrier's or a gate's box by more than the physics lets a ball sink into one
+    for (const p of game.obstacles.pushers) {
+      const inside =
+        Math.abs(world.x[ball] - p.x) < p.hx - 0.3 &&
+        Math.abs(world.y[ball] - p.y) < p.hy - 0.3 &&
+        Math.abs(world.z[ball] - p.z) < p.hz - 0.3;
+      if (inside) out.push(`the ball is inside a moving box at ${p.x.toFixed(1)},${p.y.toFixed(1)}`);
+    }
   }
   if (live > 1) out.push(`${live} bodies on the course, and only the ball should be`);
   if (!Number.isInteger(strokes) || strokes < 0) out.push(`the strokes are ${strokes}`);

@@ -1,8 +1,8 @@
 /** The autopilot as a measuring instrument: it knows how far a shot rolls, sees round corners, holes out, and gets stuck nowhere. */
 import { describe, expect, it } from 'vitest';
-import { HARDEST_SHOT, layoutOf, onFloor } from '../src/arena';
+import { HARDEST_SHOT, ROLL, TILE, layoutOf, onFloor } from '../src/arena';
 import { Autopilot, speedFor } from '../src/autopilot';
-import { COURSE } from '../src/course';
+import { COURSE, type HoleDef } from '../src/course';
 import { checkInvariants } from '../src/invariants';
 import { seeded } from '../src/random';
 import { DT, newGame, onGreen } from './helpers';
@@ -64,6 +64,100 @@ describe('the autopilot', () => {
     const { game } = newGame();
     game.shoot(0, 0.5);
     expect(new Autopilot(game).plan()).toBe(null);
+  });
+
+  it('goes round water, never through it, and up a ramp to grass it can reach no other way', () => {
+    const holes: HoleDef[] = [
+      {
+        name: 'round the pond',
+        par: 3,
+        map: ['#########', '#...C...#', '#.......#', '#~~~~~..#', '#~~~~~..#', '#.......#', '#...T...#', '#########'],
+      },
+      {
+        name: 'up and over',
+        par: 3,
+        map: [
+          '#######',
+          '#..C..#',
+          '#.....#',
+          '#~444~#',
+          '#~444~#',
+          '#~333~#',
+          '#~222~#',
+          '#~111~#',
+          '#.....#',
+          '#..T..#',
+          '#######',
+        ],
+      },
+    ];
+    for (const hole of holes) {
+      const { game, told } = newGame(1, null, [hole]);
+      const pilot = new Autopilot(game);
+      for (let f = 0; f < 60 * 60 && game.phase === 'play'; f++) {
+        pilot.step(DT);
+        if (f % 20 === 0) expect(checkInvariants(game)).toEqual([]);
+      }
+      expect(game.phase, hole.name).not.toBe('play');
+      expect(
+        told.filter((t) => t.startsWith('splash')),
+        `${hole.name}: into the water`,
+      ).toEqual([]);
+      expect(game.card[0], hole.name).toBeLessThanOrEqual(hole.par);
+    }
+  });
+
+  it('times its shots past what moves: waits for the door of the windmill and the barriers to be clear', () => {
+    // walking up to the tee at every moment of the windmill's turn and the barriers' slide: untimed, some of them meet
+    // a blade or a barrier on the way
+    for (const name of ['Windmill', 'Barriers']) {
+      const hole = COURSE.find((h) => h.name === name)!;
+      for (let wait = 0; wait < 8; wait += 0.5) {
+        const { game } = newGame(1, null, [hole]);
+        for (let f = 0; f < wait * 60; f++) game.step(DT);
+        const pilot = new Autopilot(game);
+        for (let f = 0; f < 60 * 90 && game.phase === 'play'; f++) pilot.step(DT);
+        expect(game.phase, `${name}, from ${wait} s`).not.toBe('play');
+        expect(game.card[0], `${name}, from ${wait} s`).toBeLessThanOrEqual(hole.par);
+      }
+    }
+  });
+
+  it('never plans a shot through water, nor up a rise too high to roll up, from anywhere it could lie', () => {
+    const holes: HoleDef[] = [
+      {
+        name: 'water across',
+        par: 3,
+        map: ['#########', '#...C...#', '#.......#', '#~~~~~~.#', '#.......#', '#...T...#', '#########'],
+      },
+      {
+        name: 'a wall across',
+        par: 3,
+        map: ['#########', '#...C...#', '#.......#', '#333333.#', '#.......#', '#...T...#', '#########'],
+      },
+    ];
+    for (const hole of holes) {
+      const { game } = newGame(1, null, [hole]);
+      const l = game.layout;
+      for (const [x, y] of [
+        [l.tee.x, l.tee.y],
+        // on the grass short of the water or the wall, to one side and to the other, and at its very edge
+        [l.originX + 2.5 * TILE, l.originY + 1.5 * TILE],
+        [l.originX + 6.5 * TILE, l.originY + 2.5 * TILE],
+        [l.originX + 3.5 * TILE, l.originY + 2.5 * TILE],
+      ]) {
+        game.place(x, y);
+        const shot = new Autopilot(game).plan()!;
+        // the whole of the shot, as far as the ball would roll, is on level grass and clear of it
+        const rolls = (shot.power * game.hardest) / ROLL.floorDrag;
+        for (let s = 0; s < rolls; s += 0.25) {
+          const px = x + Math.cos(shot.angle) * s,
+            py = y + Math.sin(shot.angle) * s;
+          const t = Math.floor((py - l.originY) / TILE) * l.cols + Math.floor((px - l.originX) / TILE);
+          expect(l.water[t] || l.floor[t] > 0 ? `${hole.name}: into it from ${x},${y}` : 'clear').toBe('clear');
+        }
+      }
+    }
   });
 
   it('finds its way on any map the course could have', () => {

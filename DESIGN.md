@@ -137,9 +137,21 @@ Each hole brings one new thing, and the ninth has them all.
 | 9    | All of them, and a conveyor to the cup  |
 
 Hole 7 was to be a ramp and a jump. Without slopes it is a raised green,
-and whether a ball can be got up a step without a ramp is for its feature to
-find out. If it cannot, hole 7 is a second windmill hole and the raised
-green waits for slopes.
+and whether a ball can be got up a step without a ramp was for its feature
+to find out: it can. A ball climbs a step lower than its radius at no cost
+to its speed, and a rise of 1.2 is a wall, so a ramp of steps of 0.4 leads
+up onto grass walled off everywhere else.
+
+Built on v0.3.0 while 0.4.0 is made, the course is seven holes: Straight,
+Dog-leg, Pond, Barriers, Up and Over (the ramp onto a plateau between two
+ponds, and a drop to the cup), Windmill, and The Mill Race (a barrier, the
+windmill, and a conveyor to the cup between ponds). The bunker and the
+bumpers come with 0.4.0, and their holes go in as 3 and 6.
+
+- **Water** costs a stroke, and the ball is put back where it was struck
+  from; at the limit the hole is picked up.
+- **A ball the course keeps moving,** a belt carrying it or a barrier
+  dragging it along, may be struck where it lies after ten seconds.
 
 ## The upgrades
 

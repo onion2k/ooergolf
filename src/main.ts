@@ -92,12 +92,32 @@ async function main() {
     started(index, par) {
       if (!game) return;
       const { layout } = game;
-      renderer.setStatic(scene.static(layout, game.course[index].name));
+      renderer.setStatic(scene.static(layout, game.course[index].name, game.obstacles));
+      renderer.setDynamic(scene.dynamic(game.obstacles));
       renderer.setSunShadow(boxOf(layout));
       rig.jump(layout.tee.x, layout.tee.y);
       hud.started({ index, count: game.course.length, name: game.course[index].name, par });
     },
     struck: () => hud.setStrokes(game?.strokes ?? 0),
+    // into the water: a splash where it went in, and a word, and the stroke it cost
+    splash(x, y) {
+      hud.setStrokes(game?.strokes ?? 0);
+      hud.splash();
+      renderer.emit({
+        position: [x, y, 0],
+        velocity: [0, 0, 9],
+        spread: 5,
+        count: 60,
+        life: 0.9,
+        lifeSpread: 0.3,
+        size: 0.22,
+        growth: 0.6,
+        colour: [0.75, 0.9, 1],
+        alpha: 0.8,
+        gravity: 1,
+        floor: -0.1,
+      });
+    },
     holed: (strokes, par) => hud.done(strokes, par, false),
     pickedUp: (strokes, par) => hud.done(strokes, par, true),
     finished: () => game && hud.finished(game.course, game.card),
@@ -127,7 +147,6 @@ async function main() {
   const governor = new Governor(asked !== null ? Math.max(0, Math.min(RUNGS.length - 1, +asked || 0)) : undefined);
   renderer.economy = governor.economy;
 
-  renderer.setDynamic(scene.dynamic());
   renderer.setLights(new LightPool(LIGHT_CAPACITY));
   const cam = renderer.camera;
   /** Whether the test API has parked the camera where it wants it, and it is not to follow the ball. */
@@ -192,6 +211,7 @@ async function main() {
     const dots = played.ready ? scene.writeAim(world.x[ball], world.y[ball], gesture.aim, reach) : 0;
     renderer.move(1, scene.aim, dots);
     if (dots) renderer.tint(1, scene.aimLooks);
+    scene.writeMoving().forEach((m, k) => renderer.move(2 + k, m.matrices, m.count));
   }
 
   /** What a frame of the scene as it stands costs, drawn to a texture of our own rather than the canvas, so no wait to be shown is counted. */

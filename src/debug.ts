@@ -248,12 +248,7 @@ export function createApi(host: DebugHost): GameApi {
     },
     shoot: (angle, power) => game.shoot(angle, power),
     suggest: () => (game.ready ? new Autopilot(game).plan() : null),
-    startHole(index) {
-      game.newRound();
-      // the card as if the holes before had been played at par: a card of the right length, so the rules hold
-      for (let h = 0; h < index; h++) game.card.push(game.course[h].par);
-      game.begin(index);
-    },
+    startHole: (index) => game.startAt(index),
     newRound: () => game.newRound(),
     buy: (id) => game.buy(id),
     equip: (id) => game.equip(id),

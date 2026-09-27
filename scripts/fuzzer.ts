@@ -72,6 +72,9 @@ export function fuzz(seed: number, frames: number): FuzzResult {
     // a new player, or, on odd seeds, one come back with coins and gems enough for the shop
     let store = memoryStore(seed % 2 ? JSON.stringify({ coins: 700, gems: 6 }) : null);
     let game = new Game(new Progress(store), events, { random: seeded(seed) });
+    // a player part way round, on a hole of the seed's: every hole is played, where a monkey starting from the first
+    // and reloading now and then would seldom get to the last
+    game.startAt(seed % game.course.length);
     let busy = 0;
     const between = (a: number, b: number) => a + random() * (b - a);
     const did = (what: string) => {
@@ -154,7 +157,7 @@ export function fuzz(seed: number, frames: number): FuzzResult {
         },
       ],
       [
-        1,
+        0.5,
         () => {
           // saved, and loaded again into a new game as a reload would: what was kept must come back as it went
           game.persist();

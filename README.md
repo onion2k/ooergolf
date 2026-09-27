@@ -26,8 +26,11 @@ and the best score on each hole are kept in the browser. The camera follows
 the ball; the wheel zooms on a desktop, and two fingers pinch on a phone. A
 machine that cannot keep up has the picture stepped down a rung at a time.
 
-Two holes so far: a straight putt and a dog-leg. The other seven of the
-first nine have obstacles in them, and wait for the physics those need.
+Seven holes so far: a straight putt, a dog-leg, a pond, sliding barriers,
+a ramp up onto a plateau between ponds, a windmill whose blades sweep its
+door, and The Mill Race, with a barrier, the windmill and a conveyor to the
+cup. Water costs a stroke, and the ball comes back to where it was struck
+from. The bunker and the bumpers wait for the physics they need.
 
 ## What is here
 
@@ -74,7 +77,8 @@ fixed, and no baseline is moved to make it green.
     src/main.ts        the page: events into words, the frame drawn
     src/debug.ts       window.game, the test API
     src/invariants.ts  what must always hold
-    src/course.ts      the holes: a map and a par each
+    src/course.ts      the holes: a map, a par, and what moves on each
+    src/obstacles.ts   where a barrier, a windmill's gate and a belt are at any moment
     src/arena.ts       a hole's map read into a layout; the kinds of body, the hardest shot
     src/autopilot.ts   the game played by itself, for the gates and for par
     src/clubs.ts       the clubs, what they cost, and what a hole pays

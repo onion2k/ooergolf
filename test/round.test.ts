@@ -24,7 +24,12 @@ function putt(game: Game, speed: number, aside = 0) {
       y = cup.y + Math.sin(a) * back + Math.cos(a) * aside;
     if (!onFloor(game.layout, x - 1.2, y) || !onFloor(game.layout, x + 1.2, y)) continue;
     if (!onFloor(game.layout, x, y - 1.2) || !onFloor(game.layout, x, y + 1.2)) continue;
-    game.place(x, y);
+    try {
+      game.place(x, y);
+    } catch {
+      // not level grass on this side: another
+      continue;
+    }
     game.shoot(a + Math.PI, speed / HARDEST_SHOT);
     return;
   }

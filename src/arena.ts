@@ -30,7 +30,19 @@ export const HARDEST_SHOT = 40;
  */
 export const ROLL = { floorDrag: 0.8 };
 
-/** A grid of tiles and which are solid: all that is needed to say whether a point is on the grass. */
+/**
+ * How high a step of raised grass is, a digit in a map a step: less than
+ * the ball's radius, so the ball rolls up one, and a rise of three steps
+ * (1.2) is a wall to it from below and a drop from above. Measured: a ball
+ * climbs a step of up to 0.9 at no cost to its speed, and not one of 1.2.
+ */
+export const STEP = 0.4;
+/** How low water's floor is: under the world's bottom, so a ball rolled onto water falls out of the world, and is lost. */
+export const WATER_FLOOR = -10;
+/** The world's bottom: below it a ball has left the world, into water. */
+export const BOTTOM = -5;
+
+/** A grid of tiles, which are solid and which are water: all that is needed to say whether a point is on the grass. */
 export interface Ground {
   cols: number;
   rows: number;
@@ -38,12 +50,16 @@ export interface Ground {
   originY: number;
   /** One byte a tile, row by row from the south: 1 where the ball cannot go. */
   solid: Uint8Array;
+  /** One byte a tile: 1 where there is water, which the ball can roll onto, and is lost in. */
+  water: Uint8Array;
 }
 
 /** A hole laid out from its map: the grid, which tiles are rail, the tee and the cup, and the grass's extent. */
 export interface Layout extends Ground {
   /** One byte a tile: 1 where the rail is drawn. The rest of what is solid is off the course. */
   rail: Uint8Array;
+  /** How high the floor stands on each tile: nought for level grass, a step a digit, and far below for water. */
+  floor: Float32Array;
   tee: { x: number; y: number };
   cup: { x: number; y: number };
   /** The box round the grass, in world units. */
@@ -53,8 +69,8 @@ export interface Layout extends Ground {
 /**
  * A hole's layout from its map, drawn as seen from the tee with the far end
  * first, one character a tile: `#` rail, `.` grass, `T` the tee and `C` the
- * cup on grass, and a space for off the course. The grid is centred on the
- * origin. A map with anything else in it, not exactly one tee and one cup, or
+ * cup on level grass, a digit for grass raised that many steps, `~` water,
+ * and a space for off the course. The grid is centred on the origin. A map with anything else in it, not exactly one tee and one cup, or
  * grass on its edge, where a ball would leave the world, is refused.
  */
 export function layoutOf(map: readonly string[]): Layout {
@@ -63,7 +79,9 @@ export function layoutOf(map: readonly string[]): Layout {
   const originX = -(cols * TILE) / 2,
     originY = -(rows * TILE) / 2;
   const solid = new Uint8Array(cols * rows),
-    rail = new Uint8Array(cols * rows);
+    rail = new Uint8Array(cols * rows),
+    water = new Uint8Array(cols * rows),
+    floor = new Float32Array(cols * rows);
   const tees: [number, number][] = [],
     cups: [number, number][] = [];
   const bounds = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
@@ -84,6 +102,10 @@ export function layoutOf(map: readonly string[]): Layout {
       }
       if (c === 'T') tees.push([x, y]);
       else if (c === 'C') cups.push([x, y]);
+      else if (c === '~') {
+        water[t] = 1;
+        floor[t] = WATER_FLOOR;
+      } else if (c >= '1' && c <= '9') floor[t] = (c.charCodeAt(0) - 48) * STEP;
       else if (c !== '.') throw new Error(`a hole's map has "${c}" in it, which is not a tile`);
       if (tx === 0 || ty === 0 || tx === cols - 1 || ty === rows - 1)
         throw new Error(`a hole's map has grass on its edge, at column ${tx} of row ${r}`);
@@ -97,7 +119,19 @@ export function layoutOf(map: readonly string[]): Layout {
   if (cups.length !== 1) throw new Error(`a hole's map has ${cups.length} cups, not one`);
   const [[teeX, teeY]] = tees,
     [[cupX, cupY]] = cups;
-  return { cols, rows, originX, originY, solid, rail, tee: { x: teeX, y: teeY }, cup: { x: cupX, y: cupY }, bounds };
+  return {
+    cols,
+    rows,
+    originX,
+    originY,
+    solid,
+    rail,
+    water,
+    floor,
+    tee: { x: teeX, y: teeY },
+    cup: { x: cupX, y: cupY },
+    bounds,
+  };
 }
 
 /** The tile a point is in, or -1 off the grid. */
@@ -107,8 +141,8 @@ export function tileAt(g: Ground, x: number, y: number): number {
   return tx < 0 || ty < 0 || tx >= g.cols || ty >= g.rows ? -1 : ty * g.cols + tx;
 }
 
-/** Whether a point is on the grass: on the grid and not solid. */
+/** Whether a point is on the grass: on the grid, not solid, and not water. */
 export function onFloor(g: Ground, x: number, y: number): boolean {
   const t = tileAt(g, x, y);
-  return t >= 0 && g.solid[t] === 0;
+  return t >= 0 && g.solid[t] === 0 && g.water[t] === 0;
 }

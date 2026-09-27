@@ -23,17 +23,23 @@ import { ball, box, square } from './meshes';
 import {
   FLAG_COLOURS,
   FLOWER_COLOURS,
+  barrier,
   collar,
+  conveyor,
   cup,
   flag,
   flowers,
   group,
   hedge,
+  placeBlades,
   rock,
   teeMarkers,
   tree,
+  water,
+  windmill,
   type Model,
 } from './models';
+import { BARRIER, WINDMILL, type Obstacles } from './obstacles';
 import type { World } from './physics';
 import { scatter, type Piece, type SceneryKind } from './scenery';
 import type { Shot } from './shot';
@@ -56,6 +62,8 @@ export const PALETTE = {
   grassMown: [0.16, 0.52, 0.12, 0.85],
   rough: [0.06, 0.26, 0.07, 0.95],
   rail: [0.58, 0.3, 0.13, 0.55],
+  /** The sides of grass raised on a step: the earth under the turf. */
+  bank: [0.2, 0.3, 0.08, 0.9],
   ball: [0.98, 0.98, 0.96, 0.25],
   /** The aim's dots, from a gentle putt to the hardest shot. */
   aimSoft: [0.35, 0.95, 0.4],
@@ -86,16 +94,24 @@ export class Scene {
   readonly ball = new Float32Array(16);
   readonly aim = new Float32Array(AIM_DOTS * 16);
   readonly aimLooks = new Float32Array(AIM_DOTS * MATERIAL_STRIDE);
+  /** The pools of what moves on the hole, each a group after the ball and the aim, written each frame. */
+  private moving: { matrices: Float32Array; count: number; write: (out: Float32Array) => void }[] = [];
 
-  /** What does not move on this hole, which is called `name`. */
-  static(layout: Layout, name = ''): GameGroup[] {
-    const { cols, rows, originX, originY, solid, rail: isRail, cup: at, tee } = layout;
+  /** What does not move on this hole, which is called `name`, with what stands still of what moves on it. */
+  static(layout: Layout, name = '', obstacles?: Obstacles): GameGroup[] {
+    const { cols, rows, originX, originY, solid, rail: isRail, water: isWater, floor, cup: at, tee } = layout;
     const cupTile = tileAt(layout, at.x, at.y);
+    // the rail either side of a windmill's door is under its tower, and is not drawn through it
+    const underTower = new Set<number>();
+    for (const w of obstacles?.windmills ?? [])
+      for (const side of [-1, 1]) underTower.add(tileAt(layout, w.x + side * TILE, w.y));
     const grassTiles: number[] = [],
-      railTiles: number[] = [];
+      railTiles: number[] = [],
+      raised: number[] = [];
     for (let t = 0; t < cols * rows; t++) {
-      if (!solid[t] && t !== cupTile) grassTiles.push(t);
-      else if (isRail[t]) railTiles.push(t);
+      if (!solid[t] && !isWater[t] && t !== cupTile) grassTiles.push(t);
+      else if (isRail[t] && !underTower.has(t)) railTiles.push(t);
+      if (!solid[t] && !isWater[t] && floor[t] > 0) raised.push(t);
     }
     const middle = (t: number): [number, number] => [
       originX + ((t % cols) + 0.5) * TILE,
@@ -107,14 +123,32 @@ export class Scene {
       grassLooks = new Float32Array(grassTiles.length * MATERIAL_STRIDE);
     grassTiles.forEach((t, k) => {
       const [x, y] = middle(t);
-      place(grass, k, x, y, 0, 0, TILE, TILE, 1);
+      place(grass, k, x, y, floor[t], 0, TILE, TILE, 1);
       grassLooks.set(stripe(t), k * MATERIAL_STRIDE);
     });
-    // the rail from the rough up past the grass: the green's timber sides, and the edge the ball banks off
+    // the earth under grass raised on steps, up to just under its turf
+    const banks = new Float32Array(raised.length * 16);
+    raised.forEach((t, k) => {
+      const [x, y] = middle(t);
+      place(banks, k, x, y, 0, 0, 1, 1, floor[t] - 0.01);
+    });
+    // the rail from the rough up past the grass beside it, however high that stands: the green's timber sides,
+    // and the edge the ball banks off
     const rails = new Float32Array(railTiles.length * 16);
     railTiles.forEach((t, k) => {
       const [x, y] = middle(t);
-      place(rails, k, x, y, -ROUGH_DEPTH);
+      let top = 0;
+      const tx = t % cols,
+        ty = Math.floor(t / cols);
+      for (let oy = -1; oy <= 1; oy++)
+        for (let ox = -1; ox <= 1; ox++) {
+          const nx = tx + ox,
+            ny = ty + oy;
+          if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
+          const u = ny * cols + nx;
+          if (!solid[u] && !isWater[u]) top = Math.max(top, floor[u]);
+        }
+      place(rails, k, x, y, -ROUGH_DEPTH, 0, 1, 1, top + RAIL_HEIGHT + ROUGH_DEPTH);
     });
     const rough = new Float32Array(16);
     place(rough, 0, 0, 0, -ROUGH_DEPTH, 0, 600, 600, 1);
@@ -133,16 +167,59 @@ export class Scene {
       albedo: [c[0], c[1], c[2]] as [number, number, number],
       roughness: c[3],
     });
-    return [
+    const out: GameGroup[] = [
       { mesh: square(), matrices: grass, materials: grassLooks },
       { ...group({ ...collarPart, material: stripe(cupTile) }, atCup) },
-      { mesh: box(TILE, TILE, RAIL_HEIGHT + ROUGH_DEPTH), matrices: rails, ...look(PALETTE.rail) },
+      { mesh: box(TILE, TILE, 1), matrices: rails, ...look(PALETTE.rail) },
       { mesh: square(), matrices: rough, ...look(PALETTE.rough) },
       ...groups(cup(CUP.radius), atCup),
       ...groups(flag(FLAG_COLOURS.red), flagAt),
       ...groups(teeMarkers(TEE_SPACING), teeAt),
       ...this.scenery(scatter(layout, name)),
+      ...this.ponds(layout),
     ];
+    if (raised.length) out.push({ mesh: box(TILE, TILE, 1), matrices: banks, ...look(PALETTE.bank) });
+    for (const w of obstacles?.windmills ?? []) {
+      const at = new Float32Array(16);
+      place(at, 0, w.x, w.y, 0);
+      out.push(...groups(windmill(WINDMILL), at));
+    }
+    for (const c of obstacles?.conveyors ?? []) {
+      const at = new Float32Array(16);
+      // the model carries toward +Y: turned to carry the way the belt does
+      place(at, 0, c.x, c.y, 0, c.angle - Math.PI / 2);
+      out.push(...groups(conveyor(TILE, c.length), at));
+    }
+    return out;
+  }
+
+  /**
+   * The water on a hole, as ponds: each the largest rectangle of water tiles
+   * to be had from the first not yet in one, so a pond is one sheet with its
+   * shallows round its own edge, and not a grid of puddles.
+   */
+  private ponds(layout: Layout): GameGroup[] {
+    const { cols, rows, originX, originY, water: isWater } = layout;
+    const used = new Uint8Array(cols * rows);
+    const out: GameGroup[] = [];
+    for (let t = 0; t < cols * rows; t++) {
+      if (!isWater[t] || used[t]) continue;
+      const tx = t % cols,
+        ty = Math.floor(t / cols);
+      let w = 1;
+      while (tx + w < cols && isWater[t + w] && !used[t + w]) w++;
+      let h = 1;
+      for (; ty + h < rows; h++) {
+        let full = true;
+        for (let k = 0; k < w; k++) if (!isWater[t + h * cols + k] || used[t + h * cols + k]) full = false;
+        if (!full) break;
+      }
+      for (let j = 0; j < h; j++) for (let k = 0; k < w; k++) used[t + j * cols + k] = 1;
+      const at = new Float32Array(16);
+      place(at, 0, originX + (tx + w / 2) * TILE, originY + (ty + h / 2) * TILE, 0);
+      out.push(...groups(water(w * TILE, h * TILE, { seed: t + 1 }), at));
+    }
+    return out;
   }
 
   /** The scenery on the rough, a group for each part of each kind's model, placed as the scatter says. */
@@ -168,13 +245,49 @@ export class Scene {
     return out;
   }
 
-  /** What moves: the pools, sized once. */
-  dynamic(): GameGroup[] {
+  /**
+   * What moves: the ball and the aim, and then each part of what moves on
+   * this hole: a barrier's, a windmill's blades, a conveyor's chevrons. Made
+   * again for each hole; the ball is group 0 and the aim group 1.
+   */
+  dynamic(obstacles?: Obstacles): GameGroup[] {
     const [br, bg, bb, brough] = PALETTE.ball;
-    return [
+    const out: GameGroup[] = [
       { mesh: ball(KIND_RADIUS[BALL], 8, 14), matrices: this.ball, albedo: [br, bg, bb], roughness: brough },
       { mesh: ball(AIM_RADIUS, 4, 8), matrices: this.aim, count: 0, materials: this.aimLooks },
     ];
+    this.moving = [];
+    const pool = (model: { parts: Model['parts'] }, write: (out: Float32Array) => void) => {
+      const matrices = new Float32Array(16);
+      for (const part of model.parts) {
+        this.moving.push({ matrices, count: 1, write });
+        out.push(group(part, matrices));
+      }
+    };
+    obstacles?.barriers.forEach((b, k) => {
+      const pusher = obstacles.pushers[k];
+      pool(barrier(b.hx, BARRIER.hy, BARRIER.hz), (m) => place(m, 0, pusher.x, pusher.y, BARRIER.hz));
+    });
+    for (const w of obstacles?.windmills ?? []) {
+      const blades = windmill(WINDMILL);
+      pool({ parts: blades.moving }, (m) => placeBlades(m, 0, w.x, w.y, 0, w.turn, blades.hub));
+    }
+    for (const c of obstacles?.conveyors ?? []) {
+      const belt = conveyor(TILE, c.length);
+      const yaw = c.angle - Math.PI / 2;
+      pool({ parts: belt.moving }, (m) => {
+        // the chevrons run along the belt, a spacing at a time, so they seem to go on for ever
+        const along = c.travel % belt.spacing;
+        place(m, 0, c.x + Math.cos(c.angle) * along, c.y + Math.sin(c.angle) * along, 0, yaw);
+      });
+    }
+    return out;
+  }
+
+  /** What moves on the hole where it is this frame, into its pools: how many groups there are after the aim. */
+  writeMoving(): { matrices: Float32Array; count: number }[] {
+    for (const m of this.moving) m.write(m.matrices);
+    return this.moving;
   }
 
   /** The ball where it is this frame. */
