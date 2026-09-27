@@ -1,7 +1,8 @@
 /**
  * The picture stepped down on a machine that cannot keep up: a ladder of the
  * renderer's economy, each rung taking one more thing away (the particles,
- * then the shadows, then the post chain), and a governor that watches how
+ * then the shadows and the shade where things meet, then the post chain,
+ * the haze and the glints), and a governor that watches how
  * long frames take and steps down a rung when they are slow and stay slow.
  *
  * It only ever steps down. A game cannot tell a machine that has caught up
@@ -23,8 +24,8 @@ const STALL_MS = 100;
 export const RUNGS: readonly Partial<GameEconomy>[] = [
   {},
   { particles: false },
-  { particles: false, shadows: false },
-  { particles: false, shadows: false, post: false, effects: 0 },
+  { particles: false, shadows: false, occlusion: false },
+  { particles: false, shadows: false, occlusion: false, post: false, effects: 0, fog: false },
 ];
 
 /** The renderer's economy at a rung: everything, less what that rung takes away. */

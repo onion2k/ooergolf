@@ -13,6 +13,7 @@ import { CameraRig } from './camera';
 import { CLUBS } from './clubs';
 import { createApi } from './debug';
 import { frameCost } from './frame-cost';
+import { CUP } from './course';
 import { Game, type GameEvents } from './game';
 import { Hud } from './hud';
 import { daylight } from './look';
@@ -20,6 +21,8 @@ import { Progress } from './progress';
 import { seeded } from './random';
 import { Scene, boxOf } from './scene';
 import { Gesture } from './gesture';
+import { glint } from './glints';
+import { EFFECT_STRIDE } from 'artshape-render/game/renderer';
 import { Governor, RUNGS } from './quality';
 import { groundAt } from './shot';
 
@@ -212,6 +215,45 @@ async function main() {
     renderer.move(1, scene.aim, dots);
     if (dots) renderer.tint(1, scene.aimLooks);
     scene.writeMoving().forEach((m, k) => renderer.move(2 + k, m.matrices, m.count));
+    shine();
+  }
+
+  /** The gold that glints: round the cup's rim, and the knob on the pin. */
+  const glinting = (): [number, number, number][] => {
+    const { cup } = played.layout;
+    const rim = CUP.radius + 0.15;
+    return [
+      ...[0.3, 1.9, 3.4, 4.9].map((a): [number, number, number] => [
+        cup.x + Math.cos(a) * rim,
+        cup.y + Math.sin(a) * rim,
+        0.1,
+      ]),
+      [cup.x, cup.y, 8.75],
+    ];
+  };
+  const glintQuad = new Float32Array(EFFECT_STRIDE);
+  /** The glint of the moment, if one is lit, placed where its gold is on the screen. */
+  function shine() {
+    const places = glinting();
+    const g = glint(played.t, places.length);
+    if (g.brightness <= 0) {
+      renderer.setEffects(glintQuad, 0);
+      return;
+    }
+    const [x, y, z] = places[g.at];
+    const m = cam.viewProjection;
+    const w = m[3] * x + m[7] * y + m[11] * z + m[15];
+    glintQuad.set([
+      (m[0] * x + m[4] * y + m[8] * z + m[12]) / w,
+      (m[1] * x + m[5] * y + m[9] * z + m[13]) / w,
+      0.07 * g.brightness,
+      3.5 * g.brightness,
+      1,
+      0.93,
+      0.7,
+      2.2,
+    ]);
+    renderer.setEffects(glintQuad, 1);
   }
 
   /** What a frame of the scene as it stands costs, drawn to a texture of our own rather than the canvas, so no wait to be shown is counted. */

@@ -180,7 +180,9 @@ and all the words in the page, not the picture.
   also brings patterns by placement and sprites. The game is on v0.16.0 now
   and moves up in the first feature that draws something of the golf.
 - **Light.** The `daylight` environment, a sun with a shadow, and ambient
-  light on. Lamps only where a hole wants one.
+  light on. Lamps only where a hole wants one. The shade where things meet
+  from screen-space occlusion, a thin haze that pales the far rough, and a
+  glint now and then on the gold of the cup and the pin.
 - **Grass** is rough and green, mown in bands by the `bands` pattern.
   **Bunkers** are pale, matte and speckled.
 - **Obstacles** are bright glossy plastic: the windmill, the bumpers, the

@@ -17,6 +17,7 @@
  * `test-results/`. Look at all three before deciding which is right.
  */
 import { expect, test, type Page } from '@playwright/test';
+import { glint } from '../src/glints';
 import { drag, start, watch } from './game';
 
 /** How far the pictures may differ before it is a change and not the GPU: a fiftieth of the pixels, each well off. */
@@ -107,6 +108,29 @@ test.describe('what it looks like', () => {
       expect(problems).toEqual([]);
     });
   }
+
+  test('a glint on the gold of the cup, close to', async ({ page }) => {
+    const problems = watch(page);
+    // the first moment a place on the rim is at the height of its glint
+    let t = 0;
+    for (let f = 0; f < 60 * 60; f++) {
+      const g = glint(f / 60, 5);
+      if (g.at < 4 && g.brightness > 0.95) {
+        t = f;
+        break;
+      }
+    }
+    await start(page, { seed: 11, paused: true });
+    await page.evaluate((frames) => {
+      const g = window.game!;
+      const { cup } = g.content();
+      g.look(cup.x, cup.y - 12, 30);
+      g.step(frames);
+    }, t);
+    await hideStats(page);
+    await expect(page.locator('#view')).toHaveScreenshot('glint.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
 
   test('a hole done: its score over the course', async ({ page }) => {
     const problems = watch(page);
