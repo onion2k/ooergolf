@@ -1,8 +1,8 @@
 /** The scenery round a hole: on the rough and never the course, clear of it, spaced, bounded, and the same for a hole every time. */
 import { describe, expect, it } from 'vitest';
-import { layoutOf, tileAt } from '../src/arena';
+import { TILE, layoutOf, tileAt } from '../src/arena';
 import { COURSE } from '../src/course';
-import { SCENERY, scatter } from '../src/scenery';
+import { DRESSING, SCENERY, dress, scatter } from '../src/scenery';
 
 describe('the scenery', () => {
   for (const hole of COURSE) {
@@ -45,5 +45,67 @@ describe('the scenery', () => {
       expect(s.scale).toBeGreaterThanOrEqual(0.8);
       expect(s.scale).toBeLessThanOrEqual(1.25);
     }
+  });
+});
+
+describe('the dressing of a hole', () => {
+  for (const hole of COURSE) {
+    const l = layoutOf(hole.map);
+    const d = dress(l, hole.name);
+    const onRough = (x: number, y: number) => {
+      const t = tileAt(l, x, y);
+      return t < 0 || (l.solid[t] === 1 && l.rail[t] === 0);
+    };
+
+    it(`round ${hole.name}: bunting on three sides, outside the course, strung high enough to be seen over the rail`, () => {
+      expect(d.bunting.length).toBe(3);
+      for (const b of d.bunting) {
+        // both posts and the middle of the string off the course, on the rough
+        const c = Math.cos(b.yaw),
+          s = Math.sin(b.yaw);
+        for (const k of [-0.5, 0, 0.5]) expect(onRough(b.x + c * b.length * k, b.y + s * b.length * k)).toBe(true);
+        expect(b.height, 'above the rail, from the rough').toBeGreaterThan(DRESSING.railTop + 2);
+      }
+    });
+
+    it(`round ${hole.name}: flower beds along the foot of the rail, on the rough`, () => {
+      expect(d.beds.length).toBeGreaterThanOrEqual(4);
+      for (const bed of d.beds) {
+        expect(onRough(bed.x, bed.y), `${bed.x},${bed.y}`).toBe(true);
+        // near the rail: a rail tile within a tile and a half
+        let near = false;
+        for (let a = 0; a < 8; a++) {
+          const t = tileAt(
+            l,
+            bed.x + Math.cos((a / 8) * Math.PI * 2) * TILE,
+            bed.y + Math.sin((a / 8) * Math.PI * 2) * TILE,
+          );
+          if (t >= 0 && l.rail[t] === 1) near = true;
+        }
+        expect(near, `${bed.x.toFixed(1)},${bed.y.toFixed(1)} beside the rail`).toBe(true);
+      }
+    });
+
+    it(`round ${hole.name}: rocks in clusters, on the rough, and the scattered trees kept off the bunting`, () => {
+      expect(d.rocks.length).toBeGreaterThanOrEqual(4);
+      for (const r of d.rocks) {
+        expect(onRough(r.x, r.y)).toBe(true);
+        // every rock has another of its cluster close by
+        expect(d.rocks.some((o) => o !== r && Math.hypot(o.x - r.x, o.y - r.y) < 3)).toBe(true);
+      }
+      for (const p of scatter(l, hole.name))
+        for (const b of d.bunting) {
+          const c = Math.cos(b.yaw),
+            s = Math.sin(b.yaw);
+          const along = (p.x - b.x) * c + (p.y - b.y) * s,
+            across = -(p.x - b.x) * s + (p.y - b.y) * c;
+          expect(Math.abs(across) > 2 || Math.abs(along) > b.length / 2 + 1, `${p.kind} under the bunting`).toBe(true);
+        }
+    });
+  }
+
+  it('is the same for a hole every time', () => {
+    const l = layoutOf(COURSE[2].map);
+    expect(dress(l, COURSE[2].name)).toEqual(dress(l, COURSE[2].name));
   });
 });

@@ -159,7 +159,12 @@ change meant to move it, and the commit says why. Look at every picture.
   triangle budget in `BUDGET`. `showcase.html` draws every one
   (`/showcase.html`, with `?model=name`), for building and looking at them.
 - `src/scenery.ts` scatters the decoration round a hole, on the rough and
-  clear of the course, from the hole's name and never the game's chance.
+  clear of the course, from the hole's name and never the game's chance;
+  and dresses the hole, with bunting on tall posts round three sides just
+  outside the rail, beds of flowers at the rail's foot, and rocks in
+  clusters, the scattered trees kept off the bunting. The rough is one
+  full-size square speckled with darker grass, the pattern drawn in world
+  units.
 - `src/debug.ts` is `window.game`, the test API. `src/invariants.ts` lists
   the rules that must always hold. `src/autopilot.ts` plays the game by
   itself, for the gates and for par.

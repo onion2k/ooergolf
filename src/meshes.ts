@@ -92,6 +92,14 @@ export function square(): Mesh {
   return b.build();
 }
 
+/** A flat square `side` across at z = 0, facing up, centred, at its full size: for a pattern drawn in world units. */
+export function plane(side: number): Mesh {
+  const b = new MeshBuilder();
+  const h = side / 2;
+  face(b, [-h, -h, 0], [h, -h, 0], [h, h, 0], [-h, h, 0]);
+  return b.build();
+}
+
 /** A flat disc at z = 0, facing up. */
 export function disc(radius: number, segments = 24): Mesh {
   const b = new MeshBuilder();

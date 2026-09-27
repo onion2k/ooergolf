@@ -198,7 +198,9 @@ and all the words in the page, not the picture.
   sparkles out of the cup, and a splash in water.
 - **Decoration** is for fun and the physics knows nothing of it: trees,
   hedges, flowers, bunting, a flag in every cup. Each hole has its own
-  scatter of it on the rough, the same every time.
+  scatter of it on the rough, the same every time, and is dressed: bunting
+  strung round three sides above the rail, beds of flowers at its foot, and
+  rocks in clusters, on a rough speckled with darker grass.
 - **The green is raised.** Each hole stands on the rough on timber sides,
   the rough below the bottom of the cup, so the cup is a hole seen into.
 - **The cup** is 1.45 across its middle, a little wider than the ball, so

@@ -19,11 +19,12 @@ import { MATERIAL_STRIDE, PATTERN_STRIDE } from 'artshape-render/game/renderer';
 import { BALL, KIND_RADIUS, TILE, tileAt, type Layout } from './arena';
 import { CUP } from './course';
 import { place } from './matrix';
-import { ball, box, square } from './meshes';
+import { ball, box, plane, square } from './meshes';
 import {
   FLAG_COLOURS,
   FLOWER_COLOURS,
   barrier,
+  bunting,
   collar,
   conveyor,
   cup,
@@ -42,7 +43,7 @@ import {
 import { BARRIER, WINDMILL, type Obstacles } from './obstacles';
 import type { World } from './physics';
 import { placeRolling } from './roll';
-import { scatter, type Piece, type SceneryKind } from './scenery';
+import { dress, scatter, type Piece, type SceneryKind } from './scenery';
 import { flagTurn, lean, ripple } from './sway';
 import type { Shot } from './shot';
 
@@ -63,6 +64,8 @@ export const PALETTE = {
   grass: [0.1, 0.42, 0.08, 0.85],
   grassMown: [0.16, 0.52, 0.12, 0.85],
   rough: [0.06, 0.26, 0.07, 0.95],
+  /** The darker grass speckled through the rough. */
+  roughSpeckle: [0.05, 0.225, 0.06],
   rail: [0.58, 0.3, 0.13, 0.55],
   /** The sides of grass raised on a step: the earth under the turf. */
   bank: [0.2, 0.3, 0.08, 0.9],
@@ -88,6 +91,10 @@ const SCENERY_MODELS: Record<Exclude<SceneryKind, 'flowers'>, Model> = {
 };
 /** The kinds of scenery that lean in the breeze. */
 const TREES = new Set<SceneryKind>(['round tree', 'pine']);
+/** The flowers of a bed at the foot of the rail: fuller than a clump in the rough. */
+const BED_MODELS = FLOWER_COLOURS.slice(0, 3).map((c, k) => flowers(c, { seed: k + 11, count: 9 }));
+/** The rough, as one great square at its full size, so its speckle is drawn in world units. */
+const ROUGH_SIZE = 600;
 const FLOWER_MODELS = FLOWER_COLOURS.slice(0, 3).map((c, k) => flowers(c, { seed: k + 1 }));
 
 /** Which way the flag flies when the breeze is still: across the course, never at the camera. */
@@ -185,7 +192,10 @@ export class Scene {
       place(rails, k, x, y, -ROUGH_DEPTH, 0, 1, 1, top + RAIL_HEIGHT + ROUGH_DEPTH);
     });
     const rough = new Float32Array(16);
-    place(rough, 0, 0, 0, -ROUGH_DEPTH, 0, 600, 600, 1);
+    place(rough, 0, 0, 0, -ROUGH_DEPTH);
+    // patches of darker grass through the rough, a couple of units across, so it is a field and not a colour
+    const speckle = new Float32Array(PATTERN_STRIDE);
+    speckle.set([4, 0.055, 0.3, 0, ...PALETTE.roughSpeckle, 0]);
 
     // the cup's tile is grass with the cup's hole in it, in its stripe's colour
     const atCup = new Float32Array(16);
@@ -204,12 +214,13 @@ export class Scene {
       { mesh: square(), matrices: grass, materials: grassLooks },
       { ...group({ ...collarPart, material: stripe(cupTile) }, atCup) },
       { mesh: box(TILE, TILE, 1), matrices: rails, ...look(PALETTE.rail) },
-      { mesh: square(), matrices: rough, ...look(PALETTE.rough) },
+      { mesh: plane(ROUGH_SIZE), matrices: rough, ...look(PALETTE.rough), patterns: speckle },
       ...groups(cup(CUP.radius), atCup),
       // the pin and its knob stand still; the flag's cloth swings in the breeze, and is among what moves
       ...groups({ parts: flag(FLAG_COLOURS.red).parts.filter((p) => p.name !== 'flag') } as Model, flagAt),
       ...groups(teeMarkers(TEE_SPACING), teeAt),
       ...this.scenery(scatter(layout, name)),
+      ...this.dressing(layout, name),
       ...this.ponds(layout),
     ];
     if (raised.length) out.push({ mesh: box(TILE, TILE, 1), matrices: banks, ...look(PALETTE.bank) });
@@ -272,6 +283,30 @@ export class Scene {
         y = originY + (ty + h / 2) * TILE;
       place(at, 0, x, y, 0);
       out.push({ model: water(w * TILE, h * TILE, { seed: t + 1 }), at, x, y });
+    }
+    return out;
+  }
+
+  /** A hole's dressing: its bunting on its posts, the beds at the foot of its rail, and its rocks in clusters. */
+  private dressing(layout: Layout, name: string): GameGroup[] {
+    const d = dress(layout, name);
+    const out: GameGroup[] = [];
+    for (const b of d.bunting) {
+      const at = new Float32Array(16);
+      place(at, 0, b.x, b.y, -ROUGH_DEPTH, b.yaw);
+      out.push(...groups(bunting(b.length, { height: b.height, seed: Math.round(b.length) }), at));
+    }
+    BED_MODELS.forEach((model, k) => {
+      const beds = d.beds.filter((b) => b.variant === k);
+      if (!beds.length) return;
+      const at = new Float32Array(beds.length * 16);
+      beds.forEach((b, i) => place(at, i, b.x, b.y, -ROUGH_DEPTH, b.yaw, 1.3));
+      out.push(...groups(model, at));
+    });
+    if (d.rocks.length) {
+      const at = new Float32Array(d.rocks.length * 16);
+      d.rocks.forEach((r, i) => place(at, i, r.x, r.y, -ROUGH_DEPTH, r.yaw, r.scale));
+      out.push(...groups(SCENERY_MODELS.rock, at));
     }
     return out;
   }
