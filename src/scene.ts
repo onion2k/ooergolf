@@ -118,12 +118,13 @@ export class Scene {
   }
 
   /**
-   * The aim's dots from the ball along the shot, as far as its power reaches,
-   * coloured from soft to hard: how many are placed, none for no shot.
+   * The aim's dots from the ball along the shot, as far as its power reaches
+   * (and further by `scale` for a club that strikes harder), coloured from
+   * soft to hard: how many are placed, none for no shot.
    */
-  writeAim(x: number, y: number, shot: Shot | null): number {
+  writeAim(x: number, y: number, shot: Shot | null, scale = 1): number {
     if (!shot) return 0;
-    const reach = AIM_REACH * shot.power;
+    const reach = AIM_REACH * scale * shot.power;
     const n = Math.max(2, Math.round(AIM_DOTS * shot.power));
     const c = Math.cos(shot.angle),
       s = Math.sin(shot.angle);

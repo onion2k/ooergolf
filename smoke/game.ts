@@ -32,7 +32,11 @@ export function watch(page: Page): string[] {
  * built, and `paused` stops it before a frame of its own has run, so
  * everything after is the test's own stepping.
  */
-export async function start(page: Page, options: { save?: Partial<Save>; seed?: number; paused?: boolean } = {}) {
+export async function start(
+  page: Page,
+  // a save of today's shape, or of any shape ever written, for a test that a save of an old shape still loads
+  options: { save?: Partial<Save> | Record<string, unknown>; seed?: number; paused?: boolean } = {},
+) {
   const { save, seed, paused } = options;
   if (save)
     await page.addInitScript((s) => {

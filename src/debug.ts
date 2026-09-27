@@ -12,7 +12,7 @@
  * The types are shared with the smoke tests, so a test that calls something
  * that is not here does not compile.
  */
-import { HARDEST_SHOT, KIND_NAME } from './arena';
+import { KIND_NAME } from './arena';
 import { Autopilot } from './autopilot';
 import { CUP } from './course';
 import type { Game } from './game';
@@ -43,6 +43,13 @@ export interface GameState {
   phase: 'play' | 'done' | 'over';
   /** Each hole finished this round, what it was scored. */
   card: number[];
+  coins: number;
+  gems: number;
+  /** The club in hand, and those owned. */
+  club: string;
+  owned: string[];
+  /** The hardest the club in hand strikes. */
+  hardest: number;
 }
 
 /** The ball, where it is and how fast it is going. */
@@ -112,6 +119,10 @@ export interface GameApi {
   startHole(index: number): void;
   /** A new round, as the card's button asks for. */
   newRound(): void;
+  /** A club bought, as the shop's button does; whether it was. */
+  buy(id: string): boolean;
+  /** A club owned put in hand; whether it was. */
+  equip(id: string): boolean;
   /** The save written now, and what it is. */
   save(): string;
 
@@ -178,6 +189,11 @@ export function createApi(host: DebugHost): GameApi {
         par: game.def.par,
         phase: game.phase,
         card: [...game.card],
+        coins: game.progress.save.coins,
+        gems: game.progress.save.gems,
+        club: game.progress.save.club,
+        owned: [...game.progress.save.owned],
+        hardest: game.hardest,
       };
     },
     ball() {
@@ -211,7 +227,7 @@ export function createApi(host: DebugHost): GameApi {
       floor: { ...game.layout.bounds },
       tee: { ...game.layout.tee },
       cup: { ...game.layout.cup, radius: CUP.radius },
-      hardest: HARDEST_SHOT,
+      hardest: game.hardest,
       holes: game.course.map((h) => ({ name: h.name, par: h.par })),
     }),
     events() {
@@ -236,6 +252,8 @@ export function createApi(host: DebugHost): GameApi {
       game.begin(index);
     },
     newRound: () => game.newRound(),
+    buy: (id) => game.buy(id),
+    equip: (id) => game.equip(id),
     aiming: () => host.aiming(),
     save() {
       game.persist();

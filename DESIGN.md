@@ -143,10 +143,14 @@ Bought in the shop with what the holes pay. They change the physics, within
 limits, so a score is a score with a given club and ball.
 
 - **Clubs** raise the most power a shot can have, and lengthen the aim
-  line. Made of precious metal and enamel.
+  line. Made of precious metal and enamel. Five putters, set in
+  `src/clubs.ts`: the starting one at 40, brass at 44 for 40 coins, silver
+  at 48 for 100, enamel at 53 for 220 and a gem, and gold at 58 for 450 and
+  three gems.
 - **Balls** differ in bounce and in roll. Made of enamel and gems.
-- **Coins** are paid for finishing a hole, and more for beating par.
-  **Gems** are paid for a hole in one.
+- **Coins** are paid for finishing a hole (5), and more for each stroke
+  under par (5 each); a hole picked up pays nothing. **Gems** are paid for a
+  hole in one. The shop is open from the purse's button and from the card.
 - The best score on a hole is kept with the club and ball it was made with.
 
 ## The look

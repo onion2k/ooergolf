@@ -4,8 +4,9 @@
  * few frames for anything that must always hold and does not
  * (`invariants.ts`), and for anything thrown. A player can strike the ball
  * any way at any power, strike it well at the cup, try to strike it while it
- * rolls or between holes, wait, reload, and ask for another round when one
- * is over. Random shots reach each hole's limit, and good ones hole out, so
+ * rolls or between holes, wait, reload, ask for another round when one is
+ * over, and buy and use clubs in the shop, which it can afford now and then
+ * with what its holes pay. Random shots reach each hole's limit, and good ones hole out, so
  * the monkey gets round the whole course.
  *
  * Only what a player could do. A monkey that did what no player can would
@@ -15,6 +16,7 @@
  * --seed N` does, and prints what was done before it went wrong.
  */
 import { Autopilot } from '../src/autopilot';
+import { CLUBS } from '../src/clubs';
 import { Game, type GameEvents } from '../src/game';
 import { checkInvariants } from '../src/invariants';
 import { Progress, memoryStore } from '../src/progress';
@@ -67,7 +69,8 @@ export function fuzz(seed: number, frames: number): FuzzResult {
   });
 
   try {
-    let store = memoryStore();
+    // a new player, or, on odd seeds, one come back with coins and gems enough for the shop
+    let store = memoryStore(seed % 2 ? JSON.stringify({ coins: 700, gems: 6 }) : null);
     let game = new Game(new Progress(store), events, { random: seeded(seed) });
     let busy = 0;
     const between = (a: number, b: number) => a + random() * (b - a);
@@ -112,6 +115,26 @@ export function fuzz(seed: number, frames: number): FuzzResult {
           if (game.strokes !== strokes || world.vx[ball] !== vx || world.vy[ball] !== vy)
             throw new Error('a refused shot changed the ball or the strokes');
           did('shoot while rolling');
+        },
+      ],
+      [
+        1,
+        () => {
+          // the shop, open whenever: any club, whether it can be paid for or not
+          const club = CLUBS[Math.floor(random() * CLUBS.length)];
+          const { coins, gems } = game.progress.save;
+          const can = coins >= club.coins && gems >= club.gems && !game.progress.save.owned.includes(club.id);
+          if (game.buy(club.id) !== can)
+            throw new Error(`buying ${club.id} with ${coins} coins went against the price`);
+          did(can ? 'buy' : 'buy, refused');
+        },
+      ],
+      [
+        1,
+        () => {
+          const club = CLUBS[Math.floor(random() * CLUBS.length)];
+          game.equip(club.id);
+          did('equip');
         },
       ],
       [

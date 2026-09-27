@@ -114,6 +114,8 @@ test('a hole played out to the cup by drags, its score shown, and the next hole 
   const done = await page.evaluate(() => window.game!.state());
   expect(done.phase, 'holed').toBe('done');
   expect(done.card.length).toBe(1);
+  expect(done.coins, 'the hole paid').toBeGreaterThan(0);
+  await expect(page.locator('#coins')).toHaveText(String(done.coins));
   await expect(page.locator('#toast')).toBeVisible();
   await info.attach('holed', { body: await page.screenshot(), contentType: 'image/png' });
   await play(page, 150, 'between holes');

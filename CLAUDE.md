@@ -132,13 +132,19 @@ change meant to move it, and the commit says why. Look at every picture.
   the rules that must always hold. `src/autopilot.ts` plays the game by
   itself, for the gates and for par.
 - `src/hud.ts` is the words over the course: the hole and strokes, the
-  score's name when a hole is done, and the card. `src/score.ts` names a
+  score's name when a hole is done, the card, the coins and gems, and the
+  shop. `src/score.ts` names a
   score. Both are given what to show and never read the game.
 - The holes are content in `course.ts`: each a map drawn as seen from the
   tee (`#` rail, `.` grass, `T` tee, `C` cup, space for off the course) and
   a par, and the cup's size. `arena.ts` reads a map into a layout, and holds
   the kinds of body, the hardest shot and how the ball rolls. Each hole is a
-  world of its own, made when it begins: nothing may keep `game.world`. The save
+  world of its own, made when it begins: nothing may keep `game.world`.
+- The clubs, what they cost and what a hole pays are content in `clubs.ts`.
+  The save (`progress.ts`) holds coins, gems, the clubs owned, the club in
+  hand and the best score on each hole with the club it was made with;
+  `Game` pays into it when a hole is done, and buys and equips from it.
+  Every save shape is in `test/saves/`. The save
   lives in `progress.ts`. Chance comes from `random.ts`, handed in.
 - `src/physics.ts` is the game's side of artshape-physics, and nothing else
   imports the package directly. A change a package needs goes in that repo,
@@ -180,9 +186,11 @@ it. Time: `pause`, `resume`, `step(frames)`, `seed(n)`, and `?seed=N` and
 `ball`, `bodies`, `content` (the hole's grass, tee and cup, the hardest
 shot, and every hole's name and par), `events`, `invariants`, and `aiming`,
 the shot a drag under way would make. `state` has the hole, its par, the
-phase (`play`, `done`, `over`) and the card. Playing: `shoot(angle,
-power)`, `suggest()` for the autopilot's shot from where the ball lies,
-`startHole(index)`, `newRound()`, and `drag(page, from, to, { touch, hold })` in
+phase (`play`, `done`, `over`), the card, the coins and gems, the club in
+hand and those owned, and the hardest shot the club in hand strikes.
+Playing: `shoot(angle, power)`, `suggest()` for the autopilot's shot from
+where the ball lies, `startHole(index)`, `newRound()`, `buy(id)`,
+`equip(id)`, and `drag(page, from, to, { touch, hold })` in
 `smoke/game.ts` for a real mouse or finger, pressed where `project(x, y,
 z)` says a point on the course is on the page. Setting a scene: `place` for
 a body that exists, `save`, and `start(page, { save })` for a save that is
@@ -205,9 +213,7 @@ each step, and a gate handed what it needs in the same change:
 - The physics the golf needs, from artshape-physics' next version: see
   `DESIGN.md`. Until it comes, a ball meets the rail with almost no bounce,
   and slows by drag, not by rolling resistance.
-- Anything saved. `Save` is empty and `Progress` reads no field; the first
-  field is read in its constructor, with a default, and a save in the new
-  shape goes in `test/saves/`.
+- Ball upgrades, which need the physics' bounce and roll by kind of body.
 
 ## Rules for the code
 

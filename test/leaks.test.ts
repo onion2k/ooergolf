@@ -20,7 +20,7 @@ describe('what must stay bounded', () => {
       expect(Object.keys(WATCH), `a ceiling for ${key}`).toContain(key);
     }
     expect(now.bodies, 'the ball').toBe(1);
-    expect(now['save bytes']).toBe(2);
+    expect(now['save bytes']).toBe(JSON.stringify(game.progress.save).length);
     game.world.spawn(BALL, 0, 0, 2);
     expect(sizes(game).bodies).toBe(2);
     expect(sizes(game).slots).toBe(2);

@@ -8,12 +8,15 @@
  * hardest shot: nothing on the course yet gives it speed of its own, and
  * when a bumper does, this rule says by how much. The strokes are a count no
  * more than the hole's limit. The card has a score for every hole finished
- * and no other, each between one stroke and the limit.
+ * and no other, each between one stroke and the limit. The coins and gems are
+ * counts, the clubs owned are clubs the shop sells, the starting putter
+ * among them, and the club in hand is one of them.
  *
  * Checked by the fuzzer after everything it does, by the test API on asking,
  * and by the unit tests. Each broken rule is a line saying what and where.
  */
-import { HARDEST_SHOT, KINDS, KIND_NAME, onFloor } from './arena';
+import { KINDS, KIND_NAME, onFloor } from './arena';
+import { CLUBS } from './clubs';
 import { LIMIT_OVER_PAR, type Game } from './game';
 
 /** How many broken rules of one sort are reported before the rest are only counted. */
@@ -55,7 +58,7 @@ export function checkInvariants(game: Game): string[] {
   if (world.alive[ball]) {
     const speed = Math.hypot(world.vx[ball], world.vy[ball], world.vz[ball]);
     // a hair over, for the float arithmetic of a shot at full power; a ball dropping into the cup gains speed falling
-    const most = HARDEST_SHOT * 1.001 + Math.max(0, -world.z[ball]) * 20;
+    const most = game.hardest * 1.001 + Math.max(0, -world.z[ball]) * 20;
     if (speed > most) out.push(`the ball is going ${speed.toFixed(2)}, faster than the hardest shot`);
   }
   if (live > 1) out.push(`${live} bodies on the course, and only the ball should be`);
@@ -71,5 +74,13 @@ export function checkInvariants(game: Game): string[] {
       out.push(`hole ${h + 1} is scored ${score}, not between 1 and ${limit}`);
   });
   if (phase === 'over' && hole !== course.length - 1) out.push(`the round is over on hole ${hole + 1}`);
+
+  const save = game.progress.save;
+  for (const key of ['coins', 'gems'] as const)
+    if (!Number.isInteger(save[key]) || save[key] < 0) out.push(`the ${key} are ${save[key]}`);
+  const sold = new Set(CLUBS.map((c) => c.id));
+  for (const id of save.owned) if (!sold.has(id)) out.push(`a club no one sells is owned: ${id}`);
+  if (!save.owned.includes(CLUBS[0].id)) out.push('the starting putter is not owned');
+  if (!save.owned.includes(save.club)) out.push(`the club in hand, ${save.club}, is not owned`);
   return out;
 }

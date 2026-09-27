@@ -18,14 +18,24 @@ const files = readdirSync(DIR)
   .sort();
 const read = (file: string) => readFileSync(new URL(file, DIR), 'utf8');
 
+/** A save with nothing in it yet, as every field's default makes it. */
+const FRESH = { coins: 0, gems: 0, owned: ['putter'], club: 'putter', best: {} };
+
 /**
- * What each save was worth when it was written, and what loading it must
- * keep. The first is the template's stub's, a bank the game no longer has:
- * it must still load, and nothing of it is kept.
+ * What each save loads as. The first is the template's stub's, a bank the
+ * game no longer has, and the second the empty save of a course with no
+ * cup: both must still load, as a fresh save, with nothing of them kept.
  */
 const KEPT: Record<string, Record<string, unknown>> = {
-  '01-first.json': {},
-  '02-empty.json': {},
+  '01-first.json': FRESH,
+  '02-empty.json': FRESH,
+  '03-shop.json': {
+    coins: 145,
+    gems: 2,
+    owned: ['putter', 'brass'],
+    club: 'brass',
+    best: { Straight: { strokes: 1, club: 'putter' }, 'Dog-leg': { strokes: 2, club: 'brass' } },
+  },
 };
 
 describe('saves from every shape the game has written', () => {
@@ -58,10 +68,23 @@ describe('saves from every shape the game has written', () => {
     });
   }
 
-  it('shrugs at what it cannot read', () => {
-    expect(new Progress(memoryStore('not json')).save).toEqual({});
-    expect(new Progress(memoryStore('[1, 2]')).save).toEqual({});
-    expect(new Progress(memoryStore('{"bank": "lots"}')).save).toEqual({});
+  it('shrugs at what it cannot read, and at what is not what it should be', () => {
+    expect(new Progress(memoryStore('not json')).save).toEqual(FRESH);
+    expect(new Progress(memoryStore('[1, 2]')).save).toEqual(FRESH);
+    expect(new Progress(memoryStore('{"bank": "lots"}')).save).toEqual(FRESH);
+    // coins that are not a whole number of them, a club not owned, a club no one sells, a best that is nonsense
+    const odd = new Progress(
+      memoryStore(
+        JSON.stringify({
+          coins: -4,
+          gems: 1.5,
+          owned: ['putter', 'unheard of', 7],
+          club: 'gold',
+          best: { Straight: { strokes: 0, club: 'putter' }, 'Dog-leg': 'two', Nowhere: { strokes: 3 } },
+        }),
+      ),
+    ).save;
+    expect(odd).toEqual({ ...FRESH, best: { Nowhere: { strokes: 3, club: 'putter' } } });
   });
 
   it('has the shape the game writes now: a new field means a new file here', () => {

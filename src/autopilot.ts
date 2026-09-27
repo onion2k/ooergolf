@@ -13,7 +13,7 @@
  *
  * It is handed the game, and knows nothing of the page.
  */
-import { BALL, HARDEST_SHOT, KIND_RADIUS, ROLL, TILE, onFloor, type Layout } from './arena';
+import { BALL, KIND_RADIUS, ROLL, TILE, onFloor, type Layout } from './arena';
 import type { Game } from './game';
 import type { Random } from './random';
 import type { Shot } from './shot';
@@ -99,7 +99,7 @@ export class Autopilot {
     }
     const d = Math.hypot(tx - x, ty - y);
     const speed = speedFor(d, toCup ? ARRIVE : 0);
-    return { angle: Math.atan2(ty - y, tx - x), power: Math.min(1, speed / HARDEST_SHOT) };
+    return { angle: Math.atan2(ty - y, tx - x), power: Math.min(1, speed / game.hardest) };
   }
 }
 

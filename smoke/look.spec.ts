@@ -110,6 +110,20 @@ test.describe('what it looks like', () => {
     expect(problems).toEqual([]);
   });
 
+  test('the shop, with a club in hand, one owned and the rest for sale', async ({ page }) => {
+    const problems = watch(page);
+    await start(page, {
+      seed: 11,
+      paused: true,
+      save: { coins: 130, gems: 1, owned: ['putter', 'brass'], club: 'brass' },
+    });
+    await page.evaluate(() => window.game!.step(60));
+    await hideStats(page);
+    await page.locator('#shopOpen').click();
+    await expect(page).toHaveScreenshot('shop.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
   test.describe('on a phone', () => {
     test.use({ viewport: { width: 400, height: 860 }, hasTouch: true, isMobile: true });
 
@@ -118,6 +132,19 @@ test.describe('what it looks like', () => {
       await start(page, { seed: 11, paused: true });
       await page.evaluate(() => window.game!.step(60));
       await expect(page).toHaveScreenshot('phone.png', TOLERANCE);
+      expect(problems).toEqual([]);
+    });
+
+    test('the shop, on a phone', async ({ page }) => {
+      const problems = watch(page);
+      await start(page, {
+        seed: 11,
+        paused: true,
+        save: { coins: 130, gems: 1, owned: ['putter', 'brass'], club: 'brass' },
+      });
+      await page.evaluate(() => window.game!.step(60));
+      await page.locator('#shopOpen').click();
+      await expect(page).toHaveScreenshot('phone-shop.png', TOLERANCE);
       expect(problems).toEqual([]);
     });
 

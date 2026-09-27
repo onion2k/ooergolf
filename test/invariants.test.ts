@@ -61,6 +61,23 @@ describe('what must always hold', () => {
     expect(checkInvariants(game).join('\n')).toMatch(/99 strokes on hole 1, over its limit/);
   });
 
+  it('reports coins and gems that are not counts, a club no one sells, and a club in hand not owned', () => {
+    const { game } = newGame();
+    const save = game.progress.save;
+    save.coins = -1;
+    save.gems = 0.5;
+    expect(checkInvariants(game).join('\n')).toMatch(/the coins are -1[\s\S]*the gems are 0.5/);
+    save.coins = save.gems = 0;
+    save.owned.push('stolen');
+    expect(checkInvariants(game).join('\n')).toMatch(/a club no one sells is owned: stolen/);
+    save.owned.pop();
+    save.club = 'gold';
+    expect(checkInvariants(game).join('\n')).toMatch(/the club in hand, gold, is not owned/);
+    save.club = 'putter';
+    save.owned.length = 0;
+    expect(checkInvariants(game).join('\n')).toMatch(/the starting putter is not owned/);
+  });
+
   it('reports a ball faster than the hardest shot, and strokes that are not a count', () => {
     const { game } = newGame();
     game.shoot(0, 1);

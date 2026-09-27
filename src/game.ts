@@ -13,7 +13,8 @@
  * keep a note of it. Nothing here waits on anything there, so the same game
  * runs in the page and in Node, and what the tests try is what is played.
  */
-import { BALL, HARDEST_SHOT, KIND_RADIUS, layoutOf, onFloor, type Layout } from './arena';
+import { BALL, KIND_RADIUS, layoutOf, onFloor, type Layout } from './arena';
+import { clubById, paid } from './clubs';
 import { COURSE, CUP, type HoleDef } from './course';
 import { makeWorld, type World } from './physics';
 import { Progress } from './progress';
@@ -33,6 +34,12 @@ export interface GameEvents {
   pickedUp?(strokes: number, par: number): void;
   /** The last hole done: the round's strokes, and its par. */
   finished?(strokes: number, par: number): void;
+  /** What a hole done paid into the save. */
+  paid?(coins: number, gems: number): void;
+  /** A club bought, for what it cost. */
+  bought?(coins: number, gems: number): void;
+  /** A club put in hand: how hard it strikes. */
+  equipped?(hardest: number): void;
 }
 
 export interface GameOptions {
@@ -100,6 +107,11 @@ export class Game {
     return this.def.par + LIMIT_OVER_PAR;
   }
 
+  /** The hardest the club in hand strikes. */
+  get hardest(): number {
+    return clubById(this.progress.save.club).hardest;
+  }
+
   /** Whether a shot can be taken: a hole in play, and the ball at rest, which is when the physics has put it to sleep. */
   get ready(): boolean {
     return this.phase === 'play' && this.world.alive[this.ball] === 1 && this.world.asleep[this.ball] === 1;
@@ -134,7 +146,7 @@ export class Game {
     if (!this.ready || !(power > 0)) return false;
     const p = Math.min(1, power);
     const { world, ball } = this;
-    const speed = p * HARDEST_SHOT;
+    const speed = p * this.hardest;
     world.wake(ball);
     world.vx[ball] = Math.cos(angle) * speed;
     world.vy[ball] = Math.sin(angle) * speed;
@@ -169,7 +181,10 @@ export class Game {
     }
   }
 
-  /** The hole finished, scored and told of; the next begins in a moment. */
+  /**
+   * The hole finished, scored and told of, paid for, its best kept with the
+   * club in hand, and the save written; the next begins in a moment.
+   */
   private done(how: 'holed' | 'pickedUp') {
     const score = how === 'holed' ? this.strokes : this.limit;
     this.card.push(score);
@@ -177,6 +192,39 @@ export class Game {
     this.doneAt = this.t;
     this.moving = false;
     this.events[how]?.(score, this.def.par);
+    const save = this.progress.save;
+    const pay = paid(score, this.def.par, how === 'pickedUp');
+    save.coins += pay.coins;
+    save.gems += pay.gems;
+    // a hole not yet holed has no best
+    const best = Object.hasOwn(save.best, this.def.name) ? save.best[this.def.name] : undefined;
+    if (how === 'holed' && (!best || score < best.strokes))
+      save.best[this.def.name] = { strokes: score, club: save.club };
+    this.persist();
+    this.events.paid?.(pay.coins, pay.gems);
+  }
+
+  /** A club bought, if it is sold, not owned, and can be paid for; the save written. */
+  buy(id: string): boolean {
+    const save = this.progress.save;
+    const club = clubById(id);
+    if (club.id !== id || save.owned.includes(id) || save.coins < club.coins || save.gems < club.gems) return false;
+    save.coins -= club.coins;
+    save.gems -= club.gems;
+    save.owned.push(id);
+    this.persist();
+    this.events.bought?.(club.coins, club.gems);
+    return true;
+  }
+
+  /** A club owned put in hand, for the next shot; the save written. */
+  equip(id: string): boolean {
+    const save = this.progress.save;
+    if (!save.owned.includes(id)) return false;
+    save.club = id;
+    this.persist();
+    this.events.equipped?.(this.hardest);
+    return true;
   }
 
   /** The strokes of the holes finished this round. */

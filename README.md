@@ -19,7 +19,10 @@ and let go to putt: the dots show the way and how hard. The ball rolls,
 banks off the rail and comes to rest, and then it can be struck again, until
 it drops. The score is named against par (a birdie, a bogey), the next hole
 begins, and after the last the card is shown, with a button for another
-round. The camera follows the ball, and on a desktop the wheel zooms.
+round. A hole pays coins, more for beating par, and a hole in one pays a
+gem; the shop sells finer putters that strike harder. The coins, the clubs
+and the best score on each hole are kept in the browser. The camera follows
+the ball, and on a desktop the wheel zooms.
 
 Two holes so far: a straight putt and a dog-leg. The other seven of the
 first nine have obstacles in them, and wait for the physics those need.
@@ -72,7 +75,8 @@ fixed, and no baseline is moved to make it green.
     src/course.ts      the holes: a map and a par each
     src/arena.ts       a hole's map read into a layout; the kinds of body, the hardest shot
     src/autopilot.ts   the game played by itself, for the gates and for par
-    src/hud.ts         the words over the course, and the card
+    src/clubs.ts       the clubs, what they cost, and what a hole pays
+    src/hud.ts         the words over the course, the card and the shop
     src/progress.ts    the save, and where it is kept
     src/physics.ts     the game's side of artshape-physics
     src/scene.ts       the course as it is drawn

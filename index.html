@@ -118,6 +118,12 @@
     color: var(--gold);
     border: 0;
   }
+  #cardShop {
+    margin-top: 8px;
+    width: 100%;
+    background: rgba(255, 255, 255, 0.12);
+    color: var(--ink);
+  }
   #again {
     margin-top: 14px;
     width: 100%;
@@ -130,8 +136,86 @@
     border-radius: 8px;
     cursor: pointer;
   }
-  #stats {
+  #purse {
     top: 16px;
+    right: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    pointer-events: auto;
+    font-variant-numeric: tabular-nums;
+  }
+  #purse b {
+    color: var(--gold);
+  }
+  #purse i {
+    font-style: normal;
+    color: #7fd6ff;
+  }
+  #purse em {
+    font-style: normal;
+  }
+  #purse b::before {
+    content: '\25cf  ';
+  }
+  #purse i::before {
+    content: '\25c6  ';
+  }
+  button.small {
+    padding: 5px 12px;
+    font: inherit;
+    font-weight: 700;
+    color: #1a1420;
+    background: var(--gold);
+    border: 0;
+    border-radius: 7px;
+    cursor: pointer;
+  }
+  #shop {
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: min(400px, calc(100vw - 32px));
+    padding: 18px 20px;
+    pointer-events: auto;
+  }
+  #shop h2 {
+    margin: 0 0 4px;
+    font-size: 20px;
+  }
+  #shop p {
+    margin: 0 0 12px;
+    color: var(--dim);
+  }
+  .club {
+    display: grid;
+    grid-template-columns: 26px 1fr auto;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .club .swatch {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    box-shadow: inset -4px -5px 8px rgba(0, 0, 0, 0.35);
+  }
+  .club small {
+    display: block;
+    color: var(--dim);
+  }
+  .club button:disabled {
+    background: rgba(255, 255, 255, 0.12);
+    color: var(--dim);
+    cursor: default;
+  }
+  #shopClose {
+    margin-top: 14px;
+    width: 100%;
+  }
+  #stats {
+    bottom: 16px;
     right: 16px;
     text-align: right;
     color: var(--dim);
@@ -159,8 +243,13 @@
     color: var(--dim);
   }
   @media (max-width: 600px) {
-    #stats {
+    #stats,
+    #purse em {
       display: none;
+    }
+    #purse {
+      gap: 8px;
+      padding: 8px 10px;
     }
   }
 </style>
@@ -187,6 +276,18 @@
     </tfoot>
   </table>
   <button id="again">Play again</button>
+  <button id="cardShop" class="small">Visit the shop</button>
+</div>
+<div class="panel" id="purse" hidden>
+  <span><b id="coins">0</b><em> coins</em></span
+  ><span><i id="gems">0</i><em> gems</em></span
+  ><button class="small" id="shopOpen">Shop</button>
+</div>
+<div class="panel" id="shop" hidden>
+  <h2>The pro shop</h2>
+  <p>A finer putter strikes harder, and its aim reaches further.</p>
+  <div id="shopClubs"></div>
+  <button class="small" id="shopClose">Back to the course</button>
 </div>
 <div class="panel" id="stats" hidden></div>
 <div class="panel" id="help" hidden>drag back and let go to putt</div>

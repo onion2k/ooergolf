@@ -9,7 +9,9 @@ import { createContext } from 'artshape-render/gpu/context';
 import { bakeEnvironment } from 'artshape-render/render/env';
 import { LightPool } from 'artshape-render/game/lights';
 import { GameRenderer } from 'artshape-render/game/renderer';
+import { HARDEST_SHOT } from './arena';
 import { CameraRig } from './camera';
+import { CLUBS } from './clubs';
 import { createApi } from './debug';
 import { frameCost } from './frame-cost';
 import { Game, type GameEvents } from './game';
@@ -83,7 +85,15 @@ async function main() {
     );
   // the game tells of its first hole as it is built, before it is here to be read: that one is shown once it is
   let game: Game | undefined = undefined;
-  const hud = new Hud(() => game?.newRound());
+  const hud = new Hud(
+    {
+      again: () => game?.newRound(),
+      buy: (id) => game?.buy(id),
+      equip: (id) => game?.equip(id),
+    },
+    CLUBS,
+  );
+  const showPurse = () => game && hud.setPurse(game.progress.save);
   const scene = new Scene();
   const rig = new CameraRig();
   /** What the player sees of each event, beside the note of it. */
@@ -101,6 +111,9 @@ async function main() {
     holed: (strokes, par) => hud.done(strokes, par, false),
     pickedUp: (strokes, par) => hud.done(strokes, par, true),
     finished: () => game && hud.finished(game.course, game.card),
+    paid: showPurse,
+    bought: showPurse,
+    equipped: showPurse,
   };
   const events: GameEvents = new Proxy(shown, {
     get:
@@ -115,6 +128,7 @@ async function main() {
   const played = new Game(progress, events, seed !== null ? { random: seeded(+seed) } : {});
   game = played;
   shown.started!(played.hole, played.def.par);
+  showPurse();
 
   // ---- the scene and the camera ----
 
@@ -184,7 +198,9 @@ async function main() {
     // a ball gone into the cup is not drawn
     renderer.move(0, scene.ball, world.alive[ball] ? 1 : 0);
     // the aim shows only while a shot can be taken
-    const dots = played.ready ? scene.writeAim(world.x[ball], world.y[ball], drag?.shot ?? null) : 0;
+    // a finer club's aim reaches further, as it strikes harder
+    const reach = played.hardest / HARDEST_SHOT;
+    const dots = played.ready ? scene.writeAim(world.x[ball], world.y[ball], drag?.shot ?? null, reach) : 0;
     renderer.move(1, scene.aim, dots);
     if (dots) renderer.tint(1, scene.aimLooks);
   }
