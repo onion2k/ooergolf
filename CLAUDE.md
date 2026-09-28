@@ -10,7 +10,7 @@ file says how it is made. The house
 rules in `~/.claude/CLAUDE.md` apply too. What is in `src/` is a round of
 the course: holes drawn as maps, each played from its tee to its cup with a
 drag pulled back and let go, scored against par, and the card at the end.
-Nine holes are here, on artshape-physics v0.4.1: grass, rail, sand,
+Nine holes are here, on artshape-physics v0.5.1: grass, rail, sand,
 water, raised grass, posts, sliding barriers, a windmill and a conveyor,
 with a green that lets a putt die, a rail and obstacles that bounce, posts
 that throw a ball back faster than it came, and a cup with a rim. The golf

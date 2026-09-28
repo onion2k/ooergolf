@@ -92,7 +92,7 @@ of the physics, all of it in `artshape-physics` and none of it in the game:
 Slopes and ramps are not in this list. They are the largest piece of work,
 and the first nine holes do without them. They come with a later course.
 
-All of it is in artshape-physics v0.4.1, made in that repo to its own
+All of it is in artshape-physics since v0.4.1, made in that repo to its own
 definition of done and taken in here with a version bump. v0.4.1 came of
 this game's fuzzer: a ball running round the inside of the cup's rim, held
 up by it, came back to where it was in the physics' window for judging a
@@ -146,7 +146,7 @@ to find out: it can. A ball climbs a step lower than its radius at no cost
 to its speed, and a rise of 1.2 is a wall, so a ramp of steps of 0.4 leads
 up onto grass walled off everywhere else.
 
-On artshape-physics v0.4.1, the course is nine holes: Straight, Dog-leg,
+On artshape-physics v0.5.1, the course is nine holes: Straight, Dog-leg,
 The Bunker (sand across the front of the cup, to be gone round or blasted
 through), Pond, Barriers, Bumpers (five posts, one on the straight line to
 the cup), Up and Over (the ramp onto a plateau between two ponds, and a
