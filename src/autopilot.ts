@@ -25,6 +25,7 @@ import {
   SAND,
   TILE,
   fromPosts,
+  stepAt,
   onFloor,
   powerFor,
   rollsFor,
@@ -220,7 +221,7 @@ function clear(l: Layout, x0: number, y0: number, x1: number, y1: number): boole
   const nx = d ? -(y1 - y0) / d : 0,
     ny = d ? (x1 - x0) / d : 0;
   // across the whole width of the ball, not only under its middle: a ball clips a wall's corner with its side
-  const was = [-reach, 0, reach].map((side) => l.floor[tileAt(l, x0 + nx * side, y0 + ny * side)] ?? 0);
+  const was = [-reach, 0, reach].map((side) => stepAt(l, x0 + nx * side, y0 + ny * side));
   for (let s = 0; s <= d; s += 0.25) {
     const px = x0 + ((x1 - x0) * s) / (d || 1),
       py = y0 + ((y1 - y0) * s) / (d || 1);
@@ -229,7 +230,7 @@ function clear(l: Layout, x0: number, y0: number, x1: number, y1: number): boole
       const sx = px + nx * side,
         sy = py + ny * side;
       if (!onFloor(l, sx, sy)) return false;
-      const h = l.floor[tileAt(l, sx, sy)];
+      const h = stepAt(l, sx, sy);
       if (h - was[k] >= CLIMB) return false;
       was[k] = h;
     }
@@ -252,6 +253,9 @@ function pathToCup(l: Layout, x: number, y: number): [number, number][] {
   const tile = (px: number, py: number) =>
     Math.floor((py - l.originY) / TILE) * l.cols + Math.floor((px - l.originX) / TILE);
   const posted = new Set(l.bumpers.map((p) => tile(p.x, p.y)));
+  // each tile's step, which is what makes a wall between two tiles
+  const height = (t: number) =>
+    stepAt(l, l.originX + ((t % l.cols) + 0.5) * TILE, l.originY + (Math.floor(t / l.cols) + 0.5) * TILE);
   const cost = (t: number) => (l.sand[t] ? 3 : 1);
   const far = new Float64Array(n).fill(Infinity);
   const done = new Uint8Array(n);
@@ -267,7 +271,7 @@ function pathToCup(l: Layout, x: number, y: number): [number, number][] {
     for (const u of [tx > 0 ? t - 1 : -1, tx < l.cols - 1 ? t + 1 : -1, t - l.cols, t + l.cols]) {
       if (u < 0 || u >= n || l.solid[u] || l.water[u] || posted.has(u) || done[u]) continue;
       // back from t to u: the ball goes from u to t, which it can if t is not too far above it
-      if (l.floor[t] - l.floor[u] >= CLIMB) continue;
+      if (height(t) - height(u) >= CLIMB) continue;
       far[u] = Math.min(far[u], far[t] + cost(u));
     }
   }
@@ -279,7 +283,7 @@ function pathToCup(l: Layout, x: number, y: number): [number, number][] {
     let next = t;
     for (const u of [tx > 0 ? t - 1 : -1, tx < l.cols - 1 ? t + 1 : -1, t - l.cols, t + l.cols])
       // a move the ball can make: onto a tile no higher than it can roll up
-      if (u >= 0 && u < n && far[u] < far[next] && l.floor[u] - l.floor[t] < CLIMB) next = u;
+      if (u >= 0 && u < n && far[u] < far[next] && height(u) - height(t) < CLIMB) next = u;
     if (next === t) break;
     t = next;
     out.push([l.originX + ((t % l.cols) + 0.5) * TILE, l.originY + (Math.floor(t / l.cols) + 0.5) * TILE]);

@@ -9,7 +9,7 @@
  * renderer grows and draws the blades, and the page hands it this.
  */
 import type { GrassField, GrassKind, TrampleRect, Wind } from 'artshape-render/game/grass';
-import { TILE, tileAt, type Layout } from './arena';
+import { TILE, heightAt, tileAt, type Layout } from './arena';
 import { CUP } from './course';
 import { CUP as CUP_LOOK } from './models/course';
 import type { Obstacles } from './obstacles';
@@ -99,7 +99,7 @@ export function fieldOf(layout: Layout, obstacles: Obstacles, name: string): Gra
         // not in the cup, nor through its gold rim, which is lower than the green's blades and would be lost in them
         if (Math.hypot(x - layout.cup.x, y - layout.cup.y) < CUP.radius + CUP_LOOK.rim) continue;
         mask[i] = GREEN + 1;
-        heights[i] = layout.floor[t];
+        heights[i] = heightAt(layout, x, y);
       }
     }
   const kinds = KINDS.map((k, n) =>

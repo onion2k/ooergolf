@@ -13,7 +13,7 @@
  * keep a note of it. Nothing here waits on anything there, so the same game
  * runs in the page and in Node, and what the tests try is what is played.
  */
-import { BALL, FASTEST, KIND_RADIUS, fromPosts, layoutOf, onFloor, strikeSpeed, tileAt, type Layout } from './arena';
+import { BALL, FASTEST, KIND_RADIUS, fromPosts, layoutOf, onFloor, stepAt, strikeSpeed, type Layout } from './arena';
 import { clubById, paid } from './clubs';
 import { COURSE, CUP, type HoleDef } from './course';
 import { Obstacles } from './obstacles';
@@ -348,7 +348,7 @@ export class Game {
   place(x: number, y: number) {
     const { world, ball, layout } = this;
     const r = KIND_RADIUS[BALL];
-    const level = layout.floor[tileAt(layout, x, y)];
+    const level = stepAt(layout, x, y);
     for (const [dx, dy] of [
       [0, 0],
       [r, 0],
@@ -358,7 +358,7 @@ export class Game {
     ]) {
       if (!onFloor(layout, x + dx, y + dy))
         throw new Error(`the ball cannot be put down at ${x},${y}: not on the grass`);
-      if (layout.floor[tileAt(layout, x + dx, y + dy)] !== level)
+      if (stepAt(layout, x + dx, y + dy) !== level)
         throw new Error(`the ball cannot be put down at ${x},${y}: not on level grass`);
     }
     if (fromPosts(layout, x, y) < r + 0.1) throw new Error(`the ball cannot be put down at ${x},${y}: on a post`);

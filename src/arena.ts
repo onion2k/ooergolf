@@ -205,6 +205,26 @@ export function tileAt(g: Ground, x: number, y: number): number {
   return tx < 0 || ty < 0 || tx >= g.cols || ty >= g.rows ? -1 : ty * g.cols + tx;
 }
 
+/**
+ * The step the ground stands on at a point: the tile's floor, nought off the
+ * grid. A step is what the physics takes for a wall from below and an edge
+ * from above, so it is what the autopilot judges a rise by, and what a ball
+ * must be level on to be put down; ground that slopes never is a wall.
+ */
+export function stepAt(l: Layout, x: number, y: number): number {
+  const t = tileAt(l, x, y);
+  return t < 0 ? 0 : l.floor[t];
+}
+
+/**
+ * How high the ground is at a point: the one place the game reads it, so
+ * that ground that slopes, when the physics has it, is read the same way by
+ * everything that stands on it. The step, for now: flat across each tile.
+ */
+export function heightAt(l: Layout, x: number, y: number): number {
+  return stepAt(l, x, y);
+}
+
 /** Whether a point is on the ground the ball rolls on, grass or sand: on the grid, not solid, and not water. */
 export function onFloor(g: Ground, x: number, y: number): boolean {
   const t = tileAt(g, x, y);

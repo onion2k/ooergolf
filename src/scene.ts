@@ -17,7 +17,7 @@
 import { STILL, grassGround, type Wind } from 'artshape-render/game/grass';
 import type { GameGroup } from 'artshape-render/game/renderer';
 import { MATERIAL_STRIDE, PATTERN_STRIDE } from 'artshape-render/game/renderer';
-import { BALL, BUMPER, KIND_RADIUS, TILE, tileAt, type Layout } from './arena';
+import { BALL, BUMPER, KIND_RADIUS, TILE, heightAt, stepAt, tileAt, type Layout } from './arena';
 import { CUP } from './course';
 import { place } from './matrix';
 import { ball, box, plane, square } from './meshes';
@@ -185,38 +185,41 @@ export class Scene {
 
   /** What does not move on this hole, which is called `name`, with what stands still of what moves on it. */
   static(layout: Layout, name = '', obstacles?: Obstacles): GameGroup[] {
-    const { cols, rows, originX, originY, solid, rail: isRail, water: isWater, floor, cup: at, tee } = layout;
+    const { cols, rows, originX, originY, solid, rail: isRail, water: isWater, cup: at, tee } = layout;
     const cupTile = tileAt(layout, at.x, at.y);
     // the rail either side of a windmill's door is under its tower, and is not drawn through it
     const underTower = new Set<number>();
     for (const w of obstacles?.windmills ?? [])
       for (const side of [-1, 1]) underTower.add(tileAt(layout, w.x + side * TILE, w.y));
+    const middle = (t: number): [number, number] => [
+      originX + ((t % cols) + 0.5) * TILE,
+      originY + (Math.floor(t / cols) + 0.5) * TILE,
+    ];
+    // how high the ground stands at a tile's middle, and the step it stands on
+    const ground = (t: number) => heightAt(layout, ...middle(t));
+    const step = (t: number) => stepAt(layout, ...middle(t));
     const grassTiles: number[] = [],
       railTiles: number[] = [],
       raised: number[] = [];
     for (let t = 0; t < cols * rows; t++) {
       if (!solid[t] && !isWater[t] && !layout.sand[t] && t !== cupTile) grassTiles.push(t);
       else if (isRail[t] && !underTower.has(t)) railTiles.push(t);
-      if (!solid[t] && !isWater[t] && floor[t] > 0) raised.push(t);
+      if (!solid[t] && !isWater[t] && step(t) > 0) raised.push(t);
     }
-    const middle = (t: number): [number, number] => [
-      originX + ((t % cols) + 0.5) * TILE,
-      originY + (Math.floor(t / cols) + 0.5) * TILE,
-    ];
     const stripe = (t: number) =>
       Math.floor(Math.floor(t / cols) / STRIPE_ROWS) % 2 ? PALETTE.grassMown : PALETTE.grass;
     const grass = new Float32Array(grassTiles.length * 16),
       grassLooks = new Float32Array(grassTiles.length * MATERIAL_STRIDE);
     grassTiles.forEach((t, k) => {
       const [x, y] = middle(t);
-      place(grass, k, x, y, floor[t], 0, TILE, TILE, 1);
+      place(grass, k, x, y, ground(t), 0, TILE, TILE, 1);
       grassLooks.set(stripe(t), k * MATERIAL_STRIDE);
     });
     // the earth under grass raised on steps, up to just under its turf
     const banks = new Float32Array(raised.length * 16);
     raised.forEach((t, k) => {
       const [x, y] = middle(t);
-      place(banks, k, x, y, 0, 0, 1, 1, floor[t] - 0.01);
+      place(banks, k, x, y, 0, 0, 1, 1, step(t) - 0.01);
     });
     // the rail from the rough up past the grass beside it, however high that stands: the green's timber sides,
     // and the edge the ball banks off
@@ -232,7 +235,7 @@ export class Scene {
             ny = ty + oy;
           if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
           const u = ny * cols + nx;
-          if (!solid[u] && !isWater[u]) top = Math.max(top, floor[u]);
+          if (!solid[u] && !isWater[u]) top = Math.max(top, ground(u));
         }
       place(rails, k, x, y, -ROUGH_DEPTH, 0, 1, 1, top + RAIL_HEIGHT + ROUGH_DEPTH);
     });

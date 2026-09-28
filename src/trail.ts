@@ -5,7 +5,7 @@
  * It is only drawing, and changes nothing that is played. Without it the
  * ball would press the grass in the air, over water and across the cup.
  */
-import { BALL, KIND_RADIUS, tileAt } from './arena';
+import { BALL, KIND_RADIUS, heightAt, tileAt } from './arena';
 import { CUP } from './course';
 import type { Game } from './game';
 
@@ -28,7 +28,7 @@ export function trailFrom(game: Game): { x: number; y: number; z: number } | nul
     y = world.y[ball];
   const t = tileAt(layout, x, y);
   if (t < 0 || layout.solid[t]) return null;
-  const floor = layout.floor[t];
+  const floor = heightAt(layout, x, y);
   // on the grass: its middle a radius above it, or near enough. Water's floor is far below the ball, so over water it
   // never is; and not crossing the cup, whose middle has no grass
   if (Math.abs(world.z[ball] - floor - KIND_RADIUS[BALL]) > 0.15) return null;
