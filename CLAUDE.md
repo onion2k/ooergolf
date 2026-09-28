@@ -10,7 +10,7 @@ file says how it is made. The house
 rules in `~/.claude/CLAUDE.md` apply too. What is in `src/` is a round of
 the course: holes drawn as maps, each played from its tee to its cup with a
 drag pulled back and let go, scored against par, and the card at the end.
-Nine holes are here, on artshape-physics v0.6.0: grass, rail, sand,
+Nine holes are here, on artshape-physics v0.7.0: grass, rail, sand,
 water, raised grass, posts, sliding barriers, a windmill and a conveyor,
 with a green that lets a putt die, a rail and obstacles that bounce, posts
 that throw a ball back faster than it came, and a cup with a rim. The golf
@@ -158,8 +158,8 @@ change meant to move it, and the commit says why. Look at every picture.
   digit a tile, half a unit each, handed to the world in `physics.ts` on a
   hole that has any. The physics says what it refuses, `terrainRefusal`
   there asking its `terrainProblem`: neighbours side by side more than half
-  a tile apart, rock and all, and a slope within the smoothing's reach of
-  the cup. The game keeps its own copy of the smoothing, since only
+  a tile apart, rock and all. A cup may stand on a slope since v0.7.0, its
+  rim following the ground. The game keeps its own copy of the smoothing, since only
   `physics.ts` imports the package, and a test holds it to the physics'
   own at hundreds of points. `src/ground.ts` draws the green
   as one mesh following it, in its stripes, with earth down its steps, and
@@ -314,8 +314,9 @@ each step, and a gate handed what it needs in the same change:
   hole that slopes breaking no rule. The autopilot stops within 0.6 units of
   where it means on four shots across a hollow in five, and 2.4 long on a
   21-unit climb: it sums the slowing over the level distance, where the
-  physics slows a ball along the slope. A cup that tilts with a sloped green
-  is the physics' part two, not begun. A barrier or a windmill on a slope is
+  physics slows a ball along the slope. The game still draws a cup level,
+  its collar, rim and liner flat at the height of its middle, so a cup on a
+  slope waits for them to follow the ground. A barrier or a windmill on a slope is
   refused when a hole is built, as the physics' fuzzer found one carrying a
   ball round for good.
 - The ninth hole's own, as `DESIGN.md` has it, with everything on it: The

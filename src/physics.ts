@@ -16,9 +16,9 @@ export { World, type Belt, type Pusher } from 'artshape-physics/world';
 /**
  * What the physics refuses in a hole's slopes, or null: its own rules, with
  * the hole's grid, its biggest ball and its cup. Tiles side by side more than
- * half a tile apart, rock and all, and ground that is not level wherever its
- * smoothing reaches the cup. A world built on a refused terrain throws the
- * same; this asks without building one.
+ * half a tile apart, rock and all; a cup may stand on any slope, its rim
+ * following the ground, since v0.7.0. A world built on a refused terrain
+ * throws the same; this asks without building one.
  */
 export function terrainRefusal(layout: Layout, cup: Cup): string | null {
   return terrainProblem(layout.terrain, gridOf(layout), Math.max(...KIND_RADIUS), [

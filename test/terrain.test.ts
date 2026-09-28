@@ -152,11 +152,11 @@ describe('a hole that slopes', () => {
     expect(restingAbove(l, p.x, p.y, 1), 'level on the top').toBeCloseTo(1, 9);
   });
 
-  it('refuses a slope near enough the cup to tip it: all flat as far as the smoothing reaches it', () => {
-    // the cup is at column 4, row 2: its pad is three tiles each way
-    expect(refused(terrain([[6, 5, '1']])), 'three rows off').toMatch(/not level/);
-    expect(refused(terrain([[4, 6, '1']])), 'four rows off').toBeNull();
-    // a pad raised as a whole is level, and allowed: a cup on a flat hilltop
+  it('allows a slope right up to the cup, the rim following the ground, as the physics has since v0.7.0', () => {
+    // the cup is at column 4, row 2: a slope beside it, and one through it, where it once had to stand on the level
+    expect(refused(terrain([[5, 2, '1']])), 'beside the cup').toBeNull();
+    expect(refused(terrain([[4, 2, '2']])), 'under it').toBeNull();
+    // and a cup on a flat hilltop, as before
     const hill = terrain().map((r, i) => (i <= 6 ? r.replace(/0/g, '2') : i === 7 ? r.replace(/0/g, '1') : r));
     expect(refused(hill)).toBeNull();
   });

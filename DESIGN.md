@@ -153,7 +153,7 @@ to find out: it can. A ball climbs a step lower than its radius at no cost
 to its speed, and a rise of 1.2 is a wall, so a ramp of steps of 0.4 leads
 up onto grass walled off everywhere else.
 
-On artshape-physics v0.6.0, the course is nine holes: Straight, Dog-leg,
+On artshape-physics v0.7.0, the course is nine holes: Straight, Dog-leg,
 The Bunker (sand across the front of the cup, to be gone round or blasted
 through), Pond, Barriers, Bumpers (five posts, one on the straight line to
 the cup), Up and Over (the ramp onto a plateau between two ponds, and a
