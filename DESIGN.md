@@ -28,10 +28,13 @@ courses after, as content.
 
 - **The drag.** Press anywhere on the course, drag back, and let go, as with
   a slingshot. The shot goes the way opposite to the drag, on the ground,
-  and the length of the drag is its power, up to the club's most: full at
-  35% of the screen's shorter side, and linear, so half the drag is half the
-  shot. Anywhere and not on the ball, since on a phone a finger on the ball
-  hides it (agreed when the shot was built). One pointer, so a finger and a
+  and the length of the drag is how far the ball rolls, up to the club's
+  most: full at 35% of the screen's shorter side, and linear, so half the
+  drag rolls half as far. Until the retune on physics v0.4.1 it set the
+  speed, which under the old drag came to the same thing; under the green's
+  steady slowing a half speed rolls a quarter as far. Anywhere and not on
+  the ball, since on a phone a finger on the ball hides it (agreed when the
+  shot was built). One pointer, so a finger and a
   mouse are the same input.
 - **The aim line.** Drawn from the ball along the shot, as long as the club
   allows, and showing the power.
@@ -41,19 +44,21 @@ courses after, as content.
   the physics puts it to sleep.
 - **No input is 3D.** A shot gives the ball a speed along the ground and
   none upward. Height comes only from what the ball meets.
-- **The figures,** measured and agreed when the shot was built. A world unit
-  is 10 cm. The hardest shot of the starting club is 40 units a second,
-  about 48 units of roll: three quarters of the course. The upgrades take it
-  to about 60. The physics is to hold against tunnelling up to 120, for
-  bumpers that add speed. Until the physics has rolling resistance, the
-  ball slows by the world's drag at 0.8 a second, so a putt of 20 a second
-  rolls 24 units over about four seconds.
+- **The figures,** measured and agreed when the shot was built, and at the
+  retune on physics v0.4.1. A world unit is 10 cm. The hardest shot of the
+  starting club is 40 units a second, about 50 units of roll: three
+  quarters of the course. The green slows a ball steadily, at 16 units a
+  second a second, as a putt dies on a green, so the hardest shot stops in
+  under three seconds; the upgrades take its roll to about 72. The rail
+  keeps 0.65 of the speed a ball meets it with, so a ball at thirty degrees
+  comes away at about twenty, and a barrier or a blade 0.5. The physics
+  moves a fast ball in pieces, and holds against tunnelling up to 240.
 
 ## The rules
 
-- **Par** is per hole, and is set from what the autopilot takes with the
-  starting club and ball, slipping as a player does (`npm run pace`), and is
-  never less than two.
+- **Par** is per hole, the hole's intent, and never less than two. The
+  autopilot's median on each (`npm run pace`) is kept beside it; it times
+  what moves exactly, as no player does, so it is not the par.
 - **Water and out of bounds** cost one stroke, and the ball is put back
   where it last lay at rest.
 - **The limit** on a hole is par and five more. At the limit the hole is
@@ -87,13 +92,12 @@ of the physics, all of it in `artshape-physics` and none of it in the game:
 Slopes and ramps are not in this list. They are the largest piece of work,
 and the first nine holes do without them. They come with a later course.
 
-This is the work of a new version of `artshape-physics`, from v0.3.0, made
-in that repo to that repo's own definition of done, and taken in here with a
-version bump. While it is made the game moves to v0.3.0, already
-released, for its floor heights, its bottom, its boxes and its belts, which
-the water, the raised green, the barrier, the windmill and the conveyor are
-built on; every new option in 0.4.0 defaults to what 0.3.0 does, so they
-carry over, and are retuned for 0.4.0's bounce when it comes.
+All of it is in artshape-physics v0.4.1, made in that repo to its own
+definition of done and taken in here with a version bump. v0.4.1 came of
+this game's fuzzer: a ball running round the inside of the cup's rim, held
+up by it, came back to where it was in the physics' window for judging a
+ball at rest, and was put to sleep in the mouth of the cup; now a ball
+going faster than 2 is never put to sleep.
 
 ## The course
 
@@ -142,16 +146,18 @@ to find out: it can. A ball climbs a step lower than its radius at no cost
 to its speed, and a rise of 1.2 is a wall, so a ramp of steps of 0.4 leads
 up onto grass walled off everywhere else.
 
-Built on v0.3.0 while 0.4.0 is made, the course is seven holes: Straight,
+On artshape-physics v0.4.1, the course is seven holes: Straight,
 Dog-leg, Pond, Barriers, Up and Over (the ramp onto a plateau between two
 ponds, and a drop to the cup), Windmill, and The Mill Race (a barrier, the
 windmill, and a conveyor to the cup between ponds). The bunker and the
-bumpers come with 0.4.0, and their holes go in as 3 and 6.
+bumpers come next, and their holes go in as 3 and 6.
 
 - **Water** costs a stroke, and the ball is put back where it was struck
   from; at the limit the hole is picked up.
-- **A ball the course keeps moving,** a belt carrying it or a barrier
-  dragging it along, may be struck where it lies after ten seconds.
+- **A ball the course keeps moving,** a belt carrying it, may be struck
+  where it lies after ten seconds. A belt carries at its own speed: the
+  green's steady slowing is not on it. A barrier or a blade bounces a ball
+  off, and carries it no longer.
 
 ## The upgrades
 
@@ -160,9 +166,11 @@ limits, so a score is a score with a given club and ball.
 
 - **Clubs** raise the most power a shot can have, and lengthen the aim
   line. Made of precious metal and enamel. Five putters, set in
-  `src/clubs.ts`: the starting one at 40, brass at 44 for 40 coins, silver
-  at 48 for 100, enamel at 53 for 220 and a gem, and gold at 58 for 450 and
-  three gems.
+  `src/clubs.ts`: the starting one at 40, brass at 42 for 40 coins, silver
+  at 44 for 100, enamel at 46 for 220 and a gem, and gold at 48 for 450 and
+  three gems. Each rolls as far as it did when the green slowed a ball by
+  drag, from 50 units to 72; since the roll goes as the square of the
+  speed, the figures are closer together than they were.
 - **Balls** differ in bounce and in roll. Made of enamel and gems.
 - **Coins** are paid for finishing a hole (5), and more for each stroke
   under par (5 each); a hole picked up pays nothing. **Gems** are paid for a
@@ -211,8 +219,11 @@ and all the words in the page, not the picture.
   the rough below the bottom of the cup, so the cup is a hole seen into.
 - **The cup** is 1.45 across its middle, a little wider than the ball, so
   that its opening fits inside one tile of grass; its gold rim lies over the
-  grass round it. Through the middle it catches a putt up to about 19 a
-  second, measured, and the width is chosen again from 0.4.0's table.
+  grass round it. It has the physics' rim, of 0.3, and no pull toward it:
+  through the middle it holds a putt arriving at up to 18 a second and
+  throws one from 23 up and over; 0.6 of its radius off the middle, it
+  holds one up to 7 and lips out one from 9. Measured, and chosen over a
+  wider cup at the retune, since 1.6 no longer fits a tile as it is drawn.
 
 ## The camera
 

@@ -14,7 +14,7 @@
  *
  * The first nine holes are in DESIGN.md. Those made of grass, rail, water,
  * raised grass, barriers, windmills and belts are here; the bunker and the
- * bumpers wait for the physics they need, 0.4.0's sand and bounce.
+ * bumpers come next, on the surfaces and the posts the physics now has.
  *
  *   ~   water, which the ball rolls onto and is lost in
  *   1-9 grass raised that many steps: a step the ball rolls up, three a wall
@@ -34,11 +34,14 @@ export interface HoleDef {
 }
 
 /**
- * The cup: how wide, and how deep a ball goes before it is holed. The width
- * decides how fast a ball can be going and still drop, and was chosen by
- * measuring that: see `test/cup.test.ts`.
+ * The cup: how wide, and how deep a ball goes before it is holed; the
+ * restitution of its rim, which makes it a cup a ball can lip out of; and no
+ * pull toward it, so it is the rim that decides. At this width, which fits
+ * inside a tile as it is drawn, a putt through the middle drops up to 18 a
+ * second, and one off it lips out from 8: see `test/cup.test.ts`. The rim's
+ * figure matters little: 0.1 to 0.5 moved those by a unit a second.
  */
-export const CUP = { radius: 1.45, depth: 6 };
+export const CUP = { radius: 1.45, depth: 6, rim: 0.3, pull: 0 };
 
 export const COURSE: readonly HoleDef[] = [
   {

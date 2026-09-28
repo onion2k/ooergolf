@@ -85,14 +85,7 @@ export function fieldOf(layout: Layout, obstacles: Obstacles, name: string): Gra
   const mask = new Uint8Array(cols * rows),
     heights = new Float32Array(cols * rows);
   // the tiles a belt lies on: its frame and belt stand there, not grass
-  const belted = new Set<number>();
-  for (const b of obstacles.belts) {
-    const n = Math.max(1, Math.round((b.half * 2) / TILE));
-    for (let k = 0; k < n; k++) {
-      const along = -b.half + (k + 0.5) * TILE;
-      belted.add(tileAt(layout, b.cx + b.dx * along, b.cy + b.dy * along));
-    }
-  }
+  const { belted } = obstacles;
   for (let cy = 0; cy < rows; cy++)
     for (let cx = 0; cx < cols; cx++) {
       const i = cy * cols + cx;

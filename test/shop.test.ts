@@ -1,6 +1,6 @@
 /** What a hole pays, the clubs and what they cost, buying one, and carrying it: the save the shop is built on. */
 import { describe, expect, it } from 'vitest';
-import { HARDEST_SHOT } from '../src/arena';
+import { HARDEST_SHOT, powerFor, rollsFor } from '../src/arena';
 import { CLUBS, PAY, STARTING_CLUB, clubById, paid } from '../src/clubs';
 import { COURSE } from '../src/course';
 import { CLEAR_OF_CUP, LIMIT_OVER_PAR, type Game } from '../src/game';
@@ -17,12 +17,12 @@ function holeIn(game: Game, strokes: number) {
     for (let f = 0; f < 600 && !game.ready; f++) game.step(DT);
   }
   game.place(cup.x, cup.y - CLEAR_OF_CUP - 0.1);
-  game.shoot(Math.PI / 2, 8 / game.hardest);
+  game.shoot(Math.PI / 2, powerFor(8, game.hardest));
   for (let f = 0; f < 240 && game.phase === 'play'; f++) game.step(DT);
 }
 
 describe('the clubs', () => {
-  it('start from the putter every player has, and each costs more and strikes harder than the last, up to about 60', () => {
+  it('start from the putter every player has, and each costs more and rolls further than the last, up to about 72', () => {
     expect(CLUBS[0].id).toBe(STARTING_CLUB);
     expect(CLUBS[0].hardest).toBe(HARDEST_SHOT);
     expect(CLUBS[0].coins).toBe(0);
@@ -30,7 +30,11 @@ describe('the clubs', () => {
       expect(CLUBS[k].hardest, CLUBS[k].name).toBeGreaterThan(CLUBS[k - 1].hardest);
       expect(CLUBS[k].coins, CLUBS[k].name).toBeGreaterThan(CLUBS[k - 1].coins);
     }
-    expect(CLUBS[CLUBS.length - 1].hardest).toBeLessThanOrEqual(60);
+    // each as far as it rolled under the drag it was first chosen with: the finest half as far again as the putter
+    expect(rollsFor(CLUBS[CLUBS.length - 1].hardest)).toBeGreaterThan(68);
+    expect(rollsFor(CLUBS[CLUBS.length - 1].hardest)).toBeLessThan(76);
+    expect(rollsFor(CLUBS[1].hardest), 'the first a little further than the putter').toBeGreaterThan(53);
+    expect(rollsFor(CLUBS[1].hardest)).toBeLessThan(58);
     expect(new Set(CLUBS.map((c) => c.id)).size, 'every id its own').toBe(CLUBS.length);
     expect(clubById('nonsense')).toBe(CLUBS[0]);
   });

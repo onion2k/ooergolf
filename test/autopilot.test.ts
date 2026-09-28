@@ -1,7 +1,7 @@
 /** The autopilot as a measuring instrument: it knows how far a shot rolls, sees round corners, holes out, and gets stuck nowhere. */
 import { describe, expect, it } from 'vitest';
-import { HARDEST_SHOT, ROLL, TILE, layoutOf, onFloor } from '../src/arena';
-import { Autopilot, speedFor } from '../src/autopilot';
+import { HARDEST_SHOT, TILE, layoutOf, onFloor, powerFor, rollsFor, strikeSpeed } from '../src/arena';
+import { Autopilot, speedFor, timeTo } from '../src/autopilot';
 import { COURSE, type HoleDef } from '../src/course';
 import { checkInvariants } from '../src/invariants';
 import { seeded } from '../src/random';
@@ -12,11 +12,23 @@ describe('the autopilot', () => {
     for (const d of [5, 10, 20, 30, 40]) {
       const { game } = onGreen();
       const { tee } = game.layout;
-      game.shoot(Math.PI / 2, speedFor(d, 0) / HARDEST_SHOT);
+      game.shoot(Math.PI / 2, powerFor(speedFor(d, 0), HARDEST_SHOT));
       for (let f = 0; f < 600 && !game.ready; f++) game.step(DT);
       const went = game.world.y[game.ball] - tee.y;
       expect(Math.abs(went - d), `asked for ${d}, went ${went.toFixed(1)}`).toBeLessThan(Math.max(1.5, d * 0.12));
     }
+  });
+
+  it('knows when a shot gets somewhere, so it can time what moves: each distance at the moment it says', () => {
+    const { game } = onGreen();
+    const { tee } = game.layout;
+    const speed = 30;
+    game.shoot(Math.PI / 2, powerFor(speed, HARDEST_SHOT));
+    for (const d of [5, 15, 25]) {
+      while (game.world.y[game.ball] - tee.y < d) game.step(1 / 120);
+      expect(Math.abs(game.t - timeTo(d, speed)), `${d} along`).toBeLessThan(0.03);
+    }
+    expect(timeTo(100, speed), 'never, past where it stops').toBe(Infinity);
   });
 
   it('sees round a corner: every shot it plans has clear grass the whole way', () => {
@@ -149,7 +161,7 @@ describe('the autopilot', () => {
         game.place(x, y);
         const shot = new Autopilot(game).plan()!;
         // the whole of the shot, as far as the ball would roll, is on level grass and clear of it
-        const rolls = (shot.power * game.hardest) / ROLL.floorDrag;
+        const rolls = rollsFor(strikeSpeed(shot.power, game.hardest));
         for (let s = 0; s < rolls; s += 0.25) {
           const px = x + Math.cos(shot.angle) * s,
             py = y + Math.sin(shot.angle) * s;

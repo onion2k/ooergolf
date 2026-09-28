@@ -7,6 +7,7 @@
  */
 import { expect, test, type Page } from '@playwright/test';
 import { PNG } from 'pngjs';
+import { ROLL, powerFor } from '../src/arena';
 import { drag, start, touches, watch } from './game';
 
 /** How many frames the page draws in a second. */
@@ -99,7 +100,8 @@ test('a mouse drag pulled back and let go strikes the ball up the course, as har
   const after = await putt(page, 0.5);
   expect(after.state.strokes).toBe(1);
   expect(after.state.ready).toBe(false);
-  expect(after.ball.speed / hardest, 'half a full drag, half the hardest shot').toBeCloseTo(0.5, 1);
+  // half a full drag rolls half as far as the hardest shot, and the distance goes as the square of the speed
+  expect(after.ball.speed / hardest, 'half a full drag, half as far').toBeCloseTo(Math.SQRT1_2, 1);
   expect(after.events.some((e) => e.startsWith('struck'))).toBe(true);
   await page.evaluate(() => window.game!.step(60));
   expect(await page.evaluate(() => window.game!.ball().y), 'up the course').toBeGreaterThan(
@@ -155,7 +157,7 @@ test('the shop sells a club to a player who can pay, puts it in hand, and a relo
   await expect(page.locator('[data-club=brass] button')).toHaveText('In hand');
   const state = await page.evaluate(() => window.game!.state());
   expect(state.club).toBe('brass');
-  expect(state.hardest).toBe(44);
+  expect(state.hardest).toBe(42);
   await page.locator('#shopClose').click();
   await expect(page.locator('#shop')).toBeHidden();
   await page.reload();
@@ -164,6 +166,64 @@ test('the shop sells a club to a player who can pay, puts it in hand, and a relo
   expect(after.club).toBe('brass');
   expect(after.coins).toBe(5);
   expect(problems).toEqual([]);
+});
+
+test.describe('the cup and the rail', () => {
+  /** The ball put down `back` short of the cup on the first hole, and struck at it to arrive at its edge at `speed`. */
+  const putt = async (page: Page, speed: number, back = 5) => {
+    const { cup, hardest } = await page.evaluate(() => window.game!.content());
+    const power = powerFor(Math.sqrt(speed * speed + 2 * ROLL.roll * (back - cup.radius)), hardest);
+    return page.evaluate(
+      ({ back, power }) => {
+        const g = window.game!;
+        const { cup } = g.content();
+        g.place(g.bodies('ball')[0].slot, cup.x, cup.y - back, 1);
+        g.step(60);
+        g.events();
+        g.shoot(Math.PI / 2, power);
+        // whether it crossed the whole of the cup before anything holed it: the first hole's rail is a tile behind the
+        // cup, and a ball that runs over may bank off it and come back in
+        let over = false;
+        const told: string[] = [];
+        for (let f = 0; f < 240; f++) {
+          g.step(1);
+          told.push(...g.events());
+          if (!told.some((e) => e.startsWith('holed')) && g.state().live && g.ball().y > cup.y + cup.radius)
+            over = true;
+        }
+        return { over, holed: told.some((e) => e.startsWith('holed')) };
+      },
+      { back, power },
+    );
+  };
+
+  test('a gentle putt drops, and one too fast for the rim is thrown over it', async ({ page }) => {
+    const problems = watch(page);
+    await start(page, { seed: 1, paused: true });
+    expect(await putt(page, 6), 'dropped').toEqual({ over: false, holed: true });
+    await start(page, { seed: 1, paused: true });
+    expect((await putt(page, 30)).over, 'thrown over the cup by its rim').toBe(true);
+    expect(await page.evaluate(() => window.game!.invariants())).toEqual([]);
+    expect(problems).toEqual([]);
+  });
+
+  test('a ball struck at the rail comes back off it', async ({ page }) => {
+    const problems = watch(page);
+    await start(page, { seed: 1, paused: true });
+    const xs = await page.evaluate(() => {
+      const g = window.game!;
+      g.shoot(0, 0.3);
+      const out: number[] = [];
+      for (let f = 0; f < 90; f++) {
+        g.step(1);
+        out.push(g.ball().x);
+      }
+      return out;
+    });
+    const far = Math.max(...xs);
+    expect(xs[xs.length - 1], 'back off the rail, not run along it or stopped against it').toBeLessThan(far - 1);
+    expect(problems).toEqual([]);
+  });
 });
 
 test.describe('the grass', () => {

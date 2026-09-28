@@ -100,6 +100,32 @@ describe('what must always hold', () => {
     expect(checkInvariants(game).join('\n')).toMatch(/inside a moving box/);
   });
 
+  it('reports a ball at rest in the air, with nothing under it', () => {
+    const { game } = newGame();
+    const { world, ball } = game;
+    expect(world.asleep[ball], 'at rest on the tee').toBe(1);
+    expect(checkInvariants(game)).toEqual([]);
+    world.z[ball] += 0.5;
+    expect(checkInvariants(game).join('\n')).toMatch(/at rest in the air: ball/);
+    // moving, it may be in the air: thrown up by the rim, or off an edge
+    world.wake(ball);
+    expect(checkInvariants(game)).toEqual([]);
+  });
+
+  it('holds the ball to the club that struck it, not to one put in hand while it rolls', () => {
+    const { game } = newGame();
+    game.progress.save.owned.push('gold');
+    game.equip('gold');
+    const gold = game.hardest;
+    expect(gold, 'a club harder than the putter').toBeGreaterThan(HARDEST_SHOT);
+    game.shoot(0, 1);
+    expect(game.equip('putter')).toBe(true);
+    expect(game.hardest).toBe(HARDEST_SHOT);
+    expect(checkInvariants(game), 'struck by the gold, and still going as the gold struck it').toEqual([]);
+    game.world.vx[game.ball] = gold * 1.1;
+    expect(checkInvariants(game).join('\n')).toMatch(/faster than the hardest shot/);
+  });
+
   it('reports a ball faster than the hardest shot, and strokes that are not a count', () => {
     const { game } = newGame();
     game.shoot(0, 1);

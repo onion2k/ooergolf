@@ -63,7 +63,7 @@ describe('the course', () => {
       const l = layoutOf(hole.map);
       expect(hole.par, hole.name).toBeGreaterThanOrEqual(2);
       expect(hole.par, hole.name).toBeLessThanOrEqual(5);
-      // the cup sits on level grass: the physics' hole is at the floor's nought until 0.4.0
+      // the cup sits on level grass, where its lining, collar and flag are drawn; the physics could cut it higher
       const cupTile = Math.floor((l.cup.y - l.originY) / TILE) * l.cols + Math.floor((l.cup.x - l.originX) / TILE);
       expect(l.floor[cupTile], `${hole.name}: the cup on level grass`).toBe(0);
       // a flood from the tee over the grass reaches the cup

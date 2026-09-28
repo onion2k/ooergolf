@@ -1,9 +1,11 @@
 /**
  * The clubs, what a hole pays, and what the shop asks: content. A club is a
  * putter that strikes harder than the last, and is made of something finer;
- * the figures take the hardest shot from the starting 40 to 60, the most
- * DESIGN.md allows, so an upgrade makes a hole easier and never makes one
- * possible. What each costs is set against what a round pays: a round of the
+ * the figures take the hardest shot from rolling fifty units to seventy-two,
+ * as far as each rolled under the drag they were first chosen with, so an
+ * upgrade makes a hole easier and never makes one possible. The green slows
+ * a ball steadily, so how far it rolls goes as the square of its speed, and
+ * a little more speed goes a good deal further: 48 rolls as far as 58 did. What each costs is set against what a round pays: a round of the
  * course at par pays `PAY.finish` a hole, so the first upgrade is a few
  * rounds away and the last a good many.
  */
@@ -35,11 +37,11 @@ export const CLUBS: readonly Club[] = [
     colour: [0.55, 0.56, 0.6],
     roughness: 0.35,
   },
-  { id: 'brass', name: 'Brass putter', hardest: 44, coins: 40, gems: 0, colour: [0.91, 0.78, 0.42], roughness: 0.25 },
+  { id: 'brass', name: 'Brass putter', hardest: 42, coins: 40, gems: 0, colour: [0.91, 0.78, 0.42], roughness: 0.25 },
   {
     id: 'silver',
     name: 'Silver putter',
-    hardest: 48,
+    hardest: 44,
     coins: 100,
     gems: 0,
     colour: [0.97, 0.96, 0.92],
@@ -48,13 +50,13 @@ export const CLUBS: readonly Club[] = [
   {
     id: 'enamel',
     name: 'Enamel putter',
-    hardest: 53,
+    hardest: 46,
     coins: 220,
     gems: 1,
     colour: [0.12, 0.35, 0.85],
     roughness: 0.18,
   },
-  { id: 'gold', name: 'Gold putter', hardest: 58, coins: 450, gems: 3, colour: [1.0, 0.77, 0.34], roughness: 0.08 },
+  { id: 'gold', name: 'Gold putter', hardest: 48, coins: 450, gems: 3, colour: [1.0, 0.77, 0.34], roughness: 0.08 },
 ];
 
 /** A club by its id, or the starting putter for one no one sells. */

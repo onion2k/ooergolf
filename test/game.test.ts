@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BALL, HARDEST_SHOT, KIND_RADIUS } from '../src/arena';
+import { BALL, HARDEST_SHOT, KIND_RADIUS, ROLL, powerFor, rollsFor, strikeSpeed } from '../src/arena';
 import { checkInvariants } from '../src/invariants';
 import { DT, onGreen as newGame, settle } from './helpers';
 
@@ -30,17 +30,20 @@ describe('the game', () => {
     expect(checkInvariants(game)).toEqual([]);
   });
 
-  it('strikes the ball the way it is aimed, at its share of the hardest shot, and counts the stroke', () => {
+  it('strikes the ball the way it is aimed, hard enough to roll its share of the hardest shot, and counts the stroke', () => {
     const { game, told } = newGame();
     const tee = game.layout.tee;
-    expect(game.shoot(Math.PI / 2, 0.5)).toBe(true);
+    // a quarter of the drag rolls a quarter as far, and under a steady slowing that is half the speed
+    expect(game.shoot(Math.PI / 2, 0.25)).toBe(true);
     const { world, ball } = game;
     expect(world.vx[ball]).toBeCloseTo(0, 6);
-    expect(world.vy[ball]).toBeCloseTo(HARDEST_SHOT * 0.5, 6);
+    expect(world.vy[ball]).toBeCloseTo(HARDEST_SHOT * 0.5, 4);
     expect(world.vz[ball]).toBe(0);
     expect(game.strokes).toBe(1);
     expect(game.ready).toBe(false);
-    expect(told).toEqual(['started 0 3', `struck 0.5 ${tee.x} ${tee.y}`]);
+    expect(told).toEqual(['started 0 3', `struck 0.25 ${tee.x} ${tee.y}`]);
+    expect(strikeSpeed(0.25, 40)).toBeCloseTo(20, 9);
+    expect(powerFor(strikeSpeed(0.3, 44), 44)).toBeCloseTo(0.3, 9);
   });
 
   it('holds power to between none and the hardest shot', () => {
@@ -74,6 +77,42 @@ describe('the game', () => {
       expect(game.strokes).toBe(2);
       expect(checkInvariants(game)).toEqual([]);
     }
+  });
+
+  it('rolls as far as the drag says, and dies as a putt does: the hardest shot about fifty units in under three seconds', () => {
+    const roll = (power: number) => {
+      const { game } = newGame();
+      game.shoot(Math.PI / 2, power);
+      const took = untilReady(game);
+      return { d: game.world.y[game.ball] - game.layout.tee.y, took };
+    };
+    const full = roll(1);
+    expect(full.d).toBeGreaterThan(47);
+    expect(full.d).toBeLessThan(53);
+    expect(Math.abs(full.d - rollsFor(HARDEST_SHOT)), 'as the figures say').toBeLessThan(2);
+    // come to rest, and put to sleep, in under three seconds: a steady slowing, not a long tail of drag
+    expect(full.took).toBeLessThan(3.5);
+    for (const share of [0.5, 0.25]) {
+      const { d } = roll(share);
+      expect(d / full.d, `${share} of the drag`).toBeGreaterThan(share - 0.05);
+      expect(d / full.d, `${share} of the drag`).toBeLessThan(share + 0.05);
+    }
+    expect(ROLL.roll).toBe(16);
+  });
+
+  it('is never put to sleep in the air: tossed so it is off the grass as the physics judges it at rest, it lands first', () => {
+    const { game } = newGame();
+    const { world, ball } = game;
+    // woken, which opens the physics' window of forty steps over which it judges a ball at rest; tossed four steps
+    // before the window closes, so it is a hair up and slow at the top of its hop, and back near where it was
+    world.wake(ball);
+    for (let s = 0; s < 36; s++) game.step(1 / 120);
+    world.vz[ball] = 3.5;
+    for (let s = 0; s < 60; s++) {
+      game.step(1 / 120);
+      expect(checkInvariants(game), `step ${s} of the hop`).toEqual([]);
+    }
+    expect(world.asleep[ball], 'at rest where it landed').toBe(1);
   });
 
   it('rolls further the harder it is struck', () => {

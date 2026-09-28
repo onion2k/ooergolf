@@ -33,7 +33,7 @@ Seven holes so far: a straight putt, a dog-leg, a pond, sliding barriers,
 a ramp up onto a plateau between ponds, a windmill whose blades sweep its
 door, and The Mill Race, with a barrier, the windmill and a conveyor to the
 cup. Water costs a stroke, and the ball comes back to where it was struck
-from. The bunker and the bumpers wait for the physics they need.
+from. The bunker and the bumpers come next.
 
 ## What is here
 

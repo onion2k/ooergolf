@@ -10,11 +10,12 @@ file says how it is made. The house
 rules in `~/.claude/CLAUDE.md` apply too. What is in `src/` is a round of
 the course: holes drawn as maps, each played from its tee to its cup with a
 drag pulled back and let go, scored against par, and the card at the end.
-Seven holes are here, on artshape-physics v0.3.0: grass, rail, water,
-raised grass, sliding barriers, a windmill and a conveyor. The bunker and
-the bumpers wait for 0.4.0's sand and bounce, and everything is retuned for
-0.4.0 when it comes. The golf goes in a
-feature at a time, in the order `DESIGN.md` gives.
+Seven holes are here, on artshape-physics v0.4.1: grass, rail, water,
+raised grass, sliding barriers, a windmill and a conveyor, with a green
+that lets a putt die, a rail and obstacles that bounce, and a cup with a
+rim. The bunker and the bumpers come next, on the physics' surfaces and
+posts. The golf goes in a feature at a time, in the order `DESIGN.md`
+gives.
 
 ## The factory
 
@@ -62,8 +63,12 @@ The pace gate holds the strokes a round takes, the mean over sixteen seeds,
 played by the autopilot with a player's slips: a few degrees of aim, a
 tenth of the power. A median was tried and jumps a whole stroke between
 sets of seeds; the mean held within 5%, so the tolerance of a fifth is four
-times its wobble. Par is set from the same player: `npm run pace` prints
-each hole's median against its par.
+times its wobble. `npm run pace` prints each hole's median against its
+par. Par is each hole's intent, not what this player takes: it times its
+shots past what moves exactly, and holes the obstacle holes in one on the
+median even with the cup's rim. A player's timing slip was tried, and at
+0.6 s the mean rose to 17 while those holes stayed at one or two; the pars
+were kept at the retune on 28 September 2026.
 
 ## What the gates hold now
 
@@ -205,7 +210,16 @@ change meant to move it, and the commit says why. Look at every picture.
   lives in `progress.ts`. Chance comes from `random.ts`, handed in.
 - `src/physics.ts` is the game's side of artshape-physics, and nothing else
   imports the package directly. A change a package needs goes in that repo,
-  with a version bump here.
+  with a version bump here, as v0.4.1 was for a ball put to sleep in the
+  mouth of the cup. It builds a hole's world: the green's steady slowing
+  (`ROLL` in `arena.ts`) on every tile but a belt's, which has none, so a
+  belt carries at its own speed; the rail's bounce and the obstacles'
+  (`BOUNCE`); the cup with its rim and no pull (`CUP` in `course.ts`), told
+  from the water by the hole the physics reports; and a ball never put to
+  sleep in the air or going faster than 2, banked off the rail as off one
+  flat wall, and moved in pieces when it is fast. A shot's power is how far
+  it rolls, and `strikeSpeed` and `powerFor` in `arena.ts` go between that
+  and a speed.
 
 ## Skills
 
@@ -272,35 +286,17 @@ ball down at a lie.
 Each of these is the first feature's to bring, with every gate green at
 each step, and a gate handed what it needs in the same change:
 
-- A cup with a rim. The package now in the game catches a ball slow enough
-  to fall below the floor before it has crossed the hole, up to about 19 a
-  second through the middle, and pulls in a slow one passing near (see
-  `test/cup.test.ts`, on an open green); nothing throws a ball back out or
-  turns it at the lip. On the first hole a ball that runs over banks off the
-  rail a tile behind the cup and rolls back in, so the autopilot holes it in
-  one every time. 0.4.0's rim brings lip-outs, with a table to choose the
-  cup's width from; the cup test and the pars are set again then.
-- The bunker and the bumpers, and their holes, which need 0.4.0's sand and
-  bounce.
-- Pars that are what the autopilot takes. It times its shots past what
-  moves exactly, and v0.3.0 pulls a gentle ball into the cup from 2.5 past
-  its rim, so it holes the obstacle holes in one on the median; each par is
-  the hole's intent until 0.4.0 turns the pull off and the pars are set
-  from the autopilot again.
+- The bunker and the bumpers, and their holes: the physics has the sand
+  (a surface) and the posts (bumpers) now.
+- Pars that are what a player takes: see the pace gate, above. The
+  autopilot would need a player's timing, measured against real play.
 - Where in the round a player is, in the save: a reload starts the round
   again, which is also why the fuzzer starts each seed part way round.
-- Three things the game does for v0.3.0 that go with 0.4.0. It steps the
-  physics a step at a time and takes a ball as holed the step before it
-  drops below the grass inside the cup, because v0.3.0, given the floor's
-  heights, takes a ball below its own tile's floor for one in rock and puts
-  it out on the nearest lower tile, which is water if there is some near.
-  A ball kept moving by the course for ten seconds may be struck where it
-  lies, because v0.3.0's moving boxes carry a ball touching their face along
-  with them for ever. And the autopilot's foresight of what moves.
-- The physics the golf needs, from artshape-physics' next version: see
-  `DESIGN.md`. Until it comes, a ball meets the rail with almost no bounce,
-  and slows by drag, not by rolling resistance.
-- Ball upgrades, which need the physics' bounce and roll by kind of body.
+- Ball upgrades: the physics has bounce and roll by kind of body.
+- A shop that shows how far each putter reaches. It shows each one's
+  hardest speed, 40 to 48, and under the green's steady slowing a little
+  more speed goes a good deal further: the gold rolls 72 units to the
+  putter's 50.
 
 ## Rules for the code
 

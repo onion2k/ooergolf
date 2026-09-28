@@ -1,6 +1,7 @@
 /** A round: holed, picked up, the next hole, the card, and the round over. */
 import { describe, expect, it } from 'vitest';
-import { HARDEST_SHOT, onFloor } from '../src/arena';
+import { HARDEST_SHOT, onFloor, powerFor } from '../src/arena';
+import { speedFor } from '../src/autopilot';
 import { COURSE, CUP } from '../src/course';
 import { BETWEEN_HOLES, CLEAR_OF_CUP, LIMIT_OVER_PAR, type Game } from '../src/game';
 import { checkInvariants } from '../src/invariants';
@@ -15,7 +16,7 @@ function play(game: Game, seconds: number) {
   }
 }
 
-/** The ball put down just clear of the cup, on whichever side has grass, and putted at it at `speed`, `aside` off its middle. */
+/** The ball put down just clear of the cup, on whichever side has grass, and putted at it to arrive at `speed`, `aside` off its middle. */
 function putt(game: Game, speed: number, aside = 0) {
   const { cup } = game.layout;
   const back = CLEAR_OF_CUP + 0.1;
@@ -30,7 +31,7 @@ function putt(game: Game, speed: number, aside = 0) {
       // not level grass on this side: another
       continue;
     }
-    game.shoot(a + Math.PI, speed / HARDEST_SHOT);
+    game.shoot(a + Math.PI, powerFor(speedFor(back - CUP.radius, speed), HARDEST_SHOT));
     return;
   }
   throw new Error('no grass beside the cup to putt from');
@@ -82,7 +83,8 @@ describe('a round', () => {
       // soft putts sideways, never near the cup
       game.place(game.layout.tee.x, game.layout.tee.y);
       expect(game.shoot(s % 2 ? 0 : Math.PI, 0.1), `stroke ${s}`).toBe(true);
-      play(game, 4);
+      // until it is at rest and ready again, or, on the last, the hole is done; not so long the next one begins
+      for (let f = 0; f < 4 * 60 && game.phase === 'play' && !(f > 0 && game.ready); f++) play(game, 1 / 60);
     }
     expect(told).toContain(`pickedUp ${limit} ${COURSE[0].par}`);
     expect(game.card).toEqual([limit]);

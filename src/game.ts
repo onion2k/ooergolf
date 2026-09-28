@@ -13,11 +13,11 @@
  * keep a note of it. Nothing here waits on anything there, so the same game
  * runs in the page and in Node, and what the tests try is what is played.
  */
-import { BALL, KIND_RADIUS, layoutOf, onFloor, tileAt, type Layout } from './arena';
+import { BALL, KIND_RADIUS, layoutOf, onFloor, strikeSpeed, tileAt, type Layout } from './arena';
 import { clubById, paid } from './clubs';
 import { COURSE, CUP, type HoleDef } from './course';
 import { Obstacles } from './obstacles';
-import { PHYSICS, makeWorld, type World } from './physics';
+import { THE_CUP, makeWorld, PHYSICS, type World } from './physics';
 import { Progress } from './progress';
 import type { Random } from './random';
 
@@ -61,17 +61,18 @@ export const LIMIT_OVER_PAR = 5;
 export const BETWEEN_HOLES = 2;
 /**
  * How long a ball may be kept moving by the course before it may be struck
- * where it lies, in seconds: a ball held against a sliding barrier's face is
- * carried to and fro with it and never comes to rest, and a round must get
- * on. The physics' boxes of 0.4.0 bounce a ball off rather than carry it.
+ * where it lies, in seconds: a belt carries a ball for as long as it lies on
+ * it, and a round must get on. The barriers and the windmill's blades bounce
+ * a ball off them and carry it no longer, but a belt still does.
  */
 export const KEPT_MOVING = 10;
 /**
- * How far from the cup's middle a ball may be put down: clear of the pull the
- * physics has toward a hole, which reaches this far past its rim, so a ball
- * put down is never drawn into the cup before it is played.
+ * How far from the cup's middle a ball may be put down: a ball's width and a
+ * little clear of its edge, off the gold rim drawn round it, so a ball put
+ * down is never over the hole before it is played. The cup has no pull, so
+ * nothing draws a ball in from further off.
  */
-export const CLEAR_OF_CUP = CUP.radius + 2.6;
+export const CLEAR_OF_CUP = CUP.radius + KIND_RADIUS[BALL] + 0.5;
 /** The most a ball is left to settle before it is played, in physics frames: far more than it takes. */
 const SETTLE_FRAMES = 600;
 
@@ -96,6 +97,8 @@ export class Game {
   t = 0;
   /** Where chance comes from: replaced by the test API's `seed`. */
   random: Random;
+  /** The hardest the club that struck the ball last strikes: another put in hand while it rolls does not slow it. */
+  struckWith = 0;
   /** Whether the ball was moving at the end of the last step: its coming to rest is told once, when it does. */
   private moving = false;
   /** When the ball was last struck, in game time: a ball kept moving long enough after it may be struck again. */
@@ -148,8 +151,8 @@ export class Game {
   begin(index: number) {
     this.hole = index;
     this.layout = layoutOf(this.def.map);
-    this.world = makeWorld(this.layout, CUP, () => this.random());
     this.obstacles = new Obstacles(this.def.obstacles ?? [], this.layout);
+    this.world = makeWorld(this.layout, CUP, () => this.random(), this.obstacles.belted);
     this.world.pushers = this.obstacles.pushers;
     this.world.belts = this.obstacles.belts;
     this.obstacles.update(this.t, 0);
@@ -182,7 +185,8 @@ export class Game {
 
   /**
    * The ball struck along the ground toward `angle`, at `power` of the
-   * hardest shot, held to between none and all of it. Refused, and not
+   * hardest shot, held to between none and all of it: the power is how far
+   * it rolls, a half power half as far as the hardest. Refused, and not
    * counted, while the ball is moving, between holes, or for a shot of no
    * power at all.
    */
@@ -190,13 +194,13 @@ export class Game {
     if (!this.ready || !(power > 0)) return false;
     const p = Math.min(1, power);
     const { world, ball } = this;
-    const speed = p * this.hardest;
+    const speed = strikeSpeed(p, this.hardest);
+    this.struckWith = this.hardest;
     this.lie.x = world.x[ball];
     this.lie.y = world.y[ball];
-    world.wake(ball);
-    world.vx[ball] = Math.cos(angle) * speed;
-    world.vy[ball] = Math.sin(angle) * speed;
-    world.vz[ball] = 0;
+    // a ball ready is at rest, and asleep or held by a belt: what it has of the belt's speed is not the shot's
+    world.vx[ball] = world.vy[ball] = world.vz[ball] = 0;
+    world.hit(ball, Math.cos(angle) * speed, Math.sin(angle) * speed, 0);
     this.strokes++;
     this.moving = true;
     this.struckAt = this.t;
@@ -214,12 +218,12 @@ export class Game {
         this.events.finished?.(this.total, this.coursePar);
       }
     }
-    // the physics a step at a time, what moves put where it is before each, so the cup can be watched between them
+    // the physics a step at a time, what moves put where it is before each: a box must move less in a step than its
+    // half thickness and the ball's radius, or the ball could be passed by it
     const fell = { holed: false, wet: false, x: 0, y: 0 };
-    const { cup } = this.layout;
-    const collect = (_kind: number, x: number, y: number) => {
-      // the only body is the ball, so whatever leaves the world is the ball: down the cup, or into water
-      if (Math.hypot(x - cup.x, y - cup.y) <= CUP.radius + KIND_RADIUS[BALL]) fell.holed = true;
+    const collect = (_kind: number, x: number, y: number, _slot: number, hole: number) => {
+      // the only body is the ball, so whatever leaves the world is the ball: down the cup, or out of the bottom into water
+      if (hole === THE_CUP) fell.holed = true;
       else Object.assign(fell, { wet: true, x, y });
     };
     this.owed += dt;
@@ -227,10 +231,6 @@ export class Game {
       this.owed -= PHYSICS.step;
       this.stepped += PHYSICS.step;
       this.obstacles.update(this.stepped, PHYSICS.step);
-      if (this.phase === 'play' && this.dropping()) {
-        fell.holed = true;
-        break;
-      }
       this.world.step(PHYSICS.step, collect);
       if (fell.holed || fell.wet) break;
     }
@@ -247,39 +247,16 @@ export class Game {
   /**
    * The ball lost in water: a stroke more, told of, and a new ball put down
    * where the last was struck from; or picked up, if that takes it to the
-   * limit.
+   * limit. The last stroke allowed into the water is picked up at the limit,
+   * and the water costs nothing past it.
    */
   private splashed(x: number, y: number) {
-    this.strokes++;
+    this.strokes = Math.min(this.limit, this.strokes + 1);
     this.moving = false;
     this.events.splash?.(x, y);
     this.ball = this.world.spawn(BALL, this.lie.x, this.lie.y, this.restingZ(this.lie.x, this.lie.y));
     this.settle();
     if (this.strokes >= this.limit) this.done('pickedUp');
-  }
-
-  /**
-   * Whether the ball will be in the cup after the physics' next step, with
-   * its middle below the grass inside the cup's radius; if so it is taken
-   * out of the world, holed. That is where the physics traps a ball in a
-   * cup, to collect it further down; but artshape-physics 0.3.0, given the
-   * floor's heights, takes a ball below the floor of its own tile to be in
-   * rock, and puts it out on the nearest tile lower down, which is water if
-   * there is some near. So the game takes the ball the step before the
-   * physics would trap it, and before it can be thrown. 0.4.0 fixes the
-   * physics, and this goes.
-   */
-  private dropping(): boolean {
-    const { world, ball, layout } = this;
-    if (!world.alive[ball]) return false;
-    const h = PHYSICS.step;
-    const z = world.z[ball] + world.vz[ball] * h - (PHYSICS.gravity * h * h) / 2;
-    if (z >= 0) return false;
-    const x = world.x[ball] + world.vx[ball] * h,
-      y = world.y[ball] + world.vy[ball] * h;
-    if (Math.hypot(x - layout.cup.x, y - layout.cup.y) >= CUP.radius) return false;
-    world.remove(ball);
-    return true;
   }
 
   /** How high a ball's middle is, resting on the floor at (x, y). */

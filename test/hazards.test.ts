@@ -62,6 +62,26 @@ describe('water', () => {
     expect(game.card).toEqual([limit]);
   });
 
+  it('picks the ball up at the limit, never over it, when the last stroke allowed goes into it', () => {
+    const { game, told } = newGame(1, null, [POND]);
+    const limit = POND.par + LIMIT_OVER_PAR;
+    // one short of the limit, and then the last stroke into the water
+    game.strokes = limit - 1;
+    expect(game.shoot(Math.PI / 2, 0.4)).toBe(true);
+    expect(game.strokes).toBe(limit);
+    for (let f = 0; f < 3 * 60 && game.phase === 'play'; f++) {
+      game.step(DT);
+      expect(checkInvariants(game), `frame ${f}`).toEqual([]);
+    }
+    expect(
+      told.some((t) => t.startsWith('splash')),
+      'into the water',
+    ).toBe(true);
+    expect(game.strokes, 'the water costs no stroke past the limit').toBe(limit);
+    expect(told).toContain(`pickedUp ${limit} ${POND.par}`);
+    expect(game.card).toEqual([limit]);
+  });
+
   it('is not grass to put a ball down on', () => {
     const { game } = newGame(1, null, [POND]);
     const l = game.layout;
@@ -185,6 +205,11 @@ describe('a conveyor', () => {
     expect(ball(game).y, 'put down where it was put, not carried off while it settled').toBeCloseTo(start.y, 1);
     play(game, 1);
     expect(ball(game).y - start.y).toBeGreaterThan(3);
+    // at the belt's own speed, once it has it: a belt is not the green, and does not slow what it carries
+    const y = ball(game).y;
+    play(game, 0.5);
+    expect((ball(game).y - y) / 0.5, 'at about the belt speed of 6').toBeGreaterThan(5);
+    expect(game.world.asleep[game.ball], 'and never asleep while it is carried').toBe(0);
   });
 });
 
@@ -207,7 +232,10 @@ describe('a ball the course keeps moving', () => {
     play(game, 1);
     expect(game.ready).toBe(true);
     expect(told.filter((t) => t.startsWith('stopped')).length, 'told as come to rest').toBe(1);
-    expect(game.shoot(0, 0.3)).toBe(true);
+    // struck the hardest it can be the way the belt runs: at the shot's speed, not the shot's and the belt's
+    expect(game.shoot(Math.PI / 2, 1)).toBe(true);
+    expect(Math.hypot(game.world.vx[game.ball], game.world.vy[game.ball])).toBeCloseTo(game.hardest, 3);
+    expect(checkInvariants(game)).toEqual([]);
   });
 });
 

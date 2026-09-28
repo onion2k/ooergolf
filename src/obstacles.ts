@@ -16,7 +16,7 @@
  * the slice of whichever blade is down through the door, at the height of the
  * ball, and nothing when none is.
  */
-import { BALL, KIND_RADIUS, TILE, type Layout } from './arena';
+import { BALL, BOUNCE, KIND_RADIUS, TILE, tileAt, type Layout } from './arena';
 import type { Pusher, Belt } from './physics';
 
 /** A tile of a hole's map, as the map is drawn: its column, and its row from the top. */
@@ -125,6 +125,8 @@ export class Obstacles {
   readonly windmills: { x: number; y: number; turn: number; def: Extract<ObstacleDef, { kind: 'windmill' }> }[] = [];
   /** Where each conveyor lies, which way it carries, how long it is, and how far it has carried, for drawing. */
   readonly conveyors: { x: number; y: number; angle: number; length: number; travel: number; speed: number }[] = [];
+  /** The tiles a belt lies on: not grass, so nothing grows there, and nothing slows a ball the belt carries. */
+  readonly belted = new Set<number>();
 
   constructor(defs: readonly ObstacleDef[], layout: Layout) {
     const tileX = (col: number) => layout.originX + (col + 0.5) * TILE;
@@ -143,6 +145,8 @@ export class Obstacles {
       px: 0,
       py: 0,
       owner: 0,
+      // plastic: a ball bounces off a barrier or a blade, and is not carried along its face
+      restitution: BOUNCE.box,
     });
     for (const def of defs) {
       if (def.kind === 'barrier') {
@@ -181,6 +185,8 @@ export class Obstacles {
           travel: 0,
           speed: def.speed,
         });
+        for (let k = 0; k * TILE < length; k++)
+          this.belted.add(tileAt(layout, x0 + ((x1 - x0) / d) * k * TILE, y0 + ((y1 - y0) / d) * k * TILE));
       }
     }
   }

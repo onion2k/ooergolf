@@ -15,20 +15,49 @@ export const BALL = 0;
 export const KINDS = KIND_RADIUS.length;
 
 /**
- * The hardest the starting club strikes, in units a second along the ground.
- * At the roll below it carries about 48 units, measured before it was
- * chosen; the upgrades take it to about 60.
+ * The hardest the starting club strikes, in units a second along the ground:
+ * on the green it rolls about fifty units, three quarters of the longest
+ * hole, as it did under the drag it was first chosen with.
  */
 export const HARDEST_SHOT = 40;
 
 /**
- * How the course holds back a rolling ball: the physics' drag on anything
- * touching the floor, as a rate a second. The package's own 5.5 stops a putt
- * in under a second; at 0.8 a putt of 20 a second rolls 24 units over about
- * four. It is a world-wide figure until the physics has rolling resistance by
- * surface, and then it goes.
+ * How the green holds back a rolling ball: a steady slowing, in units a
+ * second a second, as a putt dies on a green, so how far a ball rolls goes
+ * as the square of its speed. At 16 the hardest shot rolls fifty units and
+ * stops in under three seconds; the drag it replaced rolled it as far over
+ * nearly five, with a long slow tail a player waited out.
  */
-export const ROLL = { floorDrag: 0.8 };
+export const ROLL = { roll: 16 };
+
+/**
+ * How much of its speed into a thing a ball keeps coming back off it: the
+ * rail, timber, sends a ball at thirty degrees away at about twenty, keeping
+ * nine tenths of its speed; and what is on the course, plastic, a little
+ * less lively. At the physics' own figure of a tenth, a ball met the rail
+ * and ran along it.
+ */
+export const BOUNCE = { rail: 0.65, box: 0.5 };
+
+/** How far a ball struck at `speed` rolls on the green before it stops. */
+export function rollsFor(speed: number): number {
+  return (speed * speed) / (2 * ROLL.roll);
+}
+
+/**
+ * The speed a shot of `power` strikes at, with a club whose hardest is
+ * `hardest`. The drag's length is how far the ball rolls, a half drag half as
+ * far, so the aim line tells the truth; and since the distance goes as the
+ * square of the speed, the speed goes as the root of the power.
+ */
+export function strikeSpeed(power: number, hardest: number): number {
+  return hardest * Math.sqrt(power);
+}
+
+/** The power that strikes at `speed`, with a club whose hardest is `hardest`: `strikeSpeed` undone. */
+export function powerFor(speed: number, hardest: number): number {
+  return (speed / hardest) ** 2;
+}
 
 /**
  * How high a step of raised grass is, a digit in a map a step: less than

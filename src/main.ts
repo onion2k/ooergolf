@@ -8,7 +8,7 @@
 import { createContext } from 'artshape-render/gpu/context';
 import { LightPool } from 'artshape-render/game/lights';
 import { GameRenderer } from 'artshape-render/game/renderer';
-import { BALL, HARDEST_SHOT, KIND_RADIUS } from './arena';
+import { BALL, HARDEST_SHOT, KIND_RADIUS, rollsFor } from './arena';
 import { CameraRig } from './camera';
 import { CLUBS } from './clubs';
 import { createApi } from './debug';
@@ -224,8 +224,8 @@ async function main() {
     // a ball gone into the cup is not drawn
     renderer.move(0, scene.ball, world.alive[ball] ? 1 : 0);
     // the aim shows only while a shot can be taken
-    // a finer club's aim reaches further, as it strikes harder
-    const reach = played.hardest / HARDEST_SHOT;
+    // a finer club's aim reaches further, as far again as its hardest shot rolls
+    const reach = rollsFor(played.hardest) / rollsFor(HARDEST_SHOT);
     const dots = played.ready ? scene.writeAim(world.x[ball], world.y[ball], gesture.aim, reach) : 0;
     renderer.move(1, scene.aim, dots);
     if (dots) renderer.tint(1, scene.aimLooks);

@@ -18,16 +18,14 @@
  *
  * It is handed the game, and knows nothing of the page.
  */
-import { BALL, KIND_RADIUS, ROLL, TILE, onFloor, tileAt, type Layout } from './arena';
+import { BALL, KIND_RADIUS, ROLL, TILE, onFloor, powerFor, rollsFor, strikeSpeed, tileAt, type Layout } from './arena';
 import type { Game } from './game';
 import { Obstacles } from './obstacles';
 import type { Random } from './random';
 import type { Shot } from './shot';
 
-/** How fast a ball it means for the cup is going when it gets there: well inside what the cup catches. */
+/** How fast a ball it means for the cup is going when it gets there: inside what the cup catches off its middle, 7. */
 const ARRIVE = 4;
-/** What a ball loses on top of the drag before it stops: the physics' slow-speed damping, measured. */
-const STOP = 1;
 /** How far either side of its line the ball must have grass, beyond its own radius. */
 const CLEAR = 0.3;
 /**
@@ -44,13 +42,18 @@ const MISS = 0.6,
 
 /**
  * The speed to strike a ball so it arrives `distance` away still going at
- * `arrive`. Under the physics' drag a rolling ball loses the same speed for
- * every unit it travels, `floorDrag` of it, so the sum is a straight line;
- * measured, and held by a test, since the rolling resistance to come will
- * change it.
+ * `arrive`. The green slows a rolling ball steadily, `roll` a second, so it
+ * loses the square of its speed at the same rate over every unit it goes;
+ * held by a test against what the physics does.
  */
 export function speedFor(distance: number, arrive: number): number {
-  return ROLL.floorDrag * distance + arrive + STOP;
+  return Math.sqrt(arrive * arrive + 2 * ROLL.roll * distance);
+}
+
+/** How long a ball struck at `speed` takes to roll `distance`, or Infinity if it stops short of it. */
+export function timeTo(distance: number, speed: number): number {
+  const left = speed * speed - 2 * ROLL.roll * distance;
+  return left < 0 ? Infinity : (speed - Math.sqrt(left)) / ROLL.roll;
 }
 
 export interface Skill {
@@ -132,7 +135,7 @@ export class Autopilot {
     }
     const d = Math.hypot(tx - x, ty - y);
     const speed = speedFor(d, toCup ? ARRIVE : 0);
-    return { angle: Math.atan2(ty - y, tx - x), power: Math.min(1, speed / game.hardest) };
+    return { angle: Math.atan2(ty - y, tx - x), power: Math.min(1, powerFor(speed, game.hardest)) };
   }
 
   /**
@@ -149,16 +152,13 @@ export class Autopilot {
       this.foresight = { hole: game.hole, t: game.t, obstacles: new Obstacles(defs, game.layout) };
     const ahead = this.foresight.obstacles;
     const { world, ball } = game;
-    const k = ROLL.floorDrag;
-    const v0 = shot.power * game.hardest;
-    const reach = v0 / k;
+    const v0 = strikeSpeed(shot.power, game.hardest);
+    const reach = rollsFor(v0);
     const c = Math.cos(shot.angle),
       s = Math.sin(shot.angle);
     const r = KIND_RADIUS[BALL] + MISS;
     for (let d = 1; d < reach * 0.98; d += 1) {
-      // under the drag a ball d along its line got there at this time: v0 / k (1 - e^(-k t)) = d
-      const when = -Math.log(1 - d / reach) / k;
-      ahead.update(game.t + when, 1 / 120);
+      ahead.update(game.t + timeTo(d, v0), 1 / 120);
       const x = world.x[ball] + c * d,
         y = world.y[ball] + s * d;
       for (const p of ahead.pushers)
