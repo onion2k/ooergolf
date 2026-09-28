@@ -130,6 +130,40 @@ function placeLeaning(
   out.set([cy, sy, -lx * scale, 0, -sy, cy, -ly * scale, 0, lx * scale, ly * scale, scale, 0, x, y, z, 1], o);
 }
 
+/**
+ * The tiles `of` marks on a hole, as rectangles: each the largest to be had
+ * from the first tile not yet in one, so a pond is one sheet with its
+ * shallows round its own edge and not a grid of puddles. Each is its middle
+ * and its size in world units, and the first tile it was grown from.
+ */
+function rectangles(layout: Layout, of: Uint8Array): { x: number; y: number; w: number; h: number; first: number }[] {
+  const { cols, rows, originX, originY } = layout;
+  const used = new Uint8Array(cols * rows);
+  const out: { x: number; y: number; w: number; h: number; first: number }[] = [];
+  for (let t = 0; t < cols * rows; t++) {
+    if (!of[t] || used[t]) continue;
+    const tx = t % cols,
+      ty = Math.floor(t / cols);
+    let w = 1;
+    while (tx + w < cols && of[t + w] && !used[t + w]) w++;
+    let h = 1;
+    for (; ty + h < rows; h++) {
+      let full = true;
+      for (let k = 0; k < w; k++) if (!of[t + h * cols + k] || used[t + h * cols + k]) full = false;
+      if (!full) break;
+    }
+    for (let j = 0; j < h; j++) for (let k = 0; k < w; k++) used[t + j * cols + k] = 1;
+    out.push({
+      x: originX + (tx + w / 2) * TILE,
+      y: originY + (ty + h / 2) * TILE,
+      w: w * TILE,
+      h: h * TILE,
+      first: t,
+    });
+  }
+  return out;
+}
+
 /** Every part of a model as a group, all placed by the same matrices. */
 function groups(model: Model, matrices: Float32Array): GameGroup[] {
   return model.parts.map((part) => group(part, matrices));
@@ -266,29 +300,11 @@ export class Scene {
 
   /** The ponds of a hole: each the largest rectangle of water tiles from the first not yet in one. */
   private eachPond(layout: Layout): { model: Model; at: Float32Array; x: number; y: number }[] {
-    const { cols, rows, originX, originY, water: isWater } = layout;
-    const used = new Uint8Array(cols * rows);
-    const out: { model: Model; at: Float32Array; x: number; y: number }[] = [];
-    for (let t = 0; t < cols * rows; t++) {
-      if (!isWater[t] || used[t]) continue;
-      const tx = t % cols,
-        ty = Math.floor(t / cols);
-      let w = 1;
-      while (tx + w < cols && isWater[t + w] && !used[t + w]) w++;
-      let h = 1;
-      for (; ty + h < rows; h++) {
-        let full = true;
-        for (let k = 0; k < w; k++) if (!isWater[t + h * cols + k] || used[t + h * cols + k]) full = false;
-        if (!full) break;
-      }
-      for (let j = 0; j < h; j++) for (let k = 0; k < w; k++) used[t + j * cols + k] = 1;
+    return rectangles(layout, layout.water).map(({ x, y, w, h, first }) => {
       const at = new Float32Array(16);
-      const x = originX + (tx + w / 2) * TILE,
-        y = originY + (ty + h / 2) * TILE;
       place(at, 0, x, y, 0);
-      out.push({ model: water(w * TILE, h * TILE, { seed: t + 1 }), at, x, y });
-    }
-    return out;
+      return { model: water(w, h, { seed: first + 1 }), at, x, y };
+    });
   }
 
   /** A hole's dressing: its bunting on its posts, the beds at the foot of its rail, and its rocks in clusters. */
