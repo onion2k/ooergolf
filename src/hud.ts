@@ -5,9 +5,20 @@
  * show and never reads the game, so it is only ever what the game's events
  * said, and what the player presses goes back through the handlers it is
  * given.
+ *
+ * How the words look, and how each panel springs in and out, is the page's
+ * stylesheet: this only says what is up, and what kind of word the callout
+ * over the course is and each score on the card, so the stylesheet can
+ * colour them. Showing or hiding a panel is its `hidden`, which the
+ * stylesheet turns into the motion, or into none for a player who has asked
+ * for less.
  */
 import type { Club } from './clubs';
-import { againstPar, scoreName } from './score';
+import { SCORE_KINDS, againstPar, scoreKind, scoreName } from './score';
+
+/** Each kind of word the callout over the course says, which the stylesheet colours: a score's kind, or the water. */
+export const CALLOUTS = [...SCORE_KINDS, 'splash'] as const;
+export type Callout = (typeof CALLOUTS)[number];
 
 export interface HudHandlers {
   again(): void;
@@ -36,7 +47,10 @@ export interface HoleInfo {
 export class Hud {
   private readonly panel = document.getElementById('strokes')!;
   private readonly strokes = this.panel.querySelector('b')!;
+  private readonly unit = this.panel.querySelector('.unit')!;
   private readonly hole = document.getElementById('holeName')!;
+  private readonly holeOf = this.hole.querySelector('.of')!;
+  private readonly holeTitle = this.hole.querySelector('.name')!;
   private readonly par = document.getElementById('holePar')!;
   private readonly toast = document.getElementById('toast')!;
   private readonly card = document.getElementById('card')!;
@@ -86,7 +100,11 @@ export class Hud {
         const name = document.createElement('b');
         name.textContent = c.name;
         const about = document.createElement('small');
-        about.textContent = `${c.holes} holes \u00b7 par ${c.par}`;
+        for (const text of [`${c.holes} holes`, `par ${c.par}`]) {
+          const pill = document.createElement('span');
+          pill.textContent = text;
+          about.append(pill);
+        }
         card.append(name, about);
         card.addEventListener('click', () => this.handlers.choose(c.name));
         return card;
@@ -118,16 +136,19 @@ export class Hud {
         const name = document.createElement('span');
         name.textContent = club.name;
         const detail = document.createElement('small');
-        detail.textContent = `power ${club.hardest}${club.coins ? ` \u00b7 ${club.coins} coins` : ''}${club.gems ? ` + ${club.gems} gem${club.gems > 1 ? 's' : ''}` : ''}`;
+        // each figure kept with its word, so a narrow shop breaks the line between them and never inside one
+        detail.textContent = `power\u00a0${club.hardest}${club.coins ? ` \u00b7 ${club.coins}\u00a0coins` : ''}${club.gems ? ` +\u00a0${club.gems}\u00a0gem${club.gems > 1 ? 's' : ''}` : ''}`;
         name.append(detail);
         const button = document.createElement('button');
-        button.className = 'small';
         const owned = p.owned.includes(club.id);
         if (p.club === club.id) {
+          // not a button to press but a badge, which the stylesheet draws as one
           button.textContent = 'In hand';
+          button.className = 'held';
           button.disabled = true;
         } else if (owned) {
           button.textContent = 'Use';
+          button.className = 'quiet';
           button.addEventListener('click', () => this.handlers.equip(club.id));
         } else {
           button.textContent = 'Buy';
@@ -142,44 +163,60 @@ export class Hud {
 
   /** A hole begun: its number and name, its par, no strokes, and nothing else over the course. */
   started(info: HoleInfo) {
-    this.hole.textContent = `Hole ${info.index + 1} of ${info.count} · ${info.name}`;
-    this.par.textContent = `\u00b7 par ${info.par}`;
+    this.holeOf.textContent = `Hole ${info.index + 1} of ${info.count}`;
+    this.holeTitle.textContent = info.name;
+    this.par.textContent = `par ${info.par}`;
     this.setStrokes(0);
     this.toast.hidden = true;
     this.card.hidden = true;
     this.shop.hidden = true;
   }
 
-  /** The strokes taken; a new stroke takes away any word left over the course by the last. */
+  /** The strokes taken; a new stroke takes away the water's word left over the course by the last. */
   setStrokes(n: number) {
-    if (this.strokes.textContent !== String(n) && this.toast.textContent === 'In the water! +1')
-      this.toast.hidden = true;
+    if (this.strokes.textContent !== String(n) && this.toast.dataset.kind === 'splash') this.toast.hidden = true;
     this.strokes.textContent = String(n);
+    this.unit.textContent = n === 1 ? 'stroke' : 'strokes';
+  }
+
+  /** The word over the course, of its kind, which the stylesheet colours and pops in. */
+  private callout(text: string, kind: Callout) {
+    this.toast.textContent = text;
+    this.toast.dataset.kind = kind;
+    this.toast.hidden = false;
   }
 
   /** The ball into the water: a word for it, until the next stroke. */
   splash() {
-    this.toast.textContent = 'In the water! +1';
-    this.toast.hidden = false;
+    this.callout('In the water! +1', 'splash');
   }
 
-  /** A hole done: what the score is called, until the next begins. */
+  /** A hole done: what the score is called, large, until the next begins. */
   done(strokes: number, par: number, pickedUp: boolean) {
-    this.toast.textContent = scoreName(strokes, par, pickedUp);
-    this.toast.hidden = false;
+    this.callout(scoreName(strokes, par, pickedUp), scoreKind(strokes, par, pickedUp));
   }
 
-  /** The round over: every hole's par and score, and the total against par. */
+  /** The round over: every hole's par and score, each score marked by its kind, and the total against par. */
   finished(holes: readonly { name: string; par: number }[], card: readonly number[]) {
     this.toast.hidden = true;
     this.rows.replaceChildren(
       ...holes.map((h, i) => {
         const tr = document.createElement('tr');
-        for (const text of [String(i + 1), h.name, String(h.par), String(card[i] ?? '')]) {
+        for (const text of [String(i + 1), h.name, String(h.par)]) {
           const td = document.createElement('td');
           td.textContent = text;
           tr.append(td);
         }
+        const score = document.createElement('td');
+        const strokes = card.at(i);
+        if (strokes !== undefined) {
+          const mark = document.createElement('span');
+          mark.className = 'mark';
+          mark.dataset.kind = scoreKind(strokes, h.par);
+          mark.textContent = String(strokes);
+          score.append(mark);
+        }
+        tr.append(score);
         return tr;
       }),
     );

@@ -232,6 +232,11 @@ of each close, in the showcase and on the course.
 
 ### 5. The words: HUD, screens and buttons
 
+**Built,** in the system's rounded face as decided, and with no picture of
+a hole on the course cards, which are striped in each course's colour. The
+motion is CSS's alone, so a browser without its newest springs shows and
+hides the panels without them.
+
 **What:** the HUD, the card, the shop and the start screen remade.
 
 - **Type:** a rounded, bold, open-licensed web font, subset to what the

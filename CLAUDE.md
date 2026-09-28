@@ -253,8 +253,13 @@ change meant to move it, and the commit says why. Look at every picture.
   score's name when a hole is done, the card, the coins and gems, the
   shop, and the start screen, a card for each course with its holes and
   par, shown at boot and from the card's Courses button. The page plays no
-  shot while it is up. `src/score.ts` names a
-  score. Both are given what to show and never read the game.
+  shot while it is up. `src/score.ts` names a score and says what kind it
+  is, which colours its callout. Both are given what to show and never read
+  the game. How the words look and move is `index.html`'s stylesheet, in the
+  clean toy of `LOOK.md`: bright panels with a thick coloured edge, chunky
+  pill buttons that sink when pressed, the score popped in as a tilted
+  sticker, and every panel arriving with a short spring, none under reduced
+  motion; in the system's rounded face, as decided.
 - The courses are content in `course.ts`, `COURSES`, each a name and its
   holes: The Meadow (`COURSE`) and The Hills (`HILLS`). A hole is a map drawn
   as seen from the tee (`#` rail, `.` grass, `T` tee, `C` cup, `~` water,
@@ -319,7 +324,10 @@ What to copy the shape of, when building something new:
   that it finishes every hole.
 - **Test helpers:** `newGame(seed)` in `test/helpers.ts`, `onGreen()` for a
   practice green whose cup is out of the way of tests of the ball, and
-  `memoryStore` in `src/progress.ts` for a save that is not the player's.
+  `memoryStore` in `src/progress.ts` for a save that is not the player's;
+  and in `smoke/panels.ts`, `read(page)` for every text's contrast against
+  its panel, what reaches past the screen's edges and each button's height,
+  with `holeOut` and `toCard` to get there.
 
 ## The test API
 

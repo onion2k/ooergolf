@@ -13,6 +13,7 @@
  * stage the game's invariants are checked.
  */
 import { expect, test, type Page } from '@playwright/test';
+import { scoreName } from '../src/score';
 import { drag, start, watch } from './game';
 
 /** Play `frames` frames, and check nothing that must hold has broken. */
@@ -119,6 +120,7 @@ test('a hole played out to the cup by drags, its score shown, and the next hole 
   expect(done.coins, 'the hole paid').toBeGreaterThan(0);
   await expect(page.locator('#coins')).toHaveText(String(done.coins));
   await expect(page.locator('#toast')).toBeVisible();
+  await expect(page.locator('#toast'), "the score's name").toHaveText(scoreName(done.card[0], done.par));
   await info.attach('holed', { body: await page.screenshot(), contentType: 'image/png' });
   // the cup answers the ball dropping: its gold flashing, and its flag waggling, a frame at a time
   const cup = await page.evaluate(() => {
@@ -346,5 +348,16 @@ test('a ball putted into the water costs a stroke, is splashed, and comes back t
   expect(back.x).toBeCloseTo(tee.x, 0);
   expect(back.y).toBeCloseTo(tee.y, 0);
   await expect(page.locator('#strokes b')).toHaveText('2');
+  // the water's word stays until the next stroke, and goes with it
+  await untilReady(page, 'back where it was struck from');
+  await expect(page.locator('#toast')).toBeVisible();
+  expect(
+    await page.evaluate(() => {
+      const s = window.game!.suggest()!;
+      return window.game!.shoot(s.angle, s.power);
+    }),
+    'the next stroke taken',
+  ).toBe(true);
+  await expect(page.locator('#toast'), "the water's word gone with it").toBeHidden();
   expect(problems).toEqual([]);
 });

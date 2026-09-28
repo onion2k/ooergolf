@@ -9,6 +9,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { PNG } from 'pngjs';
 import { ROLL, powerFor } from '../src/arena';
 import { drag, start, touches, watch } from './game';
+import { holeOut, read, toCard } from './panels';
 
 /** How many frames the page draws in a second. */
 function framesInASecond(page: Page) {
@@ -457,13 +458,44 @@ test.describe('on a phone', () => {
     expect(problems).toEqual([]);
   });
 
-  test('boots, and nothing is wider than the screen', async ({ page }, info) => {
+  test('boots, and nothing is wider than the screen: the start screen, the course, the shop, a score and the card', async ({
+    page,
+  }, info) => {
     const problems = watch(page);
-    await start(page);
+    // a purse fuller than any yet, for the longest numbers it shows
+    await start(page, { seed: 11, paused: true, screen: true, save: { coins: 12345, gems: 99 } });
+    const beyond: string[] = [];
+    /** Whatever on this screen reaches past a side of the phone, or makes the page scroll sideways. */
+    const check = async (screen: string) => {
+      const r = await read(page);
+      expect(r.panels.length, `${screen}: something up`).toBeGreaterThan(0);
+      beyond.push(...r.outside.map((o) => `${screen}: ${o}`));
+      if (r.scrollWidth > 400) beyond.push(`${screen}: the page scrolls ${r.scrollWidth} wide`);
+    };
+    await check('the start screen');
+    // the hole with the longest name, where the hole's words and the purse come nearest each other at the top
+    await page.evaluate(() => {
+      const g = window.game!;
+      g.chooseCourse('The Meadow');
+      const { holes } = g.content();
+      g.startHole(holes.reduce((a, h, i) => (h.name.length > holes[a].name.length ? i : a), 0));
+      g.step(1);
+    });
     await expect(page.locator('#strokes')).toBeVisible();
     await expect(page.locator('#help')).toBeVisible();
+    await check('the course');
+    const hole = (await page.locator('#strokes').boundingBox())!,
+      purse = (await page.locator('#purse').boundingBox())!;
+    expect(hole.x + hole.width, "the hole's words clear of the purse").toBeLessThanOrEqual(purse.x);
     await info.attach('phone', { body: await page.screenshot(), contentType: 'image/png' });
-    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(400);
+    await page.locator('#shopOpen').click();
+    await check('the shop');
+    await page.locator('#shopClose').click();
+    expect((await holeOut(page)).phase, 'the hole done').toBe('done');
+    await check('a hole done');
+    expect((await toCard(page)).phase, 'the round over').toBe('over');
+    await check('the card');
+    expect(beyond).toEqual([]);
     expect(problems).toEqual([]);
   });
 });

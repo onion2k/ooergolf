@@ -11,11 +11,99 @@
   href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%23e8863a'/%3E%3C/svg%3E"
 />
 <style>
+  /*
+   * The words over the course, as a toy's: bright solid panels with a thick
+   * coloured edge standing on a lip of a deeper shade, chunky round-ended
+   * buttons that sink when pressed, and every panel springing in and
+   * shrinking away. The panels are solid so a word reads the same over any
+   * part of the course; the smoke tests hold every text to 4.5:1 against its
+   * panel, which a see-through panel could never promise. Every colour is
+   * one of the palette here.
+   */
   :root {
-    color-scheme: dark;
-    --ink: #f1eee6;
-    --dim: #a39f94;
-    --gold: #f2c14e;
+    color-scheme: light;
+    --ink: #1c2340;
+    --ink-soft: #4d5578;
+    --paper: #ffffff;
+    --mist: #e9edf6;
+    --mist-deep: #c3cbe0;
+    --sky: #3d9bff;
+    --sky-deep: #1a67d6;
+    --sky-ink: #0f4fa8;
+    --sky-tint: #e3f0ff;
+    --sky-face: #57b4ff;
+    --title: #1b4fd8;
+    --sun: #ffcf33;
+    --sun-hover: #ffda5c;
+    --sun-deep: #d99a00;
+    --sun-ink: #5a3b00;
+    --leaf: #4cd070;
+    --leaf-deep: #229a48;
+    --leaf-ink: #146b34;
+    --leaf-tint: #d9f6e2;
+    --orange: #ffa53d;
+    --orange-deep: #e07a0b;
+    --grape: #b58cff;
+    --grape-deep: #7a52e6;
+    --grape-ink: #4a2da6;
+    --water: #2bb8ea;
+    --water-deep: #1487b8;
+    --water-ink: #0a5a86;
+    --stone: #9aa3bd;
+    --boot: #bfe3ff;
+    --shade: rgba(20, 32, 72, 0.3);
+    /* a damped spring, a fifth past its mark and back, for a panel arriving */
+    --spring: linear(
+      0,
+      0.14 4.2%,
+      0.444 8.3%,
+      0.767 12.5%,
+      1.018 16.7%,
+      1.162 20.8%,
+      1.205 25%,
+      1.178 29.2%,
+      1.116 33.3%,
+      1.05 37.5%,
+      0.998 41.7%,
+      0.967 45.8%,
+      0.958 50%,
+      0.963 54.2%,
+      0.976 58.3%,
+      0.989 62.5%,
+      1 66.7%,
+      1.007 70.8%,
+      1.009 75%,
+      1.005 83.3%,
+      1
+    );
+    /* a looser one, a quarter past, for the score popping in */
+    --pop: linear(
+      0,
+      0.137 3.6%,
+      0.444 7.1%,
+      0.78 10.7%,
+      1.049 14.3%,
+      1.207 17.9%,
+      1.254 21.4%,
+      1.219 25%,
+      1.141 28.6%,
+      1.056 32.1%,
+      0.987 35.7%,
+      0.947 39.3%,
+      0.936 42.9%,
+      0.944 46.4%,
+      0.964 50%,
+      0.986 53.6%,
+      1.003 57.1%,
+      1.013 60.7%,
+      1.016 64.3%,
+      1.009 71.4%,
+      0.999 78.6%,
+      0.996 85.7%,
+      1
+    );
+    /* a panel leaving draws back a little before it goes, a short spring the other way */
+    --leave: cubic-bezier(0.36, 0, 0.66, -0.56);
   }
   * {
     box-sizing: border-box;
@@ -24,12 +112,12 @@
   body {
     margin: 0;
     height: 100%;
-    background: #0b0a10;
+    background: var(--boot);
     overflow: hidden;
   }
   body {
     font:
-      14px/1.5 ui-rounded,
+      15px/1.4 ui-rounded,
       'SF Pro Rounded',
       system-ui,
       sans-serif;
@@ -46,239 +134,623 @@
     /* a drag on the course is a shot, never a scroll or a zoom of the page */
     touch-action: none;
   }
+
+  /* ---- a panel, and how it comes and goes ---- */
+
   .panel {
-    position: fixed;
+    --edge: var(--sky);
+    --lip: var(--sky-deep);
     padding: 10px 14px;
-    background: rgba(14, 12, 20, 0.62);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 12px;
-    backdrop-filter: blur(8px);
+    color: var(--ink);
+    background: var(--paper);
+    border: 4px solid var(--edge);
+    border-radius: 18px;
+    box-shadow:
+      0 5px 0 var(--lip),
+      0 12px 24px var(--shade);
+    /* the course is struck through the words over it; only the panels with buttons take a pointer */
     pointer-events: none;
+    transition:
+      scale 460ms var(--spring),
+      opacity 120ms linear,
+      display 460ms allow-discrete;
   }
-  #strokes {
-    top: 16px;
-    left: 16px;
-    font-size: 15px;
+  /* hidden, a panel stays drawn while it shrinks away, and takes no pointer as it goes */
+  .panel[hidden] {
+    scale: 0.8;
+    opacity: 0;
+    transition:
+      scale 180ms var(--leave),
+      opacity 180ms ease-in,
+      display 180ms allow-discrete;
   }
-  #strokes b {
-    display: block;
-    font-size: 30px;
-    font-weight: 700;
-    color: var(--gold);
-    font-variant-numeric: tabular-nums;
+  @starting-style {
+    .panel:not([hidden]) {
+      scale: 0.6;
+      opacity: 0;
+    }
   }
-  #strokes small {
-    display: block;
-    color: var(--dim);
-    font-size: 12px;
-  }
-  #toast {
-    top: 22%;
-    left: 50%;
-    transform: translateX(-50%);
-    font-size: 30px;
-    font-weight: 700;
-    padding: 12px 26px;
-    color: var(--gold);
-    white-space: nowrap;
-  }
-  #card {
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: min(360px, calc(100vw - 32px));
-    padding: 18px 20px;
+  #purse:not([hidden]),
+  #card:not([hidden]),
+  #shop:not([hidden]),
+  #start:not([hidden]) {
     pointer-events: auto;
   }
-  #card h2 {
-    margin: 0 0 10px;
-    font-size: 20px;
+
+  /* ---- buttons: chunky, round-ended, standing on a lip they sink onto when pressed ---- */
+
+  .panel button {
+    min-height: 44px;
+    padding: 0 20px;
+    font: inherit;
+    font-size: 16px;
+    font-weight: 800;
+    line-height: 1.1;
+    color: var(--ink);
+    background: var(--sun);
+    border: 0;
+    border-radius: 999px;
+    box-shadow: 0 4px 0 var(--sun-deep);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition:
+      translate 90ms ease-out,
+      box-shadow 90ms ease-out,
+      background-color 90ms linear;
+  }
+  @media (hover: hover) {
+    .panel button:hover {
+      background: var(--sun-hover);
+      translate: 0 -1px;
+      box-shadow: 0 5px 0 var(--sun-deep);
+    }
+    .panel button.quiet:hover {
+      background: var(--sky-tint);
+      box-shadow:
+        inset 0 0 0 3px var(--sky),
+        0 5px 0 var(--sky-deep);
+    }
+  }
+  .panel button:active {
+    translate: 0 4px;
+    box-shadow: 0 0 0 var(--sun-deep);
+  }
+  .panel button:focus-visible {
+    outline: 3px solid var(--title);
+    outline-offset: 3px;
+  }
+  .panel button.quiet {
+    background: var(--paper);
+    box-shadow:
+      inset 0 0 0 3px var(--sky),
+      0 4px 0 var(--sky-deep);
+  }
+  .panel button.quiet:active {
+    box-shadow:
+      inset 0 0 0 3px var(--sky),
+      0 0 0 var(--sky-deep);
+  }
+  .panel button:disabled {
+    color: var(--ink-soft);
+    background: var(--mist);
+    box-shadow: 0 4px 0 var(--mist-deep);
+    translate: none;
+    cursor: default;
+  }
+
+  /* ---- the hole and strokes, and the purse: across the top, never over each other ---- */
+
+  #top {
+    position: fixed;
+    top: calc(16px + env(safe-area-inset-top, 0px));
+    left: 16px;
+    right: 16px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    pointer-events: none;
+  }
+  /*
+   * which hole over its name, and the strokes under it beside the word and the par, a stack narrow enough for a
+   * phone beside the purse
+   */
+  #strokes {
+    grid-template-columns: auto 1fr;
+    column-gap: 8px;
+    min-width: 0;
+    padding: 8px 16px 10px;
+    transform-origin: top left;
+  }
+  #strokes:not([hidden]) {
+    display: grid;
+  }
+  #holeName,
+  #strokes .count {
+    display: contents;
+  }
+  #holeName .of {
+    grid-area: 1 / 1 / 2 / -1;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    color: var(--ink-soft);
+  }
+  #holeName .name {
+    grid-area: 2 / 1 / 3 / -1;
+    margin-bottom: 4px;
+    font-size: 17px;
+    font-weight: 800;
+    line-height: 1.2;
+  }
+  #strokes b {
+    grid-area: 3 / 1 / 5 / 2;
+    align-self: center;
+    font-size: 36px;
+    font-weight: 900;
+    line-height: 1;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+  }
+  #strokes .unit {
+    grid-area: 3 / 2;
+    align-self: end;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.15;
+    color: var(--ink-soft);
+  }
+  #holePar {
+    grid-area: 4 / 2;
+    justify-self: start;
+    align-self: start;
+    margin-top: 3px;
+    padding: 1px 8px;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    color: var(--sky-ink);
+    background: var(--sky-tint);
+    border-radius: 999px;
+  }
+  #purse {
+    flex: none;
+    margin-left: auto;
+    align-items: center;
+    gap: 14px;
+    padding: 6px 6px 6px 16px;
+    font-size: 17px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    border-radius: 999px;
+    transform-origin: top right;
+  }
+  #purse:not([hidden]) {
+    display: flex;
+  }
+  #purse .coin,
+  #purse .gem {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+  }
+  /* a coin and a gem drawn, not written, so they are pictures and not words */
+  #purse .coin::before {
+    content: '';
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--sun);
+    box-shadow:
+      inset 0 0 0 2.5px var(--sun-deep),
+      inset 0 -3px 0 1px rgba(90, 59, 0, 0.12);
+  }
+  #purse .gem::before {
+    content: '';
+    width: 14px;
+    height: 14px;
+    margin: 0 2px;
+    rotate: 45deg;
+    border-radius: 3px;
+    background: var(--water);
+    box-shadow: inset 0 0 0 2.5px var(--water-deep);
+  }
+  #purse b,
+  #purse i {
+    font-style: normal;
+    color: var(--ink);
+  }
+  #purse em {
+    font-style: normal;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--ink-soft);
+  }
+  #purse button {
+    padding: 0 18px;
+  }
+
+  /* ---- the word over the course when a hole is done, or the ball is in the water ---- */
+
+  #toast {
+    position: fixed;
+    top: 20%;
+    left: 50%;
+    width: max-content;
+    max-width: calc(100vw - 32px);
+    padding: 6px 30px 10px;
+    font-size: clamp(38px, 10vw, 64px);
+    font-weight: 900;
+    line-height: 1.1;
+    letter-spacing: -0.01em;
+    text-align: center;
+    text-wrap: balance;
+    color: var(--sky-ink);
+    border-width: 5px;
+    border-radius: 26px;
+    box-shadow:
+      0 7px 0 var(--lip),
+      0 16px 32px var(--shade);
+    translate: -50% 0;
+    rotate: -3deg;
+    transition:
+      scale 620ms var(--pop),
+      rotate 620ms var(--pop),
+      opacity 100ms linear,
+      display 620ms allow-discrete;
+  }
+  #toast[hidden] {
+    transition:
+      scale 180ms var(--leave),
+      opacity 180ms ease-in,
+      display 180ms allow-discrete;
+  }
+  @starting-style {
+    #toast:not([hidden]) {
+      scale: 0.3;
+      rotate: -14deg;
+      opacity: 0;
+    }
+  }
+  #toast[data-kind='ace'] {
+    --edge: var(--paper);
+    --lip: var(--sun-deep);
+    color: var(--sun-ink);
+    background: var(--sun);
+  }
+  #toast[data-kind='under'] {
+    --edge: var(--leaf);
+    --lip: var(--leaf-deep);
+    color: var(--leaf-ink);
+  }
+  #toast[data-kind='over'] {
+    --edge: var(--grape);
+    --lip: var(--grape-deep);
+    color: var(--grape-ink);
+  }
+  #toast[data-kind='picked'] {
+    --edge: var(--mist-deep);
+    --lip: var(--stone);
+    color: var(--ink-soft);
+  }
+  #toast[data-kind='splash'] {
+    --edge: var(--water);
+    --lip: var(--water-deep);
+    color: var(--water-ink);
+    font-size: clamp(28px, 7vw, 40px);
+  }
+
+  /* ---- the card, the shop and the start screen: in the middle, over everything ---- */
+
+  #card,
+  #shop,
+  #start {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    max-height: calc(100% - 32px);
+    overflow: auto;
+    padding: 18px 20px 22px;
+    border-width: 5px;
+    border-radius: 26px;
+    box-shadow:
+      0 7px 0 var(--lip),
+      0 18px 40px var(--shade);
+    translate: -50% -50%;
+  }
+  #card h2,
+  #shop h2 {
+    margin: 0 0 8px;
+    font-size: 24px;
+    font-weight: 900;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+  }
+  #card {
+    --edge: var(--leaf);
+    --lip: var(--leaf-deep);
+    width: min(380px, calc(100vw - 32px));
   }
   #card table {
     width: 100%;
     border-collapse: collapse;
+    font-weight: 700;
     font-variant-numeric: tabular-nums;
   }
-  #card th,
-  #card td {
-    text-align: left;
-    padding: 4px 6px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  }
   #card th {
-    color: var(--dim);
-    font-weight: 400;
+    padding: 0 6px 6px;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-align: left;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+  #card td {
+    padding: 3px 6px;
+    border-top: 2px solid var(--mist);
+  }
+  #card tbody td:first-child {
+    color: var(--ink-soft);
   }
   #card td:nth-child(n + 3),
   #card th:nth-child(n + 3) {
     text-align: right;
   }
-  #card tfoot td {
-    font-weight: 700;
-    color: var(--gold);
-    border: 0;
+  /* a golfer's card circles a score under par and boxes one over */
+  #card .mark {
+    display: inline-grid;
+    place-items: center;
+    min-width: 26px;
+    height: 26px;
+    padding: 0 4px;
+    border-radius: 999px;
   }
-  #cardCourses,
-  #cardShop {
-    margin-top: 8px;
-    width: 100%;
-    background: rgba(255, 255, 255, 0.12);
+  #card .mark[data-kind='ace'] {
+    background: var(--sun);
+    box-shadow: inset 0 0 0 2px var(--sun-deep);
+  }
+  #card .mark[data-kind='under'] {
+    color: var(--leaf-ink);
+    box-shadow: inset 0 0 0 2px var(--leaf-deep);
+  }
+  #card .mark[data-kind='over'] {
+    color: var(--grape-ink);
+    border-radius: 6px;
+    box-shadow: inset 0 0 0 2px var(--grape);
+  }
+  #card tfoot td {
+    padding-top: 10px;
+    font-size: 18px;
+    font-weight: 900;
     color: var(--ink);
+    border-top: 3px solid var(--ink);
+  }
+  #card #cardTotal {
+    text-align: right;
+    white-space: nowrap;
   }
   #again {
-    margin-top: 14px;
+    display: block;
     width: 100%;
-    padding: 10px;
-    font: inherit;
-    font-weight: 700;
-    color: #1a1420;
-    background: var(--gold);
-    border: 0;
-    border-radius: 8px;
-    cursor: pointer;
+    min-height: 52px;
+    margin-top: 16px;
+    font-size: 19px;
   }
-  #purse {
-    top: 16px;
-    right: 16px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    pointer-events: auto;
-    font-variant-numeric: tabular-nums;
+  .pair {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 14px;
   }
-  #purse b {
-    color: var(--gold);
+  .pair button {
+    padding: 0 10px;
   }
-  #purse i {
-    font-style: normal;
-    color: #7fd6ff;
-  }
-  #purse em {
-    font-style: normal;
-  }
-  #purse b::before {
-    content: '\25cf  ';
-  }
-  #purse i::before {
-    content: '\25c6  ';
-  }
-  button.small {
-    padding: 5px 12px;
-    font: inherit;
-    font-weight: 700;
-    color: #1a1420;
-    background: var(--gold);
-    border: 0;
-    border-radius: 7px;
-    cursor: pointer;
-  }
+
   #shop {
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: min(400px, calc(100vw - 32px));
-    padding: 18px 20px;
-    pointer-events: auto;
-  }
-  #shop h2 {
-    margin: 0 0 4px;
-    font-size: 20px;
+    --edge: var(--grape);
+    --lip: var(--grape-deep);
+    width: min(420px, calc(100vw - 32px));
   }
   #shop p {
-    margin: 0 0 12px;
-    color: var(--dim);
+    margin: 0 0 8px;
+    font-weight: 600;
+    color: var(--ink-soft);
   }
   .club {
     display: grid;
-    grid-template-columns: 26px 1fr auto;
+    grid-template-columns: 34px 1fr auto;
     align-items: center;
-    gap: 10px;
-    padding: 8px 0;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  }
-  .club .swatch {
-    width: 26px;
-    height: 26px;
-    border-radius: 50%;
-    box-shadow: inset -4px -5px 8px rgba(0, 0, 0, 0.35);
+    gap: 12px;
+    padding: 9px 0;
+    border-top: 2px solid var(--mist);
+    font-weight: 800;
   }
   .club small {
     display: block;
-    color: var(--dim);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink-soft);
   }
-  .club button:disabled {
-    background: rgba(255, 255, 255, 0.12);
-    color: var(--dim);
-    cursor: default;
+  /* each putter's head as a little toy ball of its colour */
+  .club .swatch {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    box-shadow:
+      inset -5px -6px 0 rgba(20, 32, 72, 0.18),
+      inset 4px 4px 0 rgba(255, 255, 255, 0.4),
+      0 0 0 2px rgba(20, 32, 72, 0.12);
+  }
+  .club button {
+    min-width: 88px;
+    padding: 0 16px;
+  }
+  /* the club in hand is not a button to press but a badge */
+  .panel .club button.held:disabled {
+    color: var(--leaf-ink);
+    background: var(--leaf-tint);
+    box-shadow: inset 0 0 0 2px var(--leaf);
   }
   #shopClose {
-    margin-top: 14px;
     width: 100%;
+    margin-top: 12px;
   }
+
   #start {
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: min(380px, calc(100vw - 32px));
-    padding: 22px 22px 18px;
+    --edge: var(--sky);
+    --lip: var(--sky-deep);
+    width: min(560px, calc(100vw - 32px));
+    padding: 22px 22px 26px;
     text-align: center;
-    pointer-events: auto;
   }
   #start h1 {
     margin: 0;
-    font-size: 34px;
-    color: var(--gold);
-    letter-spacing: 0.02em;
+    font-size: 54px;
+    font-weight: 900;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    color: var(--title);
+    text-shadow: 0 4px 0 var(--sun);
   }
   #start p {
-    margin: 2px 0 16px;
-    color: var(--dim);
+    margin: 10px 0 18px;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--ink-soft);
   }
   #courses {
     display: grid;
-    gap: 10px;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 18px 16px;
   }
-  .course {
-    display: block;
-    width: 100%;
-    padding: 12px 14px;
-    font: inherit;
+  /* a card for each course, a colour each, striped as a mown green is */
+  #courses .course {
+    --face: var(--leaf);
+    --deep: var(--leaf-deep);
+    position: relative;
+    display: grid;
+    align-content: start;
+    gap: 4px;
+    min-height: 128px;
+    padding: 16px 18px 18px;
     text-align: left;
     color: var(--ink);
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    border-radius: 10px;
-    cursor: pointer;
+    background: var(--face) repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.16) 0 16px, transparent 16px 32px);
+    border-radius: 22px;
+    box-shadow:
+      inset 0 0 0 3px rgba(255, 255, 255, 0.5),
+      0 6px 0 var(--deep),
+      0 12px 20px var(--shade);
   }
-  .course:hover {
-    border-color: var(--gold);
+  #courses .course:nth-child(4n + 2) {
+    --face: var(--orange);
+    --deep: var(--orange-deep);
+  }
+  #courses .course:nth-child(4n + 3) {
+    --face: var(--sky-face);
+    --deep: var(--sky-deep);
+  }
+  #courses .course:nth-child(4n + 4) {
+    --face: var(--grape);
+    --deep: var(--grape-deep);
+  }
+  @media (hover: hover) {
+    #courses .course:hover {
+      translate: 0 -2px;
+      box-shadow:
+        inset 0 0 0 3px rgba(255, 255, 255, 0.7),
+        0 8px 0 var(--deep),
+        0 14px 22px var(--shade);
+    }
+  }
+  #courses .course:active {
+    translate: 0 5px;
+    box-shadow:
+      inset 0 0 0 3px rgba(255, 255, 255, 0.5),
+      0 1px 0 var(--deep),
+      0 4px 8px var(--shade);
   }
   .course b {
-    display: block;
-    font-size: 18px;
+    font-size: 26px;
+    font-weight: 900;
+    line-height: 1.1;
   }
+  /* how many holes and the par, each on a white pill */
   .course small {
-    color: var(--dim);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 4px;
   }
+  .course small span {
+    padding: 3px 11px;
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--ink);
+    background: var(--paper);
+    border-radius: 999px;
+    box-shadow: 0 2px 0 var(--deep);
+  }
+  /* a round button to go, drawn: a white disc with a triangle on it */
+  .course::before {
+    content: '';
+    position: absolute;
+    right: 14px;
+    bottom: 14px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--paper);
+    box-shadow: 0 3px 0 var(--deep);
+  }
+  .course::after {
+    content: '';
+    position: absolute;
+    right: 28px;
+    bottom: 27px;
+    border-style: solid;
+    border-width: 9px 0 9px 15px;
+    border-color: transparent transparent transparent var(--deep);
+  }
+
+  /* ---- the corners at the bottom: how to putt, and the frame's cost ---- */
+
+  #help,
   #stats {
-    bottom: 16px;
-    right: 16px;
-    text-align: right;
-    color: var(--dim);
-    font-size: 12px;
+    position: fixed;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ink-soft);
+    border-width: 3px;
+    border-radius: 999px;
+    box-shadow:
+      0 3px 0 var(--lip),
+      0 8px 16px var(--shade);
   }
   #help {
-    bottom: 16px;
     left: 16px;
-    color: var(--dim);
-    font-size: 13px;
+    transform-origin: bottom left;
   }
+  #stats {
+    right: 16px;
+    font-variant-numeric: tabular-nums;
+    transform-origin: bottom right;
+  }
+
   #boot {
     position: fixed;
     inset: 0;
     display: grid;
     place-items: center;
-    background: #0b0a10;
+    background: var(--boot);
     transition: opacity 0.4s;
   }
   #boot.gone {
@@ -286,21 +758,45 @@
     pointer-events: none;
   }
   #boot p {
-    color: var(--dim);
+    font-weight: 700;
+    color: var(--ink);
   }
+
   @media (max-width: 600px) {
     #stats,
     #purse em {
       display: none;
     }
     #purse {
-      gap: 8px;
-      padding: 8px 10px;
+      gap: 9px;
+      padding-left: 12px;
+    }
+    #purse button {
+      padding: 0 14px;
+    }
+  }
+  /* a player who has asked for less motion gets none: every panel and button is there, or gone, at once */
+  @media (prefers-reduced-motion: reduce) {
+    .panel,
+    .panel * {
+      transition: none !important;
+      animation: none !important;
     }
   }
 </style>
 <div id="stage"><canvas id="view"></canvas></div>
-<div class="panel" id="strokes" hidden><small id="holeName"></small><b>0</b>strokes <span id="holePar"></span></div>
+<div id="top">
+  <div class="panel" id="strokes" hidden>
+    <small id="holeName"><span class="of"></span> <span class="name"></span></small>
+    <span id="holePar"></span>
+    <p class="count"><b>0</b> <span class="unit">strokes</span></p>
+  </div>
+  <div class="panel" id="purse" hidden>
+    <span class="coin"><b id="coins">0</b><em> coins</em></span
+    ><span class="gem"><i id="gems">0</i><em> gems</em></span
+    ><button id="shopOpen">Shop</button>
+  </div>
+</div>
 <div class="panel" id="toast" hidden></div>
 <div class="panel" id="card" hidden>
   <h2>The card</h2>
@@ -322,19 +818,16 @@
     </tfoot>
   </table>
   <button id="again">Play again</button>
-  <button id="cardCourses" class="small">Courses</button>
-  <button id="cardShop" class="small">Visit the shop</button>
-</div>
-<div class="panel" id="purse" hidden>
-  <span><b id="coins">0</b><em> coins</em></span
-  ><span><i id="gems">0</i><em> gems</em></span
-  ><button class="small" id="shopOpen">Shop</button>
+  <div class="pair">
+    <button id="cardCourses" class="quiet">Courses</button>
+    <button id="cardShop" class="quiet">Visit the shop</button>
+  </div>
 </div>
 <div class="panel" id="shop" hidden>
   <h2>The pro shop</h2>
   <p>A finer putter strikes harder, and its aim reaches further.</p>
   <div id="shopClubs"></div>
-  <button class="small" id="shopClose">Back to the course</button>
+  <button id="shopClose">Back to the course</button>
 </div>
 <div class="panel" id="start" hidden>
   <h1>ooergolf</h1>

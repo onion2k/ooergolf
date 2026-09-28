@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { againstPar, scoreName } from '../src/score';
+import { SCORE_KINDS, againstPar, scoreKind, scoreName } from '../src/score';
 
 describe('what a score is called', () => {
   it('names a score against par, a hole in one before anything', () => {
@@ -14,6 +14,27 @@ describe('what a score is called', () => {
     expect(scoreName(6, 3)).toBe('Triple bogey');
     expect(scoreName(7, 3)).toBe('4 over par');
     expect(scoreName(8, 3, true)).toBe('Picked up');
+  });
+
+  it('says what kind of score it is, as the page colours it: a hole in one before anything, and picked up before that', () => {
+    expect(scoreKind(1, 2)).toBe('ace');
+    expect(scoreKind(1, 1)).toBe('ace');
+    expect(scoreKind(2, 5)).toBe('under');
+    expect(scoreKind(2, 3)).toBe('under');
+    expect(scoreKind(3, 3)).toBe('par');
+    expect(scoreKind(4, 3)).toBe('over');
+    expect(scoreKind(9, 3)).toBe('over');
+    expect(scoreKind(8, 3, true)).toBe('picked');
+    // every kind is one the page has a colour for
+    for (const [s, p, up] of [
+      [1, 2, false],
+      [2, 3, false],
+      [3, 3, false],
+      [4, 3, false],
+      [8, 3, true],
+    ] as const)
+      expect(SCORE_KINDS).toContain(scoreKind(s, p, up));
+    expect(new Set(SCORE_KINDS).size, 'each kind once').toBe(SCORE_KINDS.length);
   });
 
   it('says a round against par as a card does', () => {
