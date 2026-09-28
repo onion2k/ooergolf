@@ -134,8 +134,8 @@ export interface GameApi {
   follow(): void;
   /** Where a point on the course is on the page, in CSS pixels: where to put a pointer to press on it. */
   project(x: number, y: number, z: number): { x: number; y: number };
-  /** What drawing a frame of the scene as it stands costs, in milliseconds. */
-  measureFrame(): Promise<number>;
+  /** What drawing a frame of the scene as it stands costs, in milliseconds, after `warmup` frames drawn untimed. */
+  measureFrame(warmup?: number): Promise<number>;
 }
 
 /** What the page gives the API that is not the game's: time, the camera and the renderer. */
@@ -154,7 +154,7 @@ export interface DebugHost {
   project(x: number, y: number, z: number): { x: number; y: number };
   aiming(): { angle: number; power: number } | null;
   view(): { distance: number; rung: number; held: boolean };
-  measureFrame(): Promise<number>;
+  measureFrame(warmup?: number): Promise<number>;
   events: string[];
 }
 
@@ -262,6 +262,6 @@ export function createApi(host: DebugHost): GameApi {
     look: (x, y, distance) => host.look(x, y, distance),
     follow: () => host.follow(),
     project: (x, y, z) => host.project(x, y, z),
-    measureFrame: () => host.measureFrame(),
+    measureFrame: (warmup) => host.measureFrame(warmup),
   };
 }

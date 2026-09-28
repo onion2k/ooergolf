@@ -25,7 +25,9 @@ const BASELINE = 'smoke/perf-baseline.json';
 /** What the game may cost at all, on this machine, whatever it cost before. */
 export const BUDGET = { bootMs: 3000, frameMs: 8, bundleKb: 400 };
 /** How far a figure may move from the baseline before it is a change: a share, and a slack for the noisy ones. */
-const TOLERANCE = { bootMs: [0.35, 250], frameMs: [0.3, 0.6], bundleKb: [0.1, 2] } as const;
+// the frame, timed ten at a time after the GPU is warmed, wobbles about 5% between runs (0.83 to 0.91 ms over ten):
+// three times that, and a tenth of a millisecond for a frame so small
+const TOLERANCE = { bootMs: [0.35, 250], frameMs: [0.15, 0.1], bundleKb: [0.1, 2] } as const;
 
 interface Figures {
   bootMs: number;
@@ -58,7 +60,8 @@ test('boots, draws and downloads within budget, and as it did before', async ({ 
     g.step(180);
     g.look(0, 0, 110);
     g.step(1);
-    return g.measureFrame();
+    // a GPU idle while the page booted runs slow for a while: warmed first, or the figure is two figures
+    return g.measureFrame(300);
   });
   const now: Figures = { bootMs: Math.round(boot), frameMs: Math.round(frame * 100) / 100, bundleKb: bundle };
   info.annotations.push({ type: 'perf', description: JSON.stringify(now) });

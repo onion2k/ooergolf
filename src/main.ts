@@ -262,7 +262,7 @@ async function main() {
   }
 
   /** What a frame of the scene as it stands costs, drawn to a texture of our own rather than the canvas, so no wait to be shown is counted. */
-  async function measureFrame(): Promise<number> {
+  async function measureFrame(warmup?: number): Promise<number> {
     const target = ctx.device.createTexture({
       label: 'measuring target',
       size: [width, height],
@@ -276,6 +276,7 @@ async function main() {
         return renderer.frame(view, 'redraw', 1 / 60);
       },
       () => ctx.device.queue.onSubmittedWorkDone(),
+      warmup,
     );
     target.destroy();
     return cost;
