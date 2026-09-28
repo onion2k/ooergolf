@@ -13,7 +13,7 @@
  * keep a note of it. Nothing here waits on anything there, so the same game
  * runs in the page and in Node, and what the tests try is what is played.
  */
-import { BALL, KIND_RADIUS, layoutOf, onFloor, strikeSpeed, tileAt, type Layout } from './arena';
+import { BALL, FASTEST, KIND_RADIUS, fromPosts, layoutOf, onFloor, strikeSpeed, tileAt, type Layout } from './arena';
 import { clubById, paid } from './clubs';
 import { COURSE, CUP, type HoleDef } from './course';
 import { Obstacles } from './obstacles';
@@ -232,6 +232,7 @@ export class Game {
       this.stepped += PHYSICS.step;
       this.obstacles.update(this.stepped, PHYSICS.step);
       this.world.step(PHYSICS.step, collect);
+      this.heldToFastest();
       if (fell.holed || fell.wet) break;
     }
     if (this.phase !== 'play') return;
@@ -257,6 +258,22 @@ export class Game {
     this.ball = this.world.spawn(BALL, this.lie.x, this.lie.y, this.restingZ(this.lie.x, this.lie.y));
     this.settle();
     if (this.strokes >= this.limit) this.done('pickedUp');
+  }
+
+  /**
+   * The ball held to the fastest the course may throw it: a post throws a
+   * ball faster than it came, and on the line between two facing each other
+   * it would be thrown faster each time, without end. Along the ground only;
+   * a fall is gravity's.
+   */
+  private heldToFastest() {
+    const { world, ball } = this;
+    if (!world.alive[ball]) return;
+    const most = Math.max(this.hardest, this.struckWith) * FASTEST;
+    const speed = Math.hypot(world.vx[ball], world.vy[ball]);
+    if (speed <= most) return;
+    world.vx[ball] *= most / speed;
+    world.vy[ball] *= most / speed;
   }
 
   /** How high a ball's middle is, resting on the floor at (x, y). */
@@ -344,6 +361,7 @@ export class Game {
       if (layout.floor[tileAt(layout, x + dx, y + dy)] !== level)
         throw new Error(`the ball cannot be put down at ${x},${y}: not on level grass`);
     }
+    if (fromPosts(layout, x, y) < r + 0.1) throw new Error(`the ball cannot be put down at ${x},${y}: on a post`);
     if (Math.hypot(x - layout.cup.x, y - layout.cup.y) < CLEAR_OF_CUP)
       throw new Error(`the ball cannot be put down at ${x},${y}: too near the cup`);
     if (this.phase !== 'play') throw new Error('the ball cannot be put down between holes');

@@ -226,6 +226,62 @@ test.describe('the cup and the rail', () => {
   });
 });
 
+test.describe('sand and posts', () => {
+  /** The page on the hole called `name`, paused and still. */
+  const onHole = (page: Page, name: string) =>
+    page.evaluate((hole) => {
+      const g = window.game!;
+      g.startHole(g.content().holes.findIndex((h) => h.name === hole));
+      g.step(1);
+      return g.content();
+    }, name);
+
+  test('a putt that would roll fifteen units on the green dies in the sand a unit or two in', async ({ page }) => {
+    const problems = watch(page);
+    await start(page, { seed: 1, paused: true });
+    const { sand, tee } = await onHole(page, 'The Bunker');
+    // the near edge of the sand straight up the hole from the tee
+    const edge = Math.min(...sand.filter((s) => Math.abs(s.x - tee.x) < 1).map((s) => s.y)) - 1.5;
+    const rest = await page.evaluate(() => {
+      const g = window.game!;
+      g.shoot(Math.PI / 2, 0.3);
+      for (let f = 0; f < 300 && !(f > 1 && g.ball().ready); f++) g.step(1);
+      return g.ball();
+    });
+    expect(rest.y - edge, 'in the sand').toBeGreaterThan(0);
+    expect(rest.y - edge, 'a unit or two in, where the green would have taken it twelve past').toBeLessThan(3);
+    expect(await page.evaluate(() => window.game!.invariants())).toEqual([]);
+    expect(problems).toEqual([]);
+  });
+
+  test('a ball struck at a post comes back off it faster than it met it', async ({ page }) => {
+    const problems = watch(page);
+    await start(page, { seed: 1, paused: true });
+    const { posts, tee } = await onHole(page, 'Bumpers');
+    expect(posts.length).toBe(5);
+    expect(
+      posts.some((p) => Math.abs(p.x - tee.x) < 0.01),
+      'one on the line up the middle',
+    ).toBe(true);
+    const { before, after } = await page.evaluate(() => {
+      const g = window.game!;
+      g.shoot(Math.PI / 2, 0.5);
+      // the green only ever slows it: the frame its speed jumps is the frame it met the post, part way through
+      let before = g.ball().speed;
+      for (let f = 0; f < 240; f++) {
+        g.step(1);
+        const now = g.ball().speed;
+        if (now > before + 0.5) return { before, after: now };
+        before = now;
+      }
+      return { before, after: 0 };
+    });
+    expect(before, 'met it moving').toBeGreaterThan(5);
+    expect(after / before, 'thrown back faster than it came').toBeGreaterThan(1.05);
+    expect(problems).toEqual([]);
+  });
+});
+
 test.describe('the grass', () => {
   test("grows on each hole, near and far, in the hole's own wind, and the next hole grows its own", async ({
     page,

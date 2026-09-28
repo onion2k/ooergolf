@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { BALL, HARDEST_SHOT } from '../src/arena';
+import { BALL, BUMPER, FASTEST, HARDEST_SHOT } from '../src/arena';
+import type { HoleDef } from '../src/course';
 import { checkInvariants } from '../src/invariants';
-import { onGreen as newGame, settle } from './helpers';
+import { newGame as newOn, onGreen as newGame, settle } from './helpers';
 
 describe('what must always hold', () => {
   it('holds of a new game, and of one played on a little', () => {
@@ -112,6 +113,36 @@ describe('what must always hold', () => {
     expect(checkInvariants(game)).toEqual([]);
   });
 
+  it('reports a ball inside a post, and takes one at rest on the top of a post as lying on something', () => {
+    const POST: HoleDef = {
+      name: 'test post',
+      par: 3,
+      map: ['#####', '#.C.#', '#...#', '#.o.#', '#...#', '#.T.#', '#####'],
+    };
+    const { game } = newOn(1, null, [POST]);
+    const { world, ball } = game;
+    const post = game.layout.bumpers[0];
+    expect(checkInvariants(game)).toEqual([]);
+    world.x[ball] = post.x + BUMPER.radius;
+    world.y[ball] = post.y;
+    expect(checkInvariants(game).join('\n')).toMatch(/inside a post/);
+    // on its top, which is a floor to what lands on it, and asleep there
+    world.x[ball] = post.x;
+    world.z[ball] = BUMPER.height + world.r[ball];
+    world.vx[ball] = world.vy[ball] = world.vz[ball] = 0;
+    world.asleep[ball] = 1;
+    expect(checkInvariants(game)).toEqual([]);
+  });
+
+  it('lets a post throw a ball half as fast again as the club struck it, and no faster', () => {
+    const { game } = newGame();
+    game.shoot(0, 1);
+    game.world.vx[game.ball] = HARDEST_SHOT * FASTEST * 0.999;
+    expect(checkInvariants(game)).toEqual([]);
+    game.world.vx[game.ball] = HARDEST_SHOT * FASTEST * 1.01;
+    expect(checkInvariants(game).join('\n')).toMatch(/faster than a post may throw it/);
+  });
+
   it('holds the ball to the club that struck it, not to one put in hand while it rolls', () => {
     const { game } = newGame();
     game.progress.save.owned.push('gold');
@@ -121,18 +152,18 @@ describe('what must always hold', () => {
     game.shoot(0, 1);
     expect(game.equip('putter')).toBe(true);
     expect(game.hardest).toBe(HARDEST_SHOT);
-    expect(checkInvariants(game), 'struck by the gold, and still going as the gold struck it').toEqual([]);
-    game.world.vx[game.ball] = gold * 1.1;
-    expect(checkInvariants(game).join('\n')).toMatch(/faster than the hardest shot/);
+    // thrown by a post faster than any the putter could have been, but no faster than the gold's
+    game.world.vx[game.ball] = gold * FASTEST * 0.99;
+    expect(gold * FASTEST * 0.99, 'past what the putter allows').toBeGreaterThan(HARDEST_SHOT * FASTEST);
+    expect(checkInvariants(game), 'struck by the gold, and going as a post may throw what the gold struck').toEqual([]);
+    game.world.vx[game.ball] = gold * FASTEST * 1.01;
+    expect(checkInvariants(game).join('\n')).toMatch(/faster than a post may throw it/);
   });
 
-  it('reports a ball faster than the hardest shot, and strokes that are not a count', () => {
+  it('reports strokes that are not a count', () => {
     const { game } = newGame();
     game.shoot(0, 1);
     expect(checkInvariants(game)).toEqual([]);
-    game.world.vx[game.ball] = HARDEST_SHOT * 1.1;
-    expect(checkInvariants(game).join('\n')).toMatch(/faster than the hardest shot/);
-    game.world.vx[game.ball] = 0;
     game.strokes = 1.5;
     expect(checkInvariants(game).join('\n')).toMatch(/strokes are 1.5/);
     game.strokes = -1;

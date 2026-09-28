@@ -12,11 +12,13 @@
  *   C   the cup, on grass
  *       (a space) nothing: off the course, solid to the ball, drawn as rough
  *
- * The first nine holes are in DESIGN.md. Those made of grass, rail, water,
- * raised grass, barriers, windmills and belts are here; the bunker and the
- * bumpers come next, on the surfaces and the posts the physics now has.
+ * The first nine holes are in DESIGN.md, and all but the ninth's own are
+ * here: grass, rail, sand, water, raised grass, posts, barriers, windmills
+ * and belts.
  *
  *   ~   water, which the ball rolls onto and is lost in
+ *   s   sand, level, which slows the ball hard
+ *   o   a post standing on grass, which throws the ball off it faster than it came
  *   1-9 grass raised that many steps: a step the ball rolls up, three a wall
  *
  * What moves on a hole is in its `obstacles`, by the tile of the map it is
@@ -87,6 +89,24 @@ export const COURSE: readonly HoleDef[] = [
     ],
   },
   {
+    name: 'The Bunker',
+    par: 3,
+    // sand across the front of the cup: round it by the sides, or straight through it at three quarters of the hardest
+    map: [
+      '#########',
+      '#.......#',
+      '#...C...#',
+      '#.......#',
+      '#.sssss.#',
+      '#..sss..#',
+      '#.......#',
+      '#.......#',
+      '#.......#',
+      '#...T...#',
+      '#########',
+    ],
+  },
+  {
     name: 'Pond',
     par: 3,
     map: [
@@ -125,6 +145,25 @@ export const COURSE: readonly HoleDef[] = [
     obstacles: [
       { kind: 'barrier', at: [4, 4], length: 1, travel: 5, period: 3 },
       { kind: 'barrier', at: [4, 7], length: 1, travel: 5, period: 4.2, phase: 0.3 },
+    ],
+  },
+  {
+    name: 'Bumpers',
+    par: 3,
+    // a post on the straight line to the cup, and four round it: banked off them, or threaded between
+    map: [
+      '###########',
+      '#.........#',
+      '#....C....#',
+      '#.........#',
+      '#..o...o..#',
+      '#.........#',
+      '#....o....#',
+      '#.........#',
+      '#..o...o..#',
+      '#.........#',
+      '#....T....#',
+      '###########',
     ],
   },
   {

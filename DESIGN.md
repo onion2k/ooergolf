@@ -146,11 +146,23 @@ to find out: it can. A ball climbs a step lower than its radius at no cost
 to its speed, and a rise of 1.2 is a wall, so a ramp of steps of 0.4 leads
 up onto grass walled off everywhere else.
 
-On artshape-physics v0.4.1, the course is seven holes: Straight,
-Dog-leg, Pond, Barriers, Up and Over (the ramp onto a plateau between two
-ponds, and a drop to the cup), Windmill, and The Mill Race (a barrier, the
-windmill, and a conveyor to the cup between ponds). The bunker and the
-bumpers come next, and their holes go in as 3 and 6.
+On artshape-physics v0.4.1, the course is nine holes: Straight, Dog-leg,
+The Bunker (sand across the front of the cup, to be gone round or blasted
+through), Pond, Barriers, Bumpers (five posts, one on the straight line to
+the cup), Up and Over (the ramp onto a plateau between two ponds, and a
+drop to the cup), Windmill, and The Mill Race (a barrier, the windmill,
+and a conveyor to the cup between ponds). The Mill Race does not yet have
+everything, as the ninth is to.
+
+- **Sand** slows a ball steadily, at 60 a second a second where the green
+  is 16: a putt that reaches it at 20 dies three units in, and the hardest
+  shot ploughs thirteen. It is drawn as one bed over its tiles, with the
+  lip only where it meets the grass.
+- **A post** is a unit in radius and 1.6 high, and throws a ball back a
+  fifth faster than it met it, as a pinball post does. Between two facing
+  each other a ball would be thrown faster each time without end, so
+  nothing on the course throws a ball faster than half as fast again as
+  the hardest shot of the club that struck it.
 
 - **Water** costs a stroke, and the ball is put back where it was struck
   from; at the limit the hole is picked up.

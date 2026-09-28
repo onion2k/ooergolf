@@ -17,7 +17,7 @@
 import { STILL, grassGround, type Wind } from 'artshape-render/game/grass';
 import type { GameGroup } from 'artshape-render/game/renderer';
 import { MATERIAL_STRIDE, PATTERN_STRIDE } from 'artshape-render/game/renderer';
-import { BALL, KIND_RADIUS, TILE, tileAt, type Layout } from './arena';
+import { BALL, BUMPER, KIND_RADIUS, TILE, tileAt, type Layout } from './arena';
 import { CUP } from './course';
 import { place } from './matrix';
 import { ball, box, plane, square } from './meshes';
@@ -25,6 +25,7 @@ import {
   FLAG_COLOURS,
   FLOWER_COLOURS,
   barrier,
+  bumper,
   bunting,
   collar,
   conveyor,
@@ -35,6 +36,7 @@ import {
   hedge,
   placeBlades,
   rock,
+  sandBed,
   teeMarkers,
   tree,
   water,
@@ -99,6 +101,8 @@ const SCENERY_MODELS: Record<Exclude<SceneryKind, 'flowers'>, Model> = {
   hedge: hedge(4, 1.6, 1.8),
   rock: rock(1.4),
 };
+/** A post, built once, to the physics' figures for one. */
+const POST = bumper(BUMPER.radius, { height: BUMPER.height });
 /** The kinds of scenery that lean in the breeze. */
 const TREES = new Set<SceneryKind>(['round tree', 'pine']);
 /** The flowers of a bed at the foot of the rail: fuller than a clump in the rough. */
@@ -191,7 +195,7 @@ export class Scene {
       railTiles: number[] = [],
       raised: number[] = [];
     for (let t = 0; t < cols * rows; t++) {
-      if (!solid[t] && !isWater[t] && t !== cupTile) grassTiles.push(t);
+      if (!solid[t] && !isWater[t] && !layout.sand[t] && t !== cupTile) grassTiles.push(t);
       else if (isRail[t] && !underTower.has(t)) railTiles.push(t);
       if (!solid[t] && !isWater[t] && floor[t] > 0) raised.push(t);
     }
@@ -260,6 +264,8 @@ export class Scene {
       ...this.scenery(scatter(layout, name)),
       ...this.dressing(layout, name),
       ...this.ponds(layout),
+      ...this.bunkers(layout),
+      ...this.posts(layout),
     ];
     if (raised.length) out.push({ mesh: box(TILE, TILE, 1), matrices: banks, ...look(PALETTE.bank) });
     for (const w of obstacles?.windmills ?? []) {
@@ -283,6 +289,25 @@ export class Scene {
    */
   private ponds(layout: Layout): GameGroup[] {
     return this.eachPond(layout).flatMap(({ model, at }) => groups(model, at));
+  }
+
+  /** The sand on a hole, as one bed over all its tiles, with the lip only where it meets the grass. */
+  private bunkers(layout: Layout): GameGroup[] {
+    const cells: [number, number][] = [];
+    for (let t = 0; t < layout.cols * layout.rows; t++)
+      if (layout.sand[t]) cells.push([t % layout.cols, Math.floor(t / layout.cols)]);
+    if (!cells.length) return [];
+    const at = new Float32Array(16);
+    place(at, 0, layout.originX, layout.originY, 0);
+    return groups(sandBed(cells, TILE), at);
+  }
+
+  /** The posts on a hole, all of one model, each where the physics has its post. */
+  private posts(layout: Layout): GameGroup[] {
+    if (!layout.bumpers.length) return [];
+    const at = new Float32Array(layout.bumpers.length * 16);
+    layout.bumpers.forEach((p, k) => place(at, k, p.x, p.y, 0));
+    return groups(POST, at);
   }
 
   /** Each pond's ripples, swelling and settling, among what moves. */

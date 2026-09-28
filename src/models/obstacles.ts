@@ -408,6 +408,96 @@ export function bunker(w: number, h: number, { seed = 1 } = {}): Model {
   };
 }
 
+/**
+ * A bed of sand over the tiles `cells`, each `tile` across, given as its
+ * column and row from the bed's origin, which is the south-west corner of
+ * tile (0, 0) at grass level. The sand lies flush with the grass over every
+ * tile, and the bunker's lip rims only the edges where a tile meets one
+ * that is not sand: a bunker of any shape is one bed, and not rectangles
+ * pushed together with a lip across each join. Where a lip runs into sand
+ * round an inside corner, its end is closed.
+ */
+export function sandBed(cells: readonly (readonly [number, number])[], tile: number, { seed = 1 } = {}): Model {
+  const lw = Math.min(BUNKER.lipWidth, tile / 6);
+  const has = new Set(cells.map(([c, r]) => `${c},${r}`));
+  const sandAt = (c: number, r: number) => has.has(`${c},${r}`);
+  const below: V3 = [0, 0, -100];
+  const sandMesh = new MeshBuilder(),
+    lipMesh = new MeshBuilder();
+  for (const [c, r] of cells) {
+    const x0 = c * tile,
+      y0 = r * tile,
+      x1 = x0 + tile,
+      y1 = y0 + tile;
+    // which sides meet grass, going round from the south as the corners do
+    const lipped = [!sandAt(c, r - 1), !sandAt(c + 1, r), !sandAt(c, r + 1), !sandAt(c - 1, r)];
+    const [inS, inE, inN, inW] = lipped.map((l) => (l ? lw : 0));
+    // the tile's corners `f` of the way in from each side that has a lip, at height `z`
+    const loop = (f: number, z: number): V3[] => [
+      [x0 + f * inW, y0 + f * inS, z],
+      [x1 - f * inE, y0 + f * inS, z],
+      [x1 - f * inE, y1 - f * inN, z],
+      [x0 + f * inW, y1 - f * inN, z],
+    ];
+    const [p0, p1, p2, p3] = loop(1, 0);
+    face(sandMesh, p0, p1, p2, p3);
+    const edge = loop(0, 0),
+      crest = loop(0.5, BUNKER.lip),
+      foot = loop(1, 0);
+    // each side's neighbour along it, either way, in tile steps: the side before and the side after
+    const along: [number, number][] = [
+      [1, 0],
+      [0, 1],
+      [-1, 0],
+      [0, -1],
+    ];
+    const out: [number, number][] = [
+      [0, -1],
+      [1, 0],
+      [0, 1],
+      [-1, 0],
+    ];
+    for (let k = 0; k < 4; k++) {
+      if (!lipped[k]) continue;
+      const m = (k + 1) % 4;
+      faceOut(lipMesh, [edge[k], edge[m], crest[m], crest[k]], below);
+      faceOut(lipMesh, [crest[k], crest[m], foot[m], foot[k]], below);
+      // at each end, open to more sand along it whose own side here has no lip: the lip stops, and its end is shown
+      for (const [end, dir] of [
+        [k, -1],
+        [m, 1],
+      ] as const) {
+        const [ax, ay] = along[k];
+        const nc = c + ax * dir,
+          nr = r + ay * dir;
+        const [ox, oy] = out[k];
+        if (!sandAt(nc, nr) || !sandAt(nc + ox, nr + oy)) continue;
+        const inside: V3 = [edge[end][0] - ax * dir, edge[end][1] - ay * dir, 0];
+        faceOut(lipMesh, [edge[end], crest[end], foot[end]], inside);
+      }
+    }
+  }
+  const grain = (s: number) => ({ kind: PATTERN.speckle, scale: 0.75, seed: s, second: PALETTE.sandGrain });
+  return {
+    name: 'bunker',
+    parts: [
+      {
+        name: 'sand',
+        mesh: sandMesh.build(),
+        material: matte(PALETTE.sand, ROUGH.sand),
+        pattern: grain((seed * 0.37) % 1),
+      },
+      {
+        name: 'lip',
+        mesh: lipMesh.build(),
+        material: matte(PALETTE.sandLip, ROUGH.sand),
+        pattern: grain((seed * 0.53) % 1),
+      },
+    ],
+    moving: [],
+  };
+}
+
 /** A conveyor, with how far apart its chevrons are. */
 export interface Conveyor extends Model {
   /** The chevrons repeat this far apart along Y: move them on by up to this much, and back, to run them. */

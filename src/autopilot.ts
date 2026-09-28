@@ -18,7 +18,20 @@
  *
  * It is handed the game, and knows nothing of the page.
  */
-import { BALL, KIND_RADIUS, ROLL, TILE, onFloor, powerFor, rollsFor, strikeSpeed, tileAt, type Layout } from './arena';
+import {
+  BALL,
+  KIND_RADIUS,
+  ROLL,
+  SAND,
+  TILE,
+  fromPosts,
+  onFloor,
+  powerFor,
+  rollsFor,
+  strikeSpeed,
+  tileAt,
+  type Layout,
+} from './arena';
 import type { Game } from './game';
 import { Obstacles } from './obstacles';
 import type { Random } from './random';
@@ -48,6 +61,23 @@ const MISS = 0.6,
  */
 export function speedFor(distance: number, arrive: number): number {
   return Math.sqrt(arrive * arrive + 2 * ROLL.roll * distance);
+}
+
+/**
+ * The speed to strike a ball at (x0, y0) so it arrives at (x1, y1) still
+ * going at `arrive`, over whatever it rolls on: the green and sand each slow
+ * it steadily, so the square of its speed falls by twice the slowing over
+ * every unit of each, and the sum is taken along the line.
+ */
+export function speedAcross(l: Layout, x0: number, y0: number, x1: number, y1: number, arrive: number): number {
+  const d = Math.hypot(x1 - x0, y1 - y0);
+  const n = Math.max(1, Math.ceil(d / 0.25));
+  let lost = 0;
+  for (let k = 0; k < n; k++) {
+    const t = tileAt(l, x0 + ((x1 - x0) * (k + 0.5)) / n, y0 + ((y1 - y0) * (k + 0.5)) / n);
+    lost += 2 * (t >= 0 && l.sand[t] ? SAND.roll : ROLL.roll) * (d / n);
+  }
+  return Math.sqrt(arrive * arrive + lost);
 }
 
 /** How long a ball struck at `speed` takes to roll `distance`, or Infinity if it stops short of it. */
@@ -116,25 +146,30 @@ export class Autopilot {
     const x = world.x[ball],
       y = world.y[ball];
     const path = pathToCup(layout, x, y);
-    // the farthest point of the way it can see, the cup itself if it can
+    // the farthest point of the way it can see, the cup itself if it can, and if it can strike hard enough to get there:
+    // straight through sand may take more than the club has
     let tx = layout.cup.x,
       ty = layout.cup.y,
       toCup = true;
-    if (!clear(layout, x, y, tx, ty)) {
+    if (!clear(layout, x, y, tx, ty) || speedAcross(layout, x, y, tx, ty, ARRIVE) > game.hardest) {
       toCup = false;
       [tx, ty] = path[0] ?? [layout.cup.x, layout.cup.y];
       for (const [px, py] of path) {
         const d = Math.hypot(px - x, py - y) || 1;
         const past = d * OVERRUN.share + OVERRUN.more;
         const [ox, oy] = [px + ((px - x) / d) * past, py + ((py - y) / d) * past];
-        if (clear(layout, x, y, px, py) && clear(layout, px, py, ox, oy)) {
+        // and near enough for the club, over what lies between: a line to it across sand may need more than it has
+        if (
+          clear(layout, x, y, px, py) &&
+          clear(layout, px, py, ox, oy) &&
+          speedAcross(layout, x, y, px, py, 0) <= game.hardest
+        ) {
           tx = px;
           ty = py;
         }
       }
     }
-    const d = Math.hypot(tx - x, ty - y);
-    const speed = speedFor(d, toCup ? ARRIVE : 0);
+    const speed = speedAcross(layout, x, y, tx, ty, toCup ? ARRIVE : 0);
     return { angle: Math.atan2(ty - y, tx - x), power: Math.min(1, powerFor(speed, game.hardest)) };
   }
 
@@ -176,8 +211,8 @@ function spread(random: Random): number {
 
 /**
  * Whether a ball could roll from one point to another with grass under the
- * whole of it, and a little either side, and no rise on the way too high for
- * it to roll up. A drop is no matter: it rolls off.
+ * whole of it, and a little either side, no rise on the way too high for it
+ * to roll up, and no post in the way. A drop is no matter: it rolls off.
  */
 function clear(l: Layout, x0: number, y0: number, x1: number, y1: number): boolean {
   const d = Math.hypot(x1 - x0, y1 - y0);
@@ -189,6 +224,7 @@ function clear(l: Layout, x0: number, y0: number, x1: number, y1: number): boole
   for (let s = 0; s <= d; s += 0.25) {
     const px = x0 + ((x1 - x0) * s) / (d || 1),
       py = y0 + ((y1 - y0) * s) / (d || 1);
+    if (fromPosts(l, px, py) < reach) return false;
     for (const [k, side] of [-reach, 0, reach].entries()) {
       const sx = px + nx * side,
         sy = py + ny * side;
@@ -204,38 +240,47 @@ function clear(l: Layout, x0: number, y0: number, x1: number, y1: number): boole
 /**
  * The way from (x, y) to the cup over the grass, tile to tile, as the middles
  * of the tiles it passes, nearest first and the cup last. A tile's
- * neighbours are the four beside it that are grass, not water, and not a
- * rise too high to roll up from it; a flood back from the cup says how far
- * each tile is, and the way goes downhill of it.
+ * neighbours are the four beside it that are ground, not water, not a rise
+ * too high to roll up from it, and with no post in them, which leaves no
+ * room either side for a ball to pass. Sand costs three tiles of grass, so
+ * the way goes round a bunker unless through it is much the shorter. A flood
+ * back from the cup says how far each tile is, and the way goes downhill of
+ * it.
  */
 function pathToCup(l: Layout, x: number, y: number): [number, number][] {
   const n = l.cols * l.rows;
-  const far = new Int32Array(n).fill(-1);
   const tile = (px: number, py: number) =>
     Math.floor((py - l.originY) / TILE) * l.cols + Math.floor((px - l.originX) / TILE);
+  const posted = new Set(l.bumpers.map((p) => tile(p.x, p.y)));
+  const cost = (t: number) => (l.sand[t] ? 3 : 1);
+  const far = new Float64Array(n).fill(Infinity);
+  const done = new Uint8Array(n);
   const cup = tile(l.cup.x, l.cup.y);
-  const queue = [cup];
   far[cup] = 0;
-  for (let head = 0; head < queue.length; head++) {
-    const t = queue[head];
+  // the nearest tile not yet settled, each time: the grids are a few hundred tiles, and this is done once a shot
+  for (;;) {
+    let t = -1;
+    for (let u = 0; u < n; u++) if (!done[u] && far[u] < Infinity && (t < 0 || far[u] < far[t])) t = u;
+    if (t < 0) break;
+    done[t] = 1;
     const tx = t % l.cols;
     for (const u of [tx > 0 ? t - 1 : -1, tx < l.cols - 1 ? t + 1 : -1, t - l.cols, t + l.cols]) {
-      if (u < 0 || u >= n || l.solid[u] || l.water[u] || far[u] >= 0) continue;
+      if (u < 0 || u >= n || l.solid[u] || l.water[u] || posted.has(u) || done[u]) continue;
       // back from t to u: the ball goes from u to t, which it can if t is not too far above it
       if (l.floor[t] - l.floor[u] >= CLIMB) continue;
-      far[u] = far[t] + 1;
-      queue.push(u);
+      far[u] = Math.min(far[u], far[t] + cost(u));
     }
   }
   const out: [number, number][] = [];
   let t = tile(x, y);
-  if (t < 0 || t >= n || far[t] < 0) return out;
+  if (t < 0 || t >= n || far[t] === Infinity) return out;
   while (far[t] > 0) {
     const tx = t % l.cols;
     let next = t;
     for (const u of [tx > 0 ? t - 1 : -1, tx < l.cols - 1 ? t + 1 : -1, t - l.cols, t + l.cols])
       // a move the ball can make: onto a tile no higher than it can roll up
-      if (u >= 0 && u < n && far[u] >= 0 && far[u] < far[next] && l.floor[u] - l.floor[t] < CLIMB) next = u;
+      if (u >= 0 && u < n && far[u] < far[next] && l.floor[u] - l.floor[t] < CLIMB) next = u;
+    if (next === t) break;
     t = next;
     out.push([l.originX + ((t % l.cols) + 0.5) * TILE, l.originY + (Math.floor(t / l.cols) + 0.5) * TILE]);
   }

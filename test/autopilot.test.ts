@@ -1,7 +1,19 @@
 /** The autopilot as a measuring instrument: it knows how far a shot rolls, sees round corners, holes out, and gets stuck nowhere. */
 import { describe, expect, it } from 'vitest';
-import { HARDEST_SHOT, TILE, layoutOf, onFloor, powerFor, rollsFor, strikeSpeed } from '../src/arena';
-import { Autopilot, speedFor, timeTo } from '../src/autopilot';
+import {
+  BALL,
+  BUMPER,
+  HARDEST_SHOT,
+  KIND_RADIUS,
+  TILE,
+  layoutOf,
+  onFloor,
+  powerFor,
+  rollsFor,
+  strikeSpeed,
+  tileAt,
+} from '../src/arena';
+import { Autopilot, speedAcross, speedFor, timeTo } from '../src/autopilot';
 import { COURSE, type HoleDef } from '../src/course';
 import { checkInvariants } from '../src/invariants';
 import { seeded } from '../src/random';
@@ -29,6 +41,86 @@ describe('the autopilot', () => {
       expect(Math.abs(game.t - timeTo(d, speed)), `${d} along`).toBeLessThan(0.03);
     }
     expect(timeTo(100, speed), 'never, past where it stops').toBe(Infinity);
+  });
+
+  it('knows how hard to strike across sand: struck to stop past a stretch of it, it stops near there', () => {
+    const LANE: HoleDef = {
+      name: 'test sand',
+      par: 3,
+      map: ['#####', '#.C.#', '#...#', '#...#', '#...#', '#sss#', '#sss#', '#...#', '#...#', '#...#', '#.T.#', '#####'],
+    };
+    const { game } = newGame(1, null, [LANE]);
+    const l = game.layout;
+    const x = l.tee.x,
+      y0 = l.tee.y,
+      y1 = l.originY + 8.5 * TILE;
+    game.shoot(Math.PI / 2, powerFor(speedAcross(l, x, y0, x, y1, 0), HARDEST_SHOT));
+    for (let f = 0; f < 600 && !(f > 1 && game.ready); f++) game.step(DT);
+    expect(Math.abs(game.world.y[game.ball] - y1), `stopped at ${game.world.y[game.ball].toFixed(1)}`).toBeLessThan(
+      1.5,
+    );
+    // on grass alone, the same as the green's own sum
+    expect(speedAcross(l, x, y0, x, y0 + 6, 3)).toBeCloseTo(speedFor(6, 3), 1);
+  });
+
+  it('goes round sand on grass when the way through is no shorter, and round a bunker the club cannot blast through', () => {
+    // two ways to the cup as long as each other, one up a lane of sand and one up a lane of grass
+    const TWO: HoleDef = {
+      name: 'two lanes',
+      par: 3,
+      map: ['#######', '#.....#', '#..C..#', '#.###.#', '#s###.#', '#s###.#', '#.....#', '#..T..#', '#######'],
+    };
+    const two = newGame(1, null, [TWO]).game;
+    expect(Math.cos(new Autopilot(two).plan()!.angle), 'up the grass, to the east').toBeGreaterThan(0.3);
+    // sand from rail to rail but for a lane of grass at the east, five rows deep: too much for the putter straight on
+    const WIDE: HoleDef = {
+      name: 'wide bunker',
+      par: 3,
+      map: [
+        '#########',
+        '#.......#',
+        '#...C...#',
+        '#.......#',
+        ...Array.from({ length: 5 }, () => '#ssssss.#'),
+        '#.......#',
+        '#...T...#',
+        '#########',
+      ],
+    };
+    const wide = newGame(1, null, [WIDE]).game;
+    const { layout } = wide;
+    const x0 = wide.world.x[wide.ball],
+      y0 = wide.world.y[wide.ball];
+    expect(speedAcross(layout, x0, y0, layout.cup.x, layout.cup.y, 4), 'straight on is past the club').toBeGreaterThan(
+      HARDEST_SHOT,
+    );
+    // its shot played: it comes to rest on grass, round the bunker, and not in the sand for want of a harder club
+    const shot = new Autopilot(wide).plan()!;
+    wide.shoot(shot.angle, shot.power);
+    for (let f = 0; f < 600 && !(f > 1 && wide.ready); f++) wide.step(DT);
+    const t = tileAt(layout, wide.world.x[wide.ball], wide.world.y[wide.ball]);
+    expect(layout.sand[t], 'and it does not stop in the sand').toBe(0);
+  });
+
+  it('plans round a post: every shot it plans passes clear of each by the width of the ball', () => {
+    const { game } = newGame();
+    const index = COURSE.findIndex((h) => h.name === 'Bumpers');
+    game.begin(index);
+    const pilot = new Autopilot(game);
+    const { layout } = game;
+    const x0 = game.world.x[game.ball],
+      y0 = game.world.y[game.ball];
+    const shot = pilot.plan()!;
+    const reach = Math.min(
+      rollsFor(strikeSpeed(shot.power, game.hardest)),
+      Math.hypot(layout.cup.x - x0, layout.cup.y - y0),
+    );
+    for (let s = 0; s < reach; s += 0.25)
+      for (const post of layout.bumpers)
+        expect(
+          Math.hypot(x0 + Math.cos(shot.angle) * s - post.x, y0 + Math.sin(shot.angle) * s - post.y),
+          `${s.toFixed(2)} along`,
+        ).toBeGreaterThan(BUMPER.radius + KIND_RADIUS[BALL]);
   });
 
   it('sees round a corner: every shot it plans has clear grass the whole way', () => {

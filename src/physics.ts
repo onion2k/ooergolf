@@ -7,7 +7,7 @@
  * door, and a change it needs goes in its own repo with a version bump here.
  */
 import { World, type WorldOptions } from 'artshape-physics/world';
-import { BODY_CAPACITY, BOTTOM, BOUNCE, KIND_RADIUS, ROLL, TILE, type Layout } from './arena';
+import { BODY_CAPACITY, BOTTOM, BOUNCE, BUMPER, KIND_RADIUS, ROLL, SAND, TILE, type Layout } from './arena';
 import type { Random } from './random';
 
 export { World, type Belt, type Pusher } from 'artshape-physics/world';
@@ -23,8 +23,9 @@ export interface Cup {
   pull: number;
 }
 
-/** The surfaces by index: the green, and a belt. */
-const BELT = 1;
+/** The surfaces by index: the green, a belt, and sand. */
+const BELT = 1,
+  SAND_SURFACE = 2;
 
 /** The cup's index among the world's holes: the only one, so what goes down a hole and not out of the bottom is holed. */
 export const THE_CUP = 0;
@@ -47,6 +48,7 @@ export function makeWorld(layout: Layout, cup: Cup, random: Random, belted: Read
   const { cols, rows, originX, originY, solid } = layout;
   // a belt carries what lies on it at its own speed, and the green's steady slowing would hold it back to a third of it
   const surface = new Uint8Array(cols * rows);
+  for (let t = 0; t < cols * rows; t++) if (layout.sand[t]) surface[t] = SAND_SURFACE;
   for (const t of belted) surface[t] = BELT;
   const options: WorldOptions = {
     capacity: BODY_CAPACITY,
@@ -61,9 +63,19 @@ export function makeWorld(layout: Layout, cup: Cup, random: Random, belted: Read
     surfaces: [
       { drag: 0, roll: ROLL.roll },
       { drag: 0, roll: 0 },
+      { drag: 0, roll: SAND.roll },
     ],
     random,
     tuning: { wallRestitution: BOUNCE.rail, sleepInAir: false, sleepSpeed: 2, smoothWalls: true, travel: 0.5 },
   };
-  return new World(options);
+  const world = new World(options);
+  // the posts, which never move: each from below everything up to its top, which is a floor to what lands on it
+  world.bumpers = layout.bumpers.map((p) => ({
+    x: p.x,
+    y: p.y,
+    radius: BUMPER.radius,
+    top: BUMPER.height,
+    restitution: BUMPER.restitution,
+  }));
+  return world;
 }

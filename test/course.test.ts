@@ -50,6 +50,21 @@ describe('a hole from its map', () => {
     expect(WATER_FLOOR).toBeLessThan(BOTTOM);
   });
 
+  it('reads sand as level ground the ball rolls on, and a post as one standing in the middle of its tile', () => {
+    const l = layoutOf(['#######', '#..C..#', '#.sso.#', '#..T..#', '#######']);
+    const at = (tx: number, ty: number) => ty * l.cols + tx;
+    expect(l.sand[at(2, 2)]).toBe(1);
+    expect(l.sand[at(3, 2)]).toBe(1);
+    expect(l.sand[at(1, 2)], 'grass').toBe(0);
+    expect(l.solid[at(2, 2)], 'played on').toBe(0);
+    expect(l.floor[at(2, 2)], 'level').toBe(0);
+    expect(l.water[at(2, 2)]).toBe(0);
+    expect(l.bumpers).toEqual([{ x: l.originX + 4.5 * TILE, y: l.originY + 2.5 * TILE }]);
+    // a post stands on grass, which is not sand and not solid
+    expect(l.solid[at(4, 2)]).toBe(0);
+    expect(l.sand[at(4, 2)]).toBe(0);
+  });
+
   it('refuses grass on the edge of the map, where the ball could leave the world', () => {
     expect(() => layoutOf(['.C.', '#T#', '###'])).toThrow(/edge/);
   });

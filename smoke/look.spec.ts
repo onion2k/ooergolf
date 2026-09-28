@@ -85,24 +85,27 @@ test.describe('what it looks like', () => {
     expect(problems).toEqual([]);
   });
 
-  for (const [index, file] of [
-    [2, 'pond.png'],
-    [3, 'barriers.png'],
-    [4, 'up-and-over.png'],
-    [5, 'windmill.png'],
-    [6, 'mill-race.png'],
+  // by name, so a hole added to the course does not move the others' pictures
+  for (const [name, file] of [
+    ['The Bunker', 'bunker.png'],
+    ['Pond', 'pond.png'],
+    ['Barriers', 'barriers.png'],
+    ['Bumpers', 'bumpers.png'],
+    ['Up and Over', 'up-and-over.png'],
+    ['Windmill', 'windmill.png'],
+    ['The Mill Race', 'mill-race.png'],
   ] as const) {
-    test(`hole ${index + 1}, ${file.replace('.png', '')}, from its tee`, async ({ page }) => {
+    test(`${name}, from its tee`, async ({ page }) => {
       const problems = watch(page);
       await start(page, { seed: 11, paused: true });
-      await page.evaluate((i) => {
-        window.game!.startHole(i);
+      await page.evaluate((hole) => {
+        window.game!.startHole(window.game!.content().holes.findIndex((h) => h.name === hole));
         // the moving things caught part way through, and the camera still: the whole hole in view
         window.game!.step(75);
         const { floor } = window.game!.content();
         window.game!.look((floor.minX + floor.maxX) / 2, (floor.minY + floor.maxY) / 2 - 14, 70);
         window.game!.step(1);
-      }, index);
+      }, name);
       await hideStats(page);
       await expect(page.locator('#view')).toHaveScreenshot(file, TOLERANCE);
       expect(problems).toEqual([]);

@@ -10,12 +10,11 @@ file says how it is made. The house
 rules in `~/.claude/CLAUDE.md` apply too. What is in `src/` is a round of
 the course: holes drawn as maps, each played from its tee to its cup with a
 drag pulled back and let go, scored against par, and the card at the end.
-Seven holes are here, on artshape-physics v0.4.1: grass, rail, water,
-raised grass, sliding barriers, a windmill and a conveyor, with a green
-that lets a putt die, a rail and obstacles that bounce, and a cup with a
-rim. The bunker and the bumpers come next, on the physics' surfaces and
-posts. The golf goes in a feature at a time, in the order `DESIGN.md`
-gives.
+Nine holes are here, on artshape-physics v0.4.1: grass, rail, sand,
+water, raised grass, posts, sliding barriers, a windmill and a conveyor,
+with a green that lets a putt die, a rail and obstacles that bounce, posts
+that throw a ball back faster than it came, and a cup with a rim. The golf
+goes in a feature at a time, in the order `DESIGN.md` gives.
 
 ## The factory
 
@@ -84,11 +83,12 @@ today, and what the next features must hand it:
   an action in `scripts/fuzzer.ts`.
 - **Invariants:** bodies are of a kind, are numbers and are out of the rock;
   the world's count is right; the time is a time; the ball is there while a
-  hole is played, alone, and never faster than the hardest shot (or than its
-  fall into the cup); the strokes are a count within the hole's limit; the
-  card has a score for each hole finished and no other, each between one and
-  the limit. The speed rule holds only while nothing on the course adds
-  speed: a bumper changes it, and must say by how much.
+  hole is played, alone, never inside a post, and never faster along the
+  ground than half as fast again as the hardest shot of the club that struck
+  it, which is the most a post may throw it; a ball at rest lies on the
+  floor or the top of a box or a post; the strokes are a count within the
+  hole's limit; the card has a score for each hole finished and no other,
+  each between one and the limit.
 - **Determinism:** the autopilot plays, with a player's slips from its own
   chance, round after round, and the hash takes in the hole and the card.
 - **Pace:** the strokes a round takes; see above.
@@ -164,7 +164,9 @@ change meant to move it, and the commit says why. Look at every picture.
 - `src/models.ts` and `src/models/` are the models: the cup, collar, flag
   and tee markers; the obstacles at the sizes the physics will give them
   (bumper, barrier, windmill with its turning blades, water, bunker,
-  conveyor); and the decoration. Each returns its parts, a mesh and a
+  conveyor), with `sandBed` for a hole's sand of any shape, the lip only
+  where it meets grass, which the game draws where `bunker` is only the
+  showcase's; and the decoration. Each returns its parts, a mesh and a
   material each, for `group` to turn into a renderer group; each has a
   triangle budget in `BUDGET`. `showcase.html` draws every one
   (`/showcase.html`, with `?model=name`), for building and looking at them.
@@ -192,8 +194,9 @@ change meant to move it, and the commit says why. Look at every picture.
   shop. `src/score.ts` names a
   score. Both are given what to show and never read the game.
 - The holes are content in `course.ts`: each a map drawn as seen from the
-  tee (`#` rail, `.` grass, `T` tee, `C` cup on level grass, `~` water, a
-  digit for grass raised that many steps of 0.4, space for off the course),
+  tee (`#` rail, `.` grass, `T` tee, `C` cup on level grass, `~` water,
+  `s` sand, `o` a post on grass, a digit for grass raised that many steps of
+  0.4, space for off the course),
   a par, and what moves on it, by map tile; and the cup's size. A step the
   ball rolls up; three (1.2) are a wall to it. Water is a floor below the
   world's bottom: a ball in it is lost, a stroke is added, and it is put back
@@ -258,8 +261,9 @@ What to copy the shape of, when building something new:
 `window.game`, in `src/debug.ts`, typed, and the smoke tests compile against
 it. Time: `pause`, `resume`, `step(frames)`, `seed(n)`, and `?seed=N` and
 `?paused=1` on the page. Reading: `state` (with `strokes` and `ready`),
-`ball`, `bodies`, `content` (the hole's grass, tee and cup, the hardest
-shot, and every hole's name and par), `events`, `invariants`, and `aiming`,
+`ball`, `bodies`, `content` (the hole's grass, tee and cup, its sand and
+posts, the hardest shot, and every hole's name and par), `events`,
+`invariants`, and `aiming`,
 the shot a drag under way would make. `state` has the hole, its par, the
 phase (`play`, `done`, `over`), the card, the coins and gems, the club in
 hand and those owned, and the hardest shot the club in hand strikes.
@@ -286,8 +290,8 @@ ball down at a lie.
 Each of these is the first feature's to bring, with every gate green at
 each step, and a gate handed what it needs in the same change:
 
-- The bunker and the bumpers, and their holes: the physics has the sand
-  (a surface) and the posts (bumpers) now.
+- The ninth hole's own, as `DESIGN.md` has it, with everything on it: The
+  Mill Race has no sand and no post yet.
 - Pars that are what a player takes: see the pace gate, above. The
   autopilot would need a player's timing, measured against real play.
 - Where in the round a player is, in the save: a reload starts the round

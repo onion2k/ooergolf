@@ -12,7 +12,7 @@
  * The types are shared with the smoke tests, so a test that calls something
  * that is not here does not compile.
  */
-import { KIND_NAME } from './arena';
+import { KIND_NAME, TILE, type Layout } from './arena';
 import { Autopilot } from './autopilot';
 import { CUP } from './course';
 import type { Game } from './game';
@@ -82,6 +82,10 @@ export interface Content {
   hardest: number;
   /** Every hole of the course: its name and par. */
   holes: { name: string; par: number }[];
+  /** The middle of every tile of sand on this hole. */
+  sand: { x: number; y: number }[];
+  /** Where each post on this hole stands. */
+  posts: { x: number; y: number }[];
 }
 
 export interface GameApi {
@@ -248,6 +252,8 @@ export function createApi(host: DebugHost): GameApi {
       cup: { ...game.layout.cup, radius: CUP.radius },
       hardest: game.hardest,
       holes: game.course.map((h) => ({ name: h.name, par: h.par })),
+      sand: sandTiles(game.layout),
+      posts: game.layout.bumpers.map((p) => ({ ...p })),
     }),
     events() {
       return host.events.splice(0);
@@ -281,4 +287,13 @@ export function createApi(host: DebugHost): GameApi {
     measureFrame: (warmup) => host.measureFrame(warmup),
     grass: () => host.grass(),
   };
+}
+
+/** The middle of every tile of sand on a hole. */
+function sandTiles(l: Layout): { x: number; y: number }[] {
+  const out: { x: number; y: number }[] = [];
+  for (let t = 0; t < l.cols * l.rows; t++)
+    if (l.sand[t])
+      out.push({ x: l.originX + ((t % l.cols) + 0.5) * TILE, y: l.originY + (Math.floor(t / l.cols) + 0.5) * TILE });
+  return out;
 }

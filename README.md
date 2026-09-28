@@ -29,11 +29,12 @@ machine that cannot keep up has the picture stepped down a rung at a time.
 The grass is real blades, bending in each hole's own wind, and the ball
 lays a track in it as it rolls.
 
-Seven holes so far: a straight putt, a dog-leg, a pond, sliding barriers,
-a ramp up onto a plateau between ponds, a windmill whose blades sweep its
-door, and The Mill Race, with a barrier, the windmill and a conveyor to the
-cup. Water costs a stroke, and the ball comes back to where it was struck
-from. The bunker and the bumpers come next.
+Nine holes so far: a straight putt, a dog-leg, a bunker in front of the
+cup, a pond, sliding barriers, a field of pinball posts, a ramp up onto a
+plateau between ponds, a windmill whose blades sweep its door, and The Mill
+Race, with a barrier, the windmill and a conveyor to the cup. Sand slows the
+ball hard, and water costs a stroke, the ball coming back to where it was
+struck from.
 
 ## What is here
 

@@ -39,6 +39,31 @@ export const ROLL = { roll: 16 };
  */
 export const BOUNCE = { rail: 0.65, box: 0.5 };
 
+/**
+ * Sand: a steady slowing, as the green's, but nearly four times as heavy.
+ * A putt that reaches it at 20 dies three units in, and the hardest shot
+ * ploughs thirteen, about four tiles; and since it is a steady slowing, as
+ * the green's is, how hard to strike across both is one sum.
+ */
+export const SAND = { roll: 60 };
+
+/**
+ * A bumper: a round post a unit in radius, standing a little over the
+ * ball, which throws a ball off it faster than it came, as a pinball post
+ * does: a fifth faster straight on, where the rail keeps 0.65 of it.
+ */
+export const BUMPER = { radius: 1, height: 1.6, restitution: 1.2 } as const;
+
+/**
+ * The fastest the course may throw a ball, as a share of the hardest shot
+ * of the club that struck it. A post throws a ball faster than it came, and
+ * a ball on the line between two posts facing each other would be thrown
+ * back and forth faster each time, to thousands a second; the game holds it
+ * to this. Off that line a ball leaves the posts within a few bounces, at up
+ * to about 1.35 times what it was struck at.
+ */
+export const FASTEST = 1.5;
+
 /** How far a ball struck at `speed` rolls on the green before it stops. */
 export function rollsFor(speed: number): number {
   return (speed * speed) / (2 * ROLL.roll);
@@ -87,6 +112,10 @@ export interface Ground {
 export interface Layout extends Ground {
   /** One byte a tile: 1 where the rail is drawn. The rest of what is solid is off the course. */
   rail: Uint8Array;
+  /** One byte a tile: 1 where there is sand, level ground a ball rolls on and is slowed hard by. */
+  sand: Uint8Array;
+  /** Where each post stands: in the middle of its tile, on grass. */
+  bumpers: { x: number; y: number }[];
   /** How high the floor stands on each tile: nought for level grass, a step a digit, and far below for water. */
   floor: Float32Array;
   tee: { x: number; y: number };
@@ -99,7 +128,7 @@ export interface Layout extends Ground {
  * A hole's layout from its map, drawn as seen from the tee with the far end
  * first, one character a tile: `#` rail, `.` grass, `T` the tee and `C` the
  * cup on level grass, a digit for grass raised that many steps, `~` water,
- * and a space for off the course. The grid is centred on the origin. A map with anything else in it, not exactly one tee and one cup, or
+ * `s` sand, `o` a post standing on grass, and a space for off the course. The grid is centred on the origin. A map with anything else in it, not exactly one tee and one cup, or
  * grass on its edge, where a ball would leave the world, is refused.
  */
 export function layoutOf(map: readonly string[]): Layout {
@@ -110,7 +139,9 @@ export function layoutOf(map: readonly string[]): Layout {
   const solid = new Uint8Array(cols * rows),
     rail = new Uint8Array(cols * rows),
     water = new Uint8Array(cols * rows),
+    sand = new Uint8Array(cols * rows),
     floor = new Float32Array(cols * rows);
+  const bumpers: { x: number; y: number }[] = [];
   const tees: [number, number][] = [],
     cups: [number, number][] = [];
   const bounds = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
@@ -134,7 +165,9 @@ export function layoutOf(map: readonly string[]): Layout {
       else if (c === '~') {
         water[t] = 1;
         floor[t] = WATER_FLOOR;
-      } else if (c >= '1' && c <= '9') floor[t] = (c.charCodeAt(0) - 48) * STEP;
+      } else if (c === 's') sand[t] = 1;
+      else if (c === 'o') bumpers.push({ x, y });
+      else if (c >= '1' && c <= '9') floor[t] = (c.charCodeAt(0) - 48) * STEP;
       else if (c !== '.') throw new Error(`a hole's map has "${c}" in it, which is not a tile`);
       if (tx === 0 || ty === 0 || tx === cols - 1 || ty === rows - 1)
         throw new Error(`a hole's map has grass on its edge, at column ${tx} of row ${r}`);
@@ -156,6 +189,8 @@ export function layoutOf(map: readonly string[]): Layout {
     solid,
     rail,
     water,
+    sand,
+    bumpers,
     floor,
     tee: { x: teeX, y: teeY },
     cup: { x: cupX, y: cupY },
@@ -170,8 +205,15 @@ export function tileAt(g: Ground, x: number, y: number): number {
   return tx < 0 || ty < 0 || tx >= g.cols || ty >= g.rows ? -1 : ty * g.cols + tx;
 }
 
-/** Whether a point is on the grass: on the grid, not solid, and not water. */
+/** Whether a point is on the ground the ball rolls on, grass or sand: on the grid, not solid, and not water. */
 export function onFloor(g: Ground, x: number, y: number): boolean {
   const t = tileAt(g, x, y);
   return t >= 0 && g.solid[t] === 0 && g.water[t] === 0;
+}
+
+/** How far a point is from the side of the nearest post, or Infinity on a hole with none. */
+export function fromPosts(l: Layout, x: number, y: number): number {
+  let near = Infinity;
+  for (const p of l.bumpers) near = Math.min(near, Math.hypot(x - p.x, y - p.y) - BUMPER.radius);
+  return near;
 }

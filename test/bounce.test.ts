@@ -1,8 +1,9 @@
 /** What a ball does when it meets the rail or something on the course: comes off it, by the figure each has, and not along it. */
 import { describe, expect, it } from 'vitest';
-import { BOUNCE, HARDEST_SHOT, ROLL, TILE, powerFor } from '../src/arena';
-import type { HoleDef } from '../src/course';
+import { BOUNCE, BUMPER, FASTEST, HARDEST_SHOT, ROLL, TILE, powerFor } from '../src/arena';
+import { COURSE, type HoleDef } from '../src/course';
 import type { Game } from '../src/game';
+import { checkInvariants } from '../src/invariants';
 import { DT, newGame, onGreen } from './helpers';
 
 /** The speed to strike a ball so it is going `arrive` after rolling `distance` on the green. */
@@ -65,5 +66,64 @@ describe('a barrier', () => {
     expect(game.world.vy[game.ball], 'coming back off it').toBeLessThan(0);
     expect(after / before, 'by about the figure of the barrier').toBeGreaterThan(BOUNCE.box * 0.6);
     expect(after / before).toBeLessThan(BOUNCE.box * 1.4);
+  });
+});
+
+describe('a bumper', () => {
+  /** A lane with a post in its middle, and room behind the ball so it can come back off it. */
+  const POST: HoleDef = {
+    name: 'test post',
+    par: 3,
+    map: ['#######', '#..C..#', '#.....#', '#..o..#', '#.....#', '#.....#', '#.....#', '#.....#', '#..T..#', '#######'],
+  };
+
+  it('throws a ball struck at it back faster than it came, as a pinball post does', () => {
+    const { game } = newGame(1, null, [POST]);
+    const post = game.layout.bumpers[0];
+    const { tee } = game.layout;
+    const gap = post.y - BUMPER.radius - tee.y - 1;
+    game.shoot(Math.PI / 2, powerFor(arriving(15, gap), HARDEST_SHOT));
+    const { before, after } = meet(game);
+    expect(before, 'met at about 15').toBeGreaterThan(12);
+    expect(game.world.vy[game.ball], 'coming back off it').toBeLessThan(0);
+    expect(after / before, 'faster than it came, by about the post').toBeGreaterThan(1.05);
+    expect(after / before).toBeLessThan(BUMPER.restitution + 0.1);
+    expect(BUMPER.restitution).toBe(1.2);
+  });
+
+  it('never throws a ball faster than half as fast again as the club struck it, even shuttled between two posts', () => {
+    // two posts facing each other, the ball exactly on the line between them: each post throws it back faster than it
+    // came, and without the ceiling it runs away to thousands a second
+    const PAIR: HoleDef = {
+      name: 'test pair',
+      par: 3,
+      map: ['#######', '#C....#', '#..o..#', '#.....#', '#.....#', '#..o..#', '#.....#', '#..T..#', '#######'],
+    };
+    const { game } = newGame(1, null, [PAIR]);
+    const [a, b] = game.layout.bumpers;
+    game.place(a.x, (a.y + b.y) / 2);
+    game.shoot(Math.PI / 2, 1);
+    let most = 0;
+    for (let f = 0; f < 10 * 60; f++) {
+      game.step(DT);
+      most = Math.max(most, Math.hypot(game.world.vx[game.ball], game.world.vy[game.ball]));
+      expect(checkInvariants(game), `frame ${f}`).toEqual([]);
+    }
+    expect(most, 'thrown faster than it was struck').toBeGreaterThan(HARDEST_SHOT * 1.1);
+    expect(most, 'but never past the ceiling').toBeLessThanOrEqual(HARDEST_SHOT * FASTEST + 1e-3);
+    expect(FASTEST).toBe(1.5);
+  });
+
+  it('is not somewhere a ball can be put down', () => {
+    const { game } = newGame(1, null, [POST]);
+    const post = game.layout.bumpers[0];
+    expect(() => game.place(post.x + BUMPER.radius + 0.5, post.y)).toThrow(/on a post/);
+    expect(() => game.place(post.x + BUMPER.radius + 1.3, post.y)).not.toThrow();
+  });
+
+  it('is on the course, on a hole of its own', () => {
+    const hole = COURSE.find((h) => h.name === 'Bumpers')!;
+    expect(COURSE.indexOf(hole), 'the sixth hole').toBe(5);
+    expect(hole.map.join('').split('o').length - 1, 'five posts').toBe(5);
   });
 });

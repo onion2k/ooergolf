@@ -4,8 +4,8 @@
  * high the ground is there, and the wind that blows across it. The green
  * grows on the course's grass at each tile's height, mown in the stripes the
  * tiles are drawn in; the rough grows off the course, down where the rough
- * lies, and on to the horizon; and nothing grows on the rail, on water, on a
- * belt, or in the cup or on its rim. Content and the arithmetic of reading it: the
+ * lies, and on to the horizon; and nothing grows on the rail, on water, on
+ * sand, on a belt, or in the cup or on its rim. Content and the arithmetic of reading it: the
  * renderer grows and draws the blades, and the page hands it this.
  */
 import type { GrassField, GrassKind, TrampleRect, Wind } from 'artshape-render/game/grass';
@@ -95,7 +95,7 @@ export function fieldOf(layout: Layout, obstacles: Obstacles, name: string): Gra
       if (t < 0 || (layout.solid[t] && !layout.rail[t])) {
         mask[i] = ROUGH + 1;
         heights[i] = -ROUGH_DEPTH;
-      } else if (!layout.solid[t] && !layout.water[t] && !belted.has(t)) {
+      } else if (!layout.solid[t] && !layout.water[t] && !layout.sand[t] && !belted.has(t)) {
         // not in the cup, nor through its gold rim, which is lower than the green's blades and would be lost in them
         if (Math.hypot(x - layout.cup.x, y - layout.cup.y) < CUP.radius + CUP_LOOK.rim) continue;
         mask[i] = GREEN + 1;

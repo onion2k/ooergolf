@@ -25,6 +25,7 @@ import {
   bumper,
   bunker,
   bunting,
+  sandBed,
   collar,
   conveyor,
   cup,
@@ -71,6 +72,7 @@ function catalogue(): [string, Model][] {
     ['water', water(6, 9)],
     ['small water', water(3, 3, { seed: 4 })],
     ['bunker', bunker(9, 6)],
+    ['sand bed', sandBed(BUNKER_TILES, 3)],
     ['conveyor', conveyor(6, 12)],
     ['round tree', tree('round')],
     ['pine', tree('pine', { height: 10, seed: 3 })],
@@ -81,6 +83,52 @@ function catalogue(): [string, Model][] {
     ['fence', fence(6)],
   ];
 }
+
+/** The Bunker's own sand, as tiles from its south-west corner: five across, and three under their middle. */
+const BUNKER_TILES: [number, number][] = [
+  [0, 1],
+  [1, 1],
+  [2, 1],
+  [3, 1],
+  [4, 1],
+  [1, 0],
+  [2, 0],
+  [3, 0],
+];
+
+describe('a bed of sand', () => {
+  it('covers its tiles flush with the grass, and has a lip only where it meets the grass, never between two tiles', () => {
+    const m = sandBed(BUNKER_TILES, 3);
+    const b = bounds(m.parts);
+    expect([b.min[0], b.max[0], b.min[1], b.max[1]].map((v) => +v.toFixed(5))).toEqual([0, 15, 0, 6]);
+    expect(b.min[2]).toBeCloseTo(0, 5);
+    expect(b.max[2]).toBeCloseTo(BUNKER.lip, 5);
+    const raised = points(partNamed(m, 'lip').mesh).filter((p) => p[2] > 1e-6);
+    for (const [x, y] of raised) {
+      expect(Math.abs(x - 3) < 0.3 && y > 3.6 && y < 5.4, `a lip between two tiles of the long row, at ${x},${y}`).toBe(
+        false,
+      );
+      expect(y > 2.7 && y < 3.3 && x > 3.6 && x < 11.4, `a lip between the rows, at ${x},${y}`).toBe(false);
+    }
+    expect(
+      raised.some(([x, y]) => x < 0.5 && y > 3 && y < 6),
+      'the long row ends in a lip',
+    ).toBe(true);
+    expect(
+      raised.some(([x, y]) => y < 0.5 && x > 3.5 && x < 11.5),
+      'the short row has a lip at its foot',
+    ).toBe(true);
+    expect(
+      raised.some(([x, y]) => y > 2.9 && y < 3.6 && x < 2.5),
+      'and the long row under its ends',
+    ).toBe(true);
+    expect(partNamed(m, 'sand').pattern?.kind).toBe(PATTERN.speckle);
+  });
+
+  it("stays within its budget for the course's bunker", () => {
+    expect(triangles(sandBed(BUNKER_TILES, 3))).toBeLessThanOrEqual(BUDGET['sand bed']);
+  });
+});
 
 /** Every part a model has, the ones the game moves as well as the ones it does not. */
 const everyPart = (m: Model): Part[] => [...m.parts, ...m.moving];

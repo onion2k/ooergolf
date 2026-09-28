@@ -80,6 +80,19 @@ describe('the turf of a hole', () => {
     }
   });
 
+  it('grows nothing on sand, where the bunker is drawn, and grass all round it', () => {
+    const SAND = layoutOf(['#######', '#..C..#', '#.sss.#', '#.sss.#', '#..T..#', '#######']);
+    const f = fieldOf(SAND, new Obstacles([], SAND), 'test sand');
+    for (let i = 0; i < f.mask.length; i++) {
+      const x = f.origin[0] + ((i % f.cols) + 0.5) * f.cell,
+        y = f.origin[1] + (Math.floor(i / f.cols) + 0.5) * f.cell;
+      const t = tileAt(SAND, x, y);
+      if (t >= 0 && SAND.sand[t]) expect(f.mask[i], `grass in the sand at ${x},${y}`).toBe(0);
+    }
+    const beside = { x: SAND.originX + 1.5 * TILE, y: SAND.originY + 2.5 * TILE };
+    expect(at(f, beside.x, beside.y).kind, 'the green beside it').toBe(GREEN + 1);
+  });
+
   it('mows the green in the stripes the tiles had, two rows wide, from the first row of the course', () => {
     const stripes = field.kinds[GREEN].stripes!;
     expect(stripes.width).toBe(2 * TILE);
