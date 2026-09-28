@@ -27,7 +27,9 @@ import { checkInvariants } from '../src/invariants';
 import { Obstacles } from '../src/obstacles';
 import { AIM_DOTS, Scene } from '../src/scene';
 import { fieldOf } from '../src/turf';
-import { PHYSICS } from '../src/physics';
+import { CUP } from '../src/course';
+import { PHYSICS, makeWorld, physicsTerrain, terrainRefusal } from '../src/physics';
+import { seeded } from '../src/random';
 import { DT, newGame } from './helpers';
 
 /** A green nine tiles across and fifteen long, rail round it, the cup near the far end and the tee near the near. */
@@ -45,6 +47,9 @@ function terrain(raised: [number, number, string][] = []): string[] {
   for (const [c, r, d] of raised) rows[r][c] = d;
   return rows.map((r) => r.join(''));
 }
+/** What the physics refuses in a terrain for the map, or null: its own rules, asked through the game's side of it. */
+const refused = (grid: string[]) => terrainRefusal(layoutOf(MAP, grid), CUP);
+
 /** The middle of the tile at `column` and `row` counted from the top of the map. */
 const middle = (l: ReturnType<typeof layoutOf>, column: number, row: number) => ({
   x: l.originX + (column + 0.5) * TILE,
@@ -117,10 +122,10 @@ describe('a hole that slopes', () => {
   });
 
   it('refuses tiles side by side more than half a tile apart in height, rock and all', () => {
-    expect(() => layoutOf(MAP, terrain([[4, 10, '3']])), 'a tile and a half, allowed').not.toThrow();
-    expect(() => layoutOf(MAP, terrain([[4, 10, '4']]))).toThrow(/half a tile/);
+    expect(refused(terrain([[4, 10, '3']])), 'a tile and a half, allowed').toBeNull();
+    expect(refused(terrain([[4, 10, '4']]))).toMatch(/half a tile/);
     // the rail's height shapes the ground beside it, so it is held to the rule too
-    expect(() => layoutOf(MAP, terrain([[0, 10, '4']]))).toThrow(/half a tile/);
+    expect(refused(terrain([[0, 10, '4']]))).toMatch(/half a tile/);
   });
 
   it('allows a whole tile between tiles corner to corner, as the physics does: half a tile along each way', () => {
@@ -133,9 +138,9 @@ describe('a hole that slopes', () => {
       [4, 9, '2'],
       [4, 11, '2'],
     ];
-    expect(() => layoutOf(MAP, terrain(peak))).not.toThrow();
+    expect(refused(terrain(peak))).toBeNull();
     // but not more than half a tile side by side
-    expect(() => layoutOf(MAP, terrain([...peak, [3, 10, '0']]))).toThrow(/half a tile/);
+    expect(refused(terrain([...peak, [3, 10, '0']]))).toMatch(/half a tile/);
   });
 
   it('rests a ball higher on a slope than its radius, by the slope', () => {
@@ -149,11 +154,11 @@ describe('a hole that slopes', () => {
 
   it('refuses a slope near enough the cup to tip it: all flat as far as the smoothing reaches it', () => {
     // the cup is at column 4, row 2: its pad is three tiles each way
-    expect(() => layoutOf(MAP, terrain([[6, 5, '1']])), 'three rows off').toThrow(/cup/);
-    expect(() => layoutOf(MAP, terrain([[4, 6, '1']])), 'four rows off').not.toThrow();
+    expect(refused(terrain([[6, 5, '1']])), 'three rows off').toMatch(/not level/);
+    expect(refused(terrain([[4, 6, '1']])), 'four rows off').toBeNull();
     // a pad raised as a whole is level, and allowed: a cup on a flat hilltop
     const hill = terrain().map((r, i) => (i <= 6 ? r.replace(/0/g, '2') : i === 7 ? r.replace(/0/g, '1') : r));
-    expect(() => layoutOf(MAP, hill)).not.toThrow();
+    expect(refused(hill)).toBeNull();
   });
 });
 
@@ -188,9 +193,8 @@ describe('a game on ground that slopes', () => {
     expect(game.card).toEqual([]);
     expect(game.layout.terrain.some((h) => h > 0)).toBe(true);
     expect(told[told.length - 1]).toBe(`started 0 ${VALLEY.par}`);
-    // the physics has no terrain yet, so it rests the ball on its flat floor below the ground the game has: which the
-    // rule for a ball at rest rightly calls in the air, until the physics is given the slopes
-    expect(checkInvariants(game).join()).toMatch(/at rest in the air/);
+    // the physics has the slopes: the ball rests on the ground the game has, and every rule holds
+    expect(checkInvariants(game)).toEqual([]);
   });
 
   it('reads a hole’s terrain into its layout', () => {
@@ -345,5 +349,104 @@ describe('what is drawn on ground that slopes', () => {
       expect(z - heightAt(l, x, y), `dot ${k}`).toBeGreaterThan(0.3);
       expect(z - heightAt(l, x, y), `dot ${k}`).toBeLessThan(0.5);
     }
+  });
+});
+
+describe('the physics on ground that slopes', () => {
+  it('is given a hole’s slopes: the floor of its world is the game’s ground everywhere on the course', () => {
+    const l = layoutOf(VALLEY.map, VALLEY.terrain);
+    const world = makeWorld(l, CUP, seeded(1));
+    let most = 0;
+    for (let x = l.bounds.minX + 0.1; x < l.bounds.maxX; x += 0.37)
+      for (let y = l.bounds.minY + 0.1; y < l.bounds.maxY; y += 0.41)
+        most = Math.max(most, Math.abs(world.floorAt(x, y) - heightAt(l, x, y)));
+    expect(most).toBeLessThan(1e-5);
+    // and a flat hole's world is given none, so it is stepped exactly as it always was
+    expect(makeWorld(layoutOf(MAP), CUP, seeded(1)).floorAt(0, 0)).toBe(0);
+  });
+
+  it('smooths as the physics’ own terrain does, height and slope, on ground rising and falling at random', () => {
+    const random = seeded(7);
+    const rows = MAP.map((r) => r.split('').map(() => '0'));
+    // a random walk kept within half a tile of its neighbours, and level round the cup
+    for (let r = 7; r < rows.length; r++)
+      for (let c = 0; c < rows[r].length; c++) {
+        const above = +rows[r - 1][c],
+          left = c > 0 ? +rows[r][c - 1] : above;
+        const lo = Math.max(0, above - 3, left - 3),
+          hi = Math.min(9, above + 3, left + 3);
+        rows[r][c] = String(Math.floor(lo + random() * (hi - lo + 1)));
+      }
+    const l = layoutOf(
+      MAP,
+      rows.map((r) => r.join('')),
+    );
+    expect(terrainRefusal(l, CUP)).toBeNull();
+    for (let k = 0; k < 400; k++) {
+      const x = l.originX - 3 + random() * (l.cols * TILE + 6),
+        y = l.originY - 3 + random() * (l.rows * TILE + 6);
+      const theirs = physicsTerrain(l, x, y);
+      expect(heightAt(l, x, y) - stepAt(l, x, y)).toBeCloseTo(theirs.height, 5);
+      const [sx, sy] = slopeAt(l, x, y);
+      expect(sx).toBeCloseTo(theirs.slope[0], 5);
+      expect(sy).toBeCloseTo(theirs.slope[1], 5);
+    }
+  });
+
+  it('rests a ball where the autopilot says it rests, and rolls it away where it says not: the instrument against the thing', () => {
+    const l = layoutOf(VALLEY.map, VALLEY.terrain);
+    const limit = ROLL.roll / PHYSICS.gravity;
+    let rests = 0,
+      rolls = 0;
+    for (let row = 6; row <= 11; row++)
+      for (const dy of [-1, -0.5, 0, 0.5, 1]) {
+        const p = middle(l, 4, row);
+        const y = p.y + dy;
+        const [sx, sy] = slopeAt(l, p.x, y);
+        const s = Math.hypot(sx, sy);
+        const sin = s / Math.sqrt(1 + s * s);
+        // clear of the limit either way, where a hair of arithmetic cannot decide it
+        if (Math.abs(sin - limit) < 0.1 * limit) continue;
+        const { game } = newGame(1, null, [VALLEY]);
+        const { world, ball } = game;
+        world.x[ball] = p.x;
+        world.y[ball] = y;
+        world.z[ball] = heightAt(l, p.x, y) + restingAbove(l, p.x, y, KIND_RADIUS[BALL]);
+        world.vx[ball] = world.vy[ball] = world.vz[ball] = 0;
+        world.wake(ball);
+        for (let f = 0; f < 120; f++) game.step(DT);
+        const moved = Math.abs(world.y[ball] - y);
+        if (restsOn(l, p.x, y)) {
+          expect(moved, `said to rest at row ${row}, ${dy} along`).toBeLessThan(0.3);
+          rests++;
+        } else {
+          expect(moved, `said to roll at row ${row}, ${dy} along`).toBeGreaterThan(0.5);
+          rolls++;
+        }
+      }
+    expect(rests, 'some that rest').toBeGreaterThan(3);
+    expect(rolls, 'some that roll').toBeGreaterThan(3);
+  });
+
+  it('rolls a ball the autopilot strikes down into the hollow to stop about where it meant, and plays the hole out', () => {
+    const { game } = newGame(1, null, [VALLEY]);
+    const l = game.layout;
+    const from = middle(l, 4, 12),
+      to = middle(l, 4, 8);
+    game.place(from.x, from.y);
+    const speed = speedAcross(l, from.x, from.y, to.x, to.y, 0);
+    game.shoot((Math.PI / 2) * Math.sign(to.y - from.y), (speed / game.hardest) ** 2);
+    for (let f = 0; f < 600 && !(f > 1 && game.ready); f++) game.step(DT);
+    expect(Math.abs(game.world.y[game.ball] - to.y), `stopped at ${game.world.y[game.ball].toFixed(2)}`).toBeLessThan(
+      1.5,
+    );
+    // and the whole hole, by the autopilot, breaking no rule
+    const round = newGame(1, null, [VALLEY]).game;
+    const pilot = new Autopilot(round);
+    for (let f = 0; f < 60 * 60 && round.phase === 'play'; f++) {
+      pilot.step(DT);
+      if (f % 15 === 0) expect(checkInvariants(round), `frame ${f}`).toEqual([]);
+    }
+    expect(round.phase, 'holed out').not.toBe('play');
   });
 });

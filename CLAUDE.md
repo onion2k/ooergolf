@@ -10,7 +10,7 @@ file says how it is made. The house
 rules in `~/.claude/CLAUDE.md` apply too. What is in `src/` is a round of
 the course: holes drawn as maps, each played from its tee to its cup with a
 drag pulled back and let go, scored against par, and the card at the end.
-Nine holes are here, on artshape-physics v0.5.1: grass, rail, sand,
+Nine holes are here, on artshape-physics v0.6.0: grass, rail, sand,
 water, raised grass, posts, sliding barriers, a windmill and a conveyor,
 with a green that lets a putt die, a rail and obstacles that bounce, posts
 that throw a ball back faster than it came, and a cup with a rim. The golf
@@ -155,14 +155,17 @@ change meant to move it, and the commit says why. Look at every picture.
   autopilot judges a rise and a ball is put down level by it; `slopeAt` and
   `restingAbove` say how the ground slopes and how high a ball rests on it.
   A hole's slopes are an optional `terrain` grid the shape of its map, a
-  digit a tile, half a unit each; `layoutOf` refuses what the physics
-  would: neighbours more than half a tile apart, rock and all, and a slope
-  within the smoothing's reach of the cup. `src/ground.ts` draws the green
+  digit a tile, half a unit each, handed to the world in `physics.ts` on a
+  hole that has any. The physics says what it refuses, `terrainRefusal`
+  there asking its `terrainProblem`: neighbours side by side more than half
+  a tile apart, rock and all, and a slope within the smoothing's reach of
+  the cup. The game keeps its own copy of the smoothing, since only
+  `physics.ts` imports the package, and a test holds it to the physics'
+  own at hundreds of points. `src/ground.ts` draws the green
   as one mesh following it, in its stripes, with earth down its steps, and
   the rail with a top that slopes with it; the cup, flag, tee, sand, posts,
-  aim, camera and glints all stand on it. No hole on the course slopes yet:
-  the physics has no terrain until its release, and a hole that slopes is
-  drawn sloping and rolled flat. `playCourse` in the test API plays one.
+  aim, camera and glints all stand on it. No hole on the course slopes yet;
+  `playCourse` in the test API plays one.
   `src/glints.ts` says when the gold of the cup and the pin twinkles, from
   game time, and the page draws it as one of the renderer's glow quads.
 - What moves only to be seen, all from game time so a picture is the same
@@ -306,17 +309,15 @@ ball down at a lie.
 Each of these is the first feature's to bring, with every gate green at
 each step, and a gate handed what it needs in the same change:
 
-- Holes that slope, on the course, when artshape-physics' terrain is
-  released (built, not yet tagged): the layout's `terrain` handed to the
-  world as `WorldOptions.terrain` in `physics.ts`; `terrainProblem` from
-  `artshape-physics/terrain` called in `layoutOf` in place of the game's own
-  copy of the rules; a test holding the game's `heightAt` and `slopeAt` to
-  that module's; the resting slope (13.2° on the green) and the feel tuned;
-  and pace and pars set. Until then the rule that a ball at rest lies on the
-  ground rightly fails on a hole that slopes, since the physics rolls it
-  flat. A cup that tilts with a sloped green is the physics' part two, not
-  begun. A barrier or a windmill on a slope is refused when a hole is
-  built, as the physics' fuzzer found one carrying a ball round for good.
+- Holes that slope, on the course: designed, their feel tuned, and pace and
+  pars set. The physics rolls on them since v0.6.0, and the game plays a
+  hole that slopes breaking no rule. The autopilot stops within 0.6 units of
+  where it means on four shots across a hollow in five, and 2.4 long on a
+  21-unit climb: it sums the slowing over the level distance, where the
+  physics slows a ball along the slope. A cup that tilts with a sloped green
+  is the physics' part two, not begun. A barrier or a windmill on a slope is
+  refused when a hole is built, as the physics' fuzzer found one carrying a
+  ball round for good.
 - The ninth hole's own, as `DESIGN.md` has it, with everything on it: The
   Mill Race has no sand and no post yet.
 - Pars that are what a player takes: see the pace gate, above. The

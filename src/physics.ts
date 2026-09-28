@@ -6,11 +6,36 @@
  * steps or reads bodies imports from here, so the package stays behind one
  * door, and a change it needs goes in its own repo with a version bump here.
  */
+import { heightAt as terrainHeightAt, slopeAt as terrainSlopeAt, terrainProblem } from 'artshape-physics/terrain';
 import { World, type WorldOptions } from 'artshape-physics/world';
 import { BODY_CAPACITY, BOTTOM, BOUNCE, BUMPER, KIND_RADIUS, ROLL, SAND, TILE, heightAt, type Layout } from './arena';
 import type { Random } from './random';
 
 export { World, type Belt, type Pusher } from 'artshape-physics/world';
+
+/**
+ * What the physics refuses in a hole's slopes, or null: its own rules, with
+ * the hole's grid, its biggest ball and its cup. Tiles side by side more than
+ * half a tile apart, rock and all, and ground that is not level wherever its
+ * smoothing reaches the cup. A world built on a refused terrain throws the
+ * same; this asks without building one.
+ */
+export function terrainRefusal(layout: Layout, cup: Cup): string | null {
+  return terrainProblem(layout.terrain, gridOf(layout), Math.max(...KIND_RADIUS), [
+    { x: layout.cup.x, y: layout.cup.y, radius: cup.radius, depth: cup.depth },
+  ]);
+}
+
+/** The physics' own terrain at a point, without the steps: its height, and its slope across X and along Y. */
+export function physicsTerrain(layout: Layout, x: number, y: number): { height: number; slope: [number, number] } {
+  const grid = gridOf(layout);
+  return { height: terrainHeightAt(layout.terrain, grid, x, y), slope: terrainSlopeAt(layout.terrain, grid, x, y) };
+}
+
+/** A hole's grid as the physics takes it. */
+function gridOf(layout: Layout) {
+  return { cols: layout.cols, rows: layout.rows, originX: layout.originX, originY: layout.originY, tile: TILE };
+}
 
 /** The physics' fixed step, and its gravity: the package's defaults, which the game steps and predicts by. */
 export const PHYSICS = { step: 1 / 120, gravity: 70 } as const;
@@ -45,18 +70,19 @@ export const THE_CUP = 0;
  * shot passes through the rail or a blade.
  */
 export function makeWorld(layout: Layout, cup: Cup, random: Random, belted: ReadonlySet<number> = new Set()): World {
-  const { cols, rows, originX, originY, solid } = layout;
+  const { cols, rows, solid } = layout;
   // a belt carries what lies on it at its own speed, and the green's steady slowing would hold it back to a third of it
   const surface = new Uint8Array(cols * rows);
   for (let t = 0; t < cols * rows; t++) if (layout.sand[t]) surface[t] = SAND_SURFACE;
   for (const t of belted) surface[t] = BELT;
   const options: WorldOptions = {
     capacity: BODY_CAPACITY,
-    grid: { cols, rows, originX, originY, tile: TILE },
+    grid: gridOf(layout),
     solid,
     floor: layout.floor,
-    // the layout's terrain is not handed over yet: the physics has no option for it until its terrain is released, so a
-    // hole that slopes is drawn sloping and rolled flat, and none is on the course
+    // the ground's slopes, on a hole that has any: a hole that is flat is given none, and is stepped exactly as it always
+    // was, where a terrain of noughts would take the sloping path to the same place
+    ...(layout.terrain.some((h) => h !== 0) ? { terrain: layout.terrain } : {}),
     bottom: BOTTOM,
     radii: KIND_RADIUS,
     holes: [{ x: layout.cup.x, y: layout.cup.y, radius: cup.radius, depth: cup.depth, rim: cup.rim, pull: cup.pull }],

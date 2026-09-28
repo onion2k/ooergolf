@@ -5,8 +5,6 @@
  * logic: the game reads it and the page draws it, and the lower modules go
  * on knowing nothing of any hole.
  */
-import { CUP } from './course';
-
 export const TILE = 3;
 /** The most bodies the world can hold. */
 export const BODY_CAPACITY = 64;
@@ -142,8 +140,8 @@ export interface Layout extends Ground {
  * cup on level grass, a digit for grass raised that many steps, `~` water,
  * `s` sand, `o` a post standing on grass, and a space for off the course.
  * `terrain`, if given, is a grid the shape of the map with a digit a tile,
- * how high the ground slopes there; a hole whose slopes the physics would
- * refuse is refused here. The grid is centred on the origin. A map with anything else in it, not exactly one tee and one cup, or
+ * how high the ground slopes there. Whether the physics will take it is the
+ * physics' to say: see `terrainRefusal`. The grid is centred on the origin. A map with anything else in it, not exactly one tee and one cup, or
  * grass on its edge, where a ball would leave the world, is refused.
  */
 export function layoutOf(map: readonly string[], terrain?: readonly string[]): Layout {
@@ -197,7 +195,6 @@ export function layoutOf(map: readonly string[], terrain?: readonly string[]): L
   const [[teeX, teeY]] = tees,
     [[cupX, cupY]] = cups;
   const heights = terrainOf(terrain, cols, rows);
-  heldToTheSlopes(heights, cols, rows, originX, originY, cupX, cupY);
   return {
     cols,
     rows,
@@ -321,52 +318,6 @@ function terrainOf(grid: readonly string[] | undefined, cols: number, rows: numb
       out[(rows - 1 - r) * cols + tx] = (c.charCodeAt(0) - 48) * TERRAIN.step;
     }
   return out;
-}
-
-/**
- * The physics' two rules for ground that slopes, held when a hole is read:
- * no two tiles side by side, along X or along Y, more than half a tile apart
- * in height, rock and all, since the rock's heights shape the ground within
- * two tiles of it; corner to corner they may be a whole tile apart, 35
- * degrees along the diagonal, which the physics allows and tests. And the
- * ground level wherever its smoothing reaches the cup, out to the cup's
- * radius and two balls beyond, so the cup is not tipped.
- */
-function heldToTheSlopes(
-  h: Float32Array,
-  cols: number,
-  rows: number,
-  originX: number,
-  originY: number,
-  cupX: number,
-  cupY: number,
-) {
-  for (let ty = 0; ty < rows; ty++)
-    for (let tx = 0; tx < cols; tx++)
-      for (const [ox, oy] of [
-        [1, 0],
-        [0, 1],
-      ]) {
-        const nx = tx + ox,
-          ny = ty + oy;
-        if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
-        if (Math.abs(h[ty * cols + tx] - h[ny * cols + nx]) > TILE / 2 + 1e-6)
-          throw new Error(
-            `a hole's terrain rises more than half a tile between column ${tx} and ${nx}, row ${rows - 1 - ty}`,
-          );
-      }
-  // a tile's middle shapes the ground within two tiles of it each way
-  const reach = CUP.radius + 2 * KIND_RADIUS[BALL] + 2 * TILE;
-  const level = h[Math.floor((cupY - originY) / TILE) * cols + Math.floor((cupX - originX) / TILE)];
-  for (let ty = 0; ty < rows; ty++)
-    for (let tx = 0; tx < cols; tx++) {
-      const x = originX + (tx + 0.5) * TILE,
-        y = originY + (ty + 0.5) * TILE;
-      if (Math.abs(x - cupX) < reach && Math.abs(y - cupY) < reach && h[ty * cols + tx] !== level)
-        throw new Error(
-          `a hole's terrain slopes by the cup, at column ${tx}, row ${rows - 1 - ty}: it must be level there`,
-        );
-    }
 }
 
 /** Whether a point is on the ground the ball rolls on, grass or sand: on the grid, not solid, and not water. */

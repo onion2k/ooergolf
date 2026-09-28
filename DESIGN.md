@@ -89,14 +89,15 @@ of the physics, all of it in `artshape-physics` and none of it in the game:
 | Floors at heights                | Raised greens and steps (in v0.3.0)        |
 | A bottom to fall out of          | A ball off the edge of the course (v0.2.0) |
 
-Slopes are being added to artshape-physics as terrain: a height a tile,
+Slopes are artshape-physics' terrain, since v0.6.0: a height a tile,
 smoothed between the tiles' middles, on top of the steps, never a wall. The
 game's side is built ahead of it: a hole's slopes are a grid of digits the
 shape of its map, drawn as one sloping green whose rail, cup, flag, tee,
 sand and posts stand on it; the autopilot counts a rise and a fall in how
 hard it strikes and never aims to stop where a ball would roll away (past
 about 13 degrees on the green); and the speed rule allows what a fall
-gives. No hole slopes until the physics can roll on it.
+gives. The physics has rolled on it since v0.6.0; the holes that slope are
+still to be designed.
 
 All of it is in artshape-physics since v0.4.1, made in that repo to its own
 definition of done and taken in here with a version bump. v0.4.1 came of
@@ -152,7 +153,7 @@ to find out: it can. A ball climbs a step lower than its radius at no cost
 to its speed, and a rise of 1.2 is a wall, so a ramp of steps of 0.4 leads
 up onto grass walled off everywhere else.
 
-On artshape-physics v0.5.1, the course is nine holes: Straight, Dog-leg,
+On artshape-physics v0.6.0, the course is nine holes: Straight, Dog-leg,
 The Bunker (sand across the front of the cup, to be gone round or blasted
 through), Pond, Barriers, Bumpers (five posts, one on the straight line to
 the cup), Up and Over (the ramp onto a plateau between two ponds, and a
