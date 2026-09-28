@@ -10,7 +10,7 @@ file says how it is made. The house
 rules in `~/.claude/CLAUDE.md` apply too. What is in `src/` is a round of
 a course, chosen on a start screen: holes drawn as maps, each played from
 its tee to its cup with a drag pulled back and let go, scored against par,
-and the card at the end. Two courses are here, on artshape-physics v0.7.0.
+and the card at the end. Two courses are here, on artshape-physics v0.8.0.
 The Meadow is nine holes of grass, rail, sand, water, raised grass, posts,
 sliding barriers, a windmill and a conveyor, with a green that lets a putt
 die, a rail and obstacles that bounce, posts that throw a ball back faster
@@ -332,6 +332,10 @@ each step, and a gate handed what it needs in the same change:
   median. A barrier or a windmill on a slope is refused when a hole is
   built, as the physics' fuzzer found one carrying a ball round for good.
 - The course a player is on, in the save: a reload opens the start screen.
+- Steps a ball meets as ledges. v0.8.0's `stepEdges` bounces a ball off a
+  step's top edge and lets it climb a riser only with speed; tried on the
+  game, Up and Over's median went from 2 to 4 and four tests failed, so it
+  is off in `makeWorld` until the stairs are ramps of terrain.
 - The ninth hole's own, as `DESIGN.md` has it, with everything on it: The
   Mill Race has no sand and no post yet.
 - Pars that are what a player takes: see the pace gate, above. The

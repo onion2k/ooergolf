@@ -94,7 +94,16 @@ export function makeWorld(layout: Layout, cup: Cup, random: Random, belted: Read
       { drag: 0, roll: SAND.roll },
     ],
     random,
-    tuning: { wallRestitution: BOUNCE.rail, sleepInAir: false, sleepSpeed: 2, smoothWalls: true, travel: 0.5 },
+    // a step is met as a change of floor and not as a ledge with an edge: with v0.8.0's edges a ball climbs a riser only
+    // with speed, and Up and Over's stairs took two strokes more on the median
+    tuning: {
+      wallRestitution: BOUNCE.rail,
+      sleepInAir: false,
+      sleepSpeed: 2,
+      smoothWalls: true,
+      travel: 0.5,
+      stepEdges: false,
+    },
   };
   const world = new World(options);
   // the posts, which never move: each from below everything up to its top, which is a floor to what lands on it, and
