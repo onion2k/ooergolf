@@ -8,6 +8,7 @@ import type { GameRenderer } from 'artshape-render/game/renderer';
 import type { Gpu } from 'artshape-render/gpu/context';
 import { noFog } from 'artshape-render/game/fog';
 import { bakeEnvironment } from 'artshape-render/render/env';
+import { SUN } from './sun';
 
 /** How many millimetres a world unit is: the fog's lengths are the world's own, and its density per one of them. */
 const MM_PER_UNIT = 100;
@@ -31,8 +32,13 @@ export const HAZE = { halfWay: 3000, colour: [0.2, 0.3, 0.42] as [number, number
  * The clean toy of `LOOK.md`: edges drawn at four samples a pixel, the toon
  * bands eased over a narrow width so a band's edge on a curve is a clean line,
  * the shade a cool blue-violet of a colour rather than a grey of it, a warm
- * rim where a thing turns from the camera, and the sky's light from above
- * with a warm bounce off the grass from below.
+ * rim where a thing turns from the camera, the sky's light from above with a
+ * warm bounce off the grass from below, and the form light, which keeps some
+ * of the sun's fall-off in the top band. Without that last, every slope a
+ * ball can roll on takes more of this high sun than the top band's edge, and
+ * a hill was drawn exactly as bright as the flat: at 2.5 the Volcano's flank
+ * facing the sun reads 1.46 times as bright as the one turned from it, where
+ * it read 1.00, and the steepest slopes reach the band beneath.
  */
 export const TOY = {
   antialias: 'msaa',
@@ -43,6 +49,7 @@ export const TOY = {
   rimWidth: 0.18,
   skyLight: [0.5, 0.6, 0.75] as [number, number, number],
   groundLight: [0.38, 0.34, 0.22] as [number, number, number],
+  form: 2.5,
 } as const;
 
 /**
@@ -53,7 +60,7 @@ export const TOY = {
 export async function daylight(renderer: GameRenderer, ctx: Gpu): Promise<void> {
   renderer.look = {
     ...renderer.look,
-    sunDir: [0.35, -0.3, 0.89],
+    sunDir: SUN,
     // toon light is at a colour's full strength, so the sun is bright and the colours are shown straight
     sunColour: [2.55, 2.42, 2.22],
     exposure: 1,

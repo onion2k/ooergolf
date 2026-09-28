@@ -1,6 +1,6 @@
 /** The look's figures from sampled colours: the arithmetic the look-metrics gate reads a picture by. */
 import { describe, expect, it } from 'vitest';
-import { blueShare, figuresOf, luminance, medianColour, saturation, type Rgb } from '../smoke/metrics';
+import { blueShare, figuresOf, luminance, medianColour, saturation, type Rgb, type Samples } from '../smoke/metrics';
 
 describe('the look’s arithmetic', () => {
   it('weighs a colour’s brightness as the eye does, in linear light', () => {
@@ -49,6 +49,8 @@ describe('the look’s arithmetic', () => {
       rough: [[50, 100, 25]],
       railTop: [[220, 160, 120]],
       railShade: [[110, 80, 60]],
+      sunward: [[1, 1, 1]],
+      away: [[1, 1, 1]],
     });
     expect(f.saturation).toBeCloseTo(0.75, 6);
     // twice as bright in sRGB is more than four times as bright in light
@@ -61,7 +63,32 @@ describe('the look’s arithmetic', () => {
       rough: [[50, 100, 25]],
       railTop: [[220, 160, 120]],
       railShade: [[90, 80, 100]],
+      sunward: [[1, 1, 1]],
+      away: [[1, 1, 1]],
     });
     expect(cooled.coolShade).toBeGreaterThan(0.1);
+  });
+
+  it('reads the ground’s shape from its flanks: the one facing the sun brighter than the one turned from it', () => {
+    const plain: Omit<Samples, 'sunward' | 'away'> = {
+      green: [[100, 200, 50]],
+      rough: [[50, 100, 25]],
+      railTop: [[220, 160, 120]],
+      railShade: [[110, 80, 60]],
+    };
+    const flat = figuresOf({ ...plain, sunward: [[100, 200, 50]], away: [[100, 200, 50]] });
+    expect(flat.shape, 'a hill drawn as bright as the flat').toBeCloseTo(1, 6);
+    const lit = figuresOf({
+      ...plain,
+      sunward: [
+        [110, 215, 55],
+        [111, 214, 54],
+      ],
+      away: [
+        [85, 170, 42],
+        [84, 171, 41],
+      ],
+    });
+    expect(lit.shape).toBeGreaterThan(1.3);
   });
 });

@@ -303,6 +303,18 @@ leak gate where it keeps anything; a picture at a fixed frame of each.
 **Edge cases:** a hole restarted mid-motion, the last hole and the card,
 and a ball holed at the moment of a knock.
 
+## After the stages: the shape of the ground
+
+The Hills could not be read: every slope a ball can roll on takes more of
+the high sun than the top toon band's edge, so a hill was drawn exactly as
+bright as the flat, and only the stripes bending hinted at its shape. The
+renderer's form light, v0.21.0's `form`, keeps some of the sun's fall-off
+in the top band, and the look asks for 2.5 of it: the Volcano's flank
+facing the sun reads 1.46 times as bright as the one turned from it, where
+it read 1.00, held by the look metrics' shape figure. It lights everything,
+so every rounded thing reads rounder too. A putting grid and a flow of
+dots downhill were tried beside it, and not taken.
+
 ## Across every stage
 
 - **The frame:** measured before and after at the standard view and the

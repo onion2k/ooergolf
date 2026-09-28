@@ -2,7 +2,8 @@
  * The look as figures: colours sampled from a picture of the course turned
  * into the few numbers `LOOK.md` holds the look to. How much colour the green
  * has, how far the course stands out from the rough round it, how strongly
- * the sun is told from the shade, and how cool the shade is. Whether the
+ * the sun is told from the shade, how cool the shade is, and whether a
+ * hill's shape can be read from how its flanks are lit. Whether the
  * edges are drawn clean is held where it is decided, by the ladder's rungs
  * and the page's report of them: the rail's cap is rounded over, and no
  * hard edge is left on it to count blended pixels across. A picture held
@@ -16,12 +17,18 @@
 
 export type Rgb = [number, number, number];
 
-/** What was sampled, by where: the green, the rough, the rail's sunlit top, and its face turned from the sun. */
+/**
+ * What was sampled, by where: the green, the rough, the rail's sunlit top,
+ * and its face turned from the sun; and a hill's flank facing the sun and
+ * its flank turned from it.
+ */
 export interface Samples {
   green: Rgb[];
   rough: Rgb[];
   railTop: Rgb[];
   railShade: Rgb[];
+  sunward: Rgb[];
+  away: Rgb[];
 }
 
 /** The figures a picture of the course is held to. */
@@ -34,6 +41,8 @@ export interface Figures {
   contrast: number;
   /** How much more of the shade's colour is blue than of the sunlit top's: above nought, a shade cooler than the sun. */
   coolShade: number;
+  /** How many times brighter a hill's flank facing the sun is than its flank turned from it, in light: one for a hill drawn flat. */
+  shape: number;
 }
 
 /** A channel of sRGB, 0 to 255, as linear light, 0 to 1. */
@@ -82,5 +91,6 @@ export function figuresOf(s: Samples): Figures {
     framing: luminance(green) / luminance(rough),
     contrast: luminance(top) / luminance(shade),
     coolShade: blueShare(shade) - blueShare(top),
+    shape: luminance(medianColour(s.sunward)) / luminance(medianColour(s.away)),
   };
 }
