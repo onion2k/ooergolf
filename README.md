@@ -26,8 +26,8 @@ and the best score on each hole are kept in the browser. The camera follows
 the ball; the wheel zooms on a desktop, and two fingers pinch on a phone. A
 machine that cannot keep up has the picture stepped down a rung at a time.
 
-The grass is real blades, bending in each hole's own wind, and the ball
-lays a track in it as it rolls.
+The green is painted smooth in its mown stripes, and the rough round it is
+real blades, bending in each hole's own wind.
 
 Nine holes so far: a straight putt, a dog-leg, a bunker in front of the
 cup, a pond, sliding barriers, a field of pinball posts, a ramp up onto a

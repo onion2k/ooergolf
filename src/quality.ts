@@ -23,9 +23,9 @@ const STALL_MS = 100;
 /** The rungs, each what it takes away, in the order it takes them. */
 export const RUNGS: readonly Partial<GameEconomy>[] = [
   {},
-  // the grass is a fifth of a frame on a fast machine and more on a phone's, so it is thinned from the first step: half
-  // the blades, the same ones the distance keeps, standing still in the wind; and given up on the last, where the
-  // ground under it is painted its colour
+  // the rough's grass is a quarter of a frame on a fast machine, 0.2 of 0.86 ms, and more on a phone's, so it is thinned
+  // from the first step: half the blades, the same ones the distance keeps, standing still in the wind; and given up on
+  // the last, where the ground under it is painted its colour
   { particles: false, grass: 0.5, wind: false },
   { particles: false, grass: 0.5, wind: false, shadows: false, occlusion: false },
   { particles: false, grass: 0, wind: false, shadows: false, occlusion: false, post: false, effects: 0, fog: false },

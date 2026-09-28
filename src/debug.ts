@@ -149,9 +149,7 @@ export interface GameApi {
   measureFrame(warmup?: number): Promise<number>;
   /**
    * The grass the last frame drew, once the hole's is grown: how many blades
-   * near and far, read back from the GPU; the wind it bent in; and how many
-   * times on this hole the ball has pressed it, and how many of those the
-   * renderer took, which is all of them while the ball is on the course.
+   * of the rough near and far, read back from the GPU, and the wind it bent in.
    */
   grass(): Promise<GrassDrawn>;
 }
@@ -161,7 +159,6 @@ export interface GrassDrawn {
   near: number;
   far: number;
   wind: { direction: [number, number]; strength: number };
-  presses: { asked: number; taken: number };
 }
 
 /** What the page gives the API that is not the game's: time, the camera and the renderer. */

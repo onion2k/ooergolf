@@ -228,13 +228,14 @@ and all the words in the page, not the picture.
   light on. Lamps only where a hole wants one. The shade where things meet
   from screen-space occlusion, a thin haze that pales the far rough, and a
   glint now and then on the gold of the cup and the pin.
-- **Grass** is real blades, grown on the GPU by the renderer: short, dense
-  and mown in stripes on the green, long and sparse in the rough, which is
-  darker so the course stands out from it. Each hole has a gentle wind of
-  its own that the grass bends in, in gusts that cross the course, and the
-  flag and the trees follow the same gusts. A rolling ball lays the blades
-  flat and darker behind it, and they stand again in six seconds. A slow
-  machine is given half the blades, standing still, and the slowest none.
+- **Grass** is real blades in the rough, grown on the GPU by the renderer,
+  long and sparse, and darker so the course stands out from it. The green
+  itself is painted, smooth and clean, in its mown stripes: it had short
+  dense blades of its own, and a track the ball laid in them, until the
+  look of `LOOK.md` took them away. Each hole has a gentle wind of its own
+  that the rough bends in, in gusts that cross the course, and the flag and
+  the trees follow the same gusts. A slow machine is given half the blades,
+  standing still, and the slowest none.
   **Bunkers** are pale, matte and speckled.
 - **Obstacles** are bright glossy plastic: the windmill, the bumpers, the
   barriers, the flags.

@@ -1,12 +1,10 @@
-/** A hole's grass as the renderer grows it: green on the course, rough round it, and none where grass cannot be. */
+/** A hole's grass as the renderer grows it: the rough round the course, and no blade on the course, whose green is painted. */
 import { checkField, gust } from 'artshape-render/game/grass';
 import { describe, expect, it } from 'vitest';
-import { STEP, TILE, layoutOf, tileAt } from '../src/arena';
-import { COURSE, CUP, type HoleDef } from '../src/course';
-import { CUP as CUP_LOOK } from '../src/models/course';
-import { Obstacles } from '../src/obstacles';
+import { layoutOf, tileAt } from '../src/arena';
+import { COURSE, COURSES, type HoleDef } from '../src/course';
 import { ROUGH_DEPTH } from '../src/scene';
-import { GREEN, KINDS, ROUGH, TURF, fieldOf, trampleOf, windOf } from '../src/turf';
+import { KINDS, ROUGH, TURF, fieldOf, windOf } from '../src/turf';
 
 const HOLE: HoleDef = {
   name: 'test turf',
@@ -25,11 +23,7 @@ function at(field: ReturnType<typeof fieldOf>, x: number, y: number) {
 
 describe('the turf of a hole', () => {
   const l = layoutOf(HOLE.map);
-  const field = fieldOf(l, new Obstacles(HOLE.obstacles!, l), HOLE.name);
-  const tile = (col: number, row: number) => ({
-    x: l.originX + (col + 0.5) * TILE,
-    y: l.originY + (l.rows - 1 - row + 0.5) * TILE,
-  });
+  const field = fieldOf(l, HOLE.name);
 
   it('is a field the renderer takes, within its ceilings, round the whole course and the rough beyond', () => {
     expect(() => checkField(field)).not.toThrow();
@@ -40,89 +34,36 @@ describe('the turf of a hole', () => {
     expect(field.outside).toEqual({ kind: ROUGH, height: -ROUGH_DEPTH });
   });
 
-  it('grows the green on the course at its height, and the rough off it, below', () => {
-    const tee = tile(4, 5);
-    expect(at(field, tee.x, tee.y)).toEqual({ kind: GREEN + 1, height: 0 });
-    const step = tile(4, 3);
-    expect(at(field, step.x, step.y).kind).toBe(GREEN + 1);
-    expect(at(field, step.x, step.y).height).toBeCloseTo(STEP, 5);
+  it('grows the rough off the course, down where it lies, and past the field as far as is seen', () => {
     expect(at(field, l.originX - 5, l.originY - 5)).toEqual({ kind: ROUGH + 1, height: -ROUGH_DEPTH });
+    expect(KINDS, 'the rough is the only grass').toEqual([KINDS[ROUGH]]);
+    expect(KINDS[ROUGH].stripes, 'the rough is not mown').toBeUndefined();
   });
 
-  it('grows nothing on the rail, on water, on a belt, or in the cup', () => {
-    const rail = tile(0, 3),
-      water = tile(2, 3),
-      belt = tile(6, 3);
-    expect(at(field, rail.x, rail.y).kind).toBe(0);
-    expect(at(field, water.x, water.y).kind).toBe(0);
-    expect(at(field, belt.x, belt.y).kind).toBe(0);
-    expect(at(field, l.cup.x, l.cup.y).kind).toBe(0);
-    expect(at(field, l.cup.x + CUP.radius * 0.9, l.cup.y).kind, 'inside the rim').toBe(0);
-    // nor through the gold rim round it, which is lower than the green's blades, all the way round
-    const rim = CUP.radius + CUP_LOOK.rim;
-    for (let k = 0; k < 16; k++) {
-      const a = (k / 16) * Math.PI * 2;
-      const on = at(field, l.cup.x + Math.cos(a) * (rim - 0.05), l.cup.y + Math.sin(a) * (rim - 0.05));
-      expect(on.kind, `on the rim at ${k}/16 of the way round`).toBe(0);
-      const px = l.cup.x + Math.cos(a) * (rim + 0.3),
-        py = l.cup.y + Math.sin(a) * (rim + 0.3);
-      // the cup is a tile from the rail, so the way toward it is rail and not green
-      if (l.solid[tileAt(l, px, py)]) continue;
-      expect(at(field, px, py).kind, `just past it at ${k}/16`).toBe(GREEN + 1);
+  it('grows no blade on the course, on any hole of either course: the green is painted, and the rough frames it', () => {
+    for (const hole of COURSES.flatMap((c) => c.holes)) {
+      const hl = layoutOf(hole.map, hole.terrain);
+      const f = fieldOf(hl, hole.name);
+      let rough = 0;
+      for (let i = 0; i < f.mask.length; i++) {
+        const x = f.origin[0] + ((i % f.cols) + 0.5) * f.cell,
+          y = f.origin[1] + (Math.floor(i / f.cols) + 0.5) * f.cell;
+        const t = tileAt(hl, x, y);
+        // on the course is any tile but the rock round it; the rail stands on the course's edge
+        const course = t >= 0 && (!hl.solid[t] || hl.rail[t] === 1);
+        if (course) expect(f.mask[i], `${hole.name}: a blade on the course at ${x},${y}`).toBe(0);
+        else if (f.mask[i] === ROUGH + 1) rough++;
+      }
+      expect(rough, `${hole.name}: the rough round it`).toBeGreaterThan(f.mask.length / 2);
     }
-    // every cell on a rail tile, not only its middle
-    for (let i = 0; i < field.mask.length; i++) {
-      if (field.mask[i] === 0) continue;
-      const x = field.origin[0] + ((i % field.cols) + 0.5) * field.cell,
-        y = field.origin[1] + (Math.floor(i / field.cols) + 0.5) * field.cell;
-      const t = tileAt(l, x, y);
-      if (t >= 0) expect(l.rail[t] === 1 || l.water[t] === 1, `grass on rail or water at ${x},${y}`).toBe(false);
-    }
-  });
-
-  it('grows nothing on sand, where the bunker is drawn, and grass all round it', () => {
-    const SAND = layoutOf(['#######', '#..C..#', '#.sss.#', '#.sss.#', '#..T..#', '#######']);
-    const f = fieldOf(SAND, new Obstacles([], SAND), 'test sand');
-    for (let i = 0; i < f.mask.length; i++) {
-      const x = f.origin[0] + ((i % f.cols) + 0.5) * f.cell,
-        y = f.origin[1] + (Math.floor(i / f.cols) + 0.5) * f.cell;
-      const t = tileAt(SAND, x, y);
-      if (t >= 0 && SAND.sand[t]) expect(f.mask[i], `grass in the sand at ${x},${y}`).toBe(0);
-    }
-    const beside = { x: SAND.originX + 1.5 * TILE, y: SAND.originY + 2.5 * TILE };
-    expect(at(f, beside.x, beside.y).kind, 'the green beside it').toBe(GREEN + 1);
-  });
-
-  it('mows the green in the stripes the tiles had, two rows wide, from the first row of the course', () => {
-    const stripes = field.kinds[GREEN].stripes!;
-    expect(stripes.width).toBe(2 * TILE);
-    expect(stripes.angle).toBe(0);
-    // the band the renderer works out for the middle of each row, as its shader does, against the tiles' own stripe
-    for (let r = 0; r < l.rows; r++) {
-      const y = l.originY + (r + 0.5) * TILE;
-      const band = Math.floor((y + (stripes.offset ?? 0)) / stripes.width);
-      expect(((band % 2) + 2) % 2, `row ${r}`).toBe(Math.floor(r / 2) % 2);
-    }
-    expect(field.kinds[ROUGH].stripes, 'the rough is not mown').toBeUndefined();
   });
 
   it('is the same for a hole every time, and every hole of the course is one the renderer takes', () => {
-    expect(fieldOf(l, new Obstacles(HOLE.obstacles!, l), HOLE.name)).toEqual(field);
+    expect(fieldOf(l, HOLE.name)).toEqual(field);
     for (const hole of COURSE) {
       const hl = layoutOf(hole.map);
-      expect(
-        () => checkField(fieldOf(hl, new Obstacles(hole.obstacles ?? [], hl), hole.name)),
-        hole.name,
-      ).not.toThrow();
+      expect(() => checkField(fieldOf(hl, hole.name)), hole.name).not.toThrow();
     }
-  });
-
-  it('lays a trample over the course, fine enough for the ball, and within the renderer’s ceiling', () => {
-    const t = trampleOf(l);
-    expect(t.cell).toBeLessThanOrEqual(0.25);
-    expect(t.origin[0]).toBeLessThanOrEqual(l.originX);
-    expect(t.origin[0] + t.cols * t.cell).toBeGreaterThanOrEqual(l.originX + l.cols * TILE);
-    expect(t.cols * t.rows).toBeLessThanOrEqual(1024 * 1024);
   });
 });
 

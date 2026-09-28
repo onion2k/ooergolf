@@ -330,15 +330,14 @@ test.describe('sand and posts', () => {
 });
 
 test.describe('the grass', () => {
-  test("grows on each hole, near and far, in the hole's own wind, and the next hole grows its own", async ({
-    page,
-  }) => {
+  test("grows only in the rough round each hole, never on the course, in the hole's own wind", async ({ page }) => {
     const problems = watch(page);
     await start(page, { seed: 1, paused: true });
     await page.evaluate(() => window.game!.step(1));
     const first = await page.evaluate(() => window.game!.grass());
-    expect(first.near, 'blades near the camera').toBeGreaterThan(10_000);
-    expect(first.far, 'and the rough further off').toBeGreaterThan(1_000);
+    // with the green's blades, 51 thousand were drawn near the camera; the rough at the edge of the view is 13 of them
+    expect(first.near, 'no green blades near the camera').toBeLessThan(20_000);
+    expect(first.far, 'the rough round the course').toBeGreaterThan(1_000);
     expect(first.wind.strength, 'a gentle wind').toBeGreaterThanOrEqual(0.3);
     expect(first.wind.strength).toBeLessThanOrEqual(0.65);
     await page.evaluate(() => {
@@ -346,27 +345,8 @@ test.describe('the grass', () => {
       window.game!.step(1);
     });
     const second = await page.evaluate(() => window.game!.grass());
-    expect(second.near, 'grown again on the next hole').toBeGreaterThan(10_000);
+    expect(second.far, 'grown again on the next hole').toBeGreaterThan(1_000);
     expect(second.wind, 'a wind of its own').not.toEqual(first.wind);
-    expect(problems).toEqual([]);
-  });
-
-  test('is pressed wherever the ball rolls on it, and the renderer takes every press', async ({ page }) => {
-    const problems = watch(page);
-    await start(page, { seed: 1, paused: true });
-    // a frame drawn for every frame played, as the page does: the renderer takes so many presses between frames
-    await page.evaluate(() => {
-      window.game!.shoot(Math.PI / 2, 0.4);
-      for (let f = 0; f < 90; f++) window.game!.step(1);
-    });
-    const { presses } = await page.evaluate(() => window.game!.grass());
-    expect(presses.asked, 'pressed as it rolled').toBeGreaterThan(30);
-    expect(presses.taken, 'every press on the course taken').toBe(presses.asked);
-    await page.evaluate(() => window.game!.startHole(1));
-    expect((await page.evaluate(() => window.game!.grass())).presses, 'a new hole starts unpressed').toEqual({
-      asked: 0,
-      taken: 0,
-    });
     expect(problems).toEqual([]);
   });
 
@@ -378,8 +358,10 @@ test.describe('the grass', () => {
     };
     const full = await drawn(0),
       half = await drawn(1);
-    expect(half.near / full.near).toBeGreaterThan(0.4);
-    expect(half.near / full.near).toBeLessThan(0.6);
+    // every blade drawn, near and far: the rough alone is too few near the camera for a share of them to be steady
+    const share = (half.near + half.far) / (full.near + full.far);
+    expect(share).toBeGreaterThan(0.4);
+    expect(share).toBeLessThan(0.6);
   });
 });
 

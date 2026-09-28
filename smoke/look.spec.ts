@@ -222,21 +222,6 @@ test.describe('what it looks like', () => {
     expect(problems).toEqual([]);
   });
 
-  test('a putt a second on, its track pressed in the grass behind it', async ({ page }) => {
-    const problems = watch(page);
-    await start(page, { seed: 11, paused: true });
-    await page.evaluate(() => {
-      const g = window.game!;
-      g.step(30);
-      g.shoot(Math.PI / 2 + 0.12, 0.55);
-      // a frame drawn for every frame played, as the page does, so every press is taken
-      for (let f = 0; f < 60; f++) g.step(1);
-    });
-    await hideStats(page);
-    await expect(page.locator('#view')).toHaveScreenshot('track.png', TOLERANCE);
-    expect(problems).toEqual([]);
-  });
-
   test('a hole done: its score over the course', async ({ page }) => {
     const problems = watch(page);
     await start(page, { seed: 11, paused: true });

@@ -19,14 +19,12 @@ import {
   restingAbove,
   slopeAt,
   stepAt,
-  tileAt,
 } from '../src/arena';
 import { Autopilot, restsOn, speedAcross, timeAlong, timeTo } from '../src/autopilot';
 import type { HoleDef } from '../src/course';
 import { checkInvariants } from '../src/invariants';
 import { Obstacles } from '../src/obstacles';
 import { AIM_DOTS, Scene } from '../src/scene';
-import { fieldOf } from '../src/turf';
 import { CUP } from '../src/course';
 import { PHYSICS, makeWorld, physicsTerrain, terrainRefusal } from '../src/physics';
 import { seeded } from '../src/random';
@@ -319,22 +317,6 @@ describe('the autopilot on ground that slopes', () => {
 });
 
 describe('what is drawn on ground that slopes', () => {
-  it('grows the grass at the height of the ground under each blade', () => {
-    const l = layoutOf(VALLEY.map, VALLEY.terrain);
-    const field = fieldOf(l, new Obstacles([], l), VALLEY.name);
-    let checked = 0;
-    for (let i = 0; i < field.mask.length; i += 97) {
-      if (field.mask[i] === 0) continue;
-      const x = field.origin[0] + ((i % field.cols) + 0.5) * field.cell,
-        y = field.origin[1] + (Math.floor(i / field.cols) + 0.5) * field.cell;
-      const t = tileAt(l, x, y);
-      if (t < 0 || l.solid[t]) continue;
-      expect(field.heights[i]).toBeCloseTo(heightAt(l, x, y), 5);
-      checked++;
-    }
-    expect(checked).toBeGreaterThan(50);
-  });
-
   it('lays the aim’s dots on the ground under each, over the hollow as on the flat', () => {
     const l = layoutOf(VALLEY.map, VALLEY.terrain);
     const scene = new Scene();

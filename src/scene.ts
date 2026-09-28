@@ -50,7 +50,7 @@ import { dress, scatter, type Piece, type SceneryKind } from './scenery';
 import { groundOf, railsOf } from './ground';
 import { flagTurn, lean, ripple } from './sway';
 import type { Shot } from './shot';
-import { GREEN, KINDS, ROUGH } from './turf';
+import { KINDS, ROUGH } from './turf';
 
 /** How tall the rail stands above the grass: a little over the ball, so it reads as the thing the ball banks off. */
 const RAIL_HEIGHT = 1.6;
@@ -61,13 +61,17 @@ const STRIPE_ROWS = 2;
 /** How far apart the tee's markers stand. */
 const TEE_SPACING = 5;
 /**
- * The ground under the grass, between its blades, as the renderer says it
- * should be painted: the green's in its two stripes, lighter and darker by
- * as much as the blades on it are, and the rough's. Without it the ground
- * would show through the blades as a colour of its own.
+ * The green, painted: no blades grow on it, and it is the colour the ground
+ * between the green's blades was, so the course looks as the lowest rung
+ * always drew it. Its two stripes are lighter and darker by the same share.
  */
-const [greenR, greenG, greenB] = grassGround(KINDS[GREEN]);
-const stripeShade = (KINDS[GREEN].stripes?.shade ?? 0) / 2;
+const [greenR, greenG, greenB] = [0.1465, 0.4529, 0.1029];
+const stripeShade = 0.09;
+/**
+ * The ground under the rough, between its blades, as the renderer says it
+ * should be painted, so the ground does not show through as a colour of its
+ * own.
+ */
 const [roughR, roughG, roughB] = grassGround(KINDS[ROUGH]);
 
 /**

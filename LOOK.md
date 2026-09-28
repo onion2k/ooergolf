@@ -84,7 +84,9 @@ speckle is. The green is smooth, bright and clean, and the rough's long
 blades frame it.
 
 **Why first:** the green is most of the picture, and every colour after
-it is tuned against it.
+it is tuned against it. Built first, as the blades and the track taken
+away and the green painted as the lowest rung drew it; its sheen and grain
+are colour work, and go with the palette in stage 3.
 
 **Acceptance criteria:**
 
@@ -166,7 +168,9 @@ chosen: the green's two stripes, the rough, the rail's paint and its cap,
 sand, water, the cup's gold, the flag, the ball and its band, the sun, the
 shade, the rim, the sky and the bounce. The sun warm and strong, the
 ambient lower, so the lit face and the shaded one differ clearly; the haze
-thinned or gone; a little bloom on what is brightest.
+thinned or gone; a little bloom on what is brightest. And the green's
+finish, from stage 1: a soft sheen toward the sun, and a fine turf grain
+drawn in world units, faint enough not to shimmer at a distance.
 
 **Acceptance criteria:**
 
@@ -294,24 +298,20 @@ and a ball holed at the moment of a knock.
 
 ## Decisions
 
-Each is the user's, with a recommendation.
+Made by the user on 28 September 2026.
 
-1. **What the look may cost a frame.** Recommended: the top rung at most
-   3 ms at the standard view on this machine, now 1.1, leaving the rest of
-   the 8 for slower machines. A phone steps down the ladder as it does now.
-2. **The ball's track in the green.** It goes with the blades. Recommended:
-   let it go, since a clean green is the look, and the track is then
-   retired from the game, its picture and its gates with it. The other way
-   is a faint painted track on the green, which is new work for stage 1.
-3. **Antialiasing.** Recommended: four samples a pixel at the top rung, and
-   the post pass one rung down, since the rail and the bunting are thin
-   lines seen all the time.
-4. **The font.** Recommended: an open-licensed rounded face, subset, about
-   20 to 30 kB; the other way is the system's rounded face, which is free
-   and differs from one device to the next.
-5. **The horizon.** Recommended: keep the top-down views as they are, the
-   sky seen only past the course's edge where a view reaches it, and on
-   the start screen, which could look out over a hole.
+1. **What the look may cost a frame:** the top rung at most 5 ms at the
+   standard view on this machine, now 1.1; a phone steps down the ladder as
+   it does now.
+2. **The ball's track in the green:** dropped. It goes with the blades, and
+   the track is retired from the game, its picture and its gates with it.
+3. **Antialiasing:** needed. Four samples a pixel at the top rung, and a
+   cheaper post pass one rung down.
+4. **The font:** no web font. The system's rounded face is kept, and stage
+   5 is the panels, buttons and motion only.
+5. **The horizon:** the top-down views are kept as they are. The gradient
+   sky, the hills beyond and the clouds are left out of stages 2 and 6
+   until a view looks out at the horizon.
 
 ## Not in this
 

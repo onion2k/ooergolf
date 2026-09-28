@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { Mesh } from 'artshape-render/mesh/types';
 import { STEP, TILE, heightAt, layoutOf, terrainAt, type Layout } from '../src/arena';
 import { GROUND, groundOf, railsOf } from '../src/ground';
+import { PALETTE } from '../src/scene';
 
 /** Every triangle of a mesh, as its three corners. */
 function triangles(mesh: Mesh): [number, number, number][][] {
@@ -95,6 +96,19 @@ describe('the ground', () => {
     }
     const flat = layoutOf(MAP.map((r) => r.replace(/1/g, '.')));
     expect(triangles(groundOf(flat).banks).length, 'no step, no earth').toBe(0);
+  });
+
+  it('is painted in its two stripes, the mown one lighter than the other by the same share in every colour', () => {
+    const [r, g, b] = PALETTE.grass,
+      [mr, mg, mb] = PALETTE.grassMown;
+    const share = mg / g;
+    expect(share, 'lighter, and not so much it is another green').toBeGreaterThan(1.05);
+    expect(share).toBeLessThan(1.6);
+    expect(mr / r).toBeCloseTo(share, 6);
+    expect(mb / b).toBeCloseTo(share, 6);
+    // a grass green: green the most of the three, and not the grey of a green seen through fog
+    expect(g).toBeGreaterThan(r * 1.3);
+    expect(g).toBeGreaterThan(b * 1.3);
   });
 
   it('is cut fine enough to follow a slope: a few pieces a tile', () => {
