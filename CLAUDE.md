@@ -160,7 +160,7 @@ change meant to move it, and the commit says why. Look at every picture.
   on the rough as a raised green: the rough lies `ROUGH_DEPTH` below the
   grass, under the bottom of the cup, so the cup is seen into, and the rail
   comes down to meet it. The look is `LOOK.md`'s clean toy, toon daylight
-  on artshape-render v0.20.0, in `src/look.ts`, shared by the game and the
+  on artshape-render v0.21.0, in `src/look.ts`, shared by the game and the
   showcase: edges drawn at four samples a pixel (the post pass one rung
   down the ladder, and none on the last), the toon bands eased at their
   edges, a cool blue-violet shade, a warm rim, the sky's light from above
