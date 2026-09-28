@@ -12,10 +12,12 @@
 import { LightPool } from 'artshape-render/game/lights';
 import { GameRenderer, type GameGroup } from 'artshape-render/game/renderer';
 import { createContext } from 'artshape-render/gpu/context';
+import { layoutOf } from './arena';
 import { frameCost } from './frame-cost';
+import { railsOf } from './ground';
 import { daylight } from './look';
 import { place } from './matrix';
-import { ball, box, square } from './meshes';
+import { square } from './meshes';
 import {
   FLAG_COLOURS,
   FLOWER_COLOURS,
@@ -31,6 +33,7 @@ import {
   fence,
   flag,
   flowers,
+  golfBall,
   group,
   hedge,
   placeBlades,
@@ -105,6 +108,26 @@ main().catch((err: unknown) => {
   console.error(err);
 });
 
+/**
+ * The rail exhibit, as a hole's map: a run with a corner at one end, a T in
+ * its middle and a stem down from each, and grass inside the corner, since a
+ * map must have a tee and a cup; only the rail is drawn.
+ */
+const RAIL_PIECE = ['       ', ' ##### ', ' #.#.  ', ' #T#C  ', '       '];
+
+/** Rail drawn from a map, as the game draws a hole's, standing on the showcase's grass: its cap and its timber. */
+function railPiece(map: readonly string[], depth = 0): Model {
+  const rails = railsOf(layoutOf(map), RAIL_HEIGHT, depth);
+  return {
+    name: 'rail',
+    parts: [
+      { name: 'sides', mesh: rails.sides, material: [...PALETTE.rail, 0.6] },
+      { name: 'cap', mesh: rails.cap, material: [...PALETTE.railCap, 0.45] },
+    ],
+    moving: [],
+  };
+}
+
 /** The stripe's colour at `y`, as the game mows its grass. */
 const stripeAt = (y: number) => (Math.floor((y - PATCH.minY) / STRIPE) % 2 ? PALETTE.grassMown : PALETTE.grass);
 
@@ -132,6 +155,8 @@ function exhibits(seed: number): Exhibit[] {
       ],
     },
     { name: 'tee', label: 'tee markers', row: 'course', items: [{ model: teeMarkers(4), x: -14, y: -21 }] },
+    // a piece of rail turning a corner, meeting itself in a T and ending three times, for its cap and its rounds
+    { name: 'rail', label: 'rail', row: 'course', items: [{ model: railPiece(RAIL_PIECE), x: 0, y: -21 }] },
     {
       name: 'bumper',
       label: 'bumpers r 1.2, 2',
@@ -235,21 +260,30 @@ async function main() {
       }
   const isCut = (x: number, y: number) => cut.some(([x0, x1, y0, y1]) => x > x0 && x < x1 && y > y0 && y < y1);
   const tiles: [number, number][] = [];
-  const rails: [number, number][] = [];
-  for (let x = PATCH.minX - TILE; x < PATCH.maxX + TILE; x += TILE)
-    for (let y = PATCH.minY - TILE; y < PATCH.maxY + TILE; y += TILE) {
-      const inside = x >= PATCH.minX && x < PATCH.maxX && y >= PATCH.minY && y < PATCH.maxY;
-      if (!inside) rails.push([x + TILE / 2, y + TILE / 2]);
-      else if (!isCut(x + TILE / 2, y + TILE / 2)) tiles.push([x + TILE / 2, y + TILE / 2]);
-    }
+  for (let x = PATCH.minX; x < PATCH.maxX; x += TILE)
+    for (let y = PATCH.minY; y < PATCH.maxY; y += TILE)
+      if (!isCut(x + TILE / 2, y + TILE / 2)) tiles.push([x + TILE / 2, y + TILE / 2]);
   const grass = new Float32Array(tiles.length * 16),
     grassLooks = new Float32Array(tiles.length * 4);
   tiles.forEach(([x, y], k) => {
     place(grass, k, x, y, 0, 0, TILE, TILE, 1);
     grassLooks.set([...stripeAt(y), 0.85], k * 4);
   });
-  const railAt = new Float32Array(rails.length * 16);
-  rails.forEach(([x, y], k) => place(railAt, k, x, y, 0));
+  // the rail a tile outside the patch all round, as a hole's is drawn: a map of the patch, rail round its edge
+  const [across, along] = [(PATCH.maxX - PATCH.minX) / TILE + 2, (PATCH.maxY - PATCH.minY) / TILE + 2];
+  const patchMap = Array.from({ length: along }, (_, r) =>
+    Array.from({ length: across }, (_, c) =>
+      r === 0 || c === 0 || r === along - 1 || c === across - 1
+        ? '#'
+        : r === 1 && c === 1
+          ? 'T'
+          : r === 1 && c === 2
+            ? 'C'
+            : '.',
+    ).join(''),
+  );
+  const railAt = new Float32Array(16);
+  place(railAt, 0, (PATCH.minX + PATCH.maxX) / 2, (PATCH.minY + PATCH.maxY) / 2, 0);
   // the rough round the patch and not under it, so it does not hide the inside of a cup
   const rough = new Float32Array(4 * 16);
   const [rx0, rx1, ry0, ry1] = [PATCH.minX - TILE, PATCH.maxX + TILE, PATCH.minY - TILE, PATCH.maxY + TILE];
@@ -261,14 +295,15 @@ async function main() {
 
   const still: GameGroup[] = [
     { mesh: square(), matrices: grass, materials: grassLooks },
-    { mesh: box(TILE, TILE, RAIL_HEIGHT), matrices: railAt, albedo: [...PALETTE.rail], roughness: 0.55 },
+    ...railPiece(patchMap, 0.05).parts.map((part) => group(part, railAt)),
     { mesh: square(), matrices: rough, albedo: [...PALETTE.rough], roughness: 0.95 },
   ];
   // two balls, for the size of things: one on the tee, one rolling up to the windmill's door
   const balls = new Float32Array(2 * 16);
   place(balls, 0, -14, -21, 1);
   place(balls, 1, -14, -3, 1);
-  still.push({ mesh: ball(1, 8, 14), matrices: balls, albedo: [0.98, 0.98, 0.96], roughness: 0.25 });
+  const [theBall] = golfBall(1, { colour: [0.98, 0.98, 0.96], band: [0.9, 0.16, 0.12] }).parts;
+  still.push(group(theBall, balls));
 
   // ---- what moves: the windmill's blades and the belt's chevrons ----
 

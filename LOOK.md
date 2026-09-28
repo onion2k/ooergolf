@@ -200,6 +200,12 @@ one before.
 
 ### 4. The course's furniture
 
+**Built.** One thing found and not fixed: the rail tiles under a
+windmill's tower are left out whole, and the tower covers only half of
+each, so for about 1.5 units either side of it the physics has rail that is
+drawn as rough. Drawing them puts the rail's side in the plane of the
+door's inner walls; it wants a fix of its own.
+
 **What:** the things on screen every moment, remade as rounded toys.
 
 - **The rail:** painted timber with a rounded cap along its top, its edges

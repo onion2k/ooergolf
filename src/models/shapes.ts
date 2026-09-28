@@ -4,7 +4,9 @@
  * `face` and `tri`, so every face is flat-shaded and shares no vertex with
  * its neighbour. Each takes a `Place` that moves its points before a face is
  * made of them, and a face's normal is worked out from where its points end
- * up, so a solid turned, moved or scaled evenly is still lit right. Without
+ * up, so a solid turned, moved or scaled evenly is still lit right. And one
+ * that is shaded smooth, `lathe`, a profile turned about Z whose faces share
+ * their normals where the surface turns, for what must look round. Without
  * these, every model would write its own cylinder, and one of them would
  * wind a face inside out.
  */
@@ -296,6 +298,67 @@ export function rod(b: MeshBuilder, from: V3, to: V3, r: number, n: number, caps
   frustum(b, place, n, r, r, 0, len, { top: caps, bottom: caps });
 }
 
+/**
+ * A point of a profile turned about Z by `lathe`: how far out it is and how
+ * high, and which way the surface faces there, out and up. Two points in the
+ * same place with different normals are a crease: a bevel's edge.
+ */
+export type Turned = readonly [r: number, z: number, nr: number, nz: number];
+
+/**
+ * A surface of revolution, shaded smooth: `profile` turned about Z in `n`
+ * sides from `phase`, every point sharing its normal with the faces round it,
+ * so a round thing is lit round and not a face at a time. Walked along the
+ * profile, the outside is on the right: up the outside of a post, over the
+ * top of a bead from its outer edge to its inner. A point on the axis closes
+ * the surface there, as a ball's pole does.
+ */
+export function lathe(b: MeshBuilder, place: Place, n: number, profile: readonly Turned[], phase = 0) {
+  // where each point goes, and which way its normal turns: through the place, as a direction and not a point
+  const origin = place([0, 0, 0]);
+  const rows = profile.map(([r, z, nr, nz]) => {
+    const row: number[] = [];
+    for (let j = 0; j <= n; j++) {
+      const a = phase + (j / n) * Math.PI * 2,
+        c = Math.cos(a),
+        s = Math.sin(a);
+      const p = place([c * r, s * r, z]);
+      const q = place([c * nr, s * nr, nz]);
+      const d = [q[0] - origin[0], q[1] - origin[1], q[2] - origin[2]];
+      const l = Math.hypot(d[0], d[1], d[2]);
+      row.push(b.vertex(p[0], p[1], p[2], d[0] / l, d[1] / l, d[2] / l, j / n, 0));
+    }
+    return row;
+  });
+  for (let i = 0; i + 1 < profile.length; i++) {
+    const [r0, z0] = profile[i],
+      [r1, z1] = profile[i + 1];
+    // a crease is two points in one place, with nothing between them
+    if (Math.hypot(r1 - r0, z1 - z0) < 1e-9) continue;
+    for (let j = 0; j < n; j++) {
+      const [a, b1, c, d] = [rows[i][j], rows[i][j + 1], rows[i + 1][j + 1], rows[i + 1][j]];
+      // wound so the outside, to the right of the way the profile goes, faces out: a pole's point makes one triangle
+      if (r0 > 1e-9) b.triangle(a, b1, c);
+      if (r1 > 1e-9) b.triangle(a, c, d);
+    }
+  }
+}
+
+/**
+ * The profile of a ball of radius `r` about its middle at height `z`, from
+ * its bottom to its top in `rings`: for `lathe` to turn into a ball shaded
+ * round.
+ */
+export function ballProfile(r: number, rings: number, z = 0): Turned[] {
+  const out: Turned[] = [];
+  for (let i = 0; i <= rings; i++) {
+    const a = (i / rings) * Math.PI;
+    const s = i === 0 || i === rings ? 0 : Math.sin(a);
+    out.push([r * s, z - r * Math.cos(a), s, -Math.cos(a)]);
+  }
+  return out;
+}
+
 /** A mesh from what a builder was given. */
 export function built(build: (b: MeshBuilder) => void): Mesh {
   const b = new MeshBuilder();
@@ -305,25 +368,29 @@ export function built(build: (b: MeshBuilder) => void): Mesh {
 
 /**
  * A mesh built on level ground, laid on ground whose `height` at each point
- * is given: every point at the ground or above it raised by the ground's
- * height there, and those below it, the floor of a hole, left where they
- * were. Each face's normal is worked out again from its first triangle, so a
- * face lying on a slope is lit as the slope is.
+ * is given: every point at or above `from`, the ground unless told, raised by
+ * the ground's height there, and those below it, the floor of a hole, left
+ * where they were. The surface is sheared up as the ground is, so each normal
+ * is turned as the shear turns it, and a flat face lying on the slope faces
+ * as the slope does while a round one stays round: a wall stays plumb, as
+ * lifting only its top leaves it.
  */
-export function lifted(mesh: Mesh, height: (x: number, y: number) => number): Mesh {
+export function lifted(mesh: Mesh, height: (x: number, y: number) => number, { from = -1e-3 } = {}): Mesh {
   const positions = mesh.positions.slice(),
     normals = mesh.normals.slice();
-  for (let i = 0; i < positions.length; i += 3)
-    if (positions[i + 2] > -1e-3) positions[i + 2] += height(positions[i], positions[i + 1]);
-  const ix = mesh.indices;
-  for (let t = 0; t < ix.length; t += 3) {
-    const [a, b, c] = [ix[t] * 3, ix[t + 1] * 3, ix[t + 2] * 3];
-    const u = [positions[b] - positions[a], positions[b + 1] - positions[a + 1], positions[b + 2] - positions[a + 2]],
-      v = [positions[c] - positions[a], positions[c + 1] - positions[a + 1], positions[c + 2] - positions[a + 2]];
-    const n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
-    const l = Math.hypot(n[0], n[1], n[2]);
-    if (l < 1e-12) continue;
-    for (const k of [a, b, c]) for (let d = 0; d < 3; d++) normals[k + d] = n[d] / l;
+  // how the ground slopes, across X and along Y, measured either side of a point: the height is any function
+  const e = 1e-4;
+  for (let i = 0; i < positions.length; i += 3) {
+    const [x, y] = [positions[i], positions[i + 1]];
+    if (positions[i + 2] < from) continue;
+    positions[i + 2] += height(x, y);
+    const sx = (height(x + e, y) - height(x - e, y)) / (2 * e),
+      sy = (height(x, y + e) - height(x, y - e)) / (2 * e);
+    // the inverse transpose of the shear (x, y, z + h): a normal leans back against the slope by as much as it faces up
+    const [nx, ny, nz] = [normals[i], normals[i + 1], normals[i + 2]];
+    const m = [nx - sx * nz, ny - sy * nz, nz];
+    const l = Math.hypot(m[0], m[1], m[2]);
+    for (let d = 0; d < 3; d++) normals[i + d] = m[d] / l;
   }
   return { ...mesh, positions, normals };
 }

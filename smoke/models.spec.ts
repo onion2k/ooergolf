@@ -47,7 +47,7 @@ test.describe('the models', () => {
     const problems = watch(page);
     await showcase(page);
     const views = await page.evaluate(() => window.showcase!.views);
-    for (const v of ['all', 'course', 'obstacles', 'decoration', 'windmill', 'bunker', 'flowers'])
+    for (const v of ['all', 'course', 'obstacles', 'decoration', 'windmill', 'bunker', 'flowers', 'rail'])
       expect(views).toContain(v);
     for (const v of views) await look(page, v);
     await expect(page.locator('.label:not([hidden])').first()).toBeVisible();
@@ -73,6 +73,16 @@ test.describe('the models', () => {
     await showcase(page);
     await look(page, 'all');
     await expect(page).toHaveScreenshot('models-all.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
+  test('the course’s furniture, close: the rail round a corner and a T, the cups and flags, the tee and the ball', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await showcase(page);
+    await look(page, 'course');
+    await expect(page).toHaveScreenshot('models-furniture.png', TOLERANCE);
     expect(problems).toEqual([]);
   });
 

@@ -1,8 +1,9 @@
 /**
  * The models, held to what the game and its physics will take them to be.
  * Every model is built headless, with no renderer, and read back as numbers:
- * that every face is flat-shaded and wound the way its normal says, that the
- * obstacles are drawn to exactly the size the physics gives them, that a
+ * that every face is wound the way its normal says, flat-shaded unless it is
+ * the round furniture, which is smooth and never faceted, that the obstacles
+ * and the ball are drawn to exactly the size the physics gives them, that a
  * parameter changes what it names, and that each stays inside its triangle
  * budget. Without these, a bumper a hair wider than its circle, or a blade a
  * hair thinner than its box, would show the ball bouncing off thin air.
@@ -32,6 +33,7 @@ import {
   fence,
   flag,
   flowers,
+  golfBall,
   group,
   hedge,
   placeBlades,
@@ -44,6 +46,7 @@ import {
   type Model,
   type Part,
 } from '../src/models';
+import { BALL, KIND_RADIUS } from '../src/arena';
 
 /** How near a figure must be to be the figure: a float's worth, and then some. */
 const NEAR = 1e-4;
@@ -63,6 +66,7 @@ function catalogue(): [string, Model][] {
     ['flag', flag(FLAG_COLOURS.red)],
     ['tall flag', flag(FLAG_COLOURS.yellow, { height: 12 })],
     ['tee markers', teeMarkers(4)],
+    ['ball', golfBall(1)],
     ['bumper', bumper(1.2)],
     ['wide bumper', bumper(2.5, { height: 2 })],
     ['barrier', barrier(3, 0.6, 0.8)],
@@ -198,7 +202,15 @@ function points(mesh: Mesh): [number, number, number][] {
   return out;
 }
 
-describe('every model is flat-shaded, finite and wound the way its normals face', () => {
+/**
+ * The parts shaded smooth, since they are round: the course's furniture, the
+ * things on screen every moment, whose faces share their normals where the
+ * surface turns and meet at a crease only at a bevel's edge. Every other part
+ * is flat-shaded, a face at a time.
+ */
+const SMOOTH = new Set(['ball', 'liner', 'rim', 'pole', 'knob', 'flag', 'markers']);
+
+describe('every model is finite, wound the way its normals face, and flat-shaded unless it is round', () => {
   for (const [label, model] of catalogue()) {
     it(label, () => {
       expect(everyPart(model).length).toBeGreaterThan(0);
@@ -216,16 +228,201 @@ describe('every model is flat-shaded, finite and wound the way its normals face'
           const g = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
           const area = Math.hypot(g[0], g[1], g[2]);
           expect(area, `${part.name}: triangle ${t / 3} has an area`).toBeGreaterThan(1e-7);
-          // a vertex shared with a face of another slope would carry the wrong normal for one of them
+          // flat: a vertex shared with a face of another slope would carry the wrong normal for one of them; smooth: a
+          // vertex's normal is the surface's there, which leans off each face it is a corner of, but never far
           for (const k of [a, b, c]) {
             const along = (g[0] * n[k] + g[1] * n[k + 1] + g[2] * n[k + 2]) / area;
-            expect(along, `${part.name}: triangle ${t / 3} wound as its normal faces`).toBeGreaterThan(0.999);
+            expect(along, `${part.name}: triangle ${t / 3} wound as its normal faces`).toBeGreaterThan(
+              SMOOTH.has(part.name) ? 0.7 : 0.999,
+            );
           }
         }
         if (!OPEN.has(part.name)) expect(volume(part.mesh), `${part.name}: closed and facing out`).toBeGreaterThan(0);
       }
     });
   }
+});
+
+/**
+ * Where a mesh's faces meet softly, but not smoothly: an edge two faces
+ * share, less than forty-five degrees apart, whose ends do not have one
+ * normal. Faceting, which a round thing must not show; a bevel's edge, a
+ * crease of forty-five degrees or more, is left sharp on purpose.
+ */
+function facets(mesh: Mesh): string[] {
+  const p = mesh.positions,
+    n = mesh.normals,
+    ix = mesh.indices;
+  const key = (i: number) => [p[i], p[i + 1], p[i + 2]].map((v) => Math.round(v * 1e4) + 0).join(',');
+  const edges = new Map<string, { g: number[]; at: Map<string, number> }[]>();
+  for (let t = 0; t < ix.length; t += 3) {
+    const [a, b, c] = [ix[t] * 3, ix[t + 1] * 3, ix[t + 2] * 3];
+    const u = [p[b] - p[a], p[b + 1] - p[a + 1], p[b + 2] - p[a + 2]];
+    const v = [p[c] - p[a], p[c + 1] - p[a + 1], p[c + 2] - p[a + 2]];
+    const g = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+    const l = Math.hypot(g[0], g[1], g[2]);
+    const face = { g: g.map((x) => x / l), at: new Map([a, b, c].map((i) => [key(i), i])) };
+    for (const [i, j] of [
+      [a, b],
+      [b, c],
+      [c, a],
+    ]) {
+      const e = [key(i), key(j)].sort().join('|');
+      edges.set(e, [...(edges.get(e) ?? []), face]);
+    }
+  }
+  const soft: string[] = [];
+  const dot3 = (i: number, j: number) => n[i] * n[j] + n[i + 1] * n[j + 1] + n[i + 2] * n[j + 2];
+  for (const [e, pair] of edges) {
+    if (pair.length !== 2) continue;
+    const [f, h] = pair;
+    if (f.g[0] * h.g[0] + f.g[1] * h.g[1] + f.g[2] * h.g[2] < Math.cos(Math.PI / 4)) continue;
+    for (const end of e.split('|')) if (dot3(f.at.get(end)!, h.at.get(end)!) < 0.9999) soft.push(`${e} at ${end}`);
+  }
+  return soft;
+}
+
+describe('the furniture is round and smooth, and sharp only at a bevel’s edge', () => {
+  for (const [label, model] of catalogue())
+    for (const part of everyPart(model).filter((q) => SMOOTH.has(q.name)))
+      it(`${label}: its ${part.name}`, () => {
+        expect(facets(part.mesh), 'faceted where it is round').toEqual([]);
+        // and shaded smooth somewhere: some corner's normal leans off its face's, as a round thing's does
+        const { positions: p, normals: n, indices: ix } = part.mesh;
+        let leans = false;
+        for (let t = 0; t < ix.length && !leans; t += 3) {
+          const [a, b, c] = [ix[t] * 3, ix[t + 1] * 3, ix[t + 2] * 3];
+          const u = [p[b] - p[a], p[b + 1] - p[a + 1], p[b + 2] - p[a + 2]];
+          const v = [p[c] - p[a], p[c + 1] - p[a + 1], p[c + 2] - p[a + 2]];
+          const g = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+          const l = Math.hypot(g[0], g[1], g[2]);
+          leans = [a, b, c].some((k) => (g[0] * n[k] + g[1] * n[k + 1] + g[2] * n[k + 2]) / l < 0.9999);
+        }
+        expect(leans, 'shaded smooth, not a face at a time').toBe(true);
+      });
+
+  it('the ball: as big as the physics’ ball, round at every size it is seen, and banded so its roll shows', () => {
+    const R = KIND_RADIUS[BALL];
+    const m = golfBall(R, { colour: [0.9, 0.9, 0.9], band: [0.8, 0.1, 0.1] });
+    const mesh = partNamed(m, 'ball').mesh;
+    near(bounds(m.parts).min, [-R, -R, -R], 5);
+    near(bounds(m.parts).max, [R, R, R], 5);
+    // every corner on the sphere, facing straight out of it
+    for (let i = 0; i < mesh.positions.length; i += 3) {
+      const [x, y, z] = [mesh.positions[i], mesh.positions[i + 1], mesh.positions[i + 2]];
+      expect(Math.hypot(x, y, z)).toBeCloseTo(R, 6);
+      near([mesh.normals[i], mesh.normals[i + 1], mesh.normals[i + 2]], [x / R, y / R, z / R], 5);
+    }
+    // its outline strays from the sphere by under a hundredth of its radius: the middle of every edge is that close
+    const ix = mesh.indices,
+      p = mesh.positions;
+    for (let t = 0; t < ix.length; t += 3)
+      for (const [a, b] of [
+        [ix[t], ix[t + 1]],
+        [ix[t + 1], ix[t + 2]],
+        [ix[t + 2], ix[t]],
+      ]) {
+        const mid = [0, 1, 2].map((k) => (p[a * 3 + k] + p[b * 3 + k]) / 2);
+        expect(Math.hypot(mid[0], mid[1], mid[2])).toBeGreaterThan(R * 0.99);
+      }
+    const band = partNamed(m, 'ball').pattern!;
+    expect(band.kind).toBe(PATTERN.bands);
+    expect([...band.second]).toEqual([0.8, 0.1, 0.1]);
+    expect(partNamed(m, 'ball').material.slice(0, 3)).toEqual([0.9, 0.9, 0.9]);
+  });
+
+  it('the cup’s rim: a rounded gold bead on the grass, highest at its middle, never over the hole', () => {
+    for (const r of [1.45, 3]) {
+      const rim = partNamed(cup(r), 'rim').mesh;
+      const { rim: w, rimHeight: h } = CUP;
+      const mid = r + w / 2;
+      for (let i = 0; i < rim.positions.length; i += 3) {
+        const [x, y, z] = [rim.positions[i], rim.positions[i + 1], rim.positions[i + 2]];
+        const across = Math.hypot(x, y);
+        // on the bead's own curve, an ellipse w across and h high, and facing straight out of it
+        expect(((across - mid) / (w / 2)) ** 2 + (z / h) ** 2).toBeCloseTo(1, 5);
+        const [nx, ny, nz] = [rim.normals[i], rim.normals[i + 1], rim.normals[i + 2]];
+        const out = [
+          ((across - mid) / (w / 2) ** 2) * (x / across),
+          ((across - mid) / (w / 2) ** 2) * (y / across),
+          z / h ** 2,
+        ];
+        const k = Math.hypot(out[0], out[1], out[2]);
+        expect(nx * (out[0] / k) + ny * (out[1] / k) + nz * (out[2] / k)).toBeGreaterThan(0.99999);
+      }
+      // thicker than the flat ring it was, and chunky: taller than a tenth, and at least a third as tall as it is wide
+      expect(h).toBeGreaterThanOrEqual(0.12);
+      expect(h / w).toBeGreaterThanOrEqual(1 / 3);
+    }
+  });
+
+  it('the pin: a round pole, and a ball on its top', () => {
+    const m = flag(FLAG_COLOURS.red, { height: 9, radius: 0.12 });
+    const pole = partNamed(m, 'pole').mesh;
+    for (let i = 0; i < pole.positions.length; i += 3) {
+      const [x, y] = [pole.positions[i], pole.positions[i + 1]];
+      const [nx, ny, nz] = [pole.normals[i], pole.normals[i + 1], pole.normals[i + 2]];
+      // its side, facing straight out from its middle; its ends, facing along it
+      if (Math.abs(nz) < 1e-6) {
+        expect(Math.hypot(x, y)).toBeCloseTo(0.12, 6);
+        near([nx, ny], [x / 0.12, y / 0.12], 5);
+      } else expect(Math.abs(nz)).toBeCloseTo(1, 6);
+    }
+    const knob = partNamed(m, 'knob').mesh;
+    const kb = bounds([partNamed(m, 'knob')]);
+    const radius = (kb.max[2] - kb.min[2]) / 2;
+    const centre = [0, 0, 9 - radius];
+    expect(kb.max[2]).toBeCloseTo(9, 5);
+    expect(radius).toBeGreaterThan(0.12 * 1.5);
+    for (let i = 0; i < knob.positions.length; i += 3) {
+      const d = [0, 1, 2].map((k) => knob.positions[i + k] - centre[k]);
+      expect(Math.hypot(d[0], d[1], d[2])).toBeCloseTo(radius, 5);
+      near(
+        [knob.normals[i], knob.normals[i + 1], knob.normals[i + 2]],
+        d.map((v) => v / radius),
+        5,
+      );
+    }
+  });
+
+  it('the flag: cloth in soft folds, held along the pole and flying out from it', () => {
+    const m = flag(FLAG_COLOURS.red, { radius: 0.12 });
+    const cloth = partNamed(m, 'flag').mesh;
+    const ys: number[] = [];
+    for (let i = 0; i < cloth.positions.length; i += 3) {
+      const [x, y] = [cloth.positions[i], cloth.positions[i + 1]];
+      ys.push(y);
+      // along the pole it is held flat, where it is sewn to it, and it never comes back through the pole
+      if (x < 0.12) expect(Math.abs(y)).toBeLessThan(0.1);
+      expect(x).toBeGreaterThan(0);
+    }
+    // folded: its folds stand out from flat by a good deal more than it is thick, and softly, not in a wad
+    const spread = Math.max(...ys) - Math.min(...ys);
+    expect(spread).toBeGreaterThan(0.3);
+    expect(spread).toBeLessThan(1.2);
+  });
+
+  it('the tee’s markers: chunky and rounded, as wide as they are tall at their foot, and round over their top', () => {
+    const R = 0.5;
+    const m = teeMarkers(4, { radius: R });
+    const mesh = m.parts[0].mesh;
+    for (let i = 0; i < mesh.positions.length; i += 3) {
+      const [x, y, z] = [mesh.positions[i], mesh.positions[i + 1], mesh.positions[i + 2]];
+      const across = Math.hypot(Math.abs(x) - 2, y);
+      // plumb and full width at the foot, and never wider
+      expect(across).toBeLessThan(R + NEAR);
+      if (z < NEAR) expect(across).toBeCloseTo(R, 5);
+    }
+    // round over the top: the normal turns from out to up without a crease
+    const ups = [];
+    for (let i = 0; i < mesh.normals.length; i += 3) ups.push(mesh.normals[i + 2]);
+    expect(
+      ups.some((u) => u > 0.3 && u < 0.95),
+      'somewhere on its round',
+    ).toBe(true);
+    expect(Math.max(...ups)).toBeCloseTo(1, 6);
+    expect(Math.min(...ups)).toBeCloseTo(0, 6);
+  });
 });
 
 describe('every colour is a colour', () => {
@@ -350,6 +547,62 @@ describe('a cup on ground that slopes', () => {
     const floor = liner.filter(([, , z]) => z <= -CUP.depth + 1e-3);
     expect(floor.length, 'a floor').toBeGreaterThan(0);
     for (const [, , z] of floor) expect(z).toBeCloseTo(-CUP.depth, 6);
+  });
+
+  it('lies its rim on the ground shaded as the slope has it, smooth round the bead', () => {
+    const m = cup(1.45, { height });
+    expect(facets(partNamed(m, 'rim').mesh), 'faceted on the slope').toEqual([]);
+    // the top of the bead faces straight out of the slope, as the grass beside it does
+    const rim = partNamed(m, 'rim').mesh;
+    const k = 1 / Math.hypot(0.15, 0.05, 1);
+    let tops = 0;
+    for (let i = 0; i < rim.positions.length; i += 3) {
+      const [x, y, z] = [rim.positions[i], rim.positions[i + 1], rim.positions[i + 2]];
+      if (z - height(x, y) < CUP.rimHeight - 1e-6) continue;
+      tops++;
+      near([rim.normals[i], rim.normals[i + 1], rim.normals[i + 2]], [-0.15 * k, -0.05 * k, k], 4);
+    }
+    expect(tops).toBeGreaterThan(0);
+  });
+
+  it('cuts its grass to meet the ground’s own corners, a piece of the ground’s a side, so the two meet without a seam', () => {
+    for (const pieces of [1, 3]) {
+      const mesh = partNamed(collar(3, 1.45, { pieces }), 'collar').mesh;
+      const edge = points(mesh).filter(([x, y]) => Math.max(Math.abs(x), Math.abs(y)) > 1.5 - NEAR);
+      const want = new Set<string>();
+      for (let k = 0; k <= pieces; k++) {
+        const s = -1.5 + (3 * k) / pieces;
+        for (const [x, y] of [
+          [s, -1.5],
+          [s, 1.5],
+          [-1.5, s],
+          [1.5, s],
+        ])
+          want.add(`${x.toFixed(4)},${y.toFixed(4)}`);
+      }
+      expect(new Set(edge.map(([x, y]) => `${x.toFixed(4)},${y.toFixed(4)}`))).toEqual(want);
+    }
+    // however it is cut, every piece of it faces up, and together they cover the square but the hole once over
+    for (const [side, radius, pieces] of [
+      [3, 1.45, 3],
+      [3, 1.45, 1],
+      [9, 3, 3],
+      [6, 1.6, 2],
+      [12, 3, 5],
+    ]) {
+      const mesh = partNamed(collar(side, radius, { pieces }), 'collar').mesh;
+      const p = mesh.positions,
+        ix = mesh.indices;
+      let area = 0;
+      for (let t = 0; t < ix.length; t += 3) {
+        const [a, b, c] = [ix[t] * 3, ix[t + 1] * 3, ix[t + 2] * 3];
+        const z = (p[b] - p[a]) * (p[c + 1] - p[a + 1]) - (p[c] - p[a]) * (p[b + 1] - p[a + 1]);
+        expect(z, `${side} across, ${pieces} a side: triangle ${t / 3} faces up`).toBeGreaterThan(0);
+        area += z / 2;
+      }
+      const hole = (CUP.sides / 2) * radius * radius * Math.sin((Math.PI * 2) / CUP.sides);
+      expect(area).toBeCloseTo(side * side - hole, 4);
+    }
   });
 
   it('is the flat cup it always was on level ground', () => {
@@ -612,6 +865,7 @@ describe('every model keeps to its triangle budget', () => {
       ['collar', collar(12, 3)],
       ['flag', flag(FLAG_COLOURS.red, { height: 12 })],
       ['teeMarkers', teeMarkers(6)],
+      ['ball', golfBall(KIND_RADIUS[BALL])],
       ['bumper', bumper(3, { height: 2 })],
       ['barrier', barrier(6, 1, 1)],
       ['windmill', windmill({ gap: 6, bladeLength: 8 })],
@@ -645,6 +899,7 @@ describe('every model keeps to its triangle budget', () => {
       collar(9, 3),
       flag(FLAG_COLOURS.red),
       teeMarkers(4),
+      golfBall(KIND_RADIUS[BALL]),
       bumper(1.2),
       barrier(3, 0.6, 0.8),
       windmill(),

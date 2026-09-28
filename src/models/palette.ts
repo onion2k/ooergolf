@@ -26,6 +26,8 @@ export const shown = (r: number, g: number, b: number): Colour => [linear(r), li
  */
 const GREEN = [0.105, 0.41, 0.024] as const,
   STRIPE = 0.11;
+/** The rail's paint, already linear: a warm timber. */
+const RAIL_PAINT = [0.52, 0.25, 0.09] as const;
 
 export const PALETTE = {
   /**
@@ -36,7 +38,14 @@ export const PALETTE = {
   grass: rgb(GREEN.map((c) => c * (1 - STRIPE))),
   grassMown: rgb(GREEN.map((c) => c * (1 + STRIPE))),
   rough: [0.0455882, 0.1823529, 0.0694118] as Colour,
-  rail: [0.48, 0.22, 0.08] as Colour,
+  /**
+   * The rail's timber sides, and the cap painted along its top, rounded over
+   * its edges: one paint, the sides two thirds as bright, so a side in shade
+   * differs from the cap in the sun only by the light, and the shade's cool
+   * is the light's.
+   */
+  rail: rgb(RAIL_PAINT.map((c) => c * 0.68)),
+  railCap: rgb(RAIL_PAINT),
 
   /** Bright glossy plastic, for everything the ball meets. */
   plastic: {

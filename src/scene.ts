@@ -32,6 +32,7 @@ import {
   cup,
   flag,
   flowers,
+  golfBall,
   group,
   hedge,
   placeBlades,
@@ -47,7 +48,7 @@ import { BARRIER, WINDMILL, type Obstacles } from './obstacles';
 import type { World } from './physics';
 import { placeRolling } from './roll';
 import { dress, scatter, type Piece, type SceneryKind } from './scenery';
-import { groundOf, railsOf } from './ground';
+import { GROUND, cupGround, groundOf, railsOf } from './ground';
 import { flagTurn, lean, ripple, waggle } from './sway';
 import { pulse } from './pulse';
 import type { Shot } from './shot';
@@ -83,7 +84,9 @@ export const PALETTE = {
   grass: [...COLOURS.grass, 0.85],
   grassMown: [...COLOURS.grassMown, 0.85],
   rough: [...COLOURS.rough, 0.95],
-  rail: [...COLOURS.rail, 0.55],
+  /** The rail's timber sides, and the cap painted along its top, rounded over its edges. */
+  rail: [...COLOURS.rail, 0.6],
+  railCap: [...COLOURS.railCap, 0.45],
   /** The sides of grass raised on a step: the earth under the turf. */
   bank: [0.2, 0.3, 0.08, 0.9],
   ball: [0.98, 0.98, 0.96, 0.25],
@@ -209,21 +212,18 @@ export class Scene {
     const still = new Float32Array(16);
     place(still, 0, 0, 0, 0);
     // the rail from the rough up past the grass beside it, however high that stands and however it slopes: the green's
-    // timber sides, and the edge the ball banks off
+    // timber sides, and the edge the ball banks off, with its rounded cap along its top
     const rails = railsOf(layout, RAIL_HEIGHT, ROUGH_DEPTH, underTower);
     const rough = new Float32Array(16);
     place(rough, 0, 0, 0, -ROUGH_DEPTH);
 
     // the cup's tile is grass with the cup's hole in it, in its stripe's colour, placed at the ground's height at the
-    // cup's middle; the tee's markers on the ground beside the tee
-    const cupZ = heightAt(layout, at.x, at.y);
+    // cup's middle and cut to meet the ground's own corners; the tee's markers on the ground beside the tee
+    // round a cup on a slope, the collar and the rim lie on the ground, which is measured from the cup's middle
+    const { z: cupZ, ...round } = cupGround(layout);
     const atCup = new Float32Array(16);
     place(atCup, 0, at.x, at.y, cupZ);
-    // round a cup on a slope, the collar and the rim lie on the ground, which is measured from the cup's middle
-    const round = layout.terrain.some((h) => h !== 0)
-      ? { height: (x: number, y: number) => heightAt(layout, at.x + x, at.y + y) - cupZ }
-      : {};
-    const [collarPart] = collar(TILE, CUP.radius, round).parts;
+    const [collarPart] = collar(TILE, CUP.radius, { ...round, pieces: GROUND.pieces }).parts;
     const flagAt = new Float32Array(16);
     place(flagAt, 0, at.x, at.y, cupZ);
     const teeAt = new Float32Array(16);
@@ -237,7 +237,8 @@ export class Scene {
       { mesh: ground.green, matrices: still, ...look(PALETTE.grass), patterns: grain(PALETTE.grass, 0.2) },
       { mesh: ground.mown, matrices: still, ...look(PALETTE.grassMown), patterns: grain(PALETTE.grassMown, 0.7) },
       { ...group({ ...collarPart, material: stripe(cupTile) }, atCup) },
-      { mesh: rails, matrices: still, ...look(PALETTE.rail) },
+      { mesh: rails.sides, matrices: still, ...look(PALETTE.rail) },
+      { mesh: rails.cap, matrices: still, ...look(PALETTE.railCap) },
       { mesh: plane(ROUGH_SIZE), matrices: rough, ...look(PALETTE.rough) },
       ...groups(cup(CUP.radius, round), atCup),
       // the pin and its knob stand still; the flag's cloth swings in the breeze, and is among what moves
@@ -372,19 +373,11 @@ export class Scene {
    * again for each hole; the ball is group 0 and the aim group 1.
    */
   dynamic(obstacles?: Obstacles, layout?: Layout, name = '', wind: Wind = STILL): GameGroup[] {
+    // the ball, round and smooth, with one band round its middle so its roll is seen
     const [br, bg, bb, brough] = PALETTE.ball;
-    // one band round the middle: the bands pattern is a wave along the mesh's own Z, a quarter turn on so it peaks at
-    // nought, and at this scale positive only within a third of the radius of the middle
-    const band = new Float32Array(PATTERN_STRIDE);
-    band.set([2, 0.64, 0.25, 0, ...PALETTE.ballBand, 0]);
+    const [theBall] = golfBall(KIND_RADIUS[BALL], { colour: [br, bg, bb], band: PALETTE.ballBand }).parts;
     const out: GameGroup[] = [
-      {
-        mesh: ball(KIND_RADIUS[BALL], 8, 14),
-        matrices: this.ball,
-        albedo: [br, bg, bb],
-        roughness: brough,
-        patterns: band,
-      },
+      group({ ...theBall, material: [br, bg, bb, brough] }, this.ball),
       { mesh: ball(AIM_RADIUS, 4, 8), matrices: this.aim, count: 0, materials: this.aimLooks },
     ];
     this.moving = [];

@@ -186,8 +186,13 @@ change meant to move it, and the commit says why. Look at every picture.
   its floor level. The game keeps its own copy of the smoothing, since only
   `physics.ts` imports the package, and a test holds it to the physics'
   own at hundreds of points. `src/ground.ts` draws the green
-  as one mesh following it, in its stripes, with earth down its steps, and
-  the rail with a top that slopes with it; the cup, flag, tee, sand, posts,
+  as one mesh following it, in its stripes, with earth down its steps; and
+  the rail (`railsOf`, to `RAIL`'s figures) as a rounded toy's, a cap
+  painted along its top and rounded over every edge that stands in the
+  open, plumb below that where the ball meets it, its corners rounded out
+  and square in, drawn on its own tiles and no further so what is seen is
+  what the ball meets, and sloping with the ground; `cupGround` is the
+  cup's own step and slope, which the collar is cut to. The cup, flag, tee, sand, posts,
   aim, camera and glints all stand on it. The Hills are the holes that
   slope; `playCourse` in the test API plays one of a test's own.
   `src/glints.ts` says when the gold of the cup and the pin twinkles, from
@@ -210,8 +215,11 @@ change meant to move it, and the commit says why. Look at every picture.
   swings the flag as a ball drops and `flash` in `glints.ts` lights the gold;
   `src/pulse.ts` swells the aim's dots while a drag is held; and the
   camera's `glide` eases it to each new tee.
-- `src/models.ts` and `src/models/` are the models: the cup, collar, flag
-  and tee markers; the obstacles at the sizes the physics will give them
+- `src/models.ts` and `src/models/` are the models: the cup with its
+  rounded gold bead, the collar, the flag on its round pole with a gold ball
+  on top and its cloth in soft folds, the tee's rounded markers, and the
+  ball (`golfBall`, smooth, with its band), each rounded and smooth-shaded
+  from `lathe` and the other shapes in `models/shapes.ts`; the obstacles at the sizes the physics will give them
   (bumper, barrier, windmill with its turning blades, water, bunker,
   conveyor), with `sandBed` for a hole's sand of any shape, the lip only
   where it meets grass, which the game draws where `bunker` is only the

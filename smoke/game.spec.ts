@@ -365,6 +365,24 @@ test.describe('the grass', () => {
   });
 });
 
+test.describe('the edges', () => {
+  test('are drawn at four samples a pixel on the top rung, with the post pass a rung down, and plain on the last', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    for (const [rung, antialias] of [
+      [0, 'msaa'],
+      [1, 'fxaa'],
+      [3, 'none'],
+    ] as const) {
+      await start(page, { rung, seed: 1, paused: true });
+      await page.evaluate(() => window.game!.step(1));
+      expect((await page.evaluate(() => window.game!.view())).antialias, `rung ${rung}`).toBe(antialias);
+    }
+    expect(problems).toEqual([]);
+  });
+});
+
 test.describe('on a phone', () => {
   test.use({ viewport: { width: 400, height: 860 }, hasTouch: true, isMobile: true });
 

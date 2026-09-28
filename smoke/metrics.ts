@@ -2,8 +2,10 @@
  * The look as figures: colours sampled from a picture of the course turned
  * into the few numbers `LOOK.md` holds the look to. How much colour the green
  * has, how far the course stands out from the rough round it, how strongly
- * the sun is told from the shade, how cool the shade is, and whether an edge
- * is drawn clean or in steps. A picture held
+ * the sun is told from the shade, and how cool the shade is. Whether the
+ * edges are drawn clean is held where it is decided, by the ladder's rungs
+ * and the page's report of them: the rail's cap is rounded over, and no
+ * hard edge is left on it to count blended pixels across. A picture held
  * to a picture catches any change and says nothing of whether it was for the
  * worse; a picture rewritten for a new stage would carry a greyer look with
  * it unnoticed. These are floors that stay when pictures are written again.
@@ -14,17 +16,12 @@
 
 export type Rgb = [number, number, number];
 
-/**
- * What was sampled, by where: the green, the rough, the rail's sunlit top, and
- * its face turned from the sun; and rows of pixels across the edge between
- * that top and that face.
- */
+/** What was sampled, by where: the green, the rough, the rail's sunlit top, and its face turned from the sun. */
 export interface Samples {
   green: Rgb[];
   rough: Rgb[];
   railTop: Rgb[];
   railShade: Rgb[];
-  edges: Rgb[][];
 }
 
 /** The figures a picture of the course is held to. */
@@ -37,8 +34,6 @@ export interface Figures {
   contrast: number;
   /** How much more of the shade's colour is blue than of the sunlit top's: above nought, a shade cooler than the sun. */
   coolShade: number;
-  /** How many pixels across the rail's edge are a blend of its two sides, on a row: none for an edge in steps. */
-  edges: number;
 }
 
 /** A channel of sRGB, 0 to 255, as linear light, 0 to 1. */
@@ -76,24 +71,6 @@ export function medianColour(colours: Rgb[]): Rgb {
   return [0, 1, 2].map((c) => median(colours.map((x) => x[c]))) as Rgb;
 }
 
-/**
- * How many pixels of a row across an edge are neither of its sides: brighter
- * than the darker side and darker than the brighter by more than a sixth of
- * the step between them, in light. A hard edge has none; an edge drawn at
- * several samples a pixel has one wherever it cuts a pixel.
- */
-export function blended(row: Rgb[], a: Rgb, b: Rgb): number {
-  const la = luminance(a),
-    lb = luminance(b);
-  const low = Math.min(la, lb),
-    high = Math.max(la, lb),
-    margin = (high - low) / 6;
-  return row.filter((c) => {
-    const l = luminance(c);
-    return l > low + margin && l < high - margin;
-  }).length;
-}
-
 /** The figures from the samples. */
 export function figuresOf(s: Samples): Figures {
   const green = medianColour(s.green),
@@ -105,6 +82,5 @@ export function figuresOf(s: Samples): Figures {
     framing: luminance(green) / luminance(rough),
     contrast: luminance(top) / luminance(shade),
     coolShade: blueShare(shade) - blueShare(top),
-    edges: s.edges.length ? s.edges.reduce((sum, row) => sum + blended(row, top, shade), 0) / s.edges.length : 0,
   };
 }

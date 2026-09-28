@@ -12,6 +12,7 @@
  * The types are shared with the smoke tests, so a test that calls something
  * that is not here does not compile.
  */
+import type { Antialias } from 'artshape-render/game/renderer';
 import { KIND_NAME, TILE, type Layout } from './arena';
 import { Autopilot } from './autopilot';
 import { CUP, type HoleDef } from './course';
@@ -137,8 +138,11 @@ export interface GameApi {
   /** The save written now, and what it is. */
   save(): string;
 
-  /** How far back the camera stands, and which rung of the quality ladder the picture is on, and whether it was asked for. */
-  view(): { distance: number; rung: number; held: boolean };
+  /**
+   * How far back the camera stands, which rung of the quality ladder the
+   * picture is on and whether it was asked for, and how its edges are drawn.
+   */
+  view(): { distance: number; rung: number; held: boolean; antialias: Antialias };
   /** The camera parked looking at a point, `distance` back, at once, and not following the ball until `follow`. */
   look(x: number, y: number, distance?: number): void;
   /** The camera following the ball again. */
@@ -198,7 +202,7 @@ export interface DebugHost {
   follow(): void;
   project(x: number, y: number, z: number): { x: number; y: number };
   aiming(): { angle: number; power: number } | null;
-  view(): { distance: number; rung: number; held: boolean };
+  view(): { distance: number; rung: number; held: boolean; antialias: Antialias };
   measureFrame(warmup?: number): Promise<number>;
   motions(): Motions;
   grass(): Promise<GrassDrawn>;

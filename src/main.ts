@@ -7,7 +7,7 @@
  */
 import { createContext } from 'artshape-render/gpu/context';
 import { LightPool } from 'artshape-render/game/lights';
-import { GameRenderer } from 'artshape-render/game/renderer';
+import { GameRenderer, antialiasFor } from 'artshape-render/game/renderer';
 import { BALL, HARDEST_SHOT, KIND_RADIUS, heightAt, rollsFor } from './arena';
 import { CameraRig } from './camera';
 import { CLUBS } from './clubs';
@@ -432,7 +432,12 @@ async function main() {
       return { x: r.left + ((nx + 1) / 2) * r.width, y: r.top + ((1 - ny) / 2) * r.height };
     },
     aiming: () => (played.ready && gesture.aim ? { ...gesture.aim } : null),
-    view: () => ({ distance: rig.distance, rung: governor.rung, held: governor.held }),
+    view: () => ({
+      distance: rig.distance,
+      rung: governor.rung,
+      held: governor.held,
+      antialias: antialiasFor(renderer.look, renderer.economy),
+    }),
     measureFrame,
     motions: () => ({
       squash: drawn.squash,
