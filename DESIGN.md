@@ -313,5 +313,7 @@ Each line is a feature or more, through `/feature`, every gate green at each.
   autopilot.
 - Whether a ball can be got up a step without a ramp (hole 7).
 - Sound. None is designed.
+- The look: `LOOK.md` has its direction and its stages, and the decisions
+  still open in it.
 - The courses after The Hills, and whether a hole's slope may carry a
   barrier or a windmill.

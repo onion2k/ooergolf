@@ -5,8 +5,9 @@ a physics game through obstacles, fewest strokes to the cup. TypeScript,
 Vite, and WebGPU through
 [artshape-render](https://github.com/onion2k/artshape-render), with the
 physics from [artshape-physics](https://github.com/onion2k/artshape-physics).
-The README says what the game is, and `DESIGN.md` what it is to be; this
-file says how it is made. The house
+The README says what the game is, `DESIGN.md` what it is to be, and
+`LOOK.md` what it is to look like, in stages; this file says how it is
+made. The house
 rules in `~/.claude/CLAUDE.md` apply too. What is in `src/` is a round of
 a course, chosen on a start screen: holes drawn as maps, each played from
 its tee to its cup with a drag pulled back and let go, scored against par,
