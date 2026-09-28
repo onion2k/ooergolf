@@ -158,7 +158,7 @@ change meant to move it, and the commit says why. Look at every picture.
   on the rough as a raised green: the rough lies `ROUGH_DEPTH` below the
   grass, under the bottom of the cup, so the cup is seen into, and the rail
   comes down to meet it. The look is toon daylight on artshape-render
-  v0.19.0, in `src/look.ts`, shared by the game and the showcase: with the
+  v0.20.0, in `src/look.ts`, shared by the game and the showcase: with the
   renderer's screen-space occlusion for the shade where things meet, and a
   thin haze. Its fog is lit by a toon sun of 2.5, so it is kept thin and
   dark: at the sky's own colour it washed the whole course white.
