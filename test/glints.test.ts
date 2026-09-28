@@ -1,6 +1,6 @@
 /** The twinkles on what is gold: brief, one place at a time, now and then, and the same at the same moment every time. */
 import { describe, expect, it } from 'vitest';
-import { GLINT, glint } from '../src/glints';
+import { FLASH, GLINT, flash, glint } from '../src/glints';
 
 describe('a glint', () => {
   it('is nothing most of the time, and flares briefly now and then at one of its places', () => {
@@ -25,6 +25,16 @@ describe('a glint', () => {
     const peak = start + GLINT.flare / 2;
     expect(glint(start + 0.01, 3).brightness).toBeLessThan(glint(peak, 3).brightness);
     expect(glint(peak, 3).brightness).toBeGreaterThan(0.9);
+  });
+
+  it('flashes all the gold as a ball drops: brightest at once, fading, and gone at its end, exactly', () => {
+    expect(flash(0)).toBe(1);
+    for (let t = 1 / 60; t < FLASH.lasts; t += 1 / 60) {
+      expect(flash(t), `fading at ${t.toFixed(2)}`).toBeLessThan(flash(t - 1 / 60));
+      expect(flash(t)).toBeGreaterThan(0);
+    }
+    expect(FLASH.lasts, 'quick').toBeLessThanOrEqual(0.6);
+    for (const t of [FLASH.lasts, FLASH.lasts + 1e-9, 2, Infinity, -0.01, NaN]) expect(flash(t)).toBe(0);
   });
 
   it('is the same at the same moment, and there is none where there is nothing to glint', () => {

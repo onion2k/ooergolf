@@ -13,12 +13,15 @@
  * more than the hole's limit. The card has a score for every hole finished
  * and no other, each between one stroke and the limit. The coins and gems are
  * counts, the clubs owned are clubs the shop sells, the starting putter
- * among them, and the club in hand is one of them.
+ * among them, and the club in hand is one of them. And a knock told is of
+ * the ball, where it is, as hard as a knock is, along a direction: a rule of
+ * what is told rather than of what is, so `knockProblems` is asked of each
+ * knock as it is told.
  *
  * Checked by the fuzzer after everything it does, by the test API on asking,
  * and by the unit tests. Each broken rule is a line saying what and where.
  */
-import { BUMPER, KINDS, KIND_NAME, fromPosts, heightAt, restingAbove, tileAt } from './arena';
+import { BUMPER, KINDS, KIND_NAME, KNOCK, fromPosts, heightAt, restingAbove, tileAt } from './arena';
 import { CLUBS } from './clubs';
 import { LIMIT_OVER_PAR, fastest, type Game } from './game';
 
@@ -121,5 +124,30 @@ export function checkInvariants(game: Game): string[] {
   for (const id of save.owned) if (!sold.has(id)) out.push(`a club no one sells is owned: ${id}`);
   if (!save.owned.includes(CLUBS[0].id)) out.push('the starting putter is not owned');
   if (!save.owned.includes(save.club)) out.push(`the club in hand, ${save.club}, is not owned`);
+  return out;
+}
+
+/**
+ * What is wrong with a knock told, checked as it is told: a knock is of the
+ * ball on the course, where it is, at least as hard as `KNOCK` says a knock
+ * is, and along a direction. The page squashes the ball it draws by it, so a
+ * knock of no ball, of nothing, or along no line would be drawn as nonsense.
+ */
+export function knockProblems(
+  game: Game,
+  hard: number,
+  x: number,
+  y: number,
+  dx: number,
+  dy: number,
+  dz: number,
+): string[] {
+  const out: string[] = [];
+  const { world, ball } = game;
+  if (!world.alive[ball]) out.push('a knock told of no ball');
+  else if (!(Math.abs(world.x[ball] - x) < 1e-9 && Math.abs(world.y[ball] - y) < 1e-9))
+    out.push(`a knock told at ${x},${y}, not where the ball is`);
+  if (!(hard >= KNOCK.least) || !Number.isFinite(hard)) out.push(`a knock of ${hard}, softer than a knock is`);
+  if (!(Math.abs(Math.hypot(dx, dy, dz) - 1) < 1e-6)) out.push(`a knock along ${dx},${dy},${dz}, along no direction`);
   return out;
 }

@@ -24,7 +24,9 @@ import { fieldOf, windOf } from './turf';
 import { Scene, boxOf } from './scene';
 import { cupBurst, splash, strikePuff } from './bursts';
 import { Gesture } from './gesture';
-import { glint } from './glints';
+import { flash, glint } from './glints';
+import { Squash, squashInto, squashOf } from './squash';
+import { waggle } from './sway';
 import { EFFECT_STRIDE } from 'artshape-render/game/renderer';
 import { Governor, RUNGS } from './quality';
 import { groundAt } from './shot';
@@ -123,6 +125,16 @@ async function main() {
   const showPurse = () => game && hud.setPurse(game.progress.save);
   const scene = new Scene();
   const rig = new CameraRig();
+  /** The ball squashed by its last knock, until it springs back. */
+  const squash = new Squash();
+  /**
+   * What the last frame drew of what answers, read back from what was placed,
+   * for the test API: the ball's squash, the nearest aim dot's swell, and how
+   * many glints of the gold were lit.
+   */
+  const drawn = { squash: 0, pulse: 0, glints: 0 };
+  /** Whether the camera has been put on a hole yet: the first has nowhere to glide from. */
+  let looked = false;
   /** The grass of the hole being grown, which the first frame waits for so it is never drawn bare. */
   let grown: Promise<void> = Promise.resolve();
   /** What the player sees of each event, beside the note of it. */
@@ -140,22 +152,36 @@ async function main() {
       grown = renderer.setGrass(fieldOf(layout, name));
       renderer.wind = wind;
       renderer.setSunShadow(boxOf(layout));
-      rig.jump(layout.tee.x, layout.tee.y, heightAt(layout, layout.tee.x, layout.tee.y));
+      // the camera glides to the tee from wherever it was looking, but for the first hole, with nowhere it was; and the
+      // ball on the tee is round
+      const teeZ = heightAt(layout, layout.tee.x, layout.tee.y);
+      if (looked) rig.glide(layout.tee.x, layout.tee.y, teeZ, game.t);
+      else rig.jump(layout.tee.x, layout.tee.y, teeZ);
+      looked = true;
+      squash.clear();
       hud.started({ index, count: game.course.length, name: game.course[index].name, par });
     },
     struck(power, x, y) {
       hud.setStrokes(game?.strokes ?? 0);
       for (const e of strikePuff(x, y, power)) renderer.emit(e);
     },
-    // into the water: a splash where it went in, and a word, and the stroke it cost
+    // knocked off the rail, a post or the ground it dropped onto: squashed along it, and sprung back
+    knocked(hard, _x, _y, dx, dy, dz) {
+      if (game) squash.knock(game.t, hard, dx, dy, dz);
+    },
+    // into the water: a splash where it went in, and a word, and the stroke it cost; the ball put back is round
     splash(x, y) {
       hud.setStrokes(game?.strokes ?? 0);
       hud.splash();
+      squash.clear();
       for (const e of splash(x, y)) renderer.emit(e);
     },
+    // in the cup: confetti out of it, the flag waggling and its gold flashing, from the moment it dropped
     holed(strokes, par) {
       hud.done(strokes, par, false);
-      if (game) for (const e of cupBurst(game.layout.cup.x, game.layout.cup.y, strokes === 1)) renderer.emit(e);
+      if (!game) return;
+      scene.holedAt = game.t;
+      for (const e of cupBurst(game.layout.cup.x, game.layout.cup.y, strokes === 1)) renderer.emit(e);
     },
     pickedUp: (strokes, par) => hud.done(strokes, par, true),
     finished: () => game && hud.finished(game.course, game.card),
@@ -245,13 +271,19 @@ async function main() {
   function upload() {
     const { world, ball } = played;
     scene.writeBall(world, ball);
+    // squashed by its last knock, until it springs back
+    const n = squash.along;
+    squashInto(scene.ball, 0, squash.amount(played.t), n[0], n[1], n[2], KIND_RADIUS[BALL]);
     // a ball gone into the cup is not drawn
     renderer.move(0, scene.ball, world.alive[ball] ? 1 : 0);
+    drawn.squash = world.alive[ball] ? squashOf(scene.ball, 0, n[0], n[1], n[2]) : 0;
     // the aim shows only while a shot can be taken
     // a finer club's aim reaches further, as far again as its hardest shot rolls
     const reach = rollsFor(played.hardest) / rollsFor(HARDEST_SHOT);
-    const dots = played.ready ? scene.writeAim(world.x[ball], world.y[ball], gesture.aim, reach) : 0;
+    const dots = played.ready ? scene.writeAim(world.x[ball], world.y[ball], gesture.aim, reach, played.t) : 0;
     renderer.move(1, scene.aim, dots);
+    // the nearest dot's size, as it was placed: nought for none
+    drawn.pulse = dots ? scene.aim[0] - 1 : 0;
     if (dots) renderer.tint(1, scene.aimLooks);
     scene.writeMoving(played.t).forEach((m, k) => renderer.move(2 + k, m.matrices, m.count));
     // the grass's wind and its track keep game time, as everything else that moves does
@@ -274,29 +306,40 @@ async function main() {
       [cup.x, cup.y, on(cup.x, cup.y) + 8.75],
     ];
   };
-  const glintQuad = new Float32Array(EFFECT_STRIDE);
-  /** The glint of the moment, if one is lit, placed where its gold is on the screen. */
+  /** Room for a glint at every place the gold is, which a flash lights all at once: as many as the renderer takes. */
+  const glintQuad = new Float32Array(EFFECT_STRIDE * EFFECT_CAPACITY);
+  /** A glint, `brightness` from 0 to 1, at quad `k`, where (x, y, z) is on the screen. */
+  function glow(k: number, x: number, y: number, z: number, brightness: number) {
+    const m = cam.viewProjection;
+    const w = m[3] * x + m[7] * y + m[11] * z + m[15];
+    const o = k * EFFECT_STRIDE;
+    glintQuad[o] = (m[0] * x + m[4] * y + m[8] * z + m[12]) / w;
+    glintQuad[o + 1] = (m[1] * x + m[5] * y + m[9] * z + m[13]) / w;
+    glintQuad[o + 2] = 0.07 * brightness;
+    glintQuad[o + 3] = 3.5 * brightness;
+    glintQuad[o + 4] = 1;
+    glintQuad[o + 5] = 0.93;
+    glintQuad[o + 6] = 0.7;
+    glintQuad[o + 7] = 2.2;
+  }
+  /** The glint of the moment, if one is lit, placed where its gold is on the screen; or all of them, as a ball drops. */
   function shine() {
     const places = glinting();
+    const lit = flash(played.t - scene.holedAt);
+    if (lit > 0) {
+      const count = Math.min(places.length, EFFECT_CAPACITY);
+      for (let k = 0; k < count; k++) glow(k, places[k][0], places[k][1], places[k][2], lit);
+      renderer.setEffects(glintQuad, (drawn.glints = count));
+      return;
+    }
     const g = glint(played.t, places.length);
     if (g.brightness <= 0) {
-      renderer.setEffects(glintQuad, 0);
+      renderer.setEffects(glintQuad, (drawn.glints = 0));
       return;
     }
     const [x, y, z] = places[g.at];
-    const m = cam.viewProjection;
-    const w = m[3] * x + m[7] * y + m[11] * z + m[15];
-    glintQuad.set([
-      (m[0] * x + m[4] * y + m[8] * z + m[12]) / w,
-      (m[1] * x + m[5] * y + m[9] * z + m[13]) / w,
-      0.07 * g.brightness,
-      3.5 * g.brightness,
-      1,
-      0.93,
-      0.7,
-      2.2,
-    ]);
-    renderer.setEffects(glintQuad, 1);
+    glow(0, x, y, z, g.brightness);
+    renderer.setEffects(glintQuad, (drawn.glints = 1));
   }
 
   /** What a frame of the scene as it stands costs, drawn to a texture of our own rather than the canvas, so no wait to be shown is counted. */
@@ -342,7 +385,7 @@ async function main() {
     if (!parked) rig.follow(world.x[ball], world.y[ball], dt, heightAt(played.layout, world.x[ball], world.y[ball]));
   }
   function draw(dt: number) {
-    rig.place(cam);
+    rig.place(cam, played.t);
     cam.update();
     upload();
     const t = performance.now();
@@ -379,7 +422,7 @@ async function main() {
       parked = false;
     },
     project(x, y, z) {
-      rig.place(cam);
+      rig.place(cam, played.t);
       cam.update();
       const m = cam.viewProjection;
       const w = m[3] * x + m[7] * y + m[11] * z + m[15];
@@ -391,6 +434,14 @@ async function main() {
     aiming: () => (played.ready && gesture.aim ? { ...gesture.aim } : null),
     view: () => ({ distance: rig.distance, rung: governor.rung, held: governor.held }),
     measureFrame,
+    motions: () => ({
+      squash: drawn.squash,
+      waggle: waggle(played.t - scene.holedAt),
+      flash: flash(played.t - scene.holedAt),
+      glints: drawn.glints,
+      glide: rig.gliding(played.t),
+      pulse: drawn.pulse,
+    }),
     course: () => courseName,
     choosing: () => choosing,
     chooseCourse: (name) => {

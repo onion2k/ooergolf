@@ -17,6 +17,7 @@ import {
   BALL,
   FASTEST,
   KIND_RADIUS,
+  KNOCK,
   fromPosts,
   highestTerrain,
   layoutOf,
@@ -41,6 +42,12 @@ export interface GameEvents {
   struck?(power: number, x: number, y: number): void;
   /** The ball come to rest at (x, y), ready to be struck again. */
   stopped?(x: number, y: number): void;
+  /**
+   * The ball knocked at (x, y): its velocity turned by `hard` units a second
+   * in a step, by the rail, a post, a box, the cup or the ground it dropped
+   * onto, which pushed it along the unit (dx, dy, dz). See `KNOCK`.
+   */
+  knocked?(hard: number, x: number, y: number, dx: number, dy: number, dz: number): void;
   /** The ball in the cup, in `strokes`, on a hole of `par`. */
   holed?(strokes: number, par: number): void;
   /** The ball lost in water at (x, y): a stroke more, and it is put back where it was struck from. */
@@ -121,6 +128,11 @@ export class Game {
   /** Game time not yet stepped by the physics, less than one of its steps, and how far the physics has got. */
   private owed = 0;
   private stepped = 0;
+  /** The last knock told on this hole, when in the physics' time and how hard, so what follows close on it is part of it. */
+  private knockAt = -Infinity;
+  private knockHard = 0;
+  /** Whether the physics' next step is the first since the ball was struck. */
+  private firstStep = false;
 
   constructor(
     readonly progress: Progress,
@@ -175,6 +187,9 @@ export class Game {
     this.strokes = 0;
     this.moving = false;
     this.phase = 'play';
+    // a knock on the hole before holds back none on this one
+    this.knockAt = -Infinity;
+    this.firstStep = false;
     this.settle();
     this.events.started?.(index, this.def.par);
   }
@@ -227,6 +242,7 @@ export class Game {
     this.strokes++;
     this.moving = true;
     this.struckAt = this.t;
+    this.firstStep = true;
     this.events.struck?.(p, world.x[ball], world.y[ball]);
     return true;
   }
@@ -254,8 +270,13 @@ export class Game {
       this.owed -= PHYSICS.step;
       this.stepped += PHYSICS.step;
       this.obstacles.update(this.stepped, PHYSICS.step);
-      this.world.step(PHYSICS.step, collect);
+      const { world, ball } = this;
+      const vx = world.vx[ball],
+        vy = world.vy[ball],
+        vz = world.vz[ball];
+      world.step(PHYSICS.step, collect);
       this.heldToFastest();
+      this.knock(vx, vy, vz);
       if (fell.holed || fell.wet) break;
     }
     if (this.phase !== 'play') return;
@@ -299,6 +320,31 @@ export class Game {
     if (speed <= most) return;
     world.vx[ball] *= most / speed;
     world.vy[ball] *= most / speed;
+  }
+
+  /**
+   * A knock told, if the physics' step just taken turned the ball from
+   * (vx, vy, vz) by as much as `KNOCK` says one does. Only read, so the game
+   * plays exactly as it would untold. A ball gone into the cup or the water in
+   * the step is holed or splashed, and not knocked. The first step after a
+   * strike fits a ball struck along the level to the ground under it, which on
+   * a slope turns it up or down as sharply as a knock: that is the strike's,
+   * and only what turns it along the ground counts.
+   */
+  private knock(vx: number, vy: number, vz: number) {
+    const { world, ball } = this;
+    const first = this.firstStep;
+    this.firstStep = false;
+    if (!world.alive[ball]) return;
+    const dx = world.vx[ball] - vx,
+      dy = world.vy[ball] - vy,
+      dz = first ? 0 : world.vz[ball] - vz;
+    const hard = Math.hypot(dx, dy, dz);
+    if (hard < KNOCK.least) return;
+    if (this.stepped - this.knockAt < KNOCK.apart && hard <= this.knockHard) return;
+    this.knockAt = this.stepped;
+    this.knockHard = hard;
+    this.events.knocked?.(hard, world.x[ball], world.y[ball], dx / hard, dy / hard, dz / hard);
   }
 
   /** How high a ball's middle is, resting on the floor at (x, y). */

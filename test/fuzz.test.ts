@@ -36,6 +36,7 @@ describe('the fuzzer', () => {
     expect(r.happened.stopped, 'and come to rest').toBeGreaterThan(0);
     expect(r.happened.holed, 'holed out').toBeGreaterThan(0);
     expect(r.happened.finished, 'round the whole course').toBeGreaterThan(0);
+    expect(r.happened.knocked, 'knocked off the rail and the rest, each knock told as a knock is').toBeGreaterThan(0);
   });
 
   it('plays the same way twice from a seed', () => {

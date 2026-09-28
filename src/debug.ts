@@ -147,11 +147,33 @@ export interface GameApi {
   project(x: number, y: number, z: number): { x: number; y: number };
   /** What drawing a frame of the scene as it stands costs, in milliseconds, after `warmup` frames drawn untimed. */
   measureFrame(warmup?: number): Promise<number>;
+  /** The small motions the page draws at this moment, answering what has happened: each nought at rest. */
+  motions(): Motions;
   /**
    * The grass the last frame drew, once the hole's is grown: how many blades
    * of the rough near and far, read back from the GPU, and the wind it bent in.
    */
   grass(): Promise<GrassDrawn>;
+}
+
+/**
+ * The small motions the page draws at a moment, all from game time: each
+ * nought at rest. The squash, the pulse and the glints are read back from
+ * what the last frame drew.
+ */
+export interface Motions {
+  /** How far the ball was drawn squashed along its last knock, a share of its size; under nought, stretched. */
+  squash: number;
+  /** How far the flag is swung either way of where the wind flies it as a ball drops, in radians. */
+  waggle: number;
+  /** How brightly all the cup's gold flashes as a ball drops, from 0 to 1. */
+  flash: number;
+  /** How many glints of the gold the last frame lit: all of them in a flash, one in a twinkle, or none. */
+  glints: number;
+  /** How far the camera has still to glide to a new hole's tee, in world units. */
+  glide: number;
+  /** How much bigger than its size the aim's nearest dot was drawn, as a share; nought with no drag held. */
+  pulse: number;
 }
 
 /** The grass a frame drew, and the wind it bent in. */
@@ -178,6 +200,7 @@ export interface DebugHost {
   aiming(): { angle: number; power: number } | null;
   view(): { distance: number; rung: number; held: boolean };
   measureFrame(warmup?: number): Promise<number>;
+  motions(): Motions;
   grass(): Promise<GrassDrawn>;
   /** The course being played, and whether the start screen is up; and a course chosen, as the screen does it. */
   course(): string;
@@ -297,6 +320,7 @@ export function createApi(host: DebugHost): GameApi {
     follow: () => host.follow(),
     project: (x, y, z) => host.project(x, y, z),
     measureFrame: (warmup) => host.measureFrame(warmup),
+    motions: () => host.motions(),
     grass: () => host.grass(),
   };
 }

@@ -7,7 +7,8 @@
  * rolls or between holes, wait, reload, ask for another round when one is
  * over, and buy and use clubs in the shop, which it can afford now and then
  * with what its holes pay. Random shots reach each hole's limit, and good ones hole out, so
- * the monkey gets round the whole course.
+ * the monkey gets round the whole course. Each knock the game tells of is
+ * checked as it is told, since what is wrong with one is gone by the next.
  *
  * Only what a player could do. A monkey that did what no player can would
  * find bugs no player will. A new thing a player can do gets an action here.
@@ -19,11 +20,13 @@ import { Autopilot } from '../src/autopilot';
 import { CLUBS } from '../src/clubs';
 import { COURSES } from '../src/course';
 import { Game, type GameEvents } from '../src/game';
-import { checkInvariants } from '../src/invariants';
+import { checkInvariants, knockProblems } from '../src/invariants';
 import { Progress, memoryStore } from '../src/progress';
 import { seeded } from '../src/random';
 
 const DT = 1 / 60;
+/** What a knock is told with. */
+type Knock = Parameters<NonNullable<GameEvents['knocked']>>;
 /** How many frames between checks, when nothing has just been done. */
 const CHECK_EVERY = 10;
 /** How many of the last things done a failure reports. */
@@ -53,10 +56,18 @@ export function fuzz(seed: number, frames: number): FuzzResult {
   const happened: Record<string, number> = {};
   const done: Record<string, number> = {};
   const count = (into: Record<string, number>, key: string) => (into[key] = (into[key] ?? 0) + 1);
+  /** The game being played, once there is one, and what was wrong with a knock as it was told, for the next check. */
+  let playing: Game | null = null;
+  const told: string[] = [];
   const events: GameEvents = new Proxy(
     {},
     {
-      get: (_, name: string) => () => count(happened, name),
+      get:
+        (_, name: string) =>
+        (...args: number[]) => {
+          count(happened, name);
+          if (name === 'knocked' && playing) told.push(...knockProblems(playing, ...(args as Knock)));
+        },
     },
   );
   const log: string[] = [];
@@ -73,6 +84,7 @@ export function fuzz(seed: number, frames: number): FuzzResult {
     // a new player, or, on odd seeds, one come back with coins and gems enough for the shop
     let store = memoryStore(seed % 2 ? JSON.stringify({ coins: 700, gems: 6 }) : null);
     let game = new Game(new Progress(store), events, { random: seeded(seed) });
+    playing = game;
     // a player part way round, on a hole of the seed's: every hole is played, where a monkey starting from the first
     // and reloading now and then would seldom get to the last
     game.startAt(seed % game.course.length);
@@ -176,6 +188,7 @@ export function fuzz(seed: number, frames: number): FuzzResult {
           const kept = JSON.stringify(game.progress.save);
           store = memoryStore(store.json);
           game = new Game(new Progress(store), events, { random: seeded(seed + frame) });
+          playing = game;
           const loaded = JSON.stringify(game.progress.save);
           if (loaded !== kept) throw new Error(`the save was ${kept} and loaded as ${loaded}`);
           did('reload');
@@ -194,6 +207,8 @@ export function fuzz(seed: number, frames: number): FuzzResult {
       if (busy > 0) busy--;
       else act();
       game.step(DT);
+      // a knock told wrongly is told once, and waits for no check
+      if (told.length) return fail(told.splice(0));
       if (frame % CHECK_EVERY === 0) {
         const problems = checkInvariants(game);
         if (problems.length) return fail(problems);

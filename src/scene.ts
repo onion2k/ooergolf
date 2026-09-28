@@ -48,7 +48,8 @@ import type { World } from './physics';
 import { placeRolling } from './roll';
 import { dress, scatter, type Piece, type SceneryKind } from './scenery';
 import { groundOf, railsOf } from './ground';
-import { flagTurn, lean, ripple } from './sway';
+import { flagTurn, lean, ripple, waggle } from './sway';
+import { pulse } from './pulse';
 import type { Shot } from './shot';
 import { PALETTE as COLOURS } from './models/palette';
 
@@ -189,6 +190,8 @@ export class Scene {
 
   /** The hole being drawn, for the height of the ground under what moves on it. */
   private layout: Layout | null = null;
+  /** When the ball dropped into this hole's cup, in game time, which the flag waggles from: none until it has. */
+  holedAt = -Infinity;
 
   /** What does not move on this hole, which is called `name`, with what stands still of what moves on it. */
   static(layout: Layout, name = '', obstacles?: Obstacles): GameGroup[] {
@@ -385,6 +388,7 @@ export class Scene {
       { mesh: ball(AIM_RADIUS, 4, 8), matrices: this.aim, count: 0, materials: this.aimLooks },
     ];
     this.moving = [];
+    this.holedAt = -Infinity;
     const pool = (model: { parts: Model['parts'] }, write: (out: Float32Array, t: number) => void, count = 1) => {
       const matrices = new Float32Array(16 * count);
       for (const part of model.parts) {
@@ -395,9 +399,12 @@ export class Scene {
     if (layout) {
       const { cup } = layout;
       const cloth = flag(FLAG_COLOURS.red).parts.filter((p) => p.name === 'flag');
-      // the flag flies downwind, and the trees lean with it, in the same gusts the grass bends in
+      // the flag flies downwind, and the trees lean with it, in the same gusts the grass bends in; and it waggles as the
+      // ball drops
       const cupZ = heightAt(layout, cup.x, cup.y);
-      pool({ parts: cloth }, (m, t) => place(m, 0, cup.x, cup.y, cupZ, flagTurn(t, cup.x, cup.y, wind)));
+      pool({ parts: cloth }, (m, t) =>
+        place(m, 0, cup.x, cup.y, cupZ, flagTurn(t, cup.x, cup.y, wind) + waggle(t - this.holedAt)),
+      );
       const pieces = scatter(layout, name);
       for (const kind of TREES) {
         const trees = pieces.filter((p) => p.kind === kind);
@@ -448,9 +455,10 @@ export class Scene {
   /**
    * The aim's dots from the ball along the shot, as far as its power reaches
    * (and further by `scale` for a club that strikes harder), coloured from
-   * soft to hard: how many are placed, none for no shot.
+   * soft to hard, and pulsing at game time `now`: how many are placed, none
+   * for no shot.
    */
-  writeAim(x: number, y: number, shot: Shot | null, scale = 1): number {
+  writeAim(x: number, y: number, shot: Shot | null, scale = 1, now = 0): number {
     if (!shot) return 0;
     const reach = AIM_REACH * scale * shot.power;
     const n = Math.max(2, Math.round(AIM_DOTS * shot.power));
@@ -462,8 +470,9 @@ export class Scene {
       const along = KIND_RADIUS[BALL] + 0.6 + (reach * (k + 1)) / n;
       const ax = x + c * along,
         ay = y + s * along;
-      // on the ground under each dot, raised or sloped, not at nought under it
-      place(this.aim, k, ax, ay, (this.layout ? heightAt(this.layout, ax, ay) : 0) + AIM_RADIUS + 0.05);
+      // on the ground under each dot, raised or sloped, not at nought under it, and sitting on it as it swells
+      const size = pulse(now, k);
+      place(this.aim, k, ax, ay, (this.layout ? heightAt(this.layout, ax, ay) : 0) + AIM_RADIUS * size + 0.05, 0, size);
       const t = shot.power * ((k + 1) / n);
       this.aimLooks.set([sr + (hr - sr) * t, sg + (hg - sg) * t, sb + (hb - sb) * t, 0.3], k * MATERIAL_STRIDE);
     }

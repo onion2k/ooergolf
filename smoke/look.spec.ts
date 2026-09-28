@@ -272,6 +272,95 @@ test.describe('what it looks like', () => {
     expect(problems).toEqual([]);
   });
 
+  test.describe('what answers what happens, at a fixed frame of each', () => {
+    test('the ball squashed against the rail the frame it is knocked, close to', async ({ page }) => {
+      const problems = watch(page);
+      await start(page, { seed: 11, paused: true });
+      const squash = await page.evaluate(() => {
+        const g = window.game!;
+        g.step(30);
+        const { tee } = g.content();
+        // from the tee across the first hole at its rail, as hard as there is: the rail's face is seven units off
+        g.look(tee.x + 6, tee.y - 9, 18);
+        g.events();
+        g.shoot(0, 1);
+        for (let f = 0; f < 60; f++) {
+          g.step(1);
+          if (g.events().some((e) => e.startsWith('knocked'))) return g.motions().squash;
+        }
+        return 0;
+      });
+      expect(squash, 'squashed as deep as a knock does').toBeGreaterThan(0.25);
+      await hideStats(page);
+      await expect(page.locator('#view')).toHaveScreenshot('knock.png', TOLERANCE);
+      expect(problems).toEqual([]);
+    });
+
+    /** A gentle putt holed on the first hole, and `frames` more a frame at a time, close to the cup; the motions then. */
+    const holedAndOn = (page: Page, frames: number) =>
+      page.evaluate((frames) => {
+        const g = window.game!;
+        const { cup } = g.content();
+        g.place(g.bodies('ball')[0].slot, cup.x, cup.y - 4, 1);
+        g.step(30);
+        g.look(cup.x, cup.y - 12, 30);
+        g.shoot(Math.PI / 2, 0.08);
+        for (let f = 0; f < 240 && g.state().phase === 'play'; f++) g.step(1);
+        for (let f = 0; f < frames; f++) g.step(1);
+        return g.motions();
+      }, frames);
+
+    test('the gold flashing as the ball drops, close to', async ({ page }) => {
+      const problems = watch(page);
+      await start(page, { seed: 11, paused: true });
+      const now = await holedAndOn(page, 2);
+      expect(now.flash, 'bright').toBeGreaterThan(0.7);
+      await hideStats(page);
+      await expect(page.locator('#view')).toHaveScreenshot('cup-flash.png', TOLERANCE);
+      expect(problems).toEqual([]);
+    });
+
+    test('the flag waggling as the ball drops, close to', async ({ page }) => {
+      const problems = watch(page);
+      await start(page, { seed: 11, paused: true });
+      // a quarter of a second on, swung toward the camera, where the flash's picture has it swung away
+      const now = await holedAndOn(page, 15);
+      expect(now.waggle, 'swung well off the wind').toBeLessThan(-0.2);
+      await hideStats(page);
+      await expect(page.locator('#view')).toHaveScreenshot('flag-waggle.png', TOLERANCE);
+      expect(problems).toEqual([]);
+    });
+
+    test("the aim's dots pulsing, a moment after the aim's own picture", async ({ page }) => {
+      const problems = watch(page);
+      await start(page, { seed: 11, paused: true });
+      await page.evaluate(() => window.game!.step(60));
+      await hideStats(page);
+      await aim(page, 0.85, -60);
+      await page.evaluate(() => window.game!.step(16));
+      expect((await page.evaluate(() => window.game!.motions())).pulse, 'a dot swollen').not.toBe(0);
+      await expect(page.locator('#view')).toHaveScreenshot('aim-pulse.png', TOLERANCE);
+      await page.mouse.up();
+      expect(problems).toEqual([]);
+    });
+
+    test('the camera part way through its glide to the next hole, from where it was looking', async ({ page }) => {
+      const problems = watch(page);
+      await start(page, { seed: 11, paused: true });
+      const glide = await page.evaluate(() => {
+        const g = window.game!;
+        g.step(60);
+        g.startHole(1);
+        g.step(20);
+        return g.motions().glide;
+      });
+      expect(glide, 'still gliding').toBeGreaterThan(3);
+      await hideStats(page);
+      await expect(page.locator('#view')).toHaveScreenshot('glide.png', TOLERANCE);
+      expect(problems).toEqual([]);
+    });
+  });
+
   test.describe('on a phone', () => {
     test.use({ viewport: { width: 400, height: 860 }, hasTouch: true, isMobile: true });
 

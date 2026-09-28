@@ -101,7 +101,9 @@ today, and what the next features must hand it:
   it, which is the most a post may throw it; a ball at rest lies on the
   floor or the top of a box or a post; the strokes are a count within the
   hole's limit; the card has a score for each hole finished and no other,
-  each between one and the limit.
+  each between one and the limit. And every knock the game tells of is of
+  the live ball, where it is, at least `KNOCK.least` hard, in a direction
+  of unit length (`knockProblems`, which the fuzzer checks each one by).
 - **Determinism:** the autopilot plays, with a player's slips from its own
   chance, round after round, and the hash takes in the hole and the card.
 - **Pace:** the strokes a round of each course takes; see above. The
@@ -199,6 +201,15 @@ change meant to move it, and the commit says why. Look at every picture.
   particles for a stroke, the cup and water. The particles move only as a
   frame is drawn, so a test that pictures them steps a frame at a time, and
   their gravity is set on the renderer in world units (30, as Miner has).
+  And everything answers, as `LOOK.md`'s stage 7 has it: the game tells of
+  a `knocked` ball, whose velocity turned by at least `KNOCK.least` in a
+  step (a rail met hard, a post, a drop off a step; never the green, sand,
+  a slope or a belt, and one knock in `KNOCK.apart` unless a harder one),
+  and `src/squash.ts` flattens the drawn ball against what it met and
+  springs it round again within a tenth of a second; `waggle` in `sway.ts`
+  swings the flag as a ball drops and `flash` in `glints.ts` lights the gold;
+  `src/pulse.ts` swells the aim's dots while a drag is held; and the
+  camera's `glide` eases it to each new tee.
 - `src/models.ts` and `src/models/` are the models: the cup, collar, flag
   and tee markers; the obstacles at the sizes the physics will give them
   (bumper, barrier, windmill with its turning blades, water, bunker,
@@ -324,7 +335,10 @@ for a save that is not the player's, which chooses The Meadow unless given
 Looking: `look(x, y, distance)` parks the camera until `follow`, `view()`
 says how far back it stands and which rung of the quality ladder the
 picture is on, and `measureFrame`; `grass()` how many blades of the rough
-the last frame drew near and far, and the wind. `?rung=N` on the page puts the picture
+the last frame drew near and far, and the wind; `motions()` where each of
+the things that answer is (the ball's squash, the flag's waggle, the gold's
+flash and the glints the last frame lit, the camera's glide and the aim's
+pulse), read back from what the last frame placed. `?rung=N` on the page puts the picture
 on a rung and holds it; paused, the governor never moves it, so pictures are
 always taken at the top rung unless a test asks. In unit tests, `game.place(x, y)` puts the
 ball down at a lie.

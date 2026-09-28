@@ -65,6 +65,19 @@ export const BUMPER = { radius: 1, height: 1.6, restitution: 1.2 } as const;
 export const FASTEST = 1.5;
 
 /**
+ * A knock: the ball's velocity turned by at least `least` units a second in
+ * one of the physics' steps, by the rail, a post, a box, the cup or a riser,
+ * or its fall stopped by the ground it drops onto. Measured over both
+ * courses and every club, nothing else turns it by as much: in a step, the
+ * green, the sand and a slope turn a ball by at most 3.3, and a belt 4.5,
+ * where a drop off one step lands at about 7.5 and a rail met at 4 a second
+ * straight on turns it by 6.6. Knocks closer together than `apart` seconds
+ * are one, unless the later is the harder, so what a ball meets twice in a
+ * corner, or goes on meeting in the cup, is not a knock a step.
+ */
+export const KNOCK = { least: 6, apart: 0.1 } as const;
+
+/**
  * Ground that slopes: a height for every tile, a digit a tile in a hole's
  * `terrain`, each this much higher than nought. A digit between neighbours
  * is a gentle slope a ball rests on; two is one it rolls down; three is the

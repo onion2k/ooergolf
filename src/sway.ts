@@ -3,9 +3,10 @@
  * fluttering, the trees leaning with it, and the ripples on the water
  * swelling and settling. The flag and the trees follow the gusts the
  * renderer blows the grass with, through its own `gust`, so a gust that
- * crosses the green bends the grass, the flag and the trees together. All of
- * it from game time, so a picture taken at the same moment is the same
- * picture. Only drawing: nothing that is played moves.
+ * crosses the green bends the grass, the flag and the trees together. And
+ * the flag waggles as a ball drops into its cup. All of it from game time,
+ * so a picture taken at the same moment is the same picture. Only drawing:
+ * nothing that is played moves.
  */
 import { gust, type Wind } from 'artshape-render/game/grass';
 
@@ -26,6 +27,21 @@ export function lean(t: number, x: number, y: number, wind: Wind): [number, numb
   const l = Math.hypot(wind.direction[0], wind.direction[1]) || 1;
   const k = SWAY.tree * Math.min(1, wind.strength) * gust(x, y, wind, t);
   return [(wind.direction[0] / l) * k, (wind.direction[1] / l) * k];
+}
+
+/** How long the flag waggles when a ball drops, in seconds; how far either way at first, in radians; and how many times a second. */
+export const WAGGLE = { lasts: 1.2, most: 0.55, often: 3 } as const;
+
+/**
+ * How far the flag is swung either way of where the wind flies it, `since`
+ * seconds after a ball dropped into its cup: from where it was, quickly back
+ * and forth, dying away to nothing at `lasts`, exactly, as before the ball
+ * dropped. A waggle, as a pin knocked by the ball would give it.
+ */
+export function waggle(since: number): number {
+  if (!(since >= 0) || since >= WAGGLE.lasts) return 0;
+  const tau = since / WAGGLE.lasts;
+  return WAGGLE.most * (1 - tau) ** 2 * Math.sin(2 * Math.PI * WAGGLE.often * since);
 }
 
 /** How big a pond's ripples are at time `t`, against their drawn size, each pond by its own `seed`. */

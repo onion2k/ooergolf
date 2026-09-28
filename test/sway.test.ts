@@ -1,7 +1,7 @@
 /** The course's things in the hole's wind: the flag flying down it, the trees leaning with it, the ripples swelling. */
 import { describe, expect, it } from 'vitest';
 import { gust, type Wind } from 'artshape-render/game/grass';
-import { SWAY, flagTurn, lean, ripple } from '../src/sway';
+import { SWAY, WAGGLE, flagTurn, lean, ripple, waggle } from '../src/sway';
 
 const EAST: Wind = { direction: [1, 0], strength: 0.5, gustSize: 20, gustSpeed: 4 };
 const NORTH: Wind = { direction: [0, 1], strength: 0.5, gustSize: 20, gustSpeed: 4 };
@@ -66,6 +66,23 @@ describe('the wind', () => {
     expect(least).toBeGreaterThan(0.8);
     expect(most).toBeLessThan(1.2);
     expect(most - least).toBeGreaterThan(0.1);
+  });
+
+  it('waggles the flag as a ball drops: quickly either way from where it was, dying away to nothing, exactly', () => {
+    expect(waggle(0), 'from where the wind had it, without a jump').toBe(0);
+    const xs = Array.from({ length: WAGGLE.lasts * 600 }, (_, k) => waggle(k / 600));
+    expect(Math.max(...xs), 'one way').toBeGreaterThan(0.25);
+    expect(Math.min(...xs), 'and the other').toBeLessThan(-0.25);
+    for (const x of xs) expect(Math.abs(x)).toBeLessThanOrEqual(WAGGLE.most + 1e-12);
+    // a waggle, not a swing: back and forth several times
+    let turns = 0;
+    for (let k = 1; k < xs.length; k++) if (Math.sign(xs[k]) !== Math.sign(xs[k - 1]) && xs[k] !== 0) turns++;
+    expect(turns).toBeGreaterThanOrEqual(4);
+    // at rest from its end on, and nothing before the ball dropped
+    for (const t of [WAGGLE.lasts, WAGGLE.lasts + 1e-9, 3, Infinity, -0.01, NaN]) expect(waggle(t)).toBe(0);
+    expect(Math.abs(waggle(WAGGLE.lasts - 1 / 60)), 'settling into its end').toBeLessThan(0.01);
+    for (let t = 0; t < WAGGLE.lasts; t += 1 / 60)
+      expect(Math.abs(waggle(t + 1 / 60) - waggle(t)), 'quick, but never a jump').toBeLessThan(0.35);
   });
 
   it('moves slowly: never more than a little from one frame to the next', () => {
