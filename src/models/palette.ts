@@ -19,12 +19,24 @@ const linear = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) 
 /** A colour as it should show on the screen in full sun, as the renderer takes it. */
 export const shown = (r: number, g: number, b: number): Colour => [linear(r), linear(g), linear(b)];
 
+/**
+ * The green's middle colour, already linear, and how much lighter and darker
+ * its two mown stripes are: a vivid yellow-green, as a toy's grass is, which
+ * the deep blue-green of the rough frames.
+ */
+const GREEN = [0.105, 0.41, 0.024] as const,
+  STRIPE = 0.11;
+
 export const PALETTE = {
-  /** The game's own ground, as `scene.ts` has it, already linear, for the models that stand in for a piece of it. */
-  grass: [0.1, 0.42, 0.08],
-  grassMown: [0.16, 0.52, 0.12],
-  rough: [0.06, 0.26, 0.07],
-  rail: [0.58, 0.3, 0.13],
+  /**
+   * The game's own ground, already linear: the scene paints the course in it
+   * and the showcase its patch, so the two are one green. The rough is the
+   * colour between the rough's blades, as the renderer gives it for them.
+   */
+  grass: rgb(GREEN.map((c) => c * (1 - STRIPE))),
+  grassMown: rgb(GREEN.map((c) => c * (1 + STRIPE))),
+  rough: [0.0455882, 0.1823529, 0.0694118] as Colour,
+  rail: [0.48, 0.22, 0.08] as Colour,
 
   /** Bright glossy plastic, for everything the ball meets. */
   plastic: {

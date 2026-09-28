@@ -216,7 +216,7 @@ async function main() {
   const ctx = await createContext(canvas);
   bootMsg.textContent = 'compiling shaders…';
   const renderer = new GameRenderer(ctx, 16, 16, 64, MM_PER_UNIT);
-  daylight(renderer, ctx);
+  await daylight(renderer, ctx);
   const cam = renderer.camera;
   cam.near = 1;
   cam.far = 1200;

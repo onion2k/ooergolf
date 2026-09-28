@@ -56,7 +56,7 @@ async function main() {
   bootMsg.textContent = 'compiling shaders…';
   const renderer = new GameRenderer(ctx, LIGHT_CAPACITY, EFFECT_CAPACITY, PARTICLE_CAPACITY, MM_PER_UNIT);
   // the daylight look, the same one the models' showcase is drawn in
-  daylight(renderer, ctx);
+  await daylight(renderer, ctx);
   // the particles' gravity, in world units a second squared: a real 9.8 m/s² here pulls confetti back into the cup
   // before it is out of it, so a lighter one, as Miner has, and the bursts' own gravity scales it
   renderer.gravity = 30;

@@ -25,15 +25,37 @@ export const OCCLUSION = { strength: 2, radius: 2.5, direct: 0.3 } as const;
  * pale, and the course stands out against it. Half of what is behind it is
  * lost over this many world units.
  */
-export const HAZE = { halfWay: 900, colour: [0.2, 0.3, 0.42] as [number, number, number] } as const;
+export const HAZE = { halfWay: 3000, colour: [0.2, 0.3, 0.42] as [number, number, number] } as const;
 
-/** Put the daylight look on `renderer`: a cartoon in daylight, as bearing's sweet world is. */
-export function daylight(renderer: GameRenderer, ctx: Gpu) {
+/**
+ * The clean toy of `LOOK.md`: edges drawn at four samples a pixel, the toon
+ * bands eased over a narrow width so a band's edge on a curve is a clean line,
+ * the shade a cool blue-violet of a colour rather than a grey of it, a warm
+ * rim where a thing turns from the camera, and the sky's light from above
+ * with a warm bounce off the grass from below.
+ */
+export const TOY = {
+  antialias: 'msaa',
+  bandSoftness: 0.06,
+  shadeColour: [0.36, 0.38, 0.78] as [number, number, number],
+  rim: 0.35,
+  rimColour: [1, 0.95, 0.85] as [number, number, number],
+  rimWidth: 0.18,
+  skyLight: [0.5, 0.6, 0.75] as [number, number, number],
+  groundLight: [0.38, 0.34, 0.22] as [number, number, number],
+} as const;
+
+/**
+ * Put the daylight look on `renderer`: a cartoon in daylight, as bearing's
+ * sweet world is, in the clean toy's light. Resolves once the pipelines the
+ * look asks for are compiled, which the first frame waits for.
+ */
+export async function daylight(renderer: GameRenderer, ctx: Gpu): Promise<void> {
   renderer.look = {
     ...renderer.look,
     sunDir: [0.35, -0.3, 0.89],
     // toon light is at a colour's full strength, so the sun is bright and the colours are shown straight
-    sunColour: [2.5, 2.45, 2.35],
+    sunColour: [2.55, 2.42, 2.22],
     exposure: 1,
     ambient: 1,
     background: [0.45, 0.72, 0.98],
@@ -41,6 +63,7 @@ export function daylight(renderer: GameRenderer, ctx: Gpu) {
     occlusion: OCCLUSION.strength,
     occlusionRadius: OCCLUSION.radius,
     occlusionDirect: OCCLUSION.direct,
+    ...TOY,
   };
   renderer.fog = {
     ...noFog(MM_PER_UNIT),
@@ -55,7 +78,8 @@ export function daylight(renderer: GameRenderer, ctx: Gpu) {
     cones: 0,
   };
   // a bright day: no darkened corners, which against a pale sky read as a grey haze
-  renderer.post = { ...renderer.post, vignette: 0, tone: 'clamp' };
+  renderer.post = { ...renderer.post, vignette: 0, grain: 0, tone: 'clamp' };
   const env = bakeEnvironment(ctx, 'daylight', { size: 128, mips: 6 });
   renderer.setEnvironment(env.specular, env.brdf, env.mips);
+  await renderer.prepare();
 }

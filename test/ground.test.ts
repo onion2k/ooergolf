@@ -3,7 +3,10 @@ import { describe, expect, it } from 'vitest';
 import type { Mesh } from 'artshape-render/mesh/types';
 import { STEP, TILE, heightAt, layoutOf, terrainAt, type Layout } from '../src/arena';
 import { GROUND, groundOf, railsOf } from '../src/ground';
+import { PALETTE as MODELS } from '../src/models/palette';
 import { PALETTE } from '../src/scene';
+import { KINDS, ROUGH } from '../src/turf';
+import { grassGround } from 'artshape-render/game/grass';
 
 /** Every triangle of a mesh, as its three corners. */
 function triangles(mesh: Mesh): [number, number, number][][] {
@@ -109,6 +112,19 @@ describe('the ground', () => {
     // a grass green: green the most of the three, and not the grey of a green seen through fog
     expect(g).toBeGreaterThan(r * 1.3);
     expect(g).toBeGreaterThan(b * 1.3);
+  });
+
+  it('is the same green, rough and rail in the models’ showcase as on the course, from the one palette', () => {
+    for (const [name, scene, models] of [
+      ['green', PALETTE.grass, MODELS.grass],
+      ['mown', PALETTE.grassMown, MODELS.grassMown],
+      ['rail', PALETTE.rail, MODELS.rail],
+      ['rough', PALETTE.rough, MODELS.rough],
+    ] as const)
+      for (let c = 0; c < 3; c++) expect(scene[c], `${name}, channel ${c}`).toBeCloseTo(models[c], 6);
+    // and the rough's ground is the colour between its blades, so it does not show through them as a colour of its own
+    const between = grassGround(KINDS[ROUGH]);
+    for (let c = 0; c < 3; c++) expect(MODELS.rough[c]).toBeCloseTo(between[c], 6);
   });
 
   it('is cut fine enough to follow a slope: a few pieces a tile', () => {

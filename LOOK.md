@@ -162,6 +162,13 @@ instructions a pixel.
 
 ### 3. The light and the colour
 
+**Built,** with the renderer's settings as `TOY` in `look.ts` and the
+green, rough and rail named in `models/palette.ts`, which the scene and the
+showcase share. The green's grain is there; its sheen is not, since the
+toon shader's only highlight is a hard glint, and the rim and the sky and
+ground light gave the green the life a sheen was for. The palette of the
+things on the course, the rail's cap among them, is the furniture stage's.
+
 **What:** the game takes stage 2's settings and sets the palette. One
 named palette in `look.ts`, the only place a colour of the course is
 chosen: the green's two stripes, the rough, the rail's paint and its cap,

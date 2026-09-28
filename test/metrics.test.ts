@@ -1,6 +1,6 @@
 /** The look's figures from sampled colours: the arithmetic the look-metrics gate reads a picture by. */
 import { describe, expect, it } from 'vitest';
-import { blueShare, figuresOf, luminance, medianColour, saturation, type Rgb } from '../smoke/metrics';
+import { blended, blueShare, figuresOf, luminance, medianColour, saturation, type Rgb } from '../smoke/metrics';
 
 describe('the look’s arithmetic', () => {
   it('weighs a colour’s brightness as the eye does, in linear light', () => {
@@ -49,6 +49,7 @@ describe('the look’s arithmetic', () => {
       rough: [[50, 100, 25]],
       railTop: [[220, 160, 120]],
       railShade: [[110, 80, 60]],
+      edges: [],
     });
     expect(f.saturation).toBeCloseTo(0.75, 6);
     // twice as bright in sRGB is more than four times as bright in light
@@ -61,7 +62,22 @@ describe('the look’s arithmetic', () => {
       rough: [[50, 100, 25]],
       railTop: [[220, 160, 120]],
       railShade: [[90, 80, 100]],
+      edges: [],
     });
     expect(cooled.coolShade).toBeGreaterThan(0.1);
+  });
+
+  it('counts the pixels across an edge that are neither side, as four samples a pixel leave and a hard edge does not', () => {
+    const top: Rgb = [220, 160, 120],
+      face: Rgb = [90, 80, 110];
+    const hard: Rgb[] = [top, top, top, face, face, face];
+    expect(blended(hard, top, face)).toBe(0);
+    const soft: Rgb[] = [top, top, [155, 120, 115], face, face];
+    expect(blended(soft, top, face)).toBe(1);
+    // a pixel a hair off either side is that side, not the edge
+    expect(blended([[216, 158, 119], face], top, face)).toBe(0);
+    // and the figure is the mean over the rows
+    const f = figuresOf({ green: [top], rough: [face], railTop: [top], railShade: [face], edges: [hard, soft, soft] });
+    expect(f.edges).toBeCloseTo(2 / 3, 6);
   });
 });

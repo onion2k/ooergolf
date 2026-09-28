@@ -157,11 +157,17 @@ change meant to move it, and the commit says why. Look at every picture.
   flag, the tee's markers and the scenery, from the models. Each hole stands
   on the rough as a raised green: the rough lies `ROUGH_DEPTH` below the
   grass, under the bottom of the cup, so the cup is seen into, and the rail
-  comes down to meet it. The look is toon daylight on artshape-render
-  v0.20.0, in `src/look.ts`, shared by the game and the showcase: with the
-  renderer's screen-space occlusion for the shade where things meet, and a
-  thin haze. Its fog is lit by a toon sun of 2.5, so it is kept thin and
-  dark: at the sky's own colour it washed the whole course white.
+  comes down to meet it. The look is `LOOK.md`'s clean toy, toon daylight
+  on artshape-render v0.20.0, in `src/look.ts`, shared by the game and the
+  showcase: edges drawn at four samples a pixel (the post pass one rung
+  down the ladder, and none on the last), the toon bands eased at their
+  edges, a cool blue-violet shade, a warm rim, the sky's light from above
+  and a bounce off the grass from below, the renderer's screen-space
+  occlusion where things meet, no film grain, and a haze so thin it only
+  pales the far rough. The colours are named in `src/models/palette.ts`,
+  the green, rough and rail among them, so the scene and the showcase are
+  one green; the green has a fine grain of darker turf. `look:metrics`
+  holds the look to its floors.
 - The ground is read in one place. `heightAt(layout, x, y)` in `arena.ts`
   is how high the ground stands, the tile's step and the terrain smoothed
   between the tiles' middles by the cubic B-spline the physics' terrain

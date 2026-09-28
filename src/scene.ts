@@ -14,7 +14,7 @@
  * given by placement and never by texture, and the words all in the page.
  * The models are `models.ts`'s.
  */
-import { STILL, grassGround, type Wind } from 'artshape-render/game/grass';
+import { STILL, type Wind } from 'artshape-render/game/grass';
 import type { GameGroup } from 'artshape-render/game/renderer';
 import { MATERIAL_STRIDE, PATTERN_STRIDE } from 'artshape-render/game/renderer';
 import { BALL, BUMPER, KIND_RADIUS, TILE, heightAt, tileAt, type Layout } from './arena';
@@ -50,7 +50,7 @@ import { dress, scatter, type Piece, type SceneryKind } from './scenery';
 import { groundOf, railsOf } from './ground';
 import { flagTurn, lean, ripple } from './sway';
 import type { Shot } from './shot';
-import { KINDS, ROUGH } from './turf';
+import { PALETTE as COLOURS } from './models/palette';
 
 /** How tall the rail stands above the grass: a little over the ball, so it reads as the thing the ball banks off. */
 const RAIL_HEIGHT = 1.6;
@@ -61,29 +61,28 @@ const STRIPE_ROWS = 2;
 /** How far apart the tee's markers stand. */
 const TEE_SPACING = 5;
 /**
- * The green, painted: no blades grow on it, and it is the colour the ground
- * between the green's blades was, so the course looks as the lowest rung
- * always drew it. Its two stripes are lighter and darker by the same share.
+ * The green's grain: a fine speckle of darker turf, drawn in world units by
+ * the renderer's pattern, so it is the same size everywhere on every hole.
+ * Close enough to the green that, where it is finer than a pixel at the far
+ * end of the zoom and blends, the green is the same green.
  */
-const [greenR, greenG, greenB] = [0.1465, 0.4529, 0.1029];
-const stripeShade = 0.09;
-/**
- * The ground under the rough, between its blades, as the renderer says it
- * should be painted, so the ground does not show through as a colour of its
- * own.
- */
-const [roughR, roughG, roughB] = grassGround(KINDS[ROUGH]);
-
+const GRAIN = { scale: 1.4, darker: 0.94 } as const;
+function grain(c: readonly number[], seed: number): Float32Array {
+  const p = new Float32Array(PATTERN_STRIDE);
+  p.set([4, GRAIN.scale, seed, 0, c[0] * GRAIN.darker, c[1] * GRAIN.darker, c[2] * GRAIN.darker, 0]);
+  return p;
+}
 /**
  * The colours, and how rough each is. Deeper than they look written down:
  * toon light is at a colour's full strength, and washed a pale green out to
  * mint and a white rail out to a glare, as bearing found with its sweets.
  */
 export const PALETTE = {
-  grass: [greenR * (1 - stripeShade), greenG * (1 - stripeShade), greenB * (1 - stripeShade), 0.85],
-  grassMown: [greenR * (1 + stripeShade), greenG * (1 + stripeShade), greenB * (1 + stripeShade), 0.85],
-  rough: [roughR, roughG, roughB, 0.95],
-  rail: [0.58, 0.3, 0.13, 0.55],
+  /** The green, painted in its two stripes, and the rough and the rail: the models' palette's, which the showcase shares. */
+  grass: [...COLOURS.grass, 0.85],
+  grassMown: [...COLOURS.grassMown, 0.85],
+  rough: [...COLOURS.rough, 0.95],
+  rail: [...COLOURS.rail, 0.55],
   /** The sides of grass raised on a step: the earth under the turf. */
   bank: [0.2, 0.3, 0.08, 0.9],
   ball: [0.98, 0.98, 0.96, 0.25],
@@ -232,8 +231,8 @@ export class Scene {
       roughness: c[3],
     });
     const out: GameGroup[] = [
-      { mesh: ground.green, matrices: still, ...look(PALETTE.grass) },
-      { mesh: ground.mown, matrices: still, ...look(PALETTE.grassMown) },
+      { mesh: ground.green, matrices: still, ...look(PALETTE.grass), patterns: grain(PALETTE.grass, 0.2) },
+      { mesh: ground.mown, matrices: still, ...look(PALETTE.grassMown), patterns: grain(PALETTE.grassMown, 0.7) },
       { ...group({ ...collarPart, material: stripe(cupTile) }, atCup) },
       { mesh: rails, matrices: still, ...look(PALETTE.rail) },
       { mesh: plane(ROUGH_SIZE), matrices: rough, ...look(PALETTE.rough) },

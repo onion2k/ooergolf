@@ -52,6 +52,14 @@ describe('the quality ladder', () => {
     });
   });
 
+  it('draws edges at four samples a pixel on the top rung, with the cheaper post pass below it, and plain on the last', () => {
+    const edges = RUNGS.map((r) => economyFor(r).antialias);
+    expect(edges[0], 'the top rung: whatever the look asks, which is four samples').toBeUndefined();
+    expect(edges[1]).toBe('fxaa');
+    expect(edges[2]).toBe('fxaa');
+    expect(edges[3]).toBe('none');
+  });
+
   it('stays where it is on a machine that keeps up', () => {
     const g = new Governor();
     expect(feed(g, 8, 2000)).toBe(0);
