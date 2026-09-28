@@ -166,6 +166,61 @@ test('the shop sells a club to a player who can pay, puts it in hand, and a relo
   expect(problems).toEqual([]);
 });
 
+test.describe('the grass', () => {
+  test("grows on each hole, near and far, in the hole's own wind, and the next hole grows its own", async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 1, paused: true });
+    await page.evaluate(() => window.game!.step(1));
+    const first = await page.evaluate(() => window.game!.grass());
+    expect(first.near, 'blades near the camera').toBeGreaterThan(10_000);
+    expect(first.far, 'and the rough further off').toBeGreaterThan(1_000);
+    expect(first.wind.strength, 'a gentle wind').toBeGreaterThanOrEqual(0.3);
+    expect(first.wind.strength).toBeLessThanOrEqual(0.65);
+    await page.evaluate(() => {
+      window.game!.startHole(1);
+      window.game!.step(1);
+    });
+    const second = await page.evaluate(() => window.game!.grass());
+    expect(second.near, 'grown again on the next hole').toBeGreaterThan(10_000);
+    expect(second.wind, 'a wind of its own').not.toEqual(first.wind);
+    expect(problems).toEqual([]);
+  });
+
+  test('is pressed wherever the ball rolls on it, and the renderer takes every press', async ({ page }) => {
+    const problems = watch(page);
+    await start(page, { seed: 1, paused: true });
+    // a frame drawn for every frame played, as the page does: the renderer takes so many presses between frames
+    await page.evaluate(() => {
+      window.game!.shoot(Math.PI / 2, 0.4);
+      for (let f = 0; f < 90; f++) window.game!.step(1);
+    });
+    const { presses } = await page.evaluate(() => window.game!.grass());
+    expect(presses.asked, 'pressed as it rolled').toBeGreaterThan(30);
+    expect(presses.taken, 'every press on the course taken').toBe(presses.asked);
+    await page.evaluate(() => window.game!.startHole(1));
+    expect((await page.evaluate(() => window.game!.grass())).presses, 'a new hole starts unpressed').toEqual({
+      asked: 0,
+      taken: 0,
+    });
+    expect(problems).toEqual([]);
+  });
+
+  test('is thinned to half on the first rung down the ladder, the same blades the distance keeps', async ({ page }) => {
+    const drawn = async (rung: number) => {
+      await page.goto(`/?rung=${rung}&seed=1&paused=1`);
+      await expect.poll(() => page.evaluate(() => window.game?.ready ?? false), { timeout: 60_000 }).toBe(true);
+      await page.evaluate(() => window.game!.step(1));
+      return page.evaluate(() => window.game!.grass());
+    };
+    const full = await drawn(0),
+      half = await drawn(1);
+    expect(half.near / full.near).toBeGreaterThan(0.4);
+    expect(half.near / full.near).toBeLessThan(0.6);
+  });
+});
+
 test.describe('on a phone', () => {
   test.use({ viewport: { width: 400, height: 860 }, hasTouch: true, isMobile: true });
 
@@ -235,6 +290,8 @@ test.describe('on a phone', () => {
       window.game!.shoot(Math.PI / 2, 0.5);
       window.game!.step(120);
     });
+    const grass = await page.evaluate(() => window.game!.grass());
+    expect(grass, 'no grass drawn at all').toMatchObject({ near: 0, far: 0 });
     expect(await page.evaluate(() => window.game!.invariants())).toEqual([]);
     expect(problems).toEqual([]);
   });

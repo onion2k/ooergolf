@@ -10,7 +10,7 @@ function feed(g: Governor, ms: number, n: number) {
 }
 
 describe('the quality ladder', () => {
-  it('has rungs that only ever take things away: particles, then shadows and shade, then post, haze and glints', () => {
+  it('has rungs that only ever take things away: particles and half the grass, then shade, then the rest and the grass', () => {
     expect(RUNGS.length).toBeGreaterThanOrEqual(4);
     const off = RUNGS.map((r) => economyFor(r));
     expect(off[0]).toMatchObject({
@@ -20,9 +20,27 @@ describe('the quality ladder', () => {
       post: true,
       fog: true,
       effects: 1,
+      grass: 1,
+      wind: true,
     });
-    expect(off[1]).toMatchObject({ particles: false, shadows: true, occlusion: true, post: true, fog: true });
-    expect(off[2]).toMatchObject({ particles: false, shadows: false, occlusion: false, post: true, fog: true });
+    expect(off[1]).toMatchObject({
+      particles: false,
+      shadows: true,
+      occlusion: true,
+      post: true,
+      fog: true,
+      grass: 0.5,
+      wind: false,
+    });
+    expect(off[2]).toMatchObject({
+      particles: false,
+      shadows: false,
+      occlusion: false,
+      post: true,
+      fog: true,
+      grass: 0.5,
+      wind: false,
+    });
     expect(off[3]).toMatchObject({
       particles: false,
       shadows: false,
@@ -30,6 +48,7 @@ describe('the quality ladder', () => {
       post: false,
       fog: false,
       effects: 0,
+      grass: 0,
     });
   });
 

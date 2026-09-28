@@ -20,7 +20,8 @@ import { daylight } from './look';
 import { Progress } from './progress';
 import { seeded } from './random';
 import { roll } from './roll';
-import { Trail, trailFrom } from './trail';
+import { PRESS_RADIUS, trailFrom } from './trail';
+import { TURF, fieldOf, trampleOf, windOf } from './turf';
 import { Scene, boxOf } from './scene';
 import { cupBurst, splash, strikePuff } from './bursts';
 import { Gesture } from './gesture';
@@ -95,17 +96,29 @@ async function main() {
   const showPurse = () => game && hud.setPurse(game.progress.save);
   const scene = new Scene();
   const rig = new CameraRig();
-  /** The ball's track in the grass: only drawing, kept here, and emptied when a hole begins. */
-  const trail = new Trail();
+  /** The grass of the hole being grown, which the first frame waits for so it is never drawn bare. */
+  let grown: Promise<void> = Promise.resolve();
+  /** How often the ball has pressed the grass on this hole, and how often the renderer took it: for the test API. */
+  const presses = { asked: 0, taken: 0 };
   /** What the player sees of each event, beside the note of it. */
   const shown: GameEvents = {
     // a hole begun: drawn afresh, the sun's shadow fitted to it, and the camera on its tee
     started(index, par) {
       if (!game) return;
       const { layout } = game;
-      renderer.setStatic(scene.static(layout, game.course[index].name, game.obstacles));
-      renderer.setDynamic(scene.dynamic(game.obstacles, layout, game.course[index].name));
-      trail.clear();
+      const { name } = game.course[index];
+      // the hole's own wind, which the grass bends in and the flag and the trees follow
+      const wind = windOf(name);
+      renderer.setStatic(scene.static(layout, name, game.obstacles));
+      renderer.setDynamic(scene.dynamic(game.obstacles, layout, name, wind));
+      // the hole's grass, standing again everywhere the ball pressed it on the last
+      grown = renderer.setGrass(fieldOf(layout, game.obstacles, name), {
+        trample: trampleOf(layout),
+        pressShade: TURF.pressShade,
+      });
+      renderer.clearPresses();
+      presses.asked = presses.taken = 0;
+      renderer.wind = wind;
       renderer.setSunShadow(boxOf(layout));
       rig.jump(layout.tee.x, layout.tee.y);
       hud.started({ index, count: game.course.length, name: game.course[index].name, par });
@@ -216,10 +229,9 @@ async function main() {
     const dots = played.ready ? scene.writeAim(world.x[ball], world.y[ball], gesture.aim, reach) : 0;
     renderer.move(1, scene.aim, dots);
     if (dots) renderer.tint(1, scene.aimLooks);
-    const strips = scene.writeTrack(trail, played.t);
-    renderer.move(2, scene.track, strips);
-    if (strips) renderer.tint(2, scene.trackLooks);
-    scene.writeMoving(played.t).forEach((m, k) => renderer.move(3 + k, m.matrices, m.count));
+    scene.writeMoving(played.t).forEach((m, k) => renderer.move(2 + k, m.matrices, m.count));
+    // the grass's wind and its track keep game time, as everything else that moves does
+    renderer.time = played.t;
     shine();
   }
 
@@ -283,6 +295,7 @@ async function main() {
   }
 
   await renderer.ready;
+  await grown;
   boot.classList.add('gone');
   hud.show();
   stats.hidden = false;
@@ -295,11 +308,14 @@ async function main() {
   function simulate(dt: number) {
     frames++;
     played.step(dt);
-    // the track laid where the ball rolls on the grass, and broken wherever it is not
-    const at = trailFrom(played);
-    if (at) trail.lay(at.x, at.y, at.z, played.t);
-    else trail.lift();
     const { world, ball } = played;
+    // the grass pressed where the ball rolls on it, lying the way it rolls
+    const at = trailFrom(played);
+    if (at) {
+      renderer.time = played.t;
+      presses.asked++;
+      if (renderer.press(at.x, at.y, PRESS_RADIUS, world.vx[ball], world.vy[ball])) presses.taken++;
+    }
     if (!world.alive[ball]) return;
     // the ball seen to roll, as far as it went this frame
     roll(scene.ballTurn, world.vx[ball], world.vy[ball], KIND_RADIUS[BALL], dt);
@@ -356,6 +372,12 @@ async function main() {
     aiming: () => (played.ready && gesture.aim ? { ...gesture.aim } : null),
     view: () => ({ distance: rig.distance, rung: governor.rung, held: governor.held }),
     measureFrame,
+    async grass() {
+      await grown;
+      const drawn = await renderer.grassDrawn();
+      const { direction, strength } = renderer.wind;
+      return { ...drawn, wind: { direction: [direction[0], direction[1]], strength }, presses: { ...presses } };
+    },
     events: eventLog,
   });
 

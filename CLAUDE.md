@@ -88,8 +88,9 @@ today, and what the next features must hand it:
   chance, round after round, and the hash takes in the hole and the card.
 - **Pace:** the strokes a round takes; see above.
 - **Leaks:** ten minutes of the autopilot playing round after round. The
-  card is emptied each round and watched against the number of holes, and
-  the ball's track, laid as the page lays it, against its capacity.
+  card is emptied each round and watched against the number of holes. The
+  ball's track in the grass is the renderer's, a fixed grid for each hole,
+  and the game keeps nothing of it.
 - **Bench:** the physics on a green of its own, the size the course was
   before it had holes, so its figures are the physics' and not the
   content's: at rest, which costs next to nothing, and full of falling balls
@@ -138,7 +139,7 @@ change meant to move it, and the commit says why. Look at every picture.
   on the rough as a raised green: the rough lies `ROUGH_DEPTH` below the
   grass, under the bottom of the cup, so the cup is seen into, and the rail
   comes down to meet it. The look is toon daylight on artshape-render
-  v0.18.0, in `src/look.ts`, shared by the game and the showcase: with the
+  v0.19.0, in `src/look.ts`, shared by the game and the showcase: with the
   renderer's screen-space occlusion for the shade where things meet, and a
   thin haze. Its fog is lit by a toon sun of 2.5, so it is kept thin and
   dark: at the sky's own colour it washed the whole course white.
@@ -147,12 +148,11 @@ change meant to move it, and the commit says why. Look at every picture.
 - What moves only to be seen, all from game time so a picture is the same
   every run: `src/roll.ts` turns the ball as it rolls (the physics eases a
   ball at rest toward flat, as a coin, so its turn is no good for this),
-  and the ball wears a band so the roll shows; `src/trail.ts` is the track
-  the ball presses in the grass as it rolls, a ring of thin strips laid a
-  half-unit apart and faded back to the turf under them in six seconds,
-  emptied at every hole (the leak gate lays one alongside the autopilot and
-  watches its size); `src/sway.ts` swings the
-  flag, leans the trees and swells the ripples; `src/bursts.ts` is the
+  and the ball wears a band so the roll shows; `src/trail.ts` says where the
+  ball presses the grass as it rolls, and the renderer lays the blades flat
+  there and stands them again in six seconds; `src/sway.ts` flies the flag
+  down the hole's wind and leans the trees with it, in the renderer's own
+  gusts, and swells the ripples; `src/bursts.ts` is the
   particles for a stroke, the cup and water. The particles move only as a
   frame is drawn, so a test that pictures them steps a frame at a time, and
   their gravity is set on the renderer in world units (30, as Miner has).
@@ -167,11 +167,18 @@ change meant to move it, and the commit says why. Look at every picture.
   clear of the course, from the hole's name and never the game's chance;
   and dresses the hole, with bunting on tall posts round three sides just
   outside the rail, beds of flowers at the rail's foot, and rocks in
-  clusters, the scattered trees kept off the bunting; and grows tufts of
-  grass thick across the rough, a few thousand of five triangles each. The
-  rough is one full-size square speckled with darker grass, the pattern
-  drawn in world units, and each tile of the green has a fine grain of
-  darker turf, from a seed of its own.
+  clusters, the scattered trees kept off the bunting.
+- `src/turf.ts` is a hole's grass, as the renderer's GPU grass grows it: a
+  field of quarter-unit cells saying where the mown green grows (on the
+  course's grass at each tile's height, in the tiles' stripes) and where the
+  rough does (off the course, down where the rough lies, and on past the
+  field as its `outside`); none on the rail, water, a belt, or in the cup or
+  on its rim. It also gives the trample the ball presses, and the hole's own
+  gentle wind from its name. The page hands them to the renderer when a hole
+  begins, and the first frame waits for the grass. Under the blades, the
+  scene paints the ground in the colour the renderer gives for between them
+  (`grassGround`), so the lowest rung, which gives the grass up, is the same
+  course without it.
 - `src/debug.ts` is `window.game`, the test API. `src/invariants.ts` lists
   the rules that must always hold. `src/autopilot.ts` plays the game by
   itself, for the gates and for par.
@@ -251,7 +258,11 @@ a body that exists, `save`, and `start(page, { save })` for a save that is
 not the player's, and `touches(page, steps)` for fingers, several at once.
 Looking: `look(x, y, distance)` parks the camera until `follow`, `view()`
 says how far back it stands and which rung of the quality ladder the
-picture is on, and `measureFrame`. `?rung=N` on the page puts the picture
+picture is on, and `measureFrame`; `grass()` how many blades the last frame
+drew near and far, the wind, and how often the ball pressed the grass on
+this hole and how often the renderer took it. The renderer takes 64 presses
+between drawn frames, so a test of the track steps a frame at a time, as
+the page does. `?rung=N` on the page puts the picture
 on a rung and holds it; paused, the governor never moves it, so pictures are
 always taken at the top rung unless a test asks. In unit tests, `game.place(x, y)` puts the
 ball down at a lie.
@@ -333,6 +344,8 @@ For anything new on the course, check what it does:
 - **scale:** many at once, at capacity (`BODY_CAPACITY`); and what it costs
   a frame at that many
 - **phone:** narrow screen, and a slower GPU: which rung it steps down to
+- **the grass:** whether grass grows on it or under it, whether the ball
+  presses the grass there, and whether it moves in the hole's wind
 
 And the game's own, for anything new on a hole. The aim, the strokes and
 the ball at rest are here now; the rest apply from the feature that brings

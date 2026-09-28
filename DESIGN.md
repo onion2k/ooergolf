@@ -183,10 +183,13 @@ and all the words in the page, not the picture.
   light on. Lamps only where a hole wants one. The shade where things meet
   from screen-space occlusion, a thin haze that pales the far rough, and a
   glint now and then on the gold of the cup and the pin.
-- **Grass** is rough and green, mown in stripes with a fine grain of darker
-  turf through them, and the rough grows tufts of blades. A rolling ball
-  presses a darker track in the grass behind it, which fades in six
-  seconds.
+- **Grass** is real blades, grown on the GPU by the renderer: short, dense
+  and mown in stripes on the green, long and sparse in the rough, which is
+  darker so the course stands out from it. Each hole has a gentle wind of
+  its own that the grass bends in, in gusts that cross the course, and the
+  flag and the trees follow the same gusts. A rolling ball lays the blades
+  flat and darker behind it, and they stand again in six seconds. A slow
+  machine is given half the blades, standing still, and the slowest none.
   **Bunkers** are pale, matte and speckled.
 - **Obstacles** are bright glossy plastic: the windmill, the bumpers, the
   barriers, the flags.
@@ -197,13 +200,13 @@ and all the words in the page, not the picture.
   game path having no transparency.
 - **Movement** that is only to be seen: the ball turns as it rolls, with a
   red band round it to show it; the flag swings, the trees lean and the
-  ripples swell in a breeze; a puff of grass at a stroke, confetti and
+  ripples swell in the hole's wind; a puff of grass at a stroke, confetti and
   sparkles out of the cup, and a splash in water.
 - **Decoration** is for fun and the physics knows nothing of it: trees,
   hedges, flowers, bunting, a flag in every cup. Each hole has its own
   scatter of it on the rough, the same every time, and is dressed: bunting
   strung round three sides above the rail, beds of flowers at its foot, and
-  rocks in clusters, on a rough speckled with darker grass.
+  rocks in clusters, on the long grass of the rough.
 - **The green is raised.** Each hole stands on the rough on timber sides,
   the rough below the bottom of the cup, so the cup is a hole seen into.
 - **The cup** is 1.45 across its middle, a little wider than the ball, so

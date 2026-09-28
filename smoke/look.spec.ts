@@ -139,7 +139,8 @@ test.describe('what it looks like', () => {
       const g = window.game!;
       g.step(30);
       g.shoot(Math.PI / 2 + 0.12, 0.55);
-      g.step(60);
+      // a frame drawn for every frame played, as the page does, so every press is taken
+      for (let f = 0; f < 60; f++) g.step(1);
     });
     await hideStats(page);
     await expect(page.locator('#view')).toHaveScreenshot('track.png', TOLERANCE);

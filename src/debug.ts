@@ -136,6 +136,21 @@ export interface GameApi {
   project(x: number, y: number, z: number): { x: number; y: number };
   /** What drawing a frame of the scene as it stands costs, in milliseconds, after `warmup` frames drawn untimed. */
   measureFrame(warmup?: number): Promise<number>;
+  /**
+   * The grass the last frame drew, once the hole's is grown: how many blades
+   * near and far, read back from the GPU; the wind it bent in; and how many
+   * times on this hole the ball has pressed it, and how many of those the
+   * renderer took, which is all of them while the ball is on the course.
+   */
+  grass(): Promise<GrassDrawn>;
+}
+
+/** The grass a frame drew, and the wind it bent in. */
+export interface GrassDrawn {
+  near: number;
+  far: number;
+  wind: { direction: [number, number]; strength: number };
+  presses: { asked: number; taken: number };
 }
 
 /** What the page gives the API that is not the game's: time, the camera and the renderer. */
@@ -155,6 +170,7 @@ export interface DebugHost {
   aiming(): { angle: number; power: number } | null;
   view(): { distance: number; rung: number; held: boolean };
   measureFrame(warmup?: number): Promise<number>;
+  grass(): Promise<GrassDrawn>;
   events: string[];
 }
 
@@ -263,5 +279,6 @@ export function createApi(host: DebugHost): GameApi {
     follow: () => host.follow(),
     project: (x, y, z) => host.project(x, y, z),
     measureFrame: (warmup) => host.measureFrame(warmup),
+    grass: () => host.grass(),
   };
 }

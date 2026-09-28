@@ -145,49 +145,6 @@ export function dress(layout: Layout, name: string): Dressing {
   return { bunting, beds, rocks };
 }
 
-/**
- * The tufts of the rough: how far round the course they grow, how far apart
- * on the grid they are scattered from, and the most there may be, which is
- * what a hole costs a frame in them.
- */
-export const TUFTS = { reach: 34, spacing: 1.3, most: 4000 } as const;
-
-/**
- * Tufts of grass on the rough round a hole: on a grid a little over a unit
- * apart, each shaken a little off it, and turned and sized by chance from the
- * hole's name, where the rough is, out to `TUFTS.reach` from the course.
- * Never on the course, its rail or its water.
- */
-export function tufts(
-  layout: Layout,
-  name: string,
-): { x: number; y: number; yaw: number; scale: number; shade: number }[] {
-  const random = seeded(seedOf(`${name} grass`));
-  const { originX, originY, cols, rows } = layout;
-  const out: { x: number; y: number; yaw: number; scale: number; shade: number }[] = [];
-  const x0 = originX - TUFTS.reach,
-    x1 = originX + cols * TILE + TUFTS.reach,
-    y0 = originY - TUFTS.reach,
-    y1 = originY + rows * TILE + TUFTS.reach;
-  for (let y = y0; y < y1 && out.length < TUFTS.most; y += TUFTS.spacing)
-    for (let x = x0; x < x1 && out.length < TUFTS.most; x += TUFTS.spacing) {
-      const px = x + (random() - 0.5) * TUFTS.spacing,
-        py = y + (random() - 0.5) * TUFTS.spacing;
-      const yaw = random() * Math.PI * 2,
-        scale = 0.7 + random() * 0.6,
-        shade = random();
-      const t = tileAt(layout, px, py);
-      // a little out from the rail, so no tuft pokes through its foot
-      const clear = [0, Math.PI / 2, Math.PI, -Math.PI / 2].every((a) => {
-        const u = tileAt(layout, px + Math.cos(a) * 0.6, py + Math.sin(a) * 0.6);
-        return u < 0 || (layout.solid[u] === 1 && layout.rail[u] === 0);
-      });
-      if ((t < 0 || (layout.solid[t] === 1 && layout.rail[t] === 0)) && clear)
-        out.push({ x: px, y: py, yaw, scale, shade });
-    }
-  return out;
-}
-
 /** Whether a point is under one of the strings of bunting, or so near that a tree there would stand in it. */
 function underBunting(bunting: Bunting[], x: number, y: number): boolean {
   return bunting.some((b) => {

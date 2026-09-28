@@ -26,6 +26,9 @@ and the best score on each hole are kept in the browser. The camera follows
 the ball; the wheel zooms on a desktop, and two fingers pinch on a phone. A
 machine that cannot keep up has the picture stepped down a rung at a time.
 
+The grass is real blades, bending in each hole's own wind, and the ball
+lays a track in it as it rolls.
+
 Seven holes so far: a straight putt, a dog-leg, a pond, sliding barriers,
 a ramp up onto a plateau between ponds, a windmill whose blades sweep its
 door, and The Mill Race, with a barrier, the windmill and a conveyor to the
@@ -88,6 +91,7 @@ fixed, and no baseline is moved to make it green.
     src/scene.ts       a hole as it is drawn, from the models
     src/models/        the models: the cup and flag, the obstacles, the decoration
     src/scenery.ts     the decoration scattered round a hole
+    src/turf.ts        a hole's grass, where it grows, and its wind
     src/look.ts        the daylight toon look
     showcase.html      every model, drawn, for looking at
     src/shot.ts        a drag turned into a shot

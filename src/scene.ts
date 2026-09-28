@@ -14,6 +14,7 @@
  * given by placement and never by texture, and the words all in the page.
  * The models are `models.ts`'s.
  */
+import { STILL, grassGround, type Wind } from 'artshape-render/game/grass';
 import type { GameGroup } from 'artshape-render/game/renderer';
 import { MATERIAL_STRIDE, PATTERN_STRIDE } from 'artshape-render/game/renderer';
 import { BALL, KIND_RADIUS, TILE, tileAt, type Layout } from './arena';
@@ -36,7 +37,6 @@ import {
   rock,
   teeMarkers,
   tree,
-  tuft,
   water,
   windmill,
   type Model,
@@ -44,10 +44,10 @@ import {
 import { BARRIER, WINDMILL, type Obstacles } from './obstacles';
 import type { World } from './physics';
 import { placeRolling } from './roll';
-import { dress, scatter, tufts, type Piece, type SceneryKind } from './scenery';
-import { TRAIL, type Trail } from './trail';
+import { dress, scatter, type Piece, type SceneryKind } from './scenery';
 import { flagTurn, lean, ripple } from './sway';
 import type { Shot } from './shot';
+import { GREEN, KINDS, ROUGH } from './turf';
 
 /** How tall the rail stands above the grass: a little over the ball, so it reads as the thing the ball banks off. */
 const RAIL_HEIGHT = 1.6;
@@ -58,19 +58,24 @@ const STRIPE_ROWS = 2;
 /** How far apart the tee's markers stand. */
 const TEE_SPACING = 5;
 /**
+ * The ground under the grass, between its blades, as the renderer says it
+ * should be painted: the green's in its two stripes, lighter and darker by
+ * as much as the blades on it are, and the rough's. Without it the ground
+ * would show through the blades as a colour of its own.
+ */
+const [greenR, greenG, greenB] = grassGround(KINDS[GREEN]);
+const stripeShade = (KINDS[GREEN].stripes?.shade ?? 0) / 2;
+const [roughR, roughG, roughB] = grassGround(KINDS[ROUGH]);
+
+/**
  * The colours, and how rough each is. Deeper than they look written down:
  * toon light is at a colour's full strength, and washed a pale green out to
  * mint and a white rail out to a glare, as bearing found with its sweets.
  */
 export const PALETTE = {
-  grass: [0.1, 0.42, 0.08, 0.85],
-  grassMown: [0.16, 0.52, 0.12, 0.85],
-  rough: [0.06, 0.26, 0.07, 0.95],
-  /** The darker grass speckled through the rough. */
-  roughSpeckle: [0.05, 0.225, 0.06],
-  /** The tufts of the rough, from the darker of them to the lighter. */
-  tuftDark: [0.07, 0.3, 0.07, 0.85],
-  tuftLight: [0.16, 0.46, 0.1, 0.85],
+  grass: [greenR * (1 - stripeShade), greenG * (1 - stripeShade), greenB * (1 - stripeShade), 0.85],
+  grassMown: [greenR * (1 + stripeShade), greenG * (1 + stripeShade), greenB * (1 + stripeShade), 0.85],
+  rough: [roughR, roughG, roughB, 0.95],
   rail: [0.58, 0.3, 0.13, 0.55],
   /** The sides of grass raised on a step: the earth under the turf. */
   bank: [0.2, 0.3, 0.08, 0.9],
@@ -98,23 +103,9 @@ const SCENERY_MODELS: Record<Exclude<SceneryKind, 'flowers'>, Model> = {
 const TREES = new Set<SceneryKind>(['round tree', 'pine']);
 /** The flowers of a bed at the foot of the rail: fuller than a clump in the rough. */
 const BED_MODELS = FLOWER_COLOURS.slice(0, 3).map((c, k) => flowers(c, { seed: k + 11, count: 9 }));
-/**
- * The grain of the green: a fine speckle of darker turf through each tile, a
- * third of a unit across, so the green is grass and not paint. A tile's
- * pattern is drawn in its own units, which are a tile across, so the scale is
- * a tile's worth of grain; the darker turf is the tile's stripe, darkened.
- */
-const GRAIN = { scale: 1.6, dark: 0.86 };
-/** A tuft, built once and placed thousands of times. */
-const TUFT = tuft();
-/** How far above the grass the track lies: over it, never in it. */
-const TRACK_LIFT = 0.012;
-/** The rough, as one great square at its full size, so its speckle is drawn in world units. */
+/** The rough, as one great square out past the fog. */
 const ROUGH_SIZE = 600;
 const FLOWER_MODELS = FLOWER_COLOURS.slice(0, 3).map((c, k) => flowers(c, { seed: k + 1 }));
-
-/** Which way the flag flies when the breeze is still: across the course, never at the camera. */
-const FLAG_YAW = Math.PI / 6;
 
 /**
  * Placement `i` of `out`: turned `yaw` about Z and scaled by `scale`, then
@@ -149,11 +140,6 @@ export class Scene {
   readonly ball = new Float32Array(16);
   readonly aim = new Float32Array(AIM_DOTS * 16);
   readonly aimLooks = new Float32Array(AIM_DOTS * MATERIAL_STRIDE);
-  /** The ball's track: its strips, and their colours, which are written again each frame as they fade. */
-  readonly track = new Float32Array(TRAIL.capacity * 16);
-  readonly trackLooks = new Float32Array(TRAIL.capacity * MATERIAL_STRIDE);
-  /** The hole the track is laid on, for the colour of the turf under each strip. */
-  private layout: Layout | null = null;
   /** The ball's turn as it rolls, kept here since the physics does not keep one for drawing a rolling ball. */
   readonly ballTurn = new Float32Array([0, 0, 0, 1]);
   /** The pools of what moves on the hole, each a group after the ball and the aim, written each frame at a time. */
@@ -182,32 +168,11 @@ export class Scene {
     const stripe = (t: number) =>
       Math.floor(Math.floor(t / cols) / STRIPE_ROWS) % 2 ? PALETTE.grassMown : PALETTE.grass;
     const grass = new Float32Array(grassTiles.length * 16),
-      grassLooks = new Float32Array(grassTiles.length * MATERIAL_STRIDE),
-      grain = new Float32Array(grassTiles.length * PATTERN_STRIDE);
+      grassLooks = new Float32Array(grassTiles.length * MATERIAL_STRIDE);
     grassTiles.forEach((t, k) => {
       const [x, y] = middle(t);
       place(grass, k, x, y, floor[t], 0, TILE, TILE, 1);
-      const [r, g, b] = stripe(t);
       grassLooks.set(stripe(t), k * MATERIAL_STRIDE);
-      // each tile's grain from its own seed, so no two tiles are alike
-      grain.set(
-        [4, GRAIN.scale, (t * 0.618034) % 1, 0, r * GRAIN.dark, g * GRAIN.dark, b * GRAIN.dark, 0],
-        k * PATTERN_STRIDE,
-      );
-    });
-    this.layout = layout;
-    // the tufts of the rough, each a shade of its own between the darker and the lighter
-    const grown = tufts(layout, name);
-    const tuftAt = new Float32Array(grown.length * 16),
-      tuftLooks = new Float32Array(grown.length * MATERIAL_STRIDE);
-    const [dr, dg, db, tuftRough] = PALETTE.tuftDark,
-      [lr, lg, lb] = PALETTE.tuftLight;
-    grown.forEach((p, k) => {
-      place(tuftAt, k, p.x, p.y, -ROUGH_DEPTH, p.yaw, p.scale);
-      tuftLooks.set(
-        [dr + (lr - dr) * p.shade, dg + (lg - dg) * p.shade, db + (lb - db) * p.shade, tuftRough],
-        k * MATERIAL_STRIDE,
-      );
     });
     // the earth under grass raised on steps, up to just under its turf
     const banks = new Float32Array(raised.length * 16);
@@ -235,16 +200,13 @@ export class Scene {
     });
     const rough = new Float32Array(16);
     place(rough, 0, 0, 0, -ROUGH_DEPTH);
-    // patches of darker grass through the rough, a couple of units across, so it is a field and not a colour
-    const speckle = new Float32Array(PATTERN_STRIDE);
-    speckle.set([4, 0.055, 0.3, 0, ...PALETTE.roughSpeckle, 0]);
 
     // the cup's tile is grass with the cup's hole in it, in its stripe's colour
     const atCup = new Float32Array(16);
     place(atCup, 0, at.x, at.y, 0);
     const [collarPart] = collar(TILE, CUP.radius).parts;
     const flagAt = new Float32Array(16);
-    place(flagAt, 0, at.x, at.y, 0, FLAG_YAW);
+    place(flagAt, 0, at.x, at.y, 0);
     const teeAt = new Float32Array(16);
     place(teeAt, 0, tee.x, tee.y, 0);
 
@@ -253,11 +215,10 @@ export class Scene {
       roughness: c[3],
     });
     const out: GameGroup[] = [
-      { mesh: square(), matrices: grass, materials: grassLooks, patterns: grain },
-      { mesh: TUFT.parts[0].mesh, matrices: tuftAt, materials: tuftLooks },
+      { mesh: square(), matrices: grass, materials: grassLooks },
       { ...group({ ...collarPart, material: stripe(cupTile) }, atCup) },
       { mesh: box(TILE, TILE, 1), matrices: rails, ...look(PALETTE.rail) },
-      { mesh: plane(ROUGH_SIZE), matrices: rough, ...look(PALETTE.rough), patterns: speckle },
+      { mesh: plane(ROUGH_SIZE), matrices: rough, ...look(PALETTE.rough) },
       ...groups(cup(CUP.radius), atCup),
       // the pin and its knob stand still; the flag's cloth swings in the breeze, and is among what moves
       ...groups({ parts: flag(FLAG_COLOURS.red).parts.filter((p) => p.name !== 'flag') } as Model, flagAt),
@@ -384,7 +345,7 @@ export class Scene {
    * this hole: a barrier's, a windmill's blades, a conveyor's chevrons. Made
    * again for each hole; the ball is group 0 and the aim group 1.
    */
-  dynamic(obstacles?: Obstacles, layout?: Layout, name = ''): GameGroup[] {
+  dynamic(obstacles?: Obstacles, layout?: Layout, name = '', wind: Wind = STILL): GameGroup[] {
     const [br, bg, bb, brough] = PALETTE.ball;
     // one band round the middle: the bands pattern is a wave along the mesh's own Z, a quarter turn on so it peaks at
     // nought, and at this scale positive only within a third of the radius of the middle
@@ -399,7 +360,6 @@ export class Scene {
         patterns: band,
       },
       { mesh: ball(AIM_RADIUS, 4, 8), matrices: this.aim, count: 0, materials: this.aimLooks },
-      { mesh: square(), matrices: this.track, count: 0, materials: this.trackLooks },
     ];
     this.moving = [];
     const pool = (model: { parts: Model['parts'] }, write: (out: Float32Array, t: number) => void, count = 1) => {
@@ -412,7 +372,8 @@ export class Scene {
     if (layout) {
       const { cup } = layout;
       const cloth = flag(FLAG_COLOURS.red).parts.filter((p) => p.name === 'flag');
-      pool({ parts: cloth }, (m, t) => place(m, 0, cup.x, cup.y, 0, FLAG_YAW + flagTurn(t)));
+      // the flag flies downwind, and the trees lean with it, in the same gusts the grass bends in
+      pool({ parts: cloth }, (m, t) => place(m, 0, cup.x, cup.y, 0, flagTurn(t, cup.x, cup.y, wind)));
       const pieces = scatter(layout, name);
       for (const kind of TREES) {
         const trees = pieces.filter((p) => p.kind === kind);
@@ -421,7 +382,7 @@ export class Scene {
           SCENERY_MODELS[kind as Exclude<SceneryKind, 'flowers'>],
           (m, t) =>
             trees.forEach((p, k) => {
-              const [lx, ly] = lean(t, k + p.x);
+              const [lx, ly] = lean(t, p.x, p.y, wind);
               placeLeaning(m, k, p.x, p.y, -ROUGH_DEPTH, p.yaw, p.scale, lx, ly);
             }),
           trees.length,
@@ -453,35 +414,6 @@ export class Scene {
   writeMoving(t: number): { matrices: Float32Array; count: number }[] {
     for (const m of this.moving) m.write(m.matrices, t);
     return this.moving;
-  }
-
-  /**
-   * The ball's track at game time `t`: each strip where it lies, the width of
-   * the ball's footprint, and coloured between pressed-grass dark and the
-   * turf's own colour under it by how far it has faded. How many there are.
-   */
-  writeTrack(trail: Trail, t: number): number {
-    const l = this.layout;
-    if (!l) return 0;
-    for (let i = 0; i < trail.count; i++) {
-      place(
-        this.track,
-        i,
-        trail.x[i],
-        trail.y[i],
-        trail.z[i] + TRACK_LIFT,
-        trail.yaw[i],
-        trail.length[i],
-        TRAIL.width,
-        1,
-      );
-      const tile = tileAt(l, trail.x[i], trail.y[i]);
-      const turf = Math.floor(Math.floor(tile / l.cols) / STRIPE_ROWS) % 2 ? PALETTE.grassMown : PALETTE.grass;
-      // from pressed dark back to the turf as it fades
-      const k = 1 - (1 - TRAIL.dark) * trail.shade(i, t);
-      this.trackLooks.set([turf[0] * k, turf[1] * k, turf[2] * k, turf[3]], i * MATERIAL_STRIDE);
-    }
-    return trail.count;
   }
 
   /** The ball where it is this frame, turned as it has rolled. */

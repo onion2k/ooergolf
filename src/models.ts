@@ -26,7 +26,7 @@ export {
   water,
   windmill,
 } from './models/obstacles';
-export { bunting, fence, flowers, hedge, rock, tree, tuft } from './models/decor';
+export { bunting, fence, flowers, hedge, rock, tree } from './models/decor';
 
 /**
  * How many triangles each model may have at the largest the game will ask
@@ -50,6 +50,5 @@ export const BUDGET = {
   rock: 60,
   bunting: 420,
   fence: 460,
-  tuft: 8,
   hole: 8000,
 } as const;

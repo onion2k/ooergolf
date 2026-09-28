@@ -23,14 +23,17 @@ const STALL_MS = 100;
 /** The rungs, each what it takes away, in the order it takes them. */
 export const RUNGS: readonly Partial<GameEconomy>[] = [
   {},
-  { particles: false },
-  { particles: false, shadows: false, occlusion: false },
-  { particles: false, shadows: false, occlusion: false, post: false, effects: 0, fog: false },
+  // the grass is a fifth of a frame on a fast machine and more on a phone's, so it is thinned from the first step: half
+  // the blades, the same ones the distance keeps, standing still in the wind; and given up on the last, where the
+  // ground under it is painted its colour
+  { particles: false, grass: 0.5, wind: false },
+  { particles: false, grass: 0.5, wind: false, shadows: false, occlusion: false },
+  { particles: false, grass: 0, wind: false, shadows: false, occlusion: false, post: false, effects: 0, fog: false },
 ];
 
 /** The renderer's economy at a rung: everything, less what that rung takes away. */
 export function economyFor(rung: Partial<GameEconomy>): GameEconomy {
-  return { ...FULL_ECONOMY, shadows: true, ...rung };
+  return { ...FULL_ECONOMY, shadows: true, grass: 1, wind: true, ...rung };
 }
 
 export class Governor {
