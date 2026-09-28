@@ -25,7 +25,9 @@ import {
   SAND,
   TILE,
   fromPosts,
+  slopeAt,
   stepAt,
+  terrainAt,
   onFloor,
   powerFor,
   rollsFor,
@@ -35,6 +37,7 @@ import {
 } from './arena';
 import type { Game } from './game';
 import { Obstacles } from './obstacles';
+import { PHYSICS } from './physics';
 import type { Random } from './random';
 import type { Shot } from './shot';
 
@@ -64,27 +67,82 @@ export function speedFor(distance: number, arrive: number): number {
   return Math.sqrt(arrive * arrive + 2 * ROLL.roll * distance);
 }
 
+/** How steadily the ground slows a rolling ball at a point: sand's slowing on sand, the green's elsewhere. */
+function slowingAt(l: Layout, x: number, y: number): number {
+  const t = tileAt(l, x, y);
+  return t >= 0 && l.sand[t] ? SAND.roll : ROLL.roll;
+}
+
 /**
  * The speed to strike a ball at (x0, y0) so it arrives at (x1, y1) still
  * going at `arrive`, over whatever it rolls on: the green and sand each slow
  * it steadily, so the square of its speed falls by twice the slowing over
- * every unit of each, and the sum is taken along the line.
+ * every unit of each, and the sum is taken along the line; and up a slope it
+ * falls by twice gravity over the rise, and down one grows by the fall. A
+ * step down is a fall, which gives it speed downward and not along, so only
+ * the slope counts.
  */
 export function speedAcross(l: Layout, x0: number, y0: number, x1: number, y1: number, arrive: number): number {
   const d = Math.hypot(x1 - x0, y1 - y0);
   const n = Math.max(1, Math.ceil(d / 0.25));
-  let lost = 0;
+  let lost = 2 * PHYSICS.gravity * (terrainAt(l, x1, y1) - terrainAt(l, x0, y0));
+  for (let k = 0; k < n; k++)
+    lost += 2 * slowingAt(l, x0 + ((x1 - x0) * (k + 0.5)) / n, y0 + ((y1 - y0) * (k + 0.5)) / n) * (d / n);
+  return Math.sqrt(Math.max(0, arrive * arrive + lost));
+}
+
+/**
+ * How long a ball struck at `speed` from (x0, y0) takes to roll to (x1, y1),
+ * or Infinity if it stops short: a quarter unit at a time, each a steady
+ * slowing of the ground's and the slope's, so on the flat green it is
+ * exactly `timeTo`.
+ */
+export function timeAlong(l: Layout, x0: number, y0: number, x1: number, y1: number, speed: number): number {
+  const d = Math.hypot(x1 - x0, y1 - y0);
+  const n = Math.max(1, Math.ceil(d / 0.25));
+  const ds = d / n;
+  let v = speed,
+    t = 0,
+    h = terrainAt(l, x0, y0);
   for (let k = 0; k < n; k++) {
-    const t = tileAt(l, x0 + ((x1 - x0) * (k + 0.5)) / n, y0 + ((y1 - y0) * (k + 0.5)) / n);
-    lost += 2 * (t >= 0 && l.sand[t] ? SAND.roll : ROLL.roll) * (d / n);
+    const x = x0 + ((x1 - x0) * (k + 1)) / n,
+      y = y0 + ((y1 - y0) * (k + 1)) / n;
+    const rise = terrainAt(l, x, y) - h;
+    h += rise;
+    // this piece's slowing: the ground's, and gravity's share along the slope
+    const a =
+      slowingAt(l, x0 + ((x1 - x0) * (k + 0.5)) / n, y0 + ((y1 - y0) * (k + 0.5)) / n) + (PHYSICS.gravity * rise) / ds;
+    const left = v * v - 2 * a * ds;
+    if (left < 0) return Infinity;
+    const next = Math.sqrt(left);
+    t += Math.abs(a) < 1e-9 ? ds / v : (v - next) / a;
+    v = next;
   }
-  return Math.sqrt(arrive * arrive + lost);
+  return t;
+}
+
+/**
+ * Whether a ball would come to rest at a point: on ground no steeper than
+ * the ground's slowing can hold against gravity, as the physics has it: on
+ * the green up to about thirteen degrees, and on sand anywhere a hole may
+ * slope. The physics counts a surface's drag as well, three quarters of it;
+ * none of the game's surfaces has any, so only the steady slowing is here.
+ */
+export function restsOn(l: Layout, x: number, y: number): boolean {
+  const [sx, sy] = slopeAt(l, x, y);
+  const s = Math.hypot(sx, sy);
+  return s / Math.sqrt(1 + s * s) <= slowingAt(l, x, y) / PHYSICS.gravity;
 }
 
 /** How long a ball struck at `speed` takes to roll `distance`, or Infinity if it stops short of it. */
 export function timeTo(distance: number, speed: number): number {
   const left = speed * speed - 2 * ROLL.roll * distance;
   return left < 0 ? Infinity : (speed - Math.sqrt(left)) / ROLL.roll;
+}
+
+/** A shot it would take, and, when it plays to a point on the way rather than the cup, the point it means to stop at. */
+export interface Plan extends Shot {
+  to?: { x: number; y: number };
 }
 
 export interface Skill {
@@ -140,7 +198,7 @@ export class Autopilot {
   }
 
   /** The shot it would take from where the ball lies, or none when no shot can be taken. */
-  plan(): Shot | null {
+  plan(): Plan | null {
     const { game } = this;
     if (!game.ready) return null;
     const { layout, world, ball } = game;
@@ -155,6 +213,7 @@ export class Autopilot {
     if (!clear(layout, x, y, tx, ty) || speedAcross(layout, x, y, tx, ty, ARRIVE) > game.hardest) {
       toCup = false;
       [tx, ty] = path[0] ?? [layout.cup.x, layout.cup.y];
+      // and somewhere a ball comes to rest: a point on the side of a slope it would roll away from
       for (const [px, py] of path) {
         const d = Math.hypot(px - x, py - y) || 1;
         const past = d * OVERRUN.share + OVERRUN.more;
@@ -163,7 +222,8 @@ export class Autopilot {
         if (
           clear(layout, x, y, px, py) &&
           clear(layout, px, py, ox, oy) &&
-          speedAcross(layout, x, y, px, py, 0) <= game.hardest
+          speedAcross(layout, x, y, px, py, 0) <= game.hardest &&
+          restsOn(layout, px, py)
         ) {
           tx = px;
           ty = py;
@@ -171,7 +231,11 @@ export class Autopilot {
       }
     }
     const speed = speedAcross(layout, x, y, tx, ty, toCup ? ARRIVE : 0);
-    return { angle: Math.atan2(ty - y, tx - x), power: Math.min(1, powerFor(speed, game.hardest)) };
+    return {
+      angle: Math.atan2(ty - y, tx - x),
+      power: Math.min(1, powerFor(speed, game.hardest)),
+      ...(toCup ? {} : { to: { x: tx, y: ty } }),
+    };
   }
 
   /**
@@ -194,9 +258,11 @@ export class Autopilot {
       s = Math.sin(shot.angle);
     const r = KIND_RADIUS[BALL] + MISS;
     for (let d = 1; d < reach * 0.98; d += 1) {
-      ahead.update(game.t + timeTo(d, v0), 1 / 120);
       const x = world.x[ball] + c * d,
         y = world.y[ball] + s * d;
+      const when = timeAlong(game.layout, world.x[ball], world.y[ball], x, y, v0);
+      if (when === Infinity) break;
+      ahead.update(game.t + when, 1 / 120);
       for (const p of ahead.pushers)
         if (p.z - p.hz < KIND_RADIUS[BALL] * 2 && Math.abs(x - p.x) < p.hx + r && Math.abs(y - p.y) < p.hy + r)
           return true;

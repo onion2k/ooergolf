@@ -415,15 +415,33 @@ export function bunker(w: number, h: number, { seed = 1 } = {}): Model {
  * tile, and the bunker's lip rims only the edges where a tile meets one
  * that is not sand: a bunker of any shape is one bed, and not rectangles
  * pushed together with a lip across each join. Where a lip runs into sand
- * round an inside corner, its end is closed.
+ * round an inside corner, its end is closed. On ground that slopes, given
+ * its `height` at each point of the bed's own, the sand lies on it and the
+ * lip rides it, cut into `pieces` a side so it follows the curve.
  */
-export function sandBed(cells: readonly (readonly [number, number])[], tile: number, { seed = 1 } = {}): Model {
+export function sandBed(
+  cells: readonly (readonly [number, number])[],
+  tile: number,
+  {
+    seed = 1,
+    height = () => 0,
+    pieces = 1,
+  }: { seed?: number; height?: (x: number, y: number) => number; pieces?: number } = {},
+): Model {
   const lw = Math.min(BUNKER.lipWidth, tile / 6);
   const has = new Set(cells.map(([c, r]) => `${c},${r}`));
   const sandAt = (c: number, r: number) => has.has(`${c},${r}`);
   const below: V3 = [0, 0, -100];
   const sandMesh = new MeshBuilder(),
     lipMesh = new MeshBuilder();
+  // a point of the bed raised onto the ground under it, its own height above the ground kept
+  const lift = (p: V3): V3 => [p[0], p[1], height(p[0], p[1]) + p[2]];
+  // the point `s` of the way from one to another, across the ground
+  const between = (a: V3, b: V3, s: number): V3 => [
+    a[0] + (b[0] - a[0]) * s,
+    a[1] + (b[1] - a[1]) * s,
+    a[2] + (b[2] - a[2]) * s,
+  ];
   for (const [c, r] of cells) {
     const x0 = c * tile,
       y0 = r * tile,
@@ -439,8 +457,13 @@ export function sandBed(cells: readonly (readonly [number, number])[], tile: num
       [x1 - f * inE, y1 - f * inN, z],
       [x0 + f * inW, y1 - f * inN, z],
     ];
-    const [p0, p1, p2, p3] = loop(1, 0);
-    face(sandMesh, p0, p1, p2, p3);
+    const [p0, p1, , p3] = loop(1, 0);
+    for (let j = 0; j < pieces; j++)
+      for (let i = 0; i < pieces; i++) {
+        const at = (u: number, v: number): V3 => lift([p0[0] + (p1[0] - p0[0]) * u, p0[1] + (p3[1] - p0[1]) * v, 0]);
+        const [u0, u1, v0, v1] = [i / pieces, (i + 1) / pieces, j / pieces, (j + 1) / pieces];
+        face(sandMesh, at(u0, v0), at(u1, v0), at(u1, v1), at(u0, v1));
+      }
     const edge = loop(0, 0),
       crest = loop(0.5, BUNKER.lip),
       foot = loop(1, 0);
@@ -460,8 +483,14 @@ export function sandBed(cells: readonly (readonly [number, number])[], tile: num
     for (let k = 0; k < 4; k++) {
       if (!lipped[k]) continue;
       const m = (k + 1) % 4;
-      faceOut(lipMesh, [edge[k], edge[m], crest[m], crest[k]], below);
-      faceOut(lipMesh, [crest[k], crest[m], foot[m], foot[k]], below);
+      for (let q = 0; q < pieces; q++) {
+        const [s0, s1] = [q / pieces, (q + 1) / pieces];
+        const [e0, e1] = [lift(between(edge[k], edge[m], s0)), lift(between(edge[k], edge[m], s1))];
+        const [c0, c1] = [lift(between(crest[k], crest[m], s0)), lift(between(crest[k], crest[m], s1))];
+        const [f0, f1] = [lift(between(foot[k], foot[m], s0)), lift(between(foot[k], foot[m], s1))];
+        faceOut(lipMesh, [e0, e1, c1, c0], below);
+        faceOut(lipMesh, [c0, c1, f1, f0], below);
+      }
       // at each end, open to more sand along it whose own side here has no lip: the lip stops, and its end is shown
       for (const [end, dir] of [
         [k, -1],
@@ -472,8 +501,8 @@ export function sandBed(cells: readonly (readonly [number, number])[], tile: num
           nr = r + ay * dir;
         const [ox, oy] = out[k];
         if (!sandAt(nc, nr) || !sandAt(nc + ox, nr + oy)) continue;
-        const inside: V3 = [edge[end][0] - ax * dir, edge[end][1] - ay * dir, 0];
-        faceOut(lipMesh, [edge[end], crest[end], foot[end]], inside);
+        const inside = lift([edge[end][0] - ax * dir, edge[end][1] - ay * dir, 0]);
+        faceOut(lipMesh, [lift(edge[end]), lift(crest[end]), lift(foot[end])], inside);
       }
     }
   }

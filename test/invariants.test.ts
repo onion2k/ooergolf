@@ -140,7 +140,7 @@ describe('what must always hold', () => {
     game.world.vx[game.ball] = HARDEST_SHOT * FASTEST * 0.999;
     expect(checkInvariants(game)).toEqual([]);
     game.world.vx[game.ball] = HARDEST_SHOT * FASTEST * 1.01;
-    expect(checkInvariants(game).join('\n')).toMatch(/faster than a post may throw it/);
+    expect(checkInvariants(game).join('\n')).toMatch(/faster than a post and a slope may make it/);
   });
 
   it('holds the ball to the club that struck it, not to one put in hand while it rolls', () => {
@@ -157,7 +157,7 @@ describe('what must always hold', () => {
     expect(gold * FASTEST * 0.99, 'past what the putter allows').toBeGreaterThan(HARDEST_SHOT * FASTEST);
     expect(checkInvariants(game), 'struck by the gold, and going as a post may throw what the gold struck').toEqual([]);
     game.world.vx[game.ball] = gold * FASTEST * 1.01;
-    expect(checkInvariants(game).join('\n')).toMatch(/faster than a post may throw it/);
+    expect(checkInvariants(game).join('\n')).toMatch(/faster than a post and a slope may make it/);
   });
 
   it('reports strokes that are not a count', () => {

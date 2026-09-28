@@ -33,6 +33,8 @@ export interface HoleDef {
   par: number;
   map: readonly string[];
   obstacles?: readonly ObstacleDef[];
+  /** How high the ground slopes, a digit a tile in a grid the shape of the map: flat without it. See `layoutOf`. */
+  terrain?: readonly string[];
 }
 
 /**

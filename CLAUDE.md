@@ -148,6 +148,21 @@ change meant to move it, and the commit says why. Look at every picture.
   renderer's screen-space occlusion for the shade where things meet, and a
   thin haze. Its fog is lit by a toon sun of 2.5, so it is kept thin and
   dark: at the sky's own colour it washed the whole course white.
+- The ground is read in one place. `heightAt(layout, x, y)` in `arena.ts`
+  is how high the ground stands, the tile's step and the terrain smoothed
+  between the tiles' middles by the cubic B-spline the physics' terrain
+  uses; `stepAt` is the step alone, which is what makes a wall, so the
+  autopilot judges a rise and a ball is put down level by it; `slopeAt` and
+  `restingAbove` say how the ground slopes and how high a ball rests on it.
+  A hole's slopes are an optional `terrain` grid the shape of its map, a
+  digit a tile, half a unit each; `layoutOf` refuses what the physics
+  would: neighbours more than half a tile apart, rock and all, and a slope
+  within the smoothing's reach of the cup. `src/ground.ts` draws the green
+  as one mesh following it, in its stripes, with earth down its steps, and
+  the rail with a top that slopes with it; the cup, flag, tee, sand, posts,
+  aim, camera and glints all stand on it. No hole on the course slopes yet:
+  the physics has no terrain until its release, and a hole that slopes is
+  drawn sloping and rolled flat. `playCourse` in the test API plays one.
   `src/glints.ts` says when the gold of the cup and the pin twinkles, from
   game time, and the page draws it as one of the renderer's glow quads.
 - What moves only to be seen, all from game time so a picture is the same
@@ -268,7 +283,8 @@ the shot a drag under way would make. `state` has the hole, its par, the
 phase (`play`, `done`, `over`), the card, the coins and gems, the club in
 hand and those owned, and the hardest shot the club in hand strikes.
 Playing: `shoot(angle, power)`, `suggest()` for the autopilot's shot from
-where the ball lies, `startHole(index)`, `newRound()`, `buy(id)`,
+where the ball lies, `startHole(index)`, `playCourse(holes)` for holes of
+the test's own that are not on the course, `newRound()`, `buy(id)`,
 `equip(id)`, and `drag(page, from, to, { touch, hold })` in
 `smoke/game.ts` for a real mouse or finger, pressed where `project(x, y,
 z)` says a point on the course is on the page. Setting a scene: `place` for
@@ -290,6 +306,17 @@ ball down at a lie.
 Each of these is the first feature's to bring, with every gate green at
 each step, and a gate handed what it needs in the same change:
 
+- Holes that slope, on the course, when artshape-physics' terrain is
+  released (built, not yet tagged): the layout's `terrain` handed to the
+  world as `WorldOptions.terrain` in `physics.ts`; `terrainProblem` from
+  `artshape-physics/terrain` called in `layoutOf` in place of the game's own
+  copy of the rules; a test holding the game's `heightAt` and `slopeAt` to
+  that module's; the resting slope (13.2° on the green) and the feel tuned;
+  and pace and pars set. Until then the rule that a ball at rest lies on the
+  ground rightly fails on a hole that slopes, since the physics rolls it
+  flat. A cup that tilts with a sloped green is the physics' part two, not
+  begun. A barrier or a windmill on a slope is refused when a hole is
+  built, as the physics' fuzzer found one carrying a ball round for good.
 - The ninth hole's own, as `DESIGN.md` has it, with everything on it: The
   Mill Race has no sand and no post yet.
 - Pars that are what a player takes: see the pace gate, above. The

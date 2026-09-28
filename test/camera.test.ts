@@ -76,6 +76,23 @@ describe('the camera', () => {
     expect(rig.target[0]).toBeCloseTo(20, 1);
   });
 
+  it('rises and falls with the ground under the ball, easing as it does across the course, and stands as far above it', () => {
+    const rig = new CameraRig();
+    const cam = new Camera();
+    rig.jump(0, 0);
+    rig.place(cam);
+    const above = cam.position[2] - cam.target[2];
+    rig.jump(0, 0, 2);
+    rig.place(cam);
+    expect(cam.target[2], 'looking at the ground, two up').toBeCloseTo(2, 9);
+    expect(cam.position[2] - cam.target[2], 'as far above it').toBeCloseTo(above, 9);
+    rig.follow(0, 0, 1 / 60, 5);
+    expect(rig.target[2]).toBeGreaterThan(2);
+    expect(rig.target[2]).toBeLessThan(3.5);
+    for (let f = 0; f < 300; f++) rig.follow(0, 0, 1 / 60, 5);
+    expect(rig.target[2]).toBeCloseTo(5, 1);
+  });
+
   it('zooms within its limits', () => {
     const rig = new CameraRig();
     const was = rig.distance;

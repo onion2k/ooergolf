@@ -8,7 +8,7 @@
 import { createContext } from 'artshape-render/gpu/context';
 import { LightPool } from 'artshape-render/game/lights';
 import { GameRenderer } from 'artshape-render/game/renderer';
-import { BALL, HARDEST_SHOT, KIND_RADIUS, rollsFor } from './arena';
+import { BALL, HARDEST_SHOT, KIND_RADIUS, heightAt, rollsFor } from './arena';
 import { CameraRig } from './camera';
 import { CLUBS } from './clubs';
 import { createApi } from './debug';
@@ -120,7 +120,7 @@ async function main() {
       presses.asked = presses.taken = 0;
       renderer.wind = wind;
       renderer.setSunShadow(boxOf(layout));
-      rig.jump(layout.tee.x, layout.tee.y);
+      rig.jump(layout.tee.x, layout.tee.y, heightAt(layout, layout.tee.x, layout.tee.y));
       hud.started({ index, count: game.course.length, name: game.course[index].name, par });
     },
     struck(power, x, y) {
@@ -191,9 +191,11 @@ async function main() {
       const r = canvas.getBoundingClientRect();
       return Math.max(1, Math.min(r.width, r.height));
     },
+    // onto the ground at the height of the ground under the ball, where the drag is made
     ground(x, y) {
       const r = canvas.getBoundingClientRect();
-      return groundAt(cam, ((x - r.left) / r.width) * 2 - 1, 1 - ((y - r.top) / r.height) * 2, 0);
+      const g = heightAt(played.layout, played.world.x[played.ball], played.world.y[played.ball]);
+      return groundAt(cam, ((x - r.left) / r.width) * 2 - 1, 1 - ((y - r.top) / r.height) * 2, g);
     },
   });
   const act = (g: ReturnType<Gesture['up']>) => {
@@ -239,13 +241,15 @@ async function main() {
   const glinting = (): [number, number, number][] => {
     const { cup } = played.layout;
     const rim = CUP.radius + 0.15;
+    // on the level ground the cup is cut in, however high that stands
+    const z = heightAt(played.layout, cup.x, cup.y);
     return [
       ...[0.3, 1.9, 3.4, 4.9].map((a): [number, number, number] => [
         cup.x + Math.cos(a) * rim,
         cup.y + Math.sin(a) * rim,
-        0.1,
+        z + 0.1,
       ]),
-      [cup.x, cup.y, 8.75],
+      [cup.x, cup.y, z + 8.75],
     ];
   };
   const glintQuad = new Float32Array(EFFECT_STRIDE);
@@ -320,7 +324,7 @@ async function main() {
     // the ball seen to roll, as far as it went this frame
     roll(scene.ballTurn, world.vx[ball], world.vy[ball], KIND_RADIUS[BALL], dt);
     // the camera keeps game time, so a test stepping the game sees it follow the same way every run
-    if (!parked) rig.follow(world.x[ball], world.y[ball], dt);
+    if (!parked) rig.follow(world.x[ball], world.y[ball], dt, heightAt(played.layout, world.x[ball], world.y[ball]));
   }
   function draw(dt: number) {
     rig.place(cam);
@@ -353,7 +357,7 @@ async function main() {
     frame: () => frames,
     look(x, y, distance) {
       parked = true;
-      rig.jump(x, y);
+      rig.jump(x, y, heightAt(played.layout, x, y));
       if (distance !== undefined) rig.zoom(distance - rig.distance);
     },
     follow() {

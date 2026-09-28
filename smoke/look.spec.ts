@@ -17,6 +17,7 @@
  * `test-results/`. Look at all three before deciding which is right.
  */
 import { expect, test, type Page } from '@playwright/test';
+import type { HoleDef } from '../src/course';
 import { glint } from '../src/glints';
 import { drag, start, watch } from './game';
 
@@ -52,6 +53,67 @@ async function playRound(page: Page) {
 }
 
 test.describe('what it looks like', () => {
+  test('ground that slopes: a hill with sand on its side and a post on it, a hollow, and a raised step by water', async ({
+    page,
+  }) => {
+    // not on the course: the physics cannot roll on slopes yet, so this is how they are drawn, not how they play
+    const SLOPES: HoleDef = {
+      name: 'Slopes',
+      par: 3,
+      map: [
+        '###########',
+        '#.........#',
+        '#....C....#',
+        '#.........#',
+        '#.........#',
+        '#.........#',
+        '#.........#',
+        '#....ss...#',
+        '#....ss...#',
+        '#.........#',
+        '#......o..#',
+        '#.........#',
+        '#~~.......#',
+        '#~~..11...#',
+        '#....11...#',
+        '#....T....#',
+        '###########',
+      ],
+      terrain: [
+        '22222222222',
+        '22222222222',
+        '22222222222',
+        '22222222222',
+        '22222222222',
+        '22222222222',
+        '11111122221',
+        '00000123321',
+        '00000124421',
+        '00000123321',
+        '00000012210',
+        '00000001100',
+        '00000000000',
+        '00000000000',
+        '00000000000',
+        '00000000000',
+        '00000000000',
+      ],
+    };
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true });
+    await page.evaluate((hole) => {
+      const g = window.game!;
+      g.playCourse([hole]);
+      g.step(1);
+      const { floor } = g.content();
+      g.look((floor.minX + floor.maxX) / 2, (floor.minY + floor.maxY) / 2 - 14, 70);
+      g.step(1);
+    }, SLOPES);
+    await hideStats(page);
+    await expect(page.locator('#view')).toHaveScreenshot('slopes.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
   test('the first hole, with the ball on the tee', async ({ page }) => {
     const problems = watch(page);
     await start(page, { seed: 11, paused: true });

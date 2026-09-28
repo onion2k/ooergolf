@@ -32,17 +32,19 @@ export class CameraRig {
   /** How far back it stands, before a tall screen pushes it further. */
   distance: number = VIEW.home;
 
-  /** Straight to looking at (x, y), without easing: for the start of a hole. */
-  jump(x: number, y: number) {
+  /** Straight to looking at (x, y) on ground `z` high, without easing: for the start of a hole. */
+  jump(x: number, y: number, z = 0) {
     this.target[0] = x;
     this.target[1] = y;
+    this.target[2] = z;
   }
 
-  /** A step of `dt` seconds nearer looking at (x, y). */
-  follow(x: number, y: number, dt: number) {
+  /** A step of `dt` seconds nearer looking at (x, y) on ground `z` high: up and down a slope as along it. */
+  follow(x: number, y: number, dt: number, z = 0) {
     const k = 1 - Math.exp(-EASE * dt);
     this.target[0] += (x - this.target[0]) * k;
     this.target[1] += (y - this.target[1]) * k;
+    this.target[2] += (z - this.target[2]) * k;
   }
 
   /** Nearer for less than zero, further for more, held within the limits. */
@@ -57,6 +59,6 @@ export class CameraRig {
     const [x, y] = [this.target[0], this.target[1] + LEAD];
     camera.fov = VIEW.fov;
     camera.target = [x, y, this.target[2]];
-    camera.position = [x, y - Math.sin(VIEW.polar) * r, Math.cos(VIEW.polar) * r];
+    camera.position = [x, y - Math.sin(VIEW.polar) * r, this.target[2] + Math.cos(VIEW.polar) * r];
   }
 }

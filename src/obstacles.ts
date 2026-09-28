@@ -16,7 +16,7 @@
  * the slice of whichever blade is down through the door, at the height of the
  * ball, and nothing when none is.
  */
-import { BALL, BOUNCE, KIND_RADIUS, TILE, tileAt, type Layout } from './arena';
+import { BALL, BOUNCE, KIND_RADIUS, TILE, slopeAt, tileAt, type Layout } from './arena';
 import type { Pusher, Belt } from './physics';
 
 /** A tile of a hole's map, as the map is drawn: its column, and its row from the top. */
@@ -189,6 +189,20 @@ export class Obstacles {
           this.belted.add(tileAt(layout, x0 + ((x1 - x0) / d) * k * TILE, y0 + ((y1 - y0) / d) * k * TILE));
       }
     }
+    // what moves stands on level ground: on a slope a ball is rolled back against a box for good, as the physics'
+    // fuzzer found under a windmill's sweep
+    const r = KIND_RADIUS[BALL];
+    for (const b of this.barriers)
+      level(
+        layout,
+        b.x,
+        b.y,
+        b.hx + b.def.travel + r,
+        BARRIER.hy + r,
+        `a barrier at column ${b.def.at[0]}, row ${b.def.at[1]}`,
+      );
+    for (const w of this.windmills)
+      level(layout, w.x, w.y, WINDMILL.gap / 2 + TILE, TILE, `a windmill at column ${w.def.at[0]}, row ${w.def.at[1]}`);
   }
 
   /** Everything where it is at game time `t`, and going as fast as it went over the `dt` before it. */
@@ -221,4 +235,13 @@ export class Obstacles {
     }
     for (const c of this.conveyors) c.travel = c.speed * t;
   }
+}
+
+/** Refused, naming `what`, if the ground slopes anywhere within `hx` across and `hy` along of (x, y). */
+function level(l: Layout, x: number, y: number, hx: number, hy: number, what: string) {
+  for (let dx = -hx; dx <= hx + 1e-9; dx += 0.5)
+    for (let dy = -hy; dy <= hy + 1e-9; dy += 0.5) {
+      const [sx, sy] = slopeAt(l, x + dx, y + dy);
+      if (Math.abs(sx) + Math.abs(sy) > 1e-9) throw new Error(`${what} stands on ground that slopes: it must be level`);
+    }
 }

@@ -125,6 +125,21 @@ describe('a bed of sand', () => {
     expect(partNamed(m, 'sand').pattern?.kind).toBe(PATTERN.speckle);
   });
 
+  it('lies on ground that slopes: every point of the sand on it, and the lip its own height above it', () => {
+    const height = (x: number, y: number) => 0.1 * x + 0.05 * y * y;
+    const m = sandBed(BUNKER_TILES, 3, { height, pieces: 3 });
+    for (const [x, y, z] of points(partNamed(m, 'sand').mesh)) expect(z).toBeCloseTo(height(x, y), 5);
+    for (const [x, y, z] of points(partNamed(m, 'lip').mesh)) {
+      const above = z - height(x, y);
+      expect(above, `at ${x},${y}`).toBeGreaterThan(-1e-5);
+      expect(above).toBeLessThan(BUNKER.lip + 1e-5);
+    }
+    // cut finer, a sand triangle nine times over for every one flat
+    expect(partNamed(m, 'sand').mesh.indices.length).toBe(
+      partNamed(sandBed(BUNKER_TILES, 3), 'sand').mesh.indices.length * 9,
+    );
+  });
+
   it("stays within its budget for the course's bunker", () => {
     expect(triangles(sandBed(BUNKER_TILES, 3))).toBeLessThanOrEqual(BUDGET['sand bed']);
   });

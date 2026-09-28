@@ -18,9 +18,9 @@
  * Checked by the fuzzer after everything it does, by the test API on asking,
  * and by the unit tests. Each broken rule is a line saying what and where.
  */
-import { BUMPER, FASTEST, KINDS, KIND_NAME, fromPosts, tileAt } from './arena';
+import { BUMPER, KINDS, KIND_NAME, fromPosts, heightAt, restingAbove, tileAt } from './arena';
 import { CLUBS } from './clubs';
-import { LIMIT_OVER_PAR, type Game } from './game';
+import { LIMIT_OVER_PAR, fastest, type Game } from './game';
 
 /** How many broken rules of one sort are reported before the rest are only counted. */
 const EACH = 3;
@@ -66,19 +66,23 @@ export function checkInvariants(game: Game): string[] {
     // along the ground: a fall into the cup, into water or off raised grass gains speed downward, and only downward
     const speed = Math.hypot(world.vx[ball], world.vy[ball]);
     // a hair over, for the float arithmetic of a shot at full power; nothing that moves goes as fast as that
-    // a post throws a ball faster than it came, up to the course's ceiling; of the club that struck it, and not one put
-    // in hand since, which strikes no ball already rolling
-    if (speed > Math.max(game.hardest, game.struckWith) * FASTEST * 1.001)
-      out.push(`the ball is going ${speed.toFixed(2)} along the ground, faster than a post may throw it`);
+    // a post throws a ball faster than it came, up to the course's ceiling, of the club that struck it and not one put in
+    // hand since; and a ball rolled down a slope is faster by what the drop gives it
+    if (speed > fastest(game, world.x[ball], world.y[ball]) * 1.001)
+      out.push(`the ball is going ${speed.toFixed(2)} along the ground, faster than a post and a slope may make it`);
     // into a post by more than the physics lets a ball sink into anything, below the post's top
     const into = -fromPosts(layout, world.x[ball], world.y[ball]) + world.r[ball];
-    if (into > 0.1 && world.z[ball] < BUMPER.height) out.push(`the ball is inside a post, ${into.toFixed(2)} into it`);
+    const postTop = heightAt(layout, world.x[ball], world.y[ball]) + BUMPER.height;
+    if (into > 0.1 && world.z[ball] < postTop) out.push(`the ball is inside a post, ${into.toFixed(2)} into it`);
     // at rest with nothing under it: asleep where a bounce left it, which a player could never strike from
     if (world.asleep[ball]) {
       const r = world.r[ball];
       const bottom = world.z[ball] - r;
-      const onFloor = Math.abs(bottom - world.floorAt(world.x[ball], world.y[ball])) < 0.05;
-      const onPost = Math.abs(bottom - BUMPER.height) < 0.05 && fromPosts(layout, world.x[ball], world.y[ball]) < 0;
+      // on a slope its middle stands further above the ground than its radius
+      const x = world.x[ball],
+        y = world.y[ball];
+      const onFloor = Math.abs(world.z[ball] - heightAt(layout, x, y) - restingAbove(layout, x, y, r)) < 0.05;
+      const onPost = Math.abs(bottom - postTop) < 0.05 && fromPosts(layout, world.x[ball], world.y[ball]) < 0;
       const onBox = game.obstacles.pushers.some(
         (p) =>
           Math.abs(bottom - (p.z + p.hz)) < 0.05 &&

@@ -14,7 +14,7 @@
  */
 import { KIND_NAME, TILE, type Layout } from './arena';
 import { Autopilot } from './autopilot';
-import { CUP } from './course';
+import { CUP, type HoleDef } from './course';
 import type { Game } from './game';
 import { checkInvariants } from './invariants';
 import { seeded } from './random';
@@ -121,6 +121,8 @@ export interface GameApi {
   suggest(): { angle: number; power: number } | null;
   /** Hole `index` begun, from its tee, with the card as if the holes before it had not been played. */
   startHole(index: number): void;
+  /** A round of holes of the test's own, not the course's: for a hole that is not on it. */
+  playCourse(holes: HoleDef[]): void;
   /** A new round, as the card's button asks for. */
   newRound(): void;
   /** A club bought, as the shop's button does; whether it was. */
@@ -271,6 +273,7 @@ export function createApi(host: DebugHost): GameApi {
     shoot: (angle, power) => game.shoot(angle, power),
     suggest: () => (game.ready ? new Autopilot(game).plan() : null),
     startHole: (index) => game.startAt(index),
+    playCourse: (holes) => game.playCourse(holes),
     newRound: () => game.newRound(),
     buy: (id) => game.buy(id),
     equip: (id) => game.equip(id),

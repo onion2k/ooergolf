@@ -7,7 +7,7 @@
  * door, and a change it needs goes in its own repo with a version bump here.
  */
 import { World, type WorldOptions } from 'artshape-physics/world';
-import { BODY_CAPACITY, BOTTOM, BOUNCE, BUMPER, KIND_RADIUS, ROLL, SAND, TILE, type Layout } from './arena';
+import { BODY_CAPACITY, BOTTOM, BOUNCE, BUMPER, KIND_RADIUS, ROLL, SAND, TILE, heightAt, type Layout } from './arena';
 import type { Random } from './random';
 
 export { World, type Belt, type Pusher } from 'artshape-physics/world';
@@ -55,6 +55,8 @@ export function makeWorld(layout: Layout, cup: Cup, random: Random, belted: Read
     grid: { cols, rows, originX, originY, tile: TILE },
     solid,
     floor: layout.floor,
+    // the layout's terrain is not handed over yet: the physics has no option for it until its terrain is released, so a
+    // hole that slopes is drawn sloping and rolled flat, and none is on the course
     bottom: BOTTOM,
     radii: KIND_RADIUS,
     holes: [{ x: layout.cup.x, y: layout.cup.y, radius: cup.radius, depth: cup.depth, rim: cup.rim, pull: cup.pull }],
@@ -69,12 +71,13 @@ export function makeWorld(layout: Layout, cup: Cup, random: Random, belted: Read
     tuning: { wallRestitution: BOUNCE.rail, sleepInAir: false, sleepSpeed: 2, smoothWalls: true, travel: 0.5 },
   };
   const world = new World(options);
-  // the posts, which never move: each from below everything up to its top, which is a floor to what lands on it
+  // the posts, which never move: each from below everything up to its top, which is a floor to what lands on it, and
+  // stands as high above the ground it is on as a post is tall
   world.bumpers = layout.bumpers.map((p) => ({
     x: p.x,
     y: p.y,
     radius: BUMPER.radius,
-    top: BUMPER.height,
+    top: heightAt(layout, p.x, p.y) + BUMPER.height,
     restitution: BUMPER.restitution,
   }));
   return world;

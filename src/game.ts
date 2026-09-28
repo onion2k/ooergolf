@@ -13,11 +13,23 @@
  * keep a note of it. Nothing here waits on anything there, so the same game
  * runs in the page and in Node, and what the tests try is what is played.
  */
-import { BALL, FASTEST, KIND_RADIUS, fromPosts, layoutOf, onFloor, stepAt, strikeSpeed, type Layout } from './arena';
+import {
+  BALL,
+  FASTEST,
+  KIND_RADIUS,
+  fromPosts,
+  highestTerrain,
+  layoutOf,
+  onFloor,
+  stepAt,
+  strikeSpeed,
+  terrainAt,
+  type Layout,
+} from './arena';
 import { clubById, paid } from './clubs';
 import { COURSE, CUP, type HoleDef } from './course';
 import { Obstacles } from './obstacles';
-import { THE_CUP, makeWorld, PHYSICS, type World } from './physics';
+import { PHYSICS, THE_CUP, makeWorld, type World } from './physics';
 import { Progress } from './progress';
 import type { Random } from './random';
 
@@ -77,7 +89,8 @@ export const CLEAR_OF_CUP = CUP.radius + KIND_RADIUS[BALL] + 0.5;
 const SETTLE_FRAMES = 600;
 
 export class Game {
-  readonly course: readonly HoleDef[];
+  /** The holes a round is played over: the course, or a test's own. */
+  course: readonly HoleDef[];
   /** Which hole is being played, from nought. */
   hole = 0;
   layout!: Layout;
@@ -150,7 +163,7 @@ export class Game {
   /** Hole `index` begun: a world of its own, the ball on its tee, and no strokes. */
   begin(index: number) {
     this.hole = index;
-    this.layout = layoutOf(this.def.map);
+    this.layout = layoutOf(this.def.map, this.def.terrain);
     this.obstacles = new Obstacles(this.def.obstacles ?? [], this.layout);
     this.world = makeWorld(this.layout, CUP, () => this.random(), this.obstacles.belted);
     this.world.pushers = this.obstacles.pushers;
@@ -170,6 +183,16 @@ export class Game {
   newRound() {
     this.card.length = 0;
     this.begin(0);
+  }
+
+  /**
+   * A round of `holes` of a test's own, from the first: for a test to play or
+   * look at a hole that is not on the course, such as one that slopes before
+   * the physics can roll on it.
+   */
+  playCourse(holes: readonly HoleDef[]) {
+    this.course = holes;
+    this.newRound();
   }
 
   /**
@@ -269,8 +292,10 @@ export class Game {
   private heldToFastest() {
     const { world, ball } = this;
     if (!world.alive[ball]) return;
-    const most = Math.max(this.hardest, this.struckWith) * FASTEST;
     const speed = Math.hypot(world.vx[ball], world.vy[ball]);
+    // the ceiling on the flat first, which is nearly always enough, before what a fall down a slope adds to it
+    if (speed <= Math.max(this.hardest, this.struckWith) * FASTEST) return;
+    const most = fastest(this, world.x[ball], world.y[ball]);
     if (speed <= most) return;
     world.vx[ball] *= most / speed;
     world.vy[ball] *= most / speed;
@@ -397,4 +422,17 @@ export class Game {
   persist() {
     this.progress.persist();
   }
+}
+
+/**
+ * The fastest the course may have the ball going at (x, y), along the
+ * ground: half as fast again as the hardest shot of the club that struck it,
+ * which is the most a post may throw it, and as much more as rolling down
+ * from the hole's highest slope to here would give it. A step down is a
+ * fall, and gives it speed downward, not along the ground.
+ */
+export function fastest(game: Game, x: number, y: number): number {
+  const most = Math.max(game.hardest, game.struckWith) * FASTEST;
+  const drop = Math.max(0, highestTerrain(game.layout) - terrainAt(game.layout, x, y));
+  return Math.sqrt(most * most + 2 * PHYSICS.gravity * drop);
 }

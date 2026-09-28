@@ -17,10 +17,10 @@
 import { STILL, grassGround, type Wind } from 'artshape-render/game/grass';
 import type { GameGroup } from 'artshape-render/game/renderer';
 import { MATERIAL_STRIDE, PATTERN_STRIDE } from 'artshape-render/game/renderer';
-import { BALL, BUMPER, KIND_RADIUS, TILE, heightAt, stepAt, tileAt, type Layout } from './arena';
+import { BALL, BUMPER, KIND_RADIUS, TILE, heightAt, tileAt, type Layout } from './arena';
 import { CUP } from './course';
 import { place } from './matrix';
-import { ball, box, plane, square } from './meshes';
+import { ball, plane } from './meshes';
 import {
   FLAG_COLOURS,
   FLOWER_COLOURS,
@@ -47,6 +47,7 @@ import { BARRIER, WINDMILL, type Obstacles } from './obstacles';
 import type { World } from './physics';
 import { placeRolling } from './roll';
 import { dress, scatter, type Piece, type SceneryKind } from './scenery';
+import { groundOf, railsOf } from './ground';
 import { flagTurn, lean, ripple } from './sway';
 import type { Shot } from './shot';
 import { GREEN, KINDS, ROUGH } from './turf';
@@ -183,82 +184,50 @@ export class Scene {
   /** The pools of what moves on the hole, each a group after the ball and the aim, written each frame at a time. */
   private moving: { matrices: Float32Array; count: number; write: (out: Float32Array, t: number) => void }[] = [];
 
+  /** The hole being drawn, for the height of the ground under what moves on it. */
+  private layout: Layout | null = null;
+
   /** What does not move on this hole, which is called `name`, with what stands still of what moves on it. */
   static(layout: Layout, name = '', obstacles?: Obstacles): GameGroup[] {
-    const { cols, rows, originX, originY, solid, rail: isRail, water: isWater, cup: at, tee } = layout;
+    this.layout = layout;
+    const { cols, cup: at, tee } = layout;
     const cupTile = tileAt(layout, at.x, at.y);
     // the rail either side of a windmill's door is under its tower, and is not drawn through it
     const underTower = new Set<number>();
     for (const w of obstacles?.windmills ?? [])
       for (const side of [-1, 1]) underTower.add(tileAt(layout, w.x + side * TILE, w.y));
-    const middle = (t: number): [number, number] => [
-      originX + ((t % cols) + 0.5) * TILE,
-      originY + (Math.floor(t / cols) + 0.5) * TILE,
-    ];
-    // how high the ground stands at a tile's middle, and the step it stands on
-    const ground = (t: number) => heightAt(layout, ...middle(t));
-    const step = (t: number) => stepAt(layout, ...middle(t));
-    const grassTiles: number[] = [],
-      railTiles: number[] = [],
-      raised: number[] = [];
-    for (let t = 0; t < cols * rows; t++) {
-      if (!solid[t] && !isWater[t] && !layout.sand[t] && t !== cupTile) grassTiles.push(t);
-      else if (isRail[t] && !underTower.has(t)) railTiles.push(t);
-      if (!solid[t] && !isWater[t] && step(t) > 0) raised.push(t);
-    }
     const stripe = (t: number) =>
       Math.floor(Math.floor(t / cols) / STRIPE_ROWS) % 2 ? PALETTE.grassMown : PALETTE.grass;
-    const grass = new Float32Array(grassTiles.length * 16),
-      grassLooks = new Float32Array(grassTiles.length * MATERIAL_STRIDE);
-    grassTiles.forEach((t, k) => {
-      const [x, y] = middle(t);
-      place(grass, k, x, y, ground(t), 0, TILE, TILE, 1);
-      grassLooks.set(stripe(t), k * MATERIAL_STRIDE);
-    });
-    // the earth under grass raised on steps, up to just under its turf
-    const banks = new Float32Array(raised.length * 16);
-    raised.forEach((t, k) => {
-      const [x, y] = middle(t);
-      place(banks, k, x, y, 0, 0, 1, 1, step(t) - 0.01);
-    });
-    // the rail from the rough up past the grass beside it, however high that stands: the green's timber sides,
-    // and the edge the ball banks off
-    const rails = new Float32Array(railTiles.length * 16);
-    railTiles.forEach((t, k) => {
-      const [x, y] = middle(t);
-      let top = 0;
-      const tx = t % cols,
-        ty = Math.floor(t / cols);
-      for (let oy = -1; oy <= 1; oy++)
-        for (let ox = -1; ox <= 1; ox++) {
-          const nx = tx + ox,
-            ny = ty + oy;
-          if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
-          const u = ny * cols + nx;
-          if (!solid[u] && !isWater[u]) top = Math.max(top, ground(u));
-        }
-      place(rails, k, x, y, -ROUGH_DEPTH, 0, 1, 1, top + RAIL_HEIGHT + ROUGH_DEPTH);
-    });
+    // the grass as one mesh over the hole, following its slopes, and the earth down its steps
+    const ground = groundOf(layout);
+    const still = new Float32Array(16);
+    place(still, 0, 0, 0, 0);
+    // the rail from the rough up past the grass beside it, however high that stands and however it slopes: the green's
+    // timber sides, and the edge the ball banks off
+    const rails = railsOf(layout, RAIL_HEIGHT, ROUGH_DEPTH, underTower);
     const rough = new Float32Array(16);
     place(rough, 0, 0, 0, -ROUGH_DEPTH);
 
-    // the cup's tile is grass with the cup's hole in it, in its stripe's colour
+    // the cup's tile is grass with the cup's hole in it, in its stripe's colour, at the height of the level ground round
+    // it; the tee's markers on the ground beside the tee
+    const cupZ = heightAt(layout, at.x, at.y);
     const atCup = new Float32Array(16);
-    place(atCup, 0, at.x, at.y, 0);
+    place(atCup, 0, at.x, at.y, cupZ);
     const [collarPart] = collar(TILE, CUP.radius).parts;
     const flagAt = new Float32Array(16);
-    place(flagAt, 0, at.x, at.y, 0);
+    place(flagAt, 0, at.x, at.y, cupZ);
     const teeAt = new Float32Array(16);
-    place(teeAt, 0, tee.x, tee.y, 0);
+    place(teeAt, 0, tee.x, tee.y, heightAt(layout, tee.x, tee.y));
 
     const look = (c: readonly number[]) => ({
       albedo: [c[0], c[1], c[2]] as [number, number, number],
       roughness: c[3],
     });
     const out: GameGroup[] = [
-      { mesh: square(), matrices: grass, materials: grassLooks },
+      { mesh: ground.green, matrices: still, ...look(PALETTE.grass) },
+      { mesh: ground.mown, matrices: still, ...look(PALETTE.grassMown) },
       { ...group({ ...collarPart, material: stripe(cupTile) }, atCup) },
-      { mesh: box(TILE, TILE, 1), matrices: rails, ...look(PALETTE.rail) },
+      { mesh: rails, matrices: still, ...look(PALETTE.rail) },
       { mesh: plane(ROUGH_SIZE), matrices: rough, ...look(PALETTE.rough) },
       ...groups(cup(CUP.radius), atCup),
       // the pin and its knob stand still; the flag's cloth swings in the breeze, and is among what moves
@@ -270,7 +239,7 @@ export class Scene {
       ...this.bunkers(layout),
       ...this.posts(layout),
     ];
-    if (raised.length) out.push({ mesh: box(TILE, TILE, 1), matrices: banks, ...look(PALETTE.bank) });
+    if (ground.banks.indices.length) out.push({ mesh: ground.banks, matrices: still, ...look(PALETTE.bank) });
     for (const w of obstacles?.windmills ?? []) {
       const at = new Float32Array(16);
       place(at, 0, w.x, w.y, 0);
@@ -302,14 +271,17 @@ export class Scene {
     if (!cells.length) return [];
     const at = new Float32Array(16);
     place(at, 0, layout.originX, layout.originY, 0);
-    return groups(sandBed(cells, TILE), at);
+    // on a hole that slopes, laid on the ground and cut finer to follow it; flat, a piece a tile, as it always was
+    const slopes = layout.terrain.some((h) => h !== 0);
+    const height = (x: number, y: number) => heightAt(layout, layout.originX + x, layout.originY + y);
+    return groups(sandBed(cells, TILE, slopes ? { height, pieces: 3 } : {}), at);
   }
 
   /** The posts on a hole, all of one model, each where the physics has its post. */
   private posts(layout: Layout): GameGroup[] {
     if (!layout.bumpers.length) return [];
     const at = new Float32Array(layout.bumpers.length * 16);
-    layout.bumpers.forEach((p, k) => place(at, k, p.x, p.y, 0));
+    layout.bumpers.forEach((p, k) => place(at, k, p.x, p.y, heightAt(layout, p.x, p.y)));
     return groups(POST, at);
   }
 
@@ -417,7 +389,8 @@ export class Scene {
       const { cup } = layout;
       const cloth = flag(FLAG_COLOURS.red).parts.filter((p) => p.name === 'flag');
       // the flag flies downwind, and the trees lean with it, in the same gusts the grass bends in
-      pool({ parts: cloth }, (m, t) => place(m, 0, cup.x, cup.y, 0, flagTurn(t, cup.x, cup.y, wind)));
+      const cupZ = heightAt(layout, cup.x, cup.y);
+      pool({ parts: cloth }, (m, t) => place(m, 0, cup.x, cup.y, cupZ, flagTurn(t, cup.x, cup.y, wind)));
       const pieces = scatter(layout, name);
       for (const kind of TREES) {
         const trees = pieces.filter((p) => p.kind === kind);
@@ -480,7 +453,10 @@ export class Scene {
       [hr, hg, hb] = PALETTE.aimHard;
     for (let k = 0; k < n; k++) {
       const along = KIND_RADIUS[BALL] + 0.6 + (reach * (k + 1)) / n;
-      place(this.aim, k, x + c * along, y + s * along, AIM_RADIUS + 0.05);
+      const ax = x + c * along,
+        ay = y + s * along;
+      // on the ground under each dot, raised or sloped, not at nought under it
+      place(this.aim, k, ax, ay, (this.layout ? heightAt(this.layout, ax, ay) : 0) + AIM_RADIUS + 0.05);
       const t = shot.power * ((k + 1) / n);
       this.aimLooks.set([sr + (hr - sr) * t, sg + (hg - sg) * t, sb + (hb - sb) * t, 0.3], k * MATERIAL_STRIDE);
     }

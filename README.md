@@ -93,6 +93,7 @@ fixed, and no baseline is moved to make it green.
     src/models/        the models: the cup and flag, the obstacles, the decoration
     src/scenery.ts     the decoration scattered round a hole
     src/turf.ts        a hole's grass, where it grows, and its wind
+    src/ground.ts      the green drawn as one mesh over its slopes, and the rail round it
     src/look.ts        the daylight toon look
     showcase.html      every model, drawn, for looking at
     src/shot.ts        a drag turned into a shot
