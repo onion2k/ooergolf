@@ -113,8 +113,8 @@ const SCENERY_MODELS: Record<Exclude<SceneryKind, 'flowers'>, Model> = {
 const POST = bumper(BUMPER.radius, { height: BUMPER.height });
 /** The kinds of scenery that lean in the breeze. */
 const TREES = new Set<SceneryKind>(['round tree', 'pine']);
-/** The flowers of a bed at the foot of the rail: fuller than a clump in the rough. */
-const BED_MODELS = FLOWER_COLOURS.slice(0, 3).map((c, k) => flowers(c, { seed: k + 11, count: 9 }));
+/** The flowers of a bed at the foot of the rail: fuller than a clump in the rough, and few enough to read as flowers. */
+const BED_MODELS = FLOWER_COLOURS.slice(0, 3).map((c, k) => flowers(c, { seed: k + 11, count: 5 }));
 /** The rough, as one great square out past the fog. */
 const ROUGH_SIZE = 600;
 const FLOWER_MODELS = FLOWER_COLOURS.slice(0, 3).map((c, k) => flowers(c, { seed: k + 1 }));

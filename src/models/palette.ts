@@ -81,12 +81,14 @@ export const PALETTE = {
 
   trunk: shown(0.55, 0.33, 0.16),
   leaves: shown(0.22, 0.52, 0.14),
+  /** A round tree's crown, lighter than the puffs below it, as a canopy is lit from above. */
+  leavesLight: shown(0.4, 0.68, 0.2),
   pine: shown(0.1, 0.44, 0.34),
-  hedge: shown(0.13, 0.4, 0.14),
-  hedgeLight: shown(0.26, 0.56, 0.2),
+  /** Clipped box: a fresher green than the trees, so a hedge reads as kept and not wild. */
+  hedge: shown(0.2, 0.56, 0.24),
   stem: shown(0.26, 0.56, 0.18),
-  rock: shown(0.68, 0.67, 0.7),
-  rockGrain: shown(0.55, 0.54, 0.58),
+  /** A pebble: a warm stone and not a cool grey, so it keeps a colour in the shade; darker than a cream, which glared in the rough. */
+  rock: shown(0.64, 0.61, 0.56),
   paint: shown(0.98, 0.97, 0.95),
   string: shown(0.94, 0.92, 0.86),
 } as const satisfies Record<string, Colour | Record<string, Colour>>;

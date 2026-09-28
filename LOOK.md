@@ -258,6 +258,10 @@ of each close, in the showcase and on the course.
 
 ### 6. The world round the course
 
+**Built,** the scenery models only: the hills beyond and the clouds are left
+out, as decided. The renderer has no colour a vertex, so a tree's canopy is
+two greens, its crown lighter, where a soft gradient was asked for.
+
 **What:** the scenery as the same toy.
 
 - **Trees:** round, smooth-shaded canopies with a soft gradient, on

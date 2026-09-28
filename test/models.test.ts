@@ -1,9 +1,10 @@
 /**
  * The models, held to what the game and its physics will take them to be.
  * Every model is built headless, with no renderer, and read back as numbers:
- * that every face is wound the way its normal says, flat-shaded unless it is
- * the round furniture, which is smooth and never faceted, that the obstacles
- * and the ball are drawn to exactly the size the physics gives them, that a
+ * that every face is wound the way its normals say, flat-shaded where it is
+ * cut and smooth with no crease where it is round, the furniture never
+ * faceted, that the obstacles and the ball are drawn to exactly the size the
+ * physics gives them, that a
  * parameter changes what it names, and that each stays inside its triangle
  * budget. Without these, a bumper a hair wider than its circle, or a blade a
  * hair thinner than its box, would show the ball bouncing off thin air.
@@ -47,6 +48,7 @@ import {
   type Part,
 } from '../src/models';
 import { BALL, KIND_RADIUS } from '../src/arena';
+import { KINDS, ROUGH } from '../src/turf';
 
 /** How near a figure must be to be the figure: a float's worth, and then some. */
 const NEAR = 1e-4;
@@ -210,11 +212,33 @@ function points(mesh: Mesh): [number, number, number][] {
  */
 const SMOOTH = new Set(['ball', 'liner', 'rim', 'pole', 'knob', 'flag', 'markers']);
 
-describe('every model is finite, wound the way its normals face, and flat-shaded unless it is round', () => {
+/**
+ * The parts that are round, by model, and so smooth-shaded: a vertex shared
+ * by its neighbours, with the surface's own normal, so toon light falls
+ * across it in clean curved bands. Every other part is flat-shaded, a face at
+ * a time, as a pennant, a picket and everything the ball meets are.
+ */
+const ROUND: Partial<Record<string, readonly string[]>> = {
+  'round tree': ['trunk', 'leaves', 'crown'],
+  pine: ['trunk', 'leaves'],
+  hedge: ['hedge'],
+  flowers: ['leaves', 'petals', 'hearts'],
+  rock: ['rock'],
+  bunting: ['posts', 'string'],
+  fence: ['posts', 'rails'],
+};
+
+/** Whether a model's part is one of the round ones. */
+const isRound = (m: Model, part: Part) => ROUND[m.name]?.includes(part.name) ?? false;
+
+describe('every model is finite, and wound the way its normals face', () => {
   for (const [label, model] of catalogue()) {
     it(label, () => {
       expect(everyPart(model).length).toBeGreaterThan(0);
       for (const part of everyPart(model)) {
+        // a flat face's corners face exactly as it does; a round part's lean off it by up to the curve between them,
+        // which for a string of four sides is forty-five degrees and more where it bends, and for a flat petal as much
+        const facing = isRound(model, part) ? 0.5 : SMOOTH.has(part.name) ? 0.7 : 0.999;
         const { positions: p, normals: n, indices: ix } = part.mesh;
         expect(ix.length % 3, `${part.name}: whole triangles`).toBe(0);
         expect(ix.length, `${part.name}: something to draw`).toBeGreaterThan(0);
@@ -232,9 +256,7 @@ describe('every model is finite, wound the way its normals face, and flat-shaded
           // vertex's normal is the surface's there, which leans off each face it is a corner of, but never far
           for (const k of [a, b, c]) {
             const along = (g[0] * n[k] + g[1] * n[k + 1] + g[2] * n[k + 2]) / area;
-            expect(along, `${part.name}: triangle ${t / 3} wound as its normal faces`).toBeGreaterThan(
-              SMOOTH.has(part.name) ? 0.7 : 0.999,
-            );
+            expect(along, `${part.name}: triangle ${t / 3} wound as its normal faces`).toBeGreaterThan(facing);
           }
         }
         if (!OPEN.has(part.name)) expect(volume(part.mesh), `${part.name}: closed and facing out`).toBeGreaterThan(0);
@@ -423,6 +445,40 @@ describe('the furniture is round and smooth, and sharp only at a bevel’s edge'
     expect(Math.max(...ups)).toBeCloseTo(1, 6);
     expect(Math.min(...ups)).toBeCloseTo(0, 6);
   });
+});
+
+describe('the round things are smooth-shaded, with no crease', () => {
+  for (const [label, model] of catalogue()) {
+    const names = ROUND[model.name];
+    if (!names) continue;
+    const round = everyPart(model).filter((p) => isRound(model, p));
+    it(label, () => {
+      expect(round.length, 'every round part it should have').toBe(names.length);
+      for (const part of round) {
+        const { positions: p, normals: n, indices: ix } = part.mesh;
+        // no crease: every vertex at one point carries the one normal, where a flat-shaded solid's corner has one a face
+        const at = new Map<string, number>();
+        for (let i = 0; i < p.length; i += 3) {
+          const key = [p[i], p[i + 1], p[i + 2]].map((v) => Math.round(v * 1e4)).join(',');
+          const first = at.get(key);
+          if (first === undefined) at.set(key, i);
+          else
+            expect(
+              n[first] * n[i] + n[first + 1] * n[i + 1] + n[first + 2] * n[i + 2],
+              `${part.name}: a crease at ${key}`,
+            ).toBeGreaterThan(0.999);
+        }
+        // and curved: most triangles' corners face different ways, where a flat one's all face as it does
+        const dot = (a: number, b: number) => n[a] * n[b] + n[a + 1] * n[b + 1] + n[a + 2] * n[b + 2];
+        let curved = 0;
+        for (let t = 0; t < ix.length; t += 3) {
+          const [a, b, c] = [ix[t] * 3, ix[t + 1] * 3, ix[t + 2] * 3];
+          if (Math.min(dot(a, b), dot(b, c), dot(a, c)) < 0.9999) curved++;
+        }
+        expect(curved / (ix.length / 3), `${part.name}: curved`).toBeGreaterThan(0.5);
+      }
+    });
+  }
 });
 
 describe('every colour is a colour', () => {
@@ -792,11 +848,45 @@ describe('the decoration', () => {
     });
   }
 
-  it('a hedge is as long, deep and high as asked, and leafy', () => {
-    const b = bounds(hedge(6, 1.5, 1.8).parts);
+  it('a round tree is a canopy of puffs, lighter at its crown, on a trunk that goes up inside it, round from above', () => {
+    for (const seed of [1, 2, 3]) {
+      const m = tree('round', { height: 7, seed });
+      const [trunk, leaves, crown] = ['trunk', 'leaves', 'crown'].map((n) => bounds([partNamed(m, n)]));
+      const canopy = bounds([partNamed(m, 'leaves'), partNamed(m, 'crown')]);
+      // the trunk's top is hidden in the canopy, and the canopy stands clear of the grass
+      expect(trunk.max[2]).toBeGreaterThan(canopy.min[2] + 0.5);
+      expect(trunk.max[2]).toBeLessThan(canopy.max[2] - 1);
+      expect(canopy.min[2]).toBeGreaterThan(1.5);
+      // the crown on top of the puffs round it
+      expect(crown.max[2]).toBeGreaterThan(leaves.max[2]);
+      expect(crown.min[2]).toBeGreaterThan(leaves.min[2]);
+      // round from above: centred over its trunk, and about as wide one way as the other
+      const across = canopy.max[0] - canopy.min[0],
+        along = canopy.max[1] - canopy.min[1];
+      expect(across / along).toBeGreaterThan(0.75);
+      expect(across / along).toBeLessThan(1.34);
+      for (const a of [0, 1])
+        expect(Math.abs(canopy.max[a] + canopy.min[a]) / 2, 'off its trunk').toBeLessThan(0.07 * across);
+    }
+    // lit from above as a canopy is: the crown a lighter green than below it
+    const m = tree('round');
+    const light = (p: Part) => p.material[0] + p.material[1] + p.material[2];
+    expect(light(partNamed(m, 'crown'))).toBeGreaterThan(light(partNamed(m, 'leaves')) * 1.15);
+  });
+
+  it('a hedge is as long, deep and high as asked, and rounded at every edge by a good part of its depth', () => {
+    const m = hedge(6, 1.5, 1.8);
+    const b = bounds(m.parts);
     near(b.min, [-3, -0.75, 0], 5);
     near(b.max, [3, 0.75, 1.8], 5);
-    expect(hedge(6, 1.5, 1.8).parts[0].pattern?.kind).toBe(PATTERN.speckle);
+    // the flat of each side and end stops a third of the depth short of the top, and of the ends: the rest is rounding
+    const pts = points(m.parts[0].mesh);
+    const side = pts.filter(([, y]) => y > 0.75 - NEAR);
+    expect(side.length).toBeGreaterThan(0);
+    expect(Math.max(...side.map(([, , z]) => z)), 'the side up to the rounding').toBeLessThan(1.8 - 0.5);
+    expect(Math.max(...side.map(([x]) => x)), 'the side along to the rounding').toBeLessThan(3 - 0.5);
+    const end = pts.filter(([x]) => x > 3 - NEAR);
+    expect(Math.max(...end.map(([, , z]) => z)), 'the end up to the rounding').toBeLessThan(1.8 - 0.5);
   });
 
   it('flowers bloom in the colour asked', () => {
@@ -804,6 +894,19 @@ describe('the decoration', () => {
     const b = bounds(flowers(FLOWER_COLOURS[1]).parts);
     expect(b.min[2]).toBeGreaterThanOrEqual(-NEAR);
     expect(b.max[2]).toBeLessThan(2);
+  });
+
+  it('flowers hold every bloom above the blades of the rough they stand in, as many as are asked for', () => {
+    for (const count of [3, 5])
+      for (const seed of [1, 2, 11, 12, 13]) {
+        const petals = partNamed(flowers(FLOWER_COLOURS[0], { seed, count }), 'petals').mesh;
+        // each bloom's top: the one point of it that faces straight up
+        const tops: number[] = [];
+        for (let i = 0; i < petals.normals.length; i += 3)
+          if (petals.normals[i + 2] > 0.999) tops.push(petals.positions[i + 2]);
+        expect(tops.length, 'a top to every bloom').toBe(count);
+        for (const z of tops) expect(z, 'a bloom lost in the grass').toBeGreaterThan(KINDS[ROUGH].height);
+      }
   });
 
   it('a rock sits in the ground, about its size, and is its own shape for its seed', () => {
@@ -852,8 +955,8 @@ describe('the decoration', () => {
 });
 
 describe('every model keeps to its triangle budget', () => {
-  it('a tree is under 200, whatever its kind, size and seed', () => {
-    expect(BUDGET.tree).toBeLessThanOrEqual(200);
+  it('a tree is under 860, whatever its kind, size and seed', () => {
+    expect(BUDGET.tree).toBeLessThanOrEqual(860);
     for (const kind of ['round', 'pine'] as const)
       for (let seed = 0; seed < 20; seed++)
         expect(triangles(tree(kind, { seed, height: 4 + seed / 2 }))).toBeLessThan(BUDGET.tree);
@@ -873,7 +976,8 @@ describe('every model keeps to its triangle budget', () => {
       ['bunker', bunker(15, 15)],
       ['conveyor', conveyor(6, 24)],
       ['hedge', hedge(9, 1.5, 2)],
-      ['flowers', flowers(FLOWER_COLOURS[2], { seed: 9 })],
+      // a bed at the foot of the rail, which has the most blooms the game asks for
+      ['flowers', flowers(FLOWER_COLOURS[2], { seed: 9, count: 5 })],
       ['rock', rock(3)],
       ['bunting', bunting(24)],
       ['fence', fence(12)],
@@ -881,13 +985,13 @@ describe('every model keeps to its triangle budget', () => {
     for (const [name, m] of at) expect(triangles(m), name).toBeLessThanOrEqual(BUDGET[name]);
   });
 
-  it('a whole hole, forty decorations and everything on it, is under 8,000', () => {
+  it('a whole hole, forty decorations and everything on it, is under 20,000', () => {
     const decor: Model[] = [];
     for (let k = 0; k < 40; k++) {
       const pick = k % 8;
       if (pick === 0) decor.push(tree('round', { seed: k, height: 8 }));
       else if (pick === 1) decor.push(tree('pine', { seed: k, height: 10 }));
-      else if (pick === 2) decor.push(hedge(6, 1.5, 1.8, { seed: k }));
+      else if (pick === 2) decor.push(hedge(6, 1.5, 1.8));
       else if (pick === 3) decor.push(flowers(FLOWER_COLOURS[k % FLOWER_COLOURS.length], { seed: k }));
       else if (pick === 4) decor.push(rock(1.5, { seed: k }));
       else if (pick === 5) decor.push(bunting(12, { seed: k }));
@@ -909,7 +1013,7 @@ describe('every model keeps to its triangle budget', () => {
     ];
     const total = [...decor, ...course].reduce((n, m) => n + triangles(m), 0);
     expect(total).toBeLessThan(BUDGET.hole);
-    expect(BUDGET.hole).toBeLessThanOrEqual(8000);
+    expect(BUDGET.hole).toBeLessThanOrEqual(20000);
   });
 });
 

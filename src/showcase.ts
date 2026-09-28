@@ -194,7 +194,7 @@ function exhibits(seed: number): Exhibit[] {
       name: 'hedge',
       label: 'hedge',
       row: 'decoration',
-      items: [{ model: hedge(6, 1.5, 1.8, { seed }), x: -16, y: 14 }],
+      items: [{ model: hedge(6, 1.5, 1.8), x: -16, y: 14 }],
     },
     {
       name: 'flowers',

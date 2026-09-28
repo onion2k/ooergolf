@@ -223,7 +223,10 @@ change meant to move it, and the commit says why. Look at every picture.
   (bumper, barrier, windmill with its turning blades, water, bunker,
   conveyor), with `sandBed` for a hole's sand of any shape, the lip only
   where it meets grass, which the game draws where `bunker` is only the
-  showcase's; and the decoration. Each returns its parts, a mesh and a
+  showcase's; and the decoration, moulded smooth from `models/smooth.ts`:
+  puffball trees with a lighter crown, stacked pines rounded at every rim,
+  pebbles, rounded hedges, flowering bushes and round posts and strings.
+  Each returns its parts, a mesh and a
   material each, for `group` to turn into a renderer group; each has a
   triangle budget in `BUDGET`. `showcase.html` draws every one
   (`/showcase.html`, with `?model=name`), for building and looking at them.

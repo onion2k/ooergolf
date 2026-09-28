@@ -4,10 +4,11 @@
  * decoration. Each is a function of the sizes that matter to play, and
  * gives back its parts, each a mesh and a material in the renderer's terms,
  * for `group` to turn into a `GameGroup` with the placements the scene
- * writes. Low-poly and flat-shaded, in Miner's way, faces sharing no
+ * writes. What is cut is flat-shaded, in Miner's way, its faces sharing no
  * vertices; but the course's furniture, which is on screen every moment, is
- * turned round and shaded smooth. Every colour comes from a part's material,
- * never a texture.
+ * turned round and shaded smooth, and what is round in the decoration is
+ * moulded smooth. Every colour comes from a part's material, never a
+ * texture.
  *
  * Z is up, a world unit is 10 cm, the ball's radius is 1, a tile is 3.
  */
@@ -38,7 +39,10 @@ export { bunting, fence, flowers, hedge, rock, tree } from './models/decor';
  * cheaper, not given more. The furniture's were set anew when it was made
  * round: the ball fine enough that its outline is round however near it is
  * seen, since there is one of it; the cup's rim, the pin and the markers
- * turned just finely enough to be shaded round.
+ * turned just finely enough to be shaded round. The decoration's were set
+ * anew when it was moulded smooth, as enough round its edge to read round
+ * from the tee and no more: a bloom a few pixels across from the far view is
+ * one lobed ball, not five.
  */
 export const BUDGET = {
   cup: 380,
@@ -54,11 +58,11 @@ export const BUDGET = {
   bunker: 30,
   'sand bed': 120,
   conveyor: 120,
-  tree: 200,
-  hedge: 44,
-  flowers: 180,
-  rock: 60,
-  bunting: 420,
-  fence: 460,
-  hole: 8000,
+  tree: 860,
+  hedge: 300,
+  flowers: 610,
+  rock: 150,
+  bunting: 540,
+  fence: 1000,
+  hole: 20000,
 } as const;
