@@ -30,6 +30,7 @@ import { waggle } from './sway';
 import { EFFECT_STRIDE } from 'artshape-render/game/renderer';
 import { Governor, RUNGS } from './quality';
 import { groundAt } from './shot';
+import { between } from './frames';
 
 /** How many millimetres a world unit is: the renderer fixes a few real sizes by it. */
 const MM_PER_UNIT = 100;
@@ -468,8 +469,8 @@ async function main() {
   let last = performance.now();
   const frame = (now: number) => {
     requestAnimationFrame(frame);
-    const gap = now - last;
-    const dt = Math.min(gap / 1000, 1 / 20);
+    // never back, however early the browser stamps the first frame, and never a leap after the page was away
+    const { gap, dt } = between(now, last);
     last = now;
     if (paused) {
       draw(0);
