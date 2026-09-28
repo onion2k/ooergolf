@@ -48,13 +48,14 @@ The three properties, and what holds each:
 
 Numbers, held by gates, on this machine at 1280×800:
 
-| Property                                               | Budget                         | Held by |
-| ------------------------------------------------------ | ------------------------------ | ------- |
-| Boot, page start to the frame loop running             | 3000 ms                        | `perf`  |
-| Download, scripts and styles gzipped                   | 400 kB                         | `perf`  |
-| A frame drawn, lower quartile at the standard view     | 8 ms                           | `perf`  |
-| The physics, a frame, against the reference arithmetic | baseline ± 20%                 | `bench` |
-| Anything kept: bodies, slots, save bytes, heap         | ceilings in `scripts/leaks.ts` | `leaks` |
+| Property                                               | Budget                         | Held by        |
+| ------------------------------------------------------ | ------------------------------ | -------------- |
+| Boot, page start to the frame loop running             | 3000 ms                        | `perf`         |
+| Download, scripts and styles gzipped                   | 400 kB                         | `perf`         |
+| A frame drawn, lower quartile at the standard view     | 5 ms                           | `perf`         |
+| The physics, a frame, against the reference arithmetic | baseline ± 20%                 | `bench`        |
+| Anything kept: bodies, slots, save bytes, heap         | ceilings in `scripts/leaks.ts` | `leaks`        |
+| The look: colour, framing, contrast, a cool shade      | floors in `look-metrics.spec`  | `look:metrics` |
 
 A budget is what the game may cost at all; a baseline is what it cost at
 the last commit, held both ways, so a step toward a budget is noticed as
@@ -79,6 +80,14 @@ today, and what the next features must hand it:
 
 - **Unit tests, smoke, look, perf:** the real thing. They grow as any
   feature's tests do.
+- **Look metrics:** a close view of the first hole's right-hand rail,
+  sampled at points on the green, the rough, the rail's sunlit top and its
+  shaded inner face, and read by `smoke/metrics.ts` into four figures, each
+  held to a floor: the green's saturation, how much brighter the course is
+  than the rough, the sun against the shade, and how much cooler the shade
+  is. The pictures are written again whenever a change is meant; the floors
+  stay, so a greyer or flatter look is caught even then. The floors are the
+  look after stage 1 of `LOOK.md`, and stage 3 raises them.
 - **Fuzz:** the monkey strikes the ball any way at any power, strikes it
   well at the cup (the autopilot's shot, slipped), tries to strike it while
   it rolls or between holes, waits, reloads, asks for another round when
@@ -121,6 +130,7 @@ today, and what the next features must hand it:
     npm run perf           boot, frame and download held to smoke/perf-baseline.json and the budget
     npm run smoke          the game in headless Chromium on the real GPU (Playwright, smoke/)
     npm run look           the scenes, and the models' showcase, held to the pictures in smoke/screens
+    npm run look:metrics   the look's colour, framing, contrast and cool shade, held to their floors
 
 `--update` on `pace:check` or `bench`, `npm run perf:update` and `npm run
 look:update` write a baseline again. `look:update` leaves a picture that is
