@@ -302,3 +302,28 @@ export function built(build: (b: MeshBuilder) => void): Mesh {
   build(b);
   return b.build();
 }
+
+/**
+ * A mesh built on level ground, laid on ground whose `height` at each point
+ * is given: every point at the ground or above it raised by the ground's
+ * height there, and those below it, the floor of a hole, left where they
+ * were. Each face's normal is worked out again from its first triangle, so a
+ * face lying on a slope is lit as the slope is.
+ */
+export function lifted(mesh: Mesh, height: (x: number, y: number) => number): Mesh {
+  const positions = mesh.positions.slice(),
+    normals = mesh.normals.slice();
+  for (let i = 0; i < positions.length; i += 3)
+    if (positions[i + 2] > -1e-3) positions[i + 2] += height(positions[i], positions[i + 1]);
+  const ix = mesh.indices;
+  for (let t = 0; t < ix.length; t += 3) {
+    const [a, b, c] = [ix[t] * 3, ix[t + 1] * 3, ix[t + 2] * 3];
+    const u = [positions[b] - positions[a], positions[b + 1] - positions[a + 1], positions[b + 2] - positions[a + 2]],
+      v = [positions[c] - positions[a], positions[c + 1] - positions[a + 1], positions[c + 2] - positions[a + 2]];
+    const n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+    const l = Math.hypot(n[0], n[1], n[2]);
+    if (l < 1e-12) continue;
+    for (const k of [a, b, c]) for (let d = 0; d < 3; d++) normals[k + d] = n[d] / l;
+  }
+  return { ...mesh, positions, normals };
+}

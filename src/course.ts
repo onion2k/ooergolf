@@ -1,7 +1,8 @@
 /**
- * The course: its holes, each a map and a par. Content, not code, so a hole
- * is added by drawing it, and the game, the autopilot and the page all read
- * it the same way.
+ * The courses: each a round of holes, and each hole a map and a par.
+ * Content, not code, so a hole is added by drawing it, and the game, the
+ * autopilot and the page all read it the same way. The player chooses a
+ * course on the start screen, and plays its holes in order.
  *
  * A map is drawn as it is seen from the tee, the far end at the top, one
  * character a tile three units across:
@@ -12,9 +13,10 @@
  *   C   the cup, on grass
  *       (a space) nothing: off the course, solid to the ball, drawn as rough
  *
- * The first nine holes are in DESIGN.md, and all but the ninth's own are
- * here: grass, rail, sand, water, raised grass, posts, barriers, windmills
- * and belts.
+ * The Meadow is the nine holes in DESIGN.md, level but for its steps:
+ * grass, rail, sand, water, raised grass, posts, barriers, windmills and
+ * belts. The Hills are four whose ground slopes, drawn in a second grid, the
+ * hole's `terrain`, beside the map.
  *
  *   ~   water, which the ball rolls onto and is lost in
  *   s   sand, level, which slows the ball hard
@@ -230,4 +232,189 @@ export const COURSE: readonly HoleDef[] = [
       { kind: 'conveyor', from: [4, 4], to: [4, 3], speed: 5 },
     ],
   },
+];
+
+/**
+ * The Hills: holes whose ground slopes, a height a tile in each one's
+ * `terrain`, beside its map, the far end at the top as the map is. Each
+ * brings one thing a slope does: a hollow to be carried, a mound to be
+ * climbed and stopped on, a bowl that brings everything to the cup, and a
+ * green tilted so every putt breaks. Round each cup the ground is no
+ * steeper than the green holds a ball, so one can come to rest beside it.
+ */
+export const HILLS: readonly HoleDef[] = [
+  {
+    name: 'The Hollow',
+    par: 3,
+    // from a raised tee down into a dip and up a steep bank to the cup's plateau: short, and it rolls back into the dip
+    map: [
+      '#########',
+      '#.......#',
+      '#...C...#',
+      '#.......#',
+      '#.......#',
+      '#.......#',
+      '#.......#',
+      '#.......#',
+      '#.......#',
+      '#.......#',
+      '#.......#',
+      '#.......#',
+      '#.......#',
+      '#...T...#',
+      '#########',
+    ],
+    terrain: [
+      '444444444',
+      '444444444',
+      '444444444',
+      '444444444',
+      '444444444',
+      '444444444',
+      '222222222',
+      '000000000',
+      '000000000',
+      '000000000',
+      '111111111',
+      '222222222',
+      '222222222',
+      '222222222',
+      '222222222',
+    ],
+  },
+  {
+    name: 'The Volcano',
+    par: 3,
+    // the cup on the flat top of a mound, its sides steep all round: short rolls back down, long rolls off the far side
+    map: [
+      '#############',
+      '#...........#',
+      '#...........#',
+      '#...........#',
+      '#...........#',
+      '#.....C.....#',
+      '#...........#',
+      '#...........#',
+      '#...........#',
+      '#...........#',
+      '#...........#',
+      '#...........#',
+      '#...........#',
+      '#...........#',
+      '#.....T.....#',
+      '#############',
+    ],
+    terrain: [
+      '0222222222220',
+      '0244444444420',
+      '0246666666420',
+      '0246666666420',
+      '0246666666420',
+      '0246666666420',
+      '0246666666420',
+      '0246666666420',
+      '0246666666420',
+      '0244444444420',
+      '0222222222220',
+      '0000000000000',
+      '0000000000000',
+      '0000000000000',
+      '0000000000000',
+      '0000000000000',
+    ],
+  },
+  {
+    name: 'The Bowl',
+    par: 2,
+    // the cup at the bottom of a bowl, gentle round it and steep further out, played from a shelf on its rim
+    map: [
+      '#############',
+      '#...........#',
+      '#...........#',
+      '#...........#',
+      '#...........#',
+      '#.....C.....#',
+      '#...........#',
+      '#...........#',
+      '#...........#',
+      '#...........#',
+      '#...........#',
+      '#...........#',
+      '#...........#',
+      '#.....T.....#',
+      '#...........#',
+      '#############',
+    ],
+    terrain: [
+      '7777777777777',
+      '7766666666677',
+      '7764444444677',
+      '7764222224677',
+      '7764211124677',
+      '7764210124677',
+      '7764211124677',
+      '7764222224677',
+      '7764444444677',
+      '7766666666677',
+      '7777777777777',
+      '7777777777777',
+      '7777777777777',
+      '7777777777777',
+      '7777777777777',
+      '7777777777777',
+    ],
+  },
+  {
+    name: 'Side-hill',
+    par: 3,
+    // the whole green tilted across, a digit a column, so every putt breaks and is aimed above the cup
+    map: [
+      '###########',
+      '#.........#',
+      '#....C....#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#....T....#',
+      '#.........#',
+      '###########',
+    ],
+    terrain: [
+      '01234567899',
+      '01234567899',
+      '01234567899',
+      '01234567899',
+      '01234567899',
+      '01234567899',
+      '01234567899',
+      '01234567899',
+      '01234567899',
+      '01234567899',
+      '01234567899',
+      '01234567899',
+      '01234567899',
+      '01234567899',
+      '01234567899',
+      '01234567899',
+    ],
+  },
+];
+
+/** A course: what it is called, and its holes, played from the first to the last as a round. */
+export interface Course {
+  name: string;
+  holes: readonly HoleDef[];
+}
+
+/** Every course, the first the one a new player meets first. */
+export const COURSES: readonly Course[] = [
+  { name: 'The Meadow', holes: COURSE },
+  { name: 'The Hills', holes: HILLS },
 ];

@@ -8,13 +8,15 @@ physics from [artshape-physics](https://github.com/onion2k/artshape-physics).
 The README says what the game is, and `DESIGN.md` what it is to be; this
 file says how it is made. The house
 rules in `~/.claude/CLAUDE.md` apply too. What is in `src/` is a round of
-the course: holes drawn as maps, each played from its tee to its cup with a
-drag pulled back and let go, scored against par, and the card at the end.
-Nine holes are here, on artshape-physics v0.7.0: grass, rail, sand,
-water, raised grass, posts, sliding barriers, a windmill and a conveyor,
-with a green that lets a putt die, a rail and obstacles that bounce, posts
-that throw a ball back faster than it came, and a cup with a rim. The golf
-goes in a feature at a time, in the order `DESIGN.md` gives.
+a course, chosen on a start screen: holes drawn as maps, each played from
+its tee to its cup with a drag pulled back and let go, scored against par,
+and the card at the end. Two courses are here, on artshape-physics v0.7.0.
+The Meadow is nine holes of grass, rail, sand, water, raised grass, posts,
+sliding barriers, a windmill and a conveyor, with a green that lets a putt
+die, a rail and obstacles that bounce, posts that throw a ball back faster
+than it came, and a cup with a rim. The Hills is four whose ground slopes,
+each cup on the slope with its rim following the ground. The golf goes in
+a feature at a time, in the order `DESIGN.md` gives.
 
 ## The factory
 
@@ -58,8 +60,8 @@ the last commit, held both ways, so a step toward a budget is noticed as
 much as a step over it. The perf tolerances are the measured wobble of a
 headless boot and a GPU frame, and say so in the file.
 
-The pace gate holds the strokes a round takes, the mean over sixteen seeds,
-played by the autopilot with a player's slips: a few degrees of aim, a
+The pace gate holds the strokes a round of each course takes, the mean over
+sixteen seeds, each course held to its own figure, played by the autopilot with a player's slips: a few degrees of aim, a
 tenth of the power. A median was tried and jumps a whole stroke between
 sets of seeds; the mean held within 5%, so the tolerance of a fifth is four
 times its wobble. `npm run pace` prints each hole's median against its
@@ -78,8 +80,9 @@ today, and what the next features must hand it:
   feature's tests do.
 - **Fuzz:** the monkey strikes the ball any way at any power, strikes it
   well at the cup (the autopilot's shot, slipped), tries to strike it while
-  it rolls or between holes, waits, reloads, and asks for another round when
-  one is over. It gets round the whole course. Each thing a player can do is
+  it rolls or between holes, waits, reloads, asks for another round when
+  one is over, and chooses a course at the start or at the card. It gets
+  round both courses. Each thing a player can do is
   an action in `scripts/fuzzer.ts`.
 - **Invariants:** bodies are of a kind, are numbers and are out of the rock;
   the world's count is right; the time is a time; the ball is there while a
@@ -91,7 +94,9 @@ today, and what the next features must hand it:
   each between one and the limit.
 - **Determinism:** the autopilot plays, with a player's slips from its own
   chance, round after round, and the hash takes in the hole and the card.
-- **Pace:** the strokes a round takes; see above.
+- **Pace:** the strokes a round of each course takes; see above. The
+  autopilot does not read a slope's break, so on The Hills it is a player
+  who aims straight and is carried by the ground.
 - **Leaks:** ten minutes of the autopilot playing round after round. The
   card is emptied each round and watched against the number of holes. The
   ball's track in the grass is the renderer's, a fixed grid for each hole,
@@ -159,13 +164,15 @@ change meant to move it, and the commit says why. Look at every picture.
   hole that has any. The physics says what it refuses, `terrainRefusal`
   there asking its `terrainProblem`: neighbours side by side more than half
   a tile apart, rock and all. A cup may stand on a slope since v0.7.0, its
-  rim following the ground. The game keeps its own copy of the smoothing, since only
+  rim following the ground, and the game draws it so: the cup's rim, liner
+  and collar are lifted onto the ground by `lifted` in `models/shapes.ts`,
+  its floor level. The game keeps its own copy of the smoothing, since only
   `physics.ts` imports the package, and a test holds it to the physics'
   own at hundreds of points. `src/ground.ts` draws the green
   as one mesh following it, in its stripes, with earth down its steps, and
   the rail with a top that slopes with it; the cup, flag, tee, sand, posts,
-  aim, camera and glints all stand on it. No hole on the course slopes yet;
-  `playCourse` in the test API plays one.
+  aim, camera and glints all stand on it. The Hills are the holes that
+  slope; `playCourse` in the test API plays one of a test's own.
   `src/glints.ts` says when the gold of the cup and the pin twinkles, from
   game time, and the page draws it as one of the renderer's glow quads.
 - What moves only to be seen, all from game time so a picture is the same
@@ -208,14 +215,19 @@ change meant to move it, and the commit says why. Look at every picture.
   the rules that must always hold. `src/autopilot.ts` plays the game by
   itself, for the gates and for par.
 - `src/hud.ts` is the words over the course: the hole and strokes, the
-  score's name when a hole is done, the card, the coins and gems, and the
-  shop. `src/score.ts` names a
+  score's name when a hole is done, the card, the coins and gems, the
+  shop, and the start screen, a card for each course with its holes and
+  par, shown at boot and from the card's Courses button. The page plays no
+  shot while it is up. `src/score.ts` names a
   score. Both are given what to show and never read the game.
-- The holes are content in `course.ts`: each a map drawn as seen from the
-  tee (`#` rail, `.` grass, `T` tee, `C` cup on level grass, `~` water,
+- The courses are content in `course.ts`, `COURSES`, each a name and its
+  holes: The Meadow (`COURSE`) and The Hills (`HILLS`). A hole is a map drawn
+  as seen from the tee (`#` rail, `.` grass, `T` tee, `C` cup, `~` water,
   `s` sand, `o` a post on grass, a digit for grass raised that many steps of
   0.4, space for off the course),
-  a par, and what moves on it, by map tile; and the cup's size. A step the
+  a par, what moves on it, by map tile, and its `terrain`; and the cup's
+  size. Hole names are unique across the courses, since the save keeps a
+  best score by name. A step the
   ball rolls up; three (1.2) are a wall to it. Water is a floor below the
   world's bottom: a ball in it is lost, a stroke is added, and it is put back
   where it was struck from. `src/obstacles.ts` says where a barrier, a
@@ -284,15 +296,18 @@ posts, the hardest shot, and every hole's name and par), `events`,
 `invariants`, and `aiming`,
 the shot a drag under way would make. `state` has the hole, its par, the
 phase (`play`, `done`, `over`), the card, the coins and gems, the club in
-hand and those owned, and the hardest shot the club in hand strikes.
+hand and those owned, the hardest shot the club in hand strikes, the
+course's name, and whether the start screen is up (`choosing`).
 Playing: `shoot(angle, power)`, `suggest()` for the autopilot's shot from
-where the ball lies, `startHole(index)`, `playCourse(holes)` for holes of
-the test's own that are not on the course, `newRound()`, `buy(id)`,
+where the ball lies, `chooseCourse(name)`, which presses that course's
+button on the start screen, `startHole(index)`, `playCourse(holes)` for
+holes of the test's own that are not on a course, `newRound()`, `buy(id)`,
 `equip(id)`, and `drag(page, from, to, { touch, hold })` in
 `smoke/game.ts` for a real mouse or finger, pressed where `project(x, y,
 z)` says a point on the course is on the page. Setting a scene: `place` for
-a body that exists, `save`, and `start(page, { save })` for a save that is
-not the player's, and `touches(page, steps)` for fingers, several at once.
+a body that exists, `save`, and `start(page, { save, seed, paused, rung })`
+for a save that is not the player's, which chooses The Meadow unless given
+`screen` to leave the start screen up, and `touches(page, steps)` for fingers, several at once.
 Looking: `look(x, y, distance)` parks the camera until `follow`, `view()`
 says how far back it stands and which rung of the quality ladder the
 picture is on, and `measureFrame`; `grass()` how many blades the last frame
@@ -309,16 +324,14 @@ ball down at a lie.
 Each of these is the first feature's to bring, with every gate green at
 each step, and a gate handed what it needs in the same change:
 
-- Holes that slope, on the course: designed, their feel tuned, and pace and
-  pars set. The physics rolls on them since v0.6.0, and the game plays a
-  hole that slopes breaking no rule. The autopilot stops within 0.6 units of
-  where it means on four shots across a hollow in five, and 2.4 long on a
-  21-unit climb: it sums the slowing over the level distance, where the
-  physics slows a ball along the slope. The game still draws a cup level,
-  its collar, rim and liner flat at the height of its middle, so a cup on a
-  slope waits for them to follow the ground. A barrier or a windmill on a slope is
-  refused when a hole is built, as the physics' fuzzer found one carrying a
-  ball round for good.
+- An autopilot that reads a slope's break. It aims straight at the cup and
+  judges the distance along the level: it stops within 0.6 units of where
+  it means on four shots across a hollow in five, and 2.4 long on a 21-unit
+  climb, since the physics slows a ball along the slope. So The Hills' pars
+  are each hole's intent, and the autopilot takes one or two on each on the
+  median. A barrier or a windmill on a slope is refused when a hole is
+  built, as the physics' fuzzer found one carrying a ball round for good.
+- The course a player is on, in the save: a reload opens the start screen.
 - The ninth hole's own, as `DESIGN.md` has it, with everything on it: The
   Mill Race has no sand and no post yet.
 - Pars that are what a player takes: see the pace gate, above. The

@@ -168,6 +168,53 @@ test('the shop sells a club to a player who can pay, puts it in hand, and a relo
   expect(problems).toEqual([]);
 });
 
+test.describe('the start screen', () => {
+  test('opens over the first hole, a card for each course, and a click on one plays it', async ({ page }) => {
+    const problems = watch(page);
+    await start(page, { seed: 1, paused: true, screen: true });
+    await expect(page.locator('#start')).toBeVisible();
+    await expect(page.locator('#start .course')).toHaveCount(2);
+    await expect(page.locator('#start .course').first()).toContainText('The Meadow');
+    await expect(page.locator('#start .course').first()).toContainText('9 holes');
+    expect(await page.evaluate(() => window.game!.state())).toMatchObject({ choosing: true, course: 'The Meadow' });
+    // nothing is struck through it
+    const box = (await page.locator('#view').boundingBox())!;
+    await drag(page, { x: box.x + 40, y: box.y + box.height - 60 }, { x: box.x + 40, y: box.y + box.height - 10 });
+    expect((await page.evaluate(() => window.game!.state())).strokes, 'no stroke through the start screen').toBe(0);
+    await page.locator('#start .course', { hasText: 'The Hills' }).click();
+    await expect(page.locator('#start')).toBeHidden();
+    await expect(page.locator('#strokes')).toBeVisible();
+    await expect(page.locator('#holeName')).toContainText('Hole 1 of 4');
+    await expect(page.locator('#holeName')).toContainText('The Hollow');
+    expect(await page.evaluate(() => window.game!.state())).toMatchObject({
+      choosing: false,
+      course: 'The Hills',
+      hole: 0,
+    });
+    expect(problems).toEqual([]);
+  });
+
+  test('comes back from the card at the end of a round, and a course chosen there starts afresh', async ({ page }) => {
+    const problems = watch(page);
+    await start(page, { seed: 1, paused: true });
+    // the round played out by the autopilot, a frame at a time, to the card
+    await page.evaluate(() => {
+      const g = window.game!;
+      for (let f = 0; f < 60 * 60 * 4 && g.state().phase !== 'over'; f++) {
+        const s = g.suggest();
+        if (s && g.state().ready) g.shoot(s.angle, s.power);
+        g.step(1);
+      }
+    });
+    await expect(page.locator('#card')).toBeVisible();
+    await page.locator('#cardCourses').click();
+    await expect(page.locator('#start')).toBeVisible();
+    await page.locator('#start .course', { hasText: 'The Hills' }).click();
+    expect(await page.evaluate(() => window.game!.state())).toMatchObject({ course: 'The Hills', hole: 0, card: [] });
+    expect(problems).toEqual([]);
+  });
+});
+
 test.describe('the cup and the rail', () => {
   /** The ball put down `back` short of the cup on the first hole, and struck at it to arrive at its edge at `speed`. */
   const putt = async (page: Page, speed: number, back = 5) => {
@@ -325,8 +372,7 @@ test.describe('the grass', () => {
 
   test('is thinned to half on the first rung down the ladder, the same blades the distance keeps', async ({ page }) => {
     const drawn = async (rung: number) => {
-      await page.goto(`/?rung=${rung}&seed=1&paused=1`);
-      await expect.poll(() => page.evaluate(() => window.game?.ready ?? false), { timeout: 60_000 }).toBe(true);
+      await start(page, { rung, seed: 1, paused: true });
       await page.evaluate(() => window.game!.step(1));
       return page.evaluate(() => window.game!.grass());
     };
@@ -399,8 +445,7 @@ test.describe('on a phone', () => {
 
   test('on the lowest rung of the quality ladder, asked for, it boots and plays with no errors', async ({ page }) => {
     const problems = watch(page);
-    await page.goto('/?rung=3&seed=1&paused=1');
-    await expect.poll(() => page.evaluate(() => window.game?.ready ?? false), { timeout: 60_000 }).toBe(true);
+    await start(page, { rung: 3, seed: 1, paused: true });
     expect(await page.evaluate(() => window.game!.view())).toMatchObject({ rung: 3, held: true });
     await page.evaluate(() => {
       window.game!.shoot(Math.PI / 2, 0.5);

@@ -1,6 +1,6 @@
 /** The pace gate's arithmetic and its round: what it holds, and how it decides a figure has moved. */
 import { describe, expect, it } from 'vitest';
-import { COURSE } from '../src/course';
+import { COURSE, COURSES } from '../src/course';
 import { mean, median, moved, paceRun } from '../scripts/pace';
 
 describe('the pace gate', () => {
@@ -24,5 +24,12 @@ describe('the pace gate', () => {
     expect(paceRun(2)).toEqual(run);
     const cut = paceRun(1, 0.01);
     expect(cut.finished).toBe(false);
+  });
+
+  it('plays a round of any course, each held to its own figure', () => {
+    const hills = COURSES.find((c) => c.name === 'The Hills')!;
+    const run = paceRun(2, undefined, hills.holes);
+    expect(run.finished).toBe(true);
+    expect(run.card.length).toBe(hills.holes.length);
   });
 });

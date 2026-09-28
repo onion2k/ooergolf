@@ -1,6 +1,7 @@
 /**
- * How the course plays, by the autopilot with a player's slips: how many
- * strokes a round takes, over a few seeds, held to a baseline both ways.
+ * How each course plays, by the autopilot with a player's slips: how many
+ * strokes a round of it takes, over a few seeds, held to a baseline of its
+ * own, both ways.
  * Fewer is as much a change as more: a hole that plays itself is a bug the
  * same as one that cannot be finished. Par is set from the same player.
  *
@@ -14,6 +15,7 @@
  * wobble, and tight enough to catch a hole made a stroke easier or harder.
  */
 import { Autopilot, type Skill } from '../src/autopilot';
+import type { HoleDef } from '../src/course';
 import { Game } from '../src/game';
 import { Progress, memoryStore } from '../src/progress';
 import { seeded } from '../src/random';
@@ -35,9 +37,12 @@ export interface PaceRun {
   finished: boolean;
 }
 
-/** One round from a seed, played by the autopilot with a player's slips, until it is over or the time is up. */
-export function paceRun(seed: number, capMinutes = CHECK.capMinutes): PaceRun {
-  const game = new Game(new Progress(memoryStore()), {}, { random: seeded(seed) });
+/**
+ * One round of `holes`, the first course's unless told, from a seed, played
+ * by the autopilot with a player's slips, until it is over or the time is up.
+ */
+export function paceRun(seed: number, capMinutes = CHECK.capMinutes, holes?: readonly HoleDef[]): PaceRun {
+  const game = new Game(new Progress(memoryStore()), {}, { random: seeded(seed), course: holes });
   const pilot = new Autopilot(game, { skill: PLAYER, random: seeded(seed * 31 + 7) });
   const frames = capMinutes * 3600;
   for (let f = 0; f < frames && game.phase !== 'over'; f++) pilot.step(DT);

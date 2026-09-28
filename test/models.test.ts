@@ -320,6 +320,48 @@ describe('the cup and the flag', () => {
   });
 });
 
+describe('a cup on ground that slopes', () => {
+  // a green tilting up to the east and a little to the north, as the cup's middle sees it
+  const height = (x: number, y: number) => 0.15 * x + 0.05 * y;
+
+  it('lies its collar on the ground, every point of it at the ground’s height, facing up', () => {
+    const m = collar(3, 1.45, { height });
+    const mesh = partNamed(m, 'collar').mesh;
+    for (const [x, y, z] of points(mesh)) expect(z, `at ${x},${y}`).toBeCloseTo(height(x, y), 5);
+    // facing straight out of the slope, as the ground's own normal does, so it is lit as the grass round it is
+    const k = 1 / Math.hypot(0.15, 0.05, 1);
+    for (let i = 0; i < mesh.normals.length; i += 3) {
+      expect(mesh.normals[i], 'across').toBeCloseTo(-0.15 * k, 4);
+      expect(mesh.normals[i + 1], 'along').toBeCloseTo(-0.05 * k, 4);
+      expect(mesh.normals[i + 2], 'up').toBeCloseTo(k, 4);
+    }
+  });
+
+  it('rims its cup on the ground all round, its lining from there down to its depth, and its floor level', () => {
+    const m = cup(1.45, { height });
+    for (const [x, y, z] of points(partNamed(m, 'rim').mesh)) {
+      const above = z - height(x, y);
+      expect(above, `the rim at ${x.toFixed(2)},${y.toFixed(2)}`).toBeGreaterThan(-1e-5);
+      expect(above).toBeLessThan(CUP.rimHeight + 1e-5);
+    }
+    const liner = points(partNamed(m, 'liner').mesh);
+    const tops = liner.filter(([, , z]) => z > -CUP.depth + 1e-3);
+    for (const [x, y, z] of tops) expect(z, 'its top on the ground').toBeCloseTo(height(x, y), 5);
+    const floor = liner.filter(([, , z]) => z <= -CUP.depth + 1e-3);
+    expect(floor.length, 'a floor').toBeGreaterThan(0);
+    for (const [, , z] of floor) expect(z).toBeCloseTo(-CUP.depth, 6);
+  });
+
+  it('is the flat cup it always was on level ground', () => {
+    expect(points(partNamed(cup(1.45, { height: () => 0 }), 'rim').mesh)).toEqual(
+      points(partNamed(cup(1.45), 'rim').mesh),
+    );
+    expect(points(partNamed(collar(3, 1.45, { height: () => 0 }), 'collar').mesh)).toEqual(
+      points(partNamed(collar(3, 1.45), 'collar').mesh),
+    );
+  });
+});
+
 describe('the obstacles are drawn to exactly the size the physics gives them', () => {
   for (const [r, h] of [
     [0.8, 1.6],

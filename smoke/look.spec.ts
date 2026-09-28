@@ -56,7 +56,7 @@ test.describe('what it looks like', () => {
   test('ground that slopes: a hill with sand on its side and a post on it, a hollow, and a raised step by water', async ({
     page,
   }) => {
-    // not on the course: the physics cannot roll on slopes yet, so this is how they are drawn, not how they play
+    // not on a course: sand and a post on a hillside and a step by water, which no hole has, so they are pictured here
     const SLOPES: HoleDef = {
       name: 'Slopes',
       par: 3,
@@ -148,26 +148,34 @@ test.describe('what it looks like', () => {
   });
 
   // by name, so a hole added to the course does not move the others' pictures
-  for (const [name, file] of [
-    ['The Bunker', 'bunker.png'],
-    ['Pond', 'pond.png'],
-    ['Barriers', 'barriers.png'],
-    ['Bumpers', 'bumpers.png'],
-    ['Up and Over', 'up-and-over.png'],
-    ['Windmill', 'windmill.png'],
-    ['The Mill Race', 'mill-race.png'],
+  for (const [course, name, file] of [
+    ['The Meadow', 'The Bunker', 'bunker.png'],
+    ['The Meadow', 'Pond', 'pond.png'],
+    ['The Meadow', 'Barriers', 'barriers.png'],
+    ['The Meadow', 'Bumpers', 'bumpers.png'],
+    ['The Meadow', 'Up and Over', 'up-and-over.png'],
+    ['The Meadow', 'Windmill', 'windmill.png'],
+    ['The Meadow', 'The Mill Race', 'mill-race.png'],
+    ['The Hills', 'The Hollow', 'hollow.png'],
+    ['The Hills', 'The Volcano', 'volcano.png'],
+    ['The Hills', 'The Bowl', 'bowl.png'],
+    ['The Hills', 'Side-hill', 'side-hill.png'],
   ] as const) {
     test(`${name}, from its tee`, async ({ page }) => {
       const problems = watch(page);
       await start(page, { seed: 11, paused: true });
-      await page.evaluate((hole) => {
-        window.game!.startHole(window.game!.content().holes.findIndex((h) => h.name === hole));
-        // the moving things caught part way through, and the camera still: the whole hole in view
-        window.game!.step(75);
-        const { floor } = window.game!.content();
-        window.game!.look((floor.minX + floor.maxX) / 2, (floor.minY + floor.maxY) / 2 - 14, 70);
-        window.game!.step(1);
-      }, name);
+      await page.evaluate(
+        ([course, hole]) => {
+          window.game!.chooseCourse(course);
+          window.game!.startHole(window.game!.content().holes.findIndex((h) => h.name === hole));
+          // the moving things caught part way through, and the camera still: the whole hole in view
+          window.game!.step(75);
+          const { floor } = window.game!.content();
+          window.game!.look((floor.minX + floor.maxX) / 2, (floor.minY + floor.maxY) / 2 - 14, 70);
+          window.game!.step(1);
+        },
+        [course, name] as const,
+      );
       await hideStats(page);
       await expect(page.locator('#view')).toHaveScreenshot(file, TOLERANCE);
       expect(problems).toEqual([]);
@@ -194,6 +202,23 @@ test.describe('what it looks like', () => {
     }, t);
     await hideStats(page);
     await expect(page.locator('#view')).toHaveScreenshot('glint.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
+  test('a cup on a side-hill, close to: its collar and rim lying on the slope, its floor level', async ({ page }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true });
+    await page.evaluate(() => {
+      const g = window.game!;
+      g.chooseCourse('The Hills');
+      g.startHole(g.content().holes.findIndex((h) => h.name === 'Side-hill'));
+      g.step(1);
+      const { cup } = g.content();
+      g.look(cup.x, cup.y - 10, 22);
+      g.step(1);
+    });
+    await hideStats(page);
+    await expect(page.locator('#view')).toHaveScreenshot('side-hill-cup.png', TOLERANCE);
     expect(problems).toEqual([]);
   });
 
@@ -253,6 +278,15 @@ test.describe('what it looks like', () => {
     expect(problems).toEqual([]);
   });
 
+  test('the start screen, over the first hole, a card for each course', async ({ page }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true, screen: true });
+    await page.evaluate(() => window.game!.step(1));
+    await hideStats(page);
+    await expect(page).toHaveScreenshot('start.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
   test.describe('on a phone', () => {
     test.use({ viewport: { width: 400, height: 860 }, hasTouch: true, isMobile: true });
 
@@ -277,10 +311,18 @@ test.describe('what it looks like', () => {
       expect(problems).toEqual([]);
     });
 
+    test('the start screen, on a phone', async ({ page }) => {
+      const problems = watch(page);
+      await start(page, { seed: 11, paused: true, screen: true });
+      await page.evaluate(() => window.game!.step(1));
+      await hideStats(page);
+      await expect(page).toHaveScreenshot('phone-start.png', TOLERANCE);
+      expect(problems).toEqual([]);
+    });
+
     test('the lowest rung of the quality ladder: no shadows and no post', async ({ page }) => {
       const problems = watch(page);
-      await page.goto('/?rung=3&seed=11&paused=1');
-      await expect.poll(() => page.evaluate(() => window.game?.ready ?? false), { timeout: 60_000 }).toBe(true);
+      await start(page, { rung: 3, seed: 11, paused: true });
       await page.evaluate(() => window.game!.step(60));
       await expect(page).toHaveScreenshot('phone-lowest.png', TOLERANCE);
       expect(problems).toEqual([]);

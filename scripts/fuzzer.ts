@@ -17,6 +17,7 @@
  */
 import { Autopilot } from '../src/autopilot';
 import { CLUBS } from '../src/clubs';
+import { COURSES } from '../src/course';
 import { Game, type GameEvents } from '../src/game';
 import { checkInvariants } from '../src/invariants';
 import { Progress, memoryStore } from '../src/progress';
@@ -154,6 +155,17 @@ export function fuzz(seed: number, frames: number): FuzzResult {
         () => {
           busy = Math.floor(between(10, 120));
           did('wait');
+        },
+      ],
+      [
+        1,
+        () => {
+          // a course chosen as a player chooses one: on the start screen, before a round's first stroke, or from the
+          // card's button when a round is over
+          const atStart = game.hole === 0 && game.strokes === 0 && game.card.length === 0;
+          if (game.phase !== 'over' && !atStart) return;
+          game.playCourse(COURSES[Math.floor(random() * COURSES.length)].holes);
+          did('choose a course');
         },
       ],
       [

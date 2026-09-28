@@ -96,8 +96,8 @@ shape of its map, drawn as one sloping green whose rail, cup, flag, tee,
 sand and posts stand on it; the autopilot counts a rise and a fall in how
 hard it strikes and never aims to stop where a ball would roll away (past
 about 13 degrees on the green); and the speed rule allows what a fall
-gives. The physics has rolled on it since v0.6.0; the holes that slope are
-still to be designed.
+gives. The physics has rolled on it since v0.6.0, and since v0.7.0 a cup
+may stand on a slope, its rim following the ground, as the game draws it.
 
 All of it is in artshape-physics since v0.4.1, made in that repo to its own
 definition of done and taken in here with a version bump. v0.4.1 came of
@@ -160,6 +160,24 @@ the cup), Up and Over (the ramp onto a plateau between two ponds, and a
 drop to the cup), Windmill, and The Mill Race (a barrier, the windmill,
 and a conveyor to the cup between ponds). The Mill Race does not yet have
 everything, as the ninth is to.
+
+The Hills is a second course, of four holes whose ground slopes, each
+bringing one thing a slope does, chosen on the start screen beside The
+Meadow:
+
+- **The Hollow,** par 3: from a raised tee down into a dip and up a steep
+  bank to the cup's plateau. Short, and it rolls back into the dip.
+- **The Volcano,** par 3: the cup on the top of a mound, whose flanks a
+  ball too soft rolls back down and one too hard runs over.
+- **The Bowl,** par 2: the cup in the bottom of a bowl, which brings
+  everything to it; a hole to breathe on.
+- **Side-hill,** par 3: a green tilted across, so every putt breaks and has
+  to be aimed above the cup.
+
+Round each cup the ground is no steeper than the green holds a ball, 13
+degrees, so a ball can come to rest beside it. The autopilot does not read
+break: it aims straight and is carried by the ground, and takes one or two
+on each on the median, so the pars are each hole's intent.
 
 - **Sand** slows a ball steadily, at 60 a second a second where the green
   is 16: a putt that reaches it at 20 dies three units in, and the hardest
@@ -295,4 +313,5 @@ Each line is a feature or more, through `/feature`, every gate green at each.
   autopilot.
 - Whether a ball can be got up a step without a ramp (hole 7).
 - Sound. None is designed.
-- Slopes and ramps, and the courses after the first.
+- The courses after The Hills, and whether a hole's slope may carry a
+  barrier or a windmill.

@@ -13,7 +13,7 @@ import { CameraRig } from './camera';
 import { CLUBS } from './clubs';
 import { createApi } from './debug';
 import { frameCost } from './frame-cost';
-import { CUP } from './course';
+import { COURSES, CUP } from './course';
 import { Game, type GameEvents } from './game';
 import { Hud } from './hud';
 import { daylight } from './look';
@@ -44,7 +44,6 @@ const canvas = document.getElementById('view') as HTMLCanvasElement;
 const boot = document.getElementById('boot')!;
 const bootMsg = document.getElementById('bootMsg')!;
 const stats = document.getElementById('stats')!;
-const help = document.getElementById('help')!;
 
 main().catch((err: unknown) => {
   bootMsg.textContent = err instanceof Error ? err.message : String(err);
@@ -85,11 +84,40 @@ async function main() {
     );
   // the game tells of its first hole as it is built, before it is here to be read: that one is shown once it is
   let game: Game | undefined = undefined;
+  /** The course being played, and whether the start screen is up to choose one: it is, as the page opens. */
+  let courseName = COURSES[0].name;
+  let choosing = true;
+  const summaries = COURSES.map((c) => ({
+    name: c.name,
+    holes: c.holes.length,
+    par: c.holes.reduce((a, h) => a + h.par, 0),
+  }));
   const hud = new Hud(
     {
       again: () => game?.newRound(),
       buy: (id) => game?.buy(id),
       equip: (id) => game?.equip(id),
+      choose(name) {
+        const course = COURSES.find((c) => c.name === name);
+        if (!game || !course) return;
+        // the course whose first hole is already set up behind the screen, untouched, is played as it stands; any
+        // other, or one begun, starts a round afresh
+        const fresh =
+          game.course === course.holes &&
+          game.phase === 'play' &&
+          game.hole === 0 &&
+          game.strokes === 0 &&
+          !game.card.length;
+        if (!fresh) game.playCourse(course.holes);
+        courseName = name;
+        choosing = false;
+        hud.hideStart();
+        showPurse();
+      },
+      courses() {
+        choosing = true;
+        hud.showStart(summaries);
+      },
     },
     CLUBS,
   );
@@ -199,6 +227,8 @@ async function main() {
     },
   });
   const act = (g: ReturnType<Gesture['up']>) => {
+    // nothing is struck through the start screen
+    if (choosing) return;
     if (g.kind === 'shoot') played.shoot(g.shot.angle, g.shot.power);
     else if (g.kind === 'zoom') rig.zoom(g.by);
   };
@@ -241,15 +271,15 @@ async function main() {
   const glinting = (): [number, number, number][] => {
     const { cup } = played.layout;
     const rim = CUP.radius + 0.15;
-    // on the level ground the cup is cut in, however high that stands
-    const z = heightAt(played.layout, cup.x, cup.y);
+    // on the ground the cup is cut in, however high that stands, and all round its rim where it slopes
+    const on = (x: number, y: number) => heightAt(played.layout, x, y);
     return [
-      ...[0.3, 1.9, 3.4, 4.9].map((a): [number, number, number] => [
-        cup.x + Math.cos(a) * rim,
-        cup.y + Math.sin(a) * rim,
-        z + 0.1,
-      ]),
-      [cup.x, cup.y, z + 8.75],
+      ...[0.3, 1.9, 3.4, 4.9].map((a): [number, number, number] => {
+        const x = cup.x + Math.cos(a) * rim,
+          y = cup.y + Math.sin(a) * rim;
+        return [x, y, on(x, y) + 0.1];
+      }),
+      [cup.x, cup.y, on(cup.x, cup.y) + 8.75],
     ];
   };
   const glintQuad = new Float32Array(EFFECT_STRIDE);
@@ -301,9 +331,9 @@ async function main() {
   await renderer.ready;
   await grown;
   boot.classList.add('gone');
-  hud.show();
+  // the start screen over the first hole of the first course, until a course is chosen
+  hud.showStart(summaries);
   stats.hidden = false;
-  help.hidden = false;
 
   // ---- each frame ----
 
@@ -376,6 +406,15 @@ async function main() {
     aiming: () => (played.ready && gesture.aim ? { ...gesture.aim } : null),
     view: () => ({ distance: rig.distance, rung: governor.rung, held: governor.held }),
     measureFrame,
+    course: () => courseName,
+    choosing: () => choosing,
+    chooseCourse: (name) => {
+      const card = Array.from(document.querySelectorAll<HTMLButtonElement>('#start .course')).find((b) =>
+        b.textContent.startsWith(name),
+      );
+      if (!card) throw new Error(`no course called ${name} on the start screen`);
+      card.click();
+    },
     async grass() {
       await grown;
       const drawn = await renderer.grassDrawn();

@@ -5,10 +5,10 @@ import { fuzz } from '../scripts/fuzzer';
 describe('the fuzzer', () => {
   it('plays a seed through without breaking a rule, and does everything a player can', () => {
     // two seeds, since which of the rarer things a monkey gets round to on one is chance. A reload starts the round
-    // again, the save not yet keeping where in the course a player is, so a round is seldom finished: 27 and 12 do,
-    // chosen again when the cup had its rim and a round got harder
-    const one = fuzz(27, 12000),
-      two = fuzz(12, 12000);
+    // again, the save not yet keeping where in the course a player is, so a round is seldom finished: 17 and 40 do,
+    // chosen again when a course could be chosen, and each does everything a player can
+    const one = fuzz(17, 12000),
+      two = fuzz(40, 12000);
     const sum = (a: Record<string, number>, b: Record<string, number>) => {
       const out = { ...a };
       for (const [k, n] of Object.entries(b)) out[k] = (out[k] ?? 0) + n;
@@ -21,6 +21,7 @@ describe('the fuzzer', () => {
     const actions = [
       'buy',
       'buy, refused',
+      'choose a course',
       'equip',
       'play again',
       'reload',

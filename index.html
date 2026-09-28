@@ -118,6 +118,7 @@
     color: var(--gold);
     border: 0;
   }
+  #cardCourses,
   #cardShop {
     margin-top: 8px;
     width: 100%;
@@ -214,6 +215,51 @@
     margin-top: 14px;
     width: 100%;
   }
+  #start {
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: min(380px, calc(100vw - 32px));
+    padding: 22px 22px 18px;
+    text-align: center;
+    pointer-events: auto;
+  }
+  #start h1 {
+    margin: 0;
+    font-size: 34px;
+    color: var(--gold);
+    letter-spacing: 0.02em;
+  }
+  #start p {
+    margin: 2px 0 16px;
+    color: var(--dim);
+  }
+  #courses {
+    display: grid;
+    gap: 10px;
+  }
+  .course {
+    display: block;
+    width: 100%;
+    padding: 12px 14px;
+    font: inherit;
+    text-align: left;
+    color: var(--ink);
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 10px;
+    cursor: pointer;
+  }
+  .course:hover {
+    border-color: var(--gold);
+  }
+  .course b {
+    display: block;
+    font-size: 18px;
+  }
+  .course small {
+    color: var(--dim);
+  }
   #stats {
     bottom: 16px;
     right: 16px;
@@ -276,6 +322,7 @@
     </tfoot>
   </table>
   <button id="again">Play again</button>
+  <button id="cardCourses" class="small">Courses</button>
   <button id="cardShop" class="small">Visit the shop</button>
 </div>
 <div class="panel" id="purse" hidden>
@@ -288,6 +335,11 @@
   <p>A finer putter strikes harder, and its aim reaches further.</p>
   <div id="shopClubs"></div>
   <button class="small" id="shopClose">Back to the course</button>
+</div>
+<div class="panel" id="start" hidden>
+  <h1>ooergolf</h1>
+  <p>Choose a course</p>
+  <div id="courses"></div>
 </div>
 <div class="panel" id="stats" hidden></div>
 <div class="panel" id="help" hidden>drag back and let go to putt</div>

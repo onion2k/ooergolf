@@ -1,7 +1,7 @@
 /** The holes as content: every map makes a hole that can be played, and a layout says where everything is. */
 import { describe, expect, it } from 'vitest';
 import { BALL, BOTTOM, KIND_RADIUS, STEP, TILE, WATER_FLOOR, layoutOf, onFloor } from '../src/arena';
-import { COURSE, CUP } from '../src/course';
+import { COURSE, COURSES, CUP } from '../src/course';
 
 describe('a hole from its map', () => {
   const map = ['#####', '#.C.#', '#...#', '#.T.#', '#####'];
@@ -71,11 +71,11 @@ describe('a hole from its map', () => {
 });
 
 describe('the course', () => {
-  it('has holes, each with a par, a cup the ball fits, and grass the whole way from the tee to the cup', () => {
+  it('has holes, each with a par, a cup the ball fits, and grass the whole way from the tee to the cup, on every course', () => {
     expect(COURSE.length).toBeGreaterThanOrEqual(2);
     expect(CUP.radius).toBeGreaterThan(1);
-    for (const hole of COURSE) {
-      const l = layoutOf(hole.map);
+    for (const hole of COURSES.flatMap((c) => c.holes)) {
+      const l = layoutOf(hole.map, hole.terrain);
       expect(hole.par, hole.name).toBeGreaterThanOrEqual(2);
       expect(hole.par, hole.name).toBeLessThanOrEqual(5);
       // the cup sits on level grass, where its lining, collar and flag are drawn; the physics could cut it higher

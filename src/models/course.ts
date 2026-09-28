@@ -8,7 +8,8 @@
  */
 import { PALETTE, ROUGH } from './palette';
 import { PATTERN, matte, type Colour, type Model } from './part';
-import { annulus, at, built, disc, dome, frustum, lump, slab, tubeIn } from './shapes';
+import { annulus, at, built, disc, dome, frustum, lifted, lump, slab, tubeIn } from './shapes';
+import type { Mesh } from 'artshape-render/mesh/types';
 import { face } from '../meshes';
 
 /**
@@ -21,9 +22,15 @@ export const CUP = { depth: 2.4, rim: 0.3, rimHeight: 0.08, sides: 24 } as const
 /**
  * A cup of `radius`: its lining, a dark wall down from the grass and a
  * floor, and a gold rim round its lip. The lining's wall is on the cup's own
- * circle, which is the physics' hole, and the rim lies outside it.
+ * circle, which is the physics' hole, and the rim lies outside it. On
+ * ground that slopes, given its `height` round the cup's middle, the rim
+ * follows the ground and the lining runs down from it, as the physics' rim
+ * does since v0.7.0; the floor stays at the cup's depth.
  */
-export function cup(radius: number, { depth = CUP.depth } = {}): Model {
+export function cup(
+  radius: number,
+  { depth = CUP.depth, height }: { depth?: number; height?: (x: number, y: number) => number } = {},
+): Model {
   const n = CUP.sides,
     r = radius,
     rim = r + CUP.rim;
@@ -34,19 +41,25 @@ export function cup(radius: number, { depth = CUP.depth } = {}): Model {
       {
         name: 'liner',
         material: matte(PALETTE.hole, 0.8),
-        mesh: built((b) => {
-          tubeIn(b, here, n, r, -depth, 0);
-          disc(b, here, n, r, -depth);
-        }),
+        mesh: onGround(
+          built((b) => {
+            tubeIn(b, here, n, r, -depth, 0);
+            disc(b, here, n, r, -depth);
+          }),
+          height,
+        ),
       },
       {
         name: 'rim',
         material: matte(PALETTE.gold, ROUGH.metal),
-        mesh: built((b) => {
-          annulus(b, here, n, r, rim, CUP.rimHeight);
-          tubeIn(b, here, n, r, 0, CUP.rimHeight);
-          frustum(b, here, n, rim, rim, 0, CUP.rimHeight, { top: false });
-        }),
+        mesh: onGround(
+          built((b) => {
+            annulus(b, here, n, r, rim, CUP.rimHeight);
+            tubeIn(b, here, n, r, 0, CUP.rimHeight);
+            frustum(b, here, n, rim, rim, 0, CUP.rimHeight, { top: false });
+          }),
+          height,
+        ),
       },
     ],
     moving: [],
@@ -58,9 +71,14 @@ export function cup(radius: number, { depth = CUP.depth } = {}): Model {
  * of its middle, for the game to lay where the grass would otherwise cover
  * the cup. Its hole is the lining's own polygon, so the two meet edge to
  * edge. The square must be wider than the hole; the rim is a raised ring on
- * the grass, and may lie over the grass beyond the square.
+ * the grass, and may lie over the grass beyond the square. Given the
+ * ground's `height`, it lies on it.
  */
-export function collar(side: number, radius: number): Model {
+export function collar(
+  side: number,
+  radius: number,
+  { height }: { height?: (x: number, y: number) => number } = {},
+): Model {
   if (side / 2 <= radius) throw new Error(`a collar ${side} across cannot hold a cup of radius ${radius}`);
   const n = CUP.sides,
     half = side / 2;
@@ -79,7 +97,11 @@ export function collar(side: number, radius: number): Model {
     };
     for (let i = 0; i < n; i++) face(b, circle(i), edge(i), edge(i + 1), circle(i + 1));
   });
-  return { name: 'collar', parts: [{ name: 'collar', mesh, material: matte(PALETTE.grass, 0.85) }], moving: [] };
+  return {
+    name: 'collar',
+    parts: [{ name: 'collar', mesh: onGround(mesh, height), material: matte(PALETTE.grass, 0.85) }],
+    moving: [],
+  };
 }
 
 /**
@@ -134,4 +156,9 @@ export function teeMarkers(spacing: number, { radius = 0.45, colour = PALETTE.pl
     for (const side of [-1, 1]) dome(b, at((side * spacing) / 2, 0, 0), radius, 3, 8);
   });
   return { name: 'tee markers', parts: [{ name: 'markers', mesh, material: matte(colour, 0.18) }], moving: [] };
+}
+
+/** A mesh as built on level ground, or laid on the ground's `height` round the cup's middle where the ground slopes. */
+function onGround(mesh: Mesh, height?: (x: number, y: number) => number): Mesh {
+  return height ? lifted(mesh, height) : mesh;
 }

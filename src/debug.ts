@@ -50,6 +50,9 @@ export interface GameState {
   owned: string[];
   /** The hardest the club in hand strikes. */
   hardest: number;
+  /** The course being played, and whether the start screen is up to choose one. */
+  course: string;
+  choosing: boolean;
 }
 
 /** The ball, where it is and how fast it is going. */
@@ -123,6 +126,8 @@ export interface GameApi {
   startHole(index: number): void;
   /** A round of holes of the test's own, not the course's: for a hole that is not on it. */
   playCourse(holes: HoleDef[]): void;
+  /** A course chosen by its name, as a click on its card on the start screen chooses it. */
+  chooseCourse(name: string): void;
   /** A new round, as the card's button asks for. */
   newRound(): void;
   /** A club bought, as the shop's button does; whether it was. */
@@ -177,6 +182,10 @@ export interface DebugHost {
   view(): { distance: number; rung: number; held: boolean };
   measureFrame(warmup?: number): Promise<number>;
   grass(): Promise<GrassDrawn>;
+  /** The course being played, and whether the start screen is up; and a course chosen, as the screen does it. */
+  course(): string;
+  choosing(): boolean;
+  chooseCourse(name: string): void;
   events: string[];
 }
 
@@ -219,6 +228,8 @@ export function createApi(host: DebugHost): GameApi {
         club: game.progress.save.club,
         owned: [...game.progress.save.owned],
         hardest: game.hardest,
+        course: host.course(),
+        choosing: host.choosing(),
       };
     },
     ball() {
@@ -274,6 +285,7 @@ export function createApi(host: DebugHost): GameApi {
     suggest: () => (game.ready ? new Autopilot(game).plan() : null),
     startHole: (index) => game.startAt(index),
     playCourse: (holes) => game.playCourse(holes),
+    chooseCourse: (name) => host.chooseCourse(name),
     newRound: () => game.newRound(),
     buy: (id) => game.buy(id),
     equip: (id) => game.equip(id),

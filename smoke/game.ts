@@ -35,9 +35,17 @@ export function watch(page: Page): string[] {
 export async function start(
   page: Page,
   // a save of today's shape, or of any shape ever written, for a test that a save of an old shape still loads
-  options: { save?: Partial<Save> | Record<string, unknown>; seed?: number; paused?: boolean } = {},
+  // `screen` leaves the start screen up, for a test of it; otherwise The Meadow is chosen, as its first hole is set;
+  // `rung` puts the picture on a rung of the quality ladder and holds it there
+  options: {
+    save?: Partial<Save> | Record<string, unknown>;
+    seed?: number;
+    paused?: boolean;
+    screen?: boolean;
+    rung?: number;
+  } = {},
 ) {
-  const { save, seed, paused } = options;
+  const { save, seed, paused, screen, rung } = options;
   if (save)
     await page.addInitScript((s) => {
       if (sessionStorage.getItem('ooergolf-test-seeded')) return;
@@ -45,10 +53,12 @@ export async function start(
       sessionStorage.setItem('ooergolf-test-seeded', '1');
     }, save);
   const query = new URLSearchParams();
+  if (rung !== undefined) query.set('rung', String(rung));
   if (seed !== undefined) query.set('seed', String(seed));
   if (paused) query.set('paused', '1');
   await page.goto(query.size ? `/?${query.toString()}` : '/');
   await ready(page);
+  if (!screen) await page.evaluate(() => window.game!.chooseCourse('The Meadow'));
 }
 
 /**

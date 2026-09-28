@@ -13,7 +13,7 @@ fast, draws fast and has no bugs.
 
 ## How it is played
 
-A round of holes, each a striped green raised on timber sides, with trees,
+A round of holes, on a course chosen from the start screen, each a striped green raised on timber sides, with trees,
 hedges and flowers round it, from a tee between two markers to a gold-rimmed
 cup with a flag in it. Drag anywhere, back from where the ball should go,
 and let go to putt: the dots show the way and how hard. The ball rolls,
@@ -32,9 +32,11 @@ lays a track in it as it rolls.
 Nine holes so far: a straight putt, a dog-leg, a bunker in front of the
 cup, a pond, sliding barriers, a field of pinball posts, a ramp up onto a
 plateau between ponds, a windmill whose blades sweep its door, and The Mill
-Race, with a barrier, the windmill and a conveyor to the cup. Sand slows the
-ball hard, and water costs a stroke, the ball coming back to where it was
-struck from.
+Race, with a barrier, the windmill and a conveyor to the cup, make The
+Meadow. Sand slows the ball hard, and water costs a stroke, the ball coming
+back to where it was struck from. The Hills is four more whose ground
+slopes: a hollow to carry, a volcano to stop on top of, a bowl, and a
+side-hill that breaks every putt.
 
 ## What is here
 
@@ -81,7 +83,7 @@ fixed, and no baseline is moved to make it green.
     src/main.ts        the page: events into words, the frame drawn
     src/debug.ts       window.game, the test API
     src/invariants.ts  what must always hold
-    src/course.ts      the holes: a map, a par, and what moves on each
+    src/course.ts      the courses, and their holes: a map, a par, what moves on each, and its slopes
     src/obstacles.ts   where a barrier, a windmill's gate and a belt are at any moment
     src/arena.ts       a hole's map read into a layout; the kinds of body, the hardest shot
     src/autopilot.ts   the game played by itself, for the gates and for par

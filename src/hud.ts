@@ -11,6 +11,9 @@ import { againstPar, scoreName } from './score';
 
 export interface HudHandlers {
   again(): void;
+  /** A course chosen on the start screen, by its name; and the card's way back to the screen. */
+  choose(name: string): void;
+  courses(): void;
   buy(id: string): void;
   equip(id: string): void;
 }
@@ -44,12 +47,16 @@ export class Hud {
   private readonly gems = document.getElementById('gems')!;
   private readonly shop = document.getElementById('shop')!;
   private readonly clubs = document.getElementById('shopClubs')!;
+  private readonly start = document.getElementById('start')!;
+  private readonly courseList = document.getElementById('courses')!;
+  private readonly help = document.getElementById('help')!;
 
   constructor(
     private readonly handlers: HudHandlers,
     private readonly catalogue: readonly Club[],
   ) {
     document.getElementById('again')!.addEventListener('click', () => handlers.again());
+    document.getElementById('cardCourses')!.addEventListener('click', () => handlers.courses());
     const open = () => {
       this.shop.hidden = false;
     };
@@ -63,6 +70,36 @@ export class Hud {
   show() {
     this.panel.hidden = false;
     this.purse.hidden = false;
+    this.help.hidden = false;
+  }
+
+  /**
+   * The start screen, over the course, with a card for each course: its name,
+   * how many holes and its par. Everything else over the course is put away
+   * while it is up; a click on a card goes back through `choose`.
+   */
+  showStart(courses: readonly { name: string; holes: number; par: number }[]) {
+    this.courseList.replaceChildren(
+      ...courses.map((c) => {
+        const card = document.createElement('button');
+        card.className = 'course';
+        const name = document.createElement('b');
+        name.textContent = c.name;
+        const about = document.createElement('small');
+        about.textContent = `${c.holes} holes \u00b7 par ${c.par}`;
+        card.append(name, about);
+        card.addEventListener('click', () => this.handlers.choose(c.name));
+        return card;
+      }),
+    );
+    for (const el of [this.panel, this.purse, this.help, this.card, this.shop, this.toast]) el.hidden = true;
+    this.start.hidden = false;
+  }
+
+  /** The start screen put away, and the course's words shown. */
+  hideStart() {
+    this.start.hidden = true;
+    this.show();
   }
 
   /** The coins and gems, and the shop's clubs as the save now has them. */

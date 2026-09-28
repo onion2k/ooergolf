@@ -208,12 +208,16 @@ export class Scene {
     const rough = new Float32Array(16);
     place(rough, 0, 0, 0, -ROUGH_DEPTH);
 
-    // the cup's tile is grass with the cup's hole in it, in its stripe's colour, at the height of the level ground round
-    // it; the tee's markers on the ground beside the tee
+    // the cup's tile is grass with the cup's hole in it, in its stripe's colour, placed at the ground's height at the
+    // cup's middle; the tee's markers on the ground beside the tee
     const cupZ = heightAt(layout, at.x, at.y);
     const atCup = new Float32Array(16);
     place(atCup, 0, at.x, at.y, cupZ);
-    const [collarPart] = collar(TILE, CUP.radius).parts;
+    // round a cup on a slope, the collar and the rim lie on the ground, which is measured from the cup's middle
+    const round = layout.terrain.some((h) => h !== 0)
+      ? { height: (x: number, y: number) => heightAt(layout, at.x + x, at.y + y) - cupZ }
+      : {};
+    const [collarPart] = collar(TILE, CUP.radius, round).parts;
     const flagAt = new Float32Array(16);
     place(flagAt, 0, at.x, at.y, cupZ);
     const teeAt = new Float32Array(16);
@@ -229,7 +233,7 @@ export class Scene {
       { ...group({ ...collarPart, material: stripe(cupTile) }, atCup) },
       { mesh: rails, matrices: still, ...look(PALETTE.rail) },
       { mesh: plane(ROUGH_SIZE), matrices: rough, ...look(PALETTE.rough) },
-      ...groups(cup(CUP.radius), atCup),
+      ...groups(cup(CUP.radius, round), atCup),
       // the pin and its knob stand still; the flag's cloth swings in the breeze, and is among what moves
       ...groups({ parts: flag(FLAG_COLOURS.red).parts.filter((p) => p.name !== 'flag') } as Model, flagAt),
       ...groups(teeMarkers(TEE_SPACING), teeAt),
