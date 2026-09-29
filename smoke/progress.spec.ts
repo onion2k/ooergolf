@@ -315,7 +315,20 @@ test('the round finished to the card, and begun again from its button', async ({
   // everything that answered the last hole is over by the card: nothing kept past its end, and the gold's glints back to
   // a twinkle at most
   const card = await page.evaluate(() => window.game!.motions());
-  expect({ ...card, glints: 0 }).toEqual({ squash: 0, waggle: 0, flash: 0, glints: 0, glide: 0, pulse: 0 });
+  // and the water of the last hole, behind the card, twinkles as it does always, and the last stroke's puff is a stroke's
+  expect(card.sparkles).toBeLessThanOrEqual(6);
+  expect({ ...card, glints: 0, sparkles: 0, sparklesAt: [], puff: null }).toEqual({
+    squash: 0,
+    waggle: 0,
+    flash: 0,
+    glints: 0,
+    glide: 0,
+    pulse: 0,
+    sparkles: 0,
+    sparklesAt: [],
+    splash: 0,
+    puff: null,
+  });
   expect(card.glints).toBeLessThanOrEqual(1);
   await page.locator('#again').click();
   const again = await page.evaluate(() => window.game!.state());

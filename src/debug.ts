@@ -187,6 +187,14 @@ export interface Motions {
   glide: number;
   /** How much bigger than its size the aim's nearest dot was drawn, as a share; nought with no drag held. */
   pulse: number;
+  /** How many sparkles of sun on the water the last frame lit. */
+  sparkles: number;
+  /** Where on the page each of them was drawn, in CSS pixels, read back from what the frame placed. */
+  sparklesAt: { x: number; y: number }[];
+  /** How wide the ring is, in world units, where a ball went into the water: nought when there is none. */
+  splash: number;
+  /** What the last stroke threw up from under the ball, sand or grass, or null before any stroke. */
+  puff: 'sand' | 'grass' | null;
 }
 
 /** The grass a frame drew, and the wind it bent in. */

@@ -11,7 +11,7 @@
  * which cannot follow a slope, with boxes of earth under the raised ones.
  */
 import { MeshBuilder, type Mesh } from 'artshape-render/mesh/types';
-import { TILE, slopeAt, stepAt, terrainAt, tileAt, type Layout } from './arena';
+import { TILE, WATER_LEVEL, slopeAt, stepAt, terrainAt, tileAt, type Layout } from './arena';
 import { face, tri } from './meshes';
 
 type V3 = [number, number, number];
@@ -26,8 +26,13 @@ export interface Ground {
   /** The grass in its lighter stripe, and in its darker. */
   green: Mesh;
   mown: Mesh;
-  /** The earth down the side of a step, to the ground or the water below it. */
+  /** The earth down the side of a step or a pond, to the ground or the water's surface below it. */
   banks: Mesh;
+}
+
+/** Whether a tile is sand the ball rolls on: not rock, and not water. */
+function isSand(l: Layout, t: number): boolean {
+  return !l.solid[t] && !l.water[t] && l.sand[t] === 1;
 }
 
 /** The tiles of a hole that are grass: not rock, water or sand, and not the cup's, which its collar covers. */
@@ -45,28 +50,33 @@ export function groundOf(l: Layout): Ground {
   // the height of the ground of tile `t` at a point: its own step, whichever tile the point's edge also bounds
   const at = (t: number, x: number, y: number) => l.floor[t] + terrainAt(l, x, y);
   for (let t = 0; t < l.cols * l.rows; t++) {
-    if (!isGrass(l, t, cupTile)) continue;
+    // the grass is laid here; the sand is the bunker's own, but it has an edge by the water as the grass has, and the
+    // earth comes down from it too
+    const grass = isGrass(l, t, cupTile);
+    if (!grass && !isSand(l, t)) continue;
     const tx = t % l.cols,
       ty = Math.floor(t / l.cols);
     const x0 = l.originX + tx * TILE,
       y0 = l.originY + ty * TILE;
-    const b = Math.floor(ty / STRIPE_ROWS) % 2 ? mown : green;
-    const base = b.vertexCount;
-    for (let j = 0; j <= n; j++)
-      for (let i = 0; i <= n; i++) {
-        const x = x0 + (i / n) * TILE,
-          y = y0 + (j / n) * TILE;
-        const [sx, sy] = slopeAt(l, x, y);
-        const k = 1 / Math.hypot(sx, sy, 1);
-        b.vertex(x, y, at(t, x, y), -sx * k, -sy * k, k, i / n, j / n);
-      }
-    for (let j = 0; j < n; j++)
-      for (let i = 0; i < n; i++) {
-        const a = base + j * (n + 1) + i;
-        b.quad(a, a + 1, a + n + 2, a + n + 1);
-      }
-    // the earth down each side where what is beside it lies lower: another tile's lower step, or water, whose sheet lies
-    // at nought; rock has its rail, which stands over the edge
+    if (grass) {
+      const b = Math.floor(ty / STRIPE_ROWS) % 2 ? mown : green;
+      const base = b.vertexCount;
+      for (let j = 0; j <= n; j++)
+        for (let i = 0; i <= n; i++) {
+          const x = x0 + (i / n) * TILE,
+            y = y0 + (j / n) * TILE;
+          const [sx, sy] = slopeAt(l, x, y);
+          const k = 1 / Math.hypot(sx, sy, 1);
+          b.vertex(x, y, at(t, x, y), -sx * k, -sy * k, k, i / n, j / n);
+        }
+      for (let j = 0; j < n; j++)
+        for (let i = 0; i < n; i++) {
+          const a = base + j * (n + 1) + i;
+          b.quad(a, a + 1, a + n + 2, a + n + 1);
+        }
+    }
+    // the earth down each side where what is beside it lies lower: another tile's lower step, or water, whose surface
+    // lies `WATER_LEVEL` below the grass, so a pond has a wall; rock has its rail, which stands over the edge
     for (const [ox, oy] of [
       [1, 0],
       [-1, 0],
@@ -91,7 +101,7 @@ export function groundOf(l: Layout): Ground {
             : [x0 + (oy > 0 ? 1 - s : s) * TILE, ey!];
         const [ax, ay] = p(s0),
           [bx, by] = p(s1);
-        const below = (x: number, y: number) => (l.water[u] ? 0 : at(u, x, y));
+        const below = (x: number, y: number) => (l.water[u] ? WATER_LEVEL : at(u, x, y));
         const topA = at(t, ax, ay),
           topB = at(t, bx, by),
           lowA = below(ax, ay),

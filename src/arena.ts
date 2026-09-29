@@ -114,6 +114,12 @@ export function powerFor(speed: number, hardest: number): number {
 export const STEP = 0.4;
 /** How low water's floor is: under the world's bottom, so a ball rolled onto water falls out of the world, and is lost. */
 export const WATER_FLOOR = -10;
+/**
+ * How far below the grass water's surface is drawn, which the earth at a pond's edge comes down to. The ball never
+ * meets it: it is lost the moment it is over water, and the floor it falls through is `WATER_FLOOR`. A pond a step
+ * below the grass, and not a stain on it.
+ */
+export const WATER_LEVEL = -0.3;
 /** The world's bottom: below it a ball has left the world, into water. */
 export const BOTTOM = -5;
 
@@ -346,6 +352,12 @@ function terrainOf(grid: readonly string[] | Float32Array | undefined, cols: num
       out[(rows - 1 - r) * cols + tx] = (c.charCodeAt(0) - 48) * TERRAIN.step;
     }
   return out;
+}
+
+/** Whether a point is on a tile of sand: where a stroke throws sand up, and not grass. Off the grid, never. */
+export function onSand(l: Layout, x: number, y: number): boolean {
+  const t = tileAt(l, x, y);
+  return t >= 0 && l.sand[t] === 1;
 }
 
 /** Whether a point is on the ground the ball rolls on, grass or sand: on the grid, not solid, and not water. */

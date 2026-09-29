@@ -1,6 +1,17 @@
 /** The holes as content: every map makes a hole that can be played, and a layout says where everything is. */
 import { describe, expect, it } from 'vitest';
-import { BALL, BOTTOM, KIND_RADIUS, STEP, TILE, WATER_FLOOR, layoutOf, onFloor } from '../src/arena';
+import {
+  BALL,
+  BOTTOM,
+  KIND_RADIUS,
+  STEP,
+  TILE,
+  WATER_FLOOR,
+  WATER_LEVEL,
+  layoutOf,
+  onFloor,
+  onSand,
+} from '../src/arena';
 import { COURSE, COURSES, CUP } from '../src/course';
 
 describe('a hole from its map', () => {
@@ -63,6 +74,24 @@ describe('a hole from its map', () => {
     // a post stands on grass, which is not sand and not solid
     expect(l.solid[at(4, 2)]).toBe(0);
     expect(l.sand[at(4, 2)]).toBe(0);
+  });
+
+  it('says whether a point lies on sand, where a stroke throws sand and not grass, and never off the grid', () => {
+    const l = layoutOf(['#######', '#..C..#', '#.sso.#', '#..T..#', '#######']);
+    const middle = (tx: number, ty: number) => ({ x: l.originX + (tx + 0.5) * TILE, y: l.originY + (ty + 0.5) * TILE });
+    // the row of sand is the third from the top: row 2, that is row 2 from the south of five
+    const sand = middle(2, 2),
+      grass = middle(1, 2);
+    expect(onSand(l, sand.x, sand.y)).toBe(true);
+    expect(onSand(l, sand.x + 1.4, sand.y - 1.4), 'the tile’s corner').toBe(true);
+    expect(onSand(l, grass.x, grass.y)).toBe(false);
+    expect(onSand(l, l.tee.x, l.tee.y)).toBe(false);
+    expect(onSand(l, l.originX - 5, l.originY - 5), 'off the grid').toBe(false);
+  });
+
+  it('has the water’s surface a good way below the grass, that the ground’s earth comes down to', () => {
+    expect(WATER_LEVEL).toBeLessThan(-0.2);
+    expect(WATER_LEVEL, 'well above the floor a ball falls through').toBeGreaterThan(WATER_FLOOR);
   });
 
   it('refuses grass on the edge of the map, where the ball could leave the world', () => {

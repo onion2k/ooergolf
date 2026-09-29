@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { Mesh } from 'artshape-render/mesh/types';
-import { BALL, KIND_RADIUS, STEP, TILE, heightAt, layoutOf, terrainAt, type Layout } from '../src/arena';
+import { BALL, KIND_RADIUS, STEP, TILE, WATER_LEVEL, heightAt, layoutOf, terrainAt, type Layout } from '../src/arena';
 import { COURSES, CUP } from '../src/course';
 import { GROUND, RAIL, cupGround, groundOf, railsOf, type Rails } from '../src/ground';
 import { BUDGET, collar, type V3 } from '../src/models';
@@ -112,8 +112,8 @@ describe('the ground', () => {
       for (const tri of west)
         expect(Math.max(...tri.map((p) => p[2])) - Math.min(...tri.map((p) => p[2]))).toBeGreaterThan(STEP - 1e-3);
     }
-    const flat = layoutOf(MAP.map((r) => r.replace(/1/g, '.')));
-    expect(triangles(groundOf(flat).banks).length, 'no step, no earth').toBe(0);
+    const flat = layoutOf(MAP.map((r) => r.replace(/[1~]/g, '.')));
+    expect(triangles(groundOf(flat).banks).length, 'no step and no water, no earth').toBe(0);
   });
 
   it('is painted in its two stripes, the mown one lighter than the other by the same share in every colour', () => {
@@ -542,5 +542,65 @@ describe('the grass round the cup', () => {
       // and the collar has no corner on its edge that the ground's grass beside it does not
       for (const k of round.keys()) expect(green.has(k), `${name}: a corner of the collar alone, ${k}`).toBe(true);
     }
+  });
+});
+
+describe('the earth round a pond', () => {
+  // a pond two tiles across and two down; sand beside it on its east side; the rest grass
+  const POND = ['#######', '#..C..#', '#.....#', '#.~~..#', '#.~~s.#', '#..T..#', '#######'];
+  /** The area of a triangle in space. */
+  const area3 = ([a, b, c]: V3[]) => Math.hypot(...cross(sub(b, a), sub(c, a))) / 2;
+
+  it('stands on every edge where grass or sand meets water, down from the ground to the water’s surface, and on no other', () => {
+    const l = layoutOf(POND);
+    const earth = triangles(groundOf(l).banks);
+    expect(earth.length).toBeGreaterThan(0);
+    // every corner of the earth is at the ground or at the water: a wall, plumb
+    for (const tri of earth)
+      for (const p of tri)
+        expect(
+          [0, WATER_LEVEL].some((z) => Math.abs(p[2] - z) < 1e-6),
+          `at height ${p[2]}`,
+        ).toBe(true);
+    // its area is the length of the edges that face water, times how far the water lies below
+    let edges = 0;
+    for (let ty = 0; ty < l.rows; ty++)
+      for (let tx = 0; tx < l.cols; tx++) {
+        const t = ty * l.cols + tx;
+        if (l.solid[t] || l.water[t]) continue;
+        for (const [ox, oy] of [
+          [1, 0],
+          [-1, 0],
+          [0, 1],
+          [0, -1],
+        ])
+          if (l.water[(ty + oy) * l.cols + tx + ox]) edges++;
+      }
+    // the cup's own tile is left to its collar, and is not beside the water here
+    expect(edges, 'a two by two pond has eight edges').toBe(8);
+    const total = earth.reduce((a, tri) => a + area3(tri), 0);
+    expect(total).toBeCloseTo(edges * TILE * -WATER_LEVEL, 4);
+  });
+
+  it('comes down from the sand’s edge too, so there is no gap between a bunker and the water', () => {
+    const l = layoutOf(POND);
+    const eastEdge = l.originX + 4 * TILE;
+    const walls = triangles(groundOf(l).banks).filter((tri) => tri.every((p) => Math.abs(p[0] - eastEdge) < 1e-6));
+    expect(walls.length, 'the wall between the sand and the water').toBeGreaterThan(0);
+    // and it is at the sand's own row, the fourth from the top of seven
+    const rowSouth = l.originY + 2 * TILE;
+    for (const tri of walls) for (const p of tri) expect(p[1]).toBeGreaterThanOrEqual(rowSouth - 1e-6);
+  });
+
+  it('comes down from a raised step as far as the water, the whole of the step and the drop', () => {
+    const l = layoutOf(['#######', '#..C..#', '#.....#', '#.~2..#', '#.~~..#', '#..T..#', '#######']);
+    const step = STEP * 2;
+    // the step's west face, between the water and the step, on the line between column 2 and column 3
+    const line = l.originX + 3 * TILE;
+    const walls = triangles(groundOf(l).banks).filter((tri) => tri.every((p) => Math.abs(p[0] - line) < 1e-6));
+    expect(walls.length).toBeGreaterThan(0);
+    const tops = walls.flatMap((tri) => tri.map((p) => p[2]));
+    expect(Math.max(...tops)).toBeCloseTo(step, 5);
+    expect(Math.min(...tops)).toBeCloseTo(WATER_LEVEL, 5);
   });
 });

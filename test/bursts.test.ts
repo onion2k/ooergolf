@@ -1,5 +1,6 @@
 /** The bursts of particles for what happens: a puff of grass at a stroke, confetti and sparkles at the cup, and a splash. */
 import { describe, expect, it } from 'vitest';
+import { WATER_LEVEL } from '../src/arena';
 import { cupBurst, splash, strikePuff } from '../src/bursts';
 
 describe('the bursts', () => {
@@ -13,6 +14,20 @@ describe('the bursts', () => {
       expect(e.position.slice(0, 2)).toEqual([3, 4]);
       expect(e.colour[1], 'grass is green').toBeGreaterThan(e.colour[0]);
     }
+  });
+
+  it('puffs sand from under a ball struck out of sand, as much of it, in the colour of sand and not of grass', () => {
+    const grass = strikePuff(3, 4, 0.6),
+      sand = strikePuff(3, 4, 0.6, 'sand');
+    expect(sand.reduce((a, e) => a + e.count, 0)).toBe(grass.reduce((a, e) => a + e.count, 0));
+    for (const e of sand) {
+      expect(e.position.slice(0, 2)).toEqual([3, 4]);
+      // sand: red over green over blue, warm and light; not grass, which is green over red
+      expect(e.colour[0], 'warm').toBeGreaterThan(e.colour[1]);
+      expect(e.colour[1]).toBeGreaterThan(e.colour[2]);
+      expect(e.colour[0], 'light').toBeGreaterThan(0.8);
+    }
+    expect(strikePuff(3, 4, 0.6, 'grass')).toEqual(grass);
   });
 
   it('throws confetti of many colours up out of the cup, and sparkles with it, more for a hole in one', () => {
@@ -33,7 +48,9 @@ describe('the bursts', () => {
 
   it('splashes up where the ball went in, in the colour of water', () => {
     const [s] = splash(5, 6);
-    expect(s.position).toEqual([5, 6, 0]);
+    // from the water's own surface, which lies below the grass, and falls back onto it
+    expect(s.position).toEqual([5, 6, WATER_LEVEL]);
+    expect(s.floor).toBeLessThan(WATER_LEVEL);
     expect(s.colour[2]).toBeGreaterThan(s.colour[0]);
   });
 });

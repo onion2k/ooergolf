@@ -6,12 +6,12 @@
  * where its origin is and which way it faces. What turns or runs is a part
  * of its own, in `moving`, for the game to place each frame.
  */
-import { MeshBuilder } from 'artshape-render/mesh/types';
+import { MeshBuilder, type Mesh } from 'artshape-render/mesh/types';
+import { WATER_LEVEL } from '../arena';
 import { face } from '../meshes';
 import { PALETTE, ROUGH } from './palette';
 import { PATTERN, matte, type Colour, type Model, type V3 } from './part';
 import { annulus, at, block, built, faceOut, facingSouth, frustum, roundedBox } from './shapes';
-import { seeded } from '../random';
 
 /**
  * A bumper: a round post of `radius` standing `height` on the grass, its
@@ -316,41 +316,56 @@ export function placeBlades(out: Float32Array, i: number, x: number, y: number, 
   );
 }
 
-/** How far below the grass water lies, and how wide its pale shallows are round the edge. */
-export const WATER = { drop: 0.04, shallows: 0.4 } as const;
+/**
+ * How far below the grass water lies (the game's `WATER_LEVEL`, which its earth comes down to), and how wide the
+ * foam at a pond's edge is and each of its two bands of shallows, at most.
+ */
+export const WATER = { drop: -WATER_LEVEL, foam: 0.16, band: 0.5 } as const;
+
+/** A pond: a model, with the room on its water a ripple or a sparkle has, and how wide a ring may spread. */
+export interface Pond extends Model {
+  /** The half sizes, across X and along Y, of the water a ring or a sparkle may be on: in from the foam and the shallows. */
+  free: { hx: number; hy: number };
+  /** The widest a ring may spread, which fits in `free` and is never more than a unit and a tenth. */
+  reach: number;
+}
 
 /**
- * A pond of `w` across X by `h` along Y, a hair below the grass, its origin
- * the middle of it at grass level: deep blue glossy water, pale shallows
- * round its edge, and a few ripple rings on it in `moving`, which the game
- * may pulse or leave be. The game leaves the grass out where the pond is.
+ * A pond of `w` across X by `h` along Y, its origin the middle of it at grass level, its surface `WATER.drop` below
+ * it, filling its tiles exactly: a rim of foam, two bands of shallows a step darker each, and the deep water veined
+ * in a lighter blue and glossy. The ripples are in `moving`, one fat ring of unit size that the game places, as many
+ * times as it likes, wherever and however wide and in whatever colour it likes on the water.
  */
-export function water(w: number, h: number, { seed = 1 } = {}): Model {
-  const z = -WATER.drop;
-  const sw = Math.min(WATER.shallows, w / 6, h / 6);
+export function water(w: number, h: number, { seed = 1 } = {}): Pond {
+  const z = WATER_LEVEL;
+  const { foam } = WATER;
+  const band = Math.min(WATER.band, (w - 2 * foam) / 8, (h - 2 * foam) / 8);
+  const sw = foam + 2 * band;
   const [x0, y0, x1, y1] = [-w / 2, -h / 2, w / 2, h / 2];
+  // a frame `width` wide, `from` in from the edge of the pond: the bands fit together with no gap and no overlap
+  const framed = (from: number, width: number) => built((b) => frame(b, w - 2 * from, h - 2 * from, width, z));
   const surface = built((b) =>
     face(b, [x0 + sw, y0 + sw, z], [x1 - sw, y0 + sw, z], [x1 - sw, y1 - sw, z], [x0 + sw, y1 - sw, z]),
   );
-  const shallows = built((b) => frame(b, w, h, sw, z));
-  const random = seeded(seed * 7919 + 13);
-  const rings = Math.max(2, Math.min(6, Math.round((w * h) / 16)));
-  const ripples = built((b) => {
-    for (let k = 0; k < rings; k++) {
-      const most = Math.min(1.1, w / 2 - sw - 0.15, h / 2 - sw - 0.15);
-      const r = Math.max(0.25, most * (0.45 + random() * 0.55));
-      const cx = (random() * 2 - 1) * (w / 2 - sw - r - 0.1),
-        cy = (random() * 2 - 1) * (h / 2 - sw - r - 0.1);
-      annulus(b, at(cx, cy, 0), 12, r - Math.min(0.1, r * 0.3), r, z + 0.012);
-    }
-  });
+  // a ring as wide as half its size: a band, not an outline
+  const ring = built((b) => annulus(b, at(0, 0, 0), 24, 0.55, 1, 0));
+  const free = { hx: w / 2 - foam - band, hy: h / 2 - foam - band };
   return {
     name: 'water',
     parts: [
-      { name: 'surface', mesh: surface, material: matte(PALETTE.water, ROUGH.water) },
-      { name: 'shallows', mesh: shallows, material: matte(PALETTE.waterShallow, ROUGH.water) },
+      { name: 'foam', mesh: framed(0, foam), material: matte(PALETTE.waterFoam, ROUGH.water) },
+      { name: 'shallows', mesh: framed(foam, band), material: matte(PALETTE.waterShallow, ROUGH.water) },
+      { name: 'mid', mesh: framed(foam + band, band), material: matte(PALETTE.waterMid, ROUGH.water) },
+      {
+        name: 'surface',
+        mesh: surface,
+        material: matte(PALETTE.water, ROUGH.water),
+        pattern: { kind: PATTERN.marbling, scale: 0.5, seed: (seed * 0.29) % 1, second: PALETTE.waterVein },
+      },
     ],
-    moving: [{ name: 'ripples', mesh: ripples, material: matte(PALETTE.ripple, ROUGH.water) }],
+    moving: [{ name: 'ring', mesh: ring, material: matte(PALETTE.ripple, ROUGH.water) }],
+    free,
+    reach: Math.min(1.1, free.hx, free.hy),
   };
 }
 
@@ -365,47 +380,29 @@ function frame(b: MeshBuilder, w: number, h: number, width: number, z: number) {
 }
 
 /** The bunker's lip: how high it rises above the grass, and how wide it is. */
-export const BUNKER = { lip: 0.1, lipWidth: 0.5 } as const;
+export const BUNKER = { lip: 0.1, lipWidth: 0.5, stripe: 0.75 } as const;
 
 /**
- * A bunker of `w` across X by `h` along Y, its origin the middle of it at
- * grass level: pale matte sand, speckled, flush with the grass, and a low
- * rounded lip round its edge that rises from the grass and falls to the
- * sand. The game leaves the grass out where the bunker is.
+ * A bunker of `w` across X by `h` along Y, its origin the middle of it at grass level: a bed of tiles three across,
+ * as the game's is, so it has the raked stripes, the speckled sand and the lip that the game's has. It is the
+ * showcase's, and sizes that are not whole tiles are rounded to them.
  */
 export function bunker(w: number, h: number, { seed = 1 } = {}): Model {
-  const lw = Math.min(BUNKER.lipWidth, w / 6, h / 6);
-  const [x0, y0, x1, y1] = [-w / 2, -h / 2, w / 2, h / 2];
-  const sand = built((b) =>
-    face(b, [x0 + lw, y0 + lw, 0], [x1 - lw, y0 + lw, 0], [x1 - lw, y1 - lw, 0], [x0 + lw, y1 - lw, 0]),
-  );
-  const lip = built((b) => {
-    const below: V3 = [0, 0, -100];
-    // the rectangle `inset` in from the edge, at height `z`, a corner at a time
-    const loop = (inset: number, z: number): V3[] => [
-      [x0 + inset, y0 + inset, z],
-      [x1 - inset, y0 + inset, z],
-      [x1 - inset, y1 - inset, z],
-      [x0 + inset, y1 - inset, z],
-    ];
-    const edge = loop(0, 0),
-      crest = loop(lw / 2, BUNKER.lip),
-      foot = loop(lw, 0);
-    for (let k = 0; k < 4; k++) {
-      const m = (k + 1) % 4;
-      faceOut(b, [edge[k], edge[m], crest[m], crest[k]], below);
-      faceOut(b, [crest[k], crest[m], foot[m], foot[k]], below);
+  const tile = 3;
+  const [cols, rows] = [Math.max(1, Math.round(w / tile)), Math.max(1, Math.round(h / tile))];
+  const cells: [number, number][] = [];
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) cells.push([c, r]);
+  const bed = sandBed(cells, tile, { seed });
+  // the bed's origin is a corner of it: moved to its middle
+  const shift = (mesh: Mesh): Mesh => {
+    const positions = mesh.positions.slice();
+    for (let i = 0; i < positions.length; i += 3) {
+      positions[i] -= (cols * tile) / 2;
+      positions[i + 1] -= (rows * tile) / 2;
     }
-  });
-  const grain = (s: number) => ({ kind: PATTERN.speckle, scale: 0.75, seed: s, second: PALETTE.sandGrain });
-  return {
-    name: 'bunker',
-    parts: [
-      { name: 'sand', mesh: sand, material: matte(PALETTE.sand, ROUGH.sand), pattern: grain((seed * 0.37) % 1) },
-      { name: 'lip', mesh: lip, material: matte(PALETTE.sandLip, ROUGH.sand), pattern: grain((seed * 0.53) % 1) },
-    ],
-    moving: [],
+    return { ...mesh, positions };
   };
+  return { ...bed, parts: bed.parts.map((part) => ({ ...part, mesh: shift(part.mesh) })) };
 }
 
 /**
@@ -432,8 +429,15 @@ export function sandBed(
   const has = new Set(cells.map(([c, r]) => `${c},${r}`));
   const sandAt = (c: number, r: number) => has.has(`${c},${r}`);
   const below: V3 = [0, 0, -100];
+  // the sand in its two tones of stripe, and the lip in its two faces: the outside to the sun and the inside in its shade
   const sandMesh = new MeshBuilder(),
-    lipMesh = new MeshBuilder();
+    rakedMesh = new MeshBuilder(),
+    lipMesh = new MeshBuilder(),
+    innerMesh = new MeshBuilder();
+  // stripes are laid across the whole of the bed by where they are, a stripe wide each way from its origin, so they run
+  // straight on from one tile to the next and are never the same tone as the one beside them
+  const stripes = Math.max(1, Math.round(tile / BUNKER.stripe)),
+    stripe = tile / stripes;
   // a point of the bed raised onto the ground under it, its own height above the ground kept
   const lift = (p: V3): V3 => [p[0], p[1], height(p[0], p[1]) + p[2]];
   // the point `s` of the way from one to another, across the ground
@@ -458,12 +462,19 @@ export function sandBed(
       [x0 + f * inW, y1 - f * inN, z],
     ];
     const [p0, p1, , p3] = loop(1, 0);
-    for (let j = 0; j < pieces; j++)
+    // each stripe of the tile, as far as the sand goes: in from the lip on the sides that have one, so the first and last
+    // of a lipped tile are narrower than the rest, and run on under the lip as a raked bunker's do
+    for (let j = 0; j < stripes; j++) {
+      const yLo = Math.max(p0[1], y0 + j * stripe),
+        yHi = Math.min(p3[1], y0 + (j + 1) * stripe);
+      if (yHi - yLo < 1e-9) continue;
+      const mesh = (r * stripes + j) % 2 ? rakedMesh : sandMesh;
       for (let i = 0; i < pieces; i++) {
-        const at = (u: number, v: number): V3 => lift([p0[0] + (p1[0] - p0[0]) * u, p0[1] + (p3[1] - p0[1]) * v, 0]);
-        const [u0, u1, v0, v1] = [i / pieces, (i + 1) / pieces, j / pieces, (j + 1) / pieces];
-        face(sandMesh, at(u0, v0), at(u1, v0), at(u1, v1), at(u0, v1));
+        const [u0, u1] = [i / pieces, (i + 1) / pieces];
+        const [xa, xb] = [p0[0] + (p1[0] - p0[0]) * u0, p0[0] + (p1[0] - p0[0]) * u1];
+        face(mesh, lift([xa, yLo, 0]), lift([xb, yLo, 0]), lift([xb, yHi, 0]), lift([xa, yHi, 0]));
       }
+    }
     const edge = loop(0, 0),
       crest = loop(0.5, BUNKER.lip),
       foot = loop(1, 0);
@@ -489,7 +500,7 @@ export function sandBed(
         const [c0, c1] = [lift(between(crest[k], crest[m], s0)), lift(between(crest[k], crest[m], s1))];
         const [f0, f1] = [lift(between(foot[k], foot[m], s0)), lift(between(foot[k], foot[m], s1))];
         faceOut(lipMesh, [e0, e1, c1, c0], below);
-        faceOut(lipMesh, [c0, c1, f1, f0], below);
+        faceOut(innerMesh, [c0, c1, f1, f0], below);
       }
       // at each end, open to more sand along it whose own side here has no lip: the lip stops, and its end is shown
       for (const [end, dir] of [
@@ -506,7 +517,8 @@ export function sandBed(
       }
     }
   }
-  const grain = (s: number) => ({ kind: PATTERN.speckle, scale: 0.75, seed: s, second: PALETTE.sandGrain });
+  // a fine grain, a shade darker than the sand, and not the rash of dark specks it was
+  const grain = (s: number) => ({ kind: PATTERN.speckle, scale: 1.1, seed: s, second: PALETTE.sandGrain });
   return {
     name: 'bunker',
     parts: [
@@ -517,10 +529,22 @@ export function sandBed(
         pattern: grain((seed * 0.37) % 1),
       },
       {
+        name: 'raked',
+        mesh: rakedMesh.build(),
+        material: matte(PALETTE.sandRaked, ROUGH.sand),
+        pattern: grain((seed * 0.41) % 1),
+      },
+      {
         name: 'lip',
         mesh: lipMesh.build(),
         material: matte(PALETTE.sandLip, ROUGH.sand),
         pattern: grain((seed * 0.53) % 1),
+      },
+      {
+        name: 'lipInner',
+        mesh: innerMesh.build(),
+        material: matte(PALETTE.sandLipInner, ROUGH.sand),
+        pattern: grain((seed * 0.59) % 1),
       },
     ],
     moving: [],

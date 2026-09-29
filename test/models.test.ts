@@ -47,7 +47,7 @@ import {
   type Model,
   type Part,
 } from '../src/models';
-import { BALL, KIND_RADIUS } from '../src/arena';
+import { BALL, KIND_RADIUS, WATER_LEVEL } from '../src/arena';
 import { SCALE } from '../src/scenery';
 import { KINDS, ROUGH } from '../src/turf';
 
@@ -110,7 +110,9 @@ describe('a bed of sand', () => {
     expect([b.min[0], b.max[0], b.min[1], b.max[1]].map((v) => +v.toFixed(5))).toEqual([0, 15, 0, 6]);
     expect(b.min[2]).toBeCloseTo(0, 5);
     expect(b.max[2]).toBeCloseTo(BUNKER.lip, 5);
-    const raised = points(partNamed(m, 'lip').mesh).filter((p) => p[2] > 1e-6);
+    const raised = [...points(partNamed(m, 'lip').mesh), ...points(partNamed(m, 'lipInner').mesh)].filter(
+      (p) => p[2] > 1e-6,
+    );
     for (const [x, y] of raised) {
       expect(Math.abs(x - 3) < 0.3 && y > 3.6 && y < 5.4, `a lip between two tiles of the long row, at ${x},${y}`).toBe(
         false,
@@ -136,15 +138,59 @@ describe('a bed of sand', () => {
     const height = (x: number, y: number) => 0.1 * x + 0.05 * y * y;
     const m = sandBed(BUNKER_TILES, 3, { height, pieces: 3 });
     for (const [x, y, z] of points(partNamed(m, 'sand').mesh)) expect(z).toBeCloseTo(height(x, y), 5);
-    for (const [x, y, z] of points(partNamed(m, 'lip').mesh)) {
-      const above = z - height(x, y);
-      expect(above, `at ${x},${y}`).toBeGreaterThan(-1e-5);
-      expect(above).toBeLessThan(BUNKER.lip + 1e-5);
+    for (const lip of ['lip', 'lipInner'])
+      for (const [x, y, z] of points(partNamed(m, lip).mesh)) {
+        const above = z - height(x, y);
+        expect(above, `${lip} at ${x},${y}`).toBeGreaterThan(-1e-5);
+        expect(above).toBeLessThan(BUNKER.lip + 1e-5);
+      }
+    // cut finer across each stripe, three pieces for every one flat
+    const pieces = (bed: Model) =>
+      partNamed(bed, 'sand').mesh.indices.length + partNamed(bed, 'raked').mesh.indices.length;
+    expect(pieces(m)).toBe(pieces(sandBed(BUNKER_TILES, 3)) * 3);
+  });
+
+  it('is raked: stripes 0.75 wide in two tones, alternating, laid by where they are so they run on across tiles', () => {
+    expect(BUNKER.stripe).toBe(0.75);
+    for (const opts of [{}, { height: (x: number, y: number) => 0.1 * x + 0.05 * y * y, pieces: 3 }]) {
+      const m = sandBed(BUNKER_TILES, 3, opts);
+      const centres = (part: Part) => {
+        const p = part.mesh.positions,
+          ix = part.mesh.indices,
+          ys: number[] = [];
+        for (let i = 0; i < ix.length; i += 3)
+          ys.push((p[ix[i] * 3 + 1] + p[ix[i + 1] * 3 + 1] + p[ix[i + 2] * 3 + 1]) / 3);
+        return ys;
+      };
+      const plain = centres(partNamed(m, 'sand')),
+        raked = centres(partNamed(m, 'raked'));
+      expect(plain.length).toBeGreaterThan(0);
+      expect(raked.length).toBeGreaterThan(0);
+      // the stripe a triangle is in is the same whichever tile it is of: even ones plain, odd ones raked
+      for (const y of plain) expect(Math.floor(y / BUNKER.stripe) % 2, `plain at ${y}`).toBe(0);
+      for (const y of raked) expect(Math.floor(y / BUNKER.stripe) % 2, `raked at ${y}`).toBe(1);
+      expect(raked.length / plain.length, 'about half each').toBeGreaterThan(0.6);
+      expect(raked.length / plain.length).toBeLessThan(1.6);
+      // and two tones: the raked a little darker than the plain
+      expect(luminance(partNamed(m, 'raked').material)).toBeLessThan(luminance(partNamed(m, 'sand').material));
+      expect(luminance(partNamed(m, 'raked').material)).toBeGreaterThan(
+        0.75 * luminance(partNamed(m, 'sand').material),
+      );
     }
-    // cut finer, a sand triangle nine times over for every one flat
-    expect(partNamed(m, 'sand').mesh.indices.length).toBe(
-      partNamed(sandBed(BUNKER_TILES, 3), 'sand').mesh.indices.length * 9,
-    );
+  });
+
+  it('has a lip lit on its outside and shaded on its inside, its crest lighter than the sand, and a calm grain', () => {
+    const m = sandBed(BUNKER_TILES, 3);
+    const l = (name: string) => luminance(partNamed(m, name).material);
+    expect(l('lip'), 'the outer face, to the sun').toBeGreaterThan(l('lipInner'));
+    expect(l('lip'), 'lighter than the sand it rims').toBeGreaterThan(l('sand'));
+    const sand = partNamed(m, 'sand');
+    const grain = luminance(sand.pattern!.second);
+    // a grain a little darker than the sand, within a fifth of its brightness, and not a rash of dark specks
+    expect(grain).toBeLessThan(l('sand'));
+    expect(grain).toBeGreaterThan(0.8 * l('sand'));
+    expect(partNamed(m, 'raked').pattern?.kind).toBe(PATTERN.speckle);
+    expect(partNamed(m, 'lip').pattern?.kind).toBe(PATTERN.speckle);
   });
 
   it("stays within its budget for the course's bunker", () => {
@@ -165,10 +211,14 @@ const OPEN = new Set([
   'door',
   'collar',
   'surface',
+  'foam',
   'shallows',
-  'ripples',
+  'mid',
+  'ring',
   'sand',
+  'raked',
   'lip',
+  'lipInner',
   'belt',
   'frame',
   'chevrons',
@@ -189,6 +239,23 @@ function volume(mesh: Mesh): number {
       p[a + 2] * (p[b] * p[c + 1] - p[b + 1] * p[c]);
   }
   return v / 6;
+}
+
+/** How bright a colour is: the weights the eye gives red, green and blue. */
+function luminance(c: readonly number[]): number {
+  return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+}
+
+/** How much area a mesh's triangles cover, seen from above: flat parts, so the sum of their footprints. */
+function areaOf(mesh: Mesh): number {
+  const p = mesh.positions,
+    ix = mesh.indices;
+  let area = 0;
+  for (let i = 0; i < ix.length; i += 3) {
+    const [a, b, c] = [ix[i] * 3, ix[i + 1] * 3, ix[i + 2] * 3];
+    area += Math.abs((p[b] - p[a]) * (p[c + 1] - p[a + 1]) - (p[c] - p[a]) * (p[b + 1] - p[a + 1])) / 2;
+  }
+  return area;
 }
 
 function partNamed(m: Model, name: string): Part {
@@ -773,22 +840,53 @@ describe('the obstacles are drawn to exactly the size the physics gives them', (
     [3, 3],
     [12, 6],
   ]) {
-    it(`water of ${w} by ${h}, a hair below the grass, its ripples on it`, () => {
+    it(`water of ${w} by ${h}, well below the grass, in bands from foam to deep, veined`, () => {
       const m = water(w, h);
+      expect(m.parts.map((p) => p.name)).toEqual(['foam', 'shallows', 'mid', 'surface']);
       const b = bounds(m.parts);
+      // exactly the pond's tiles, and no further: what is seen is what the ball falls into
       expect(b.min[0]).toBeCloseTo(-w / 2, 5);
       expect(b.max[0]).toBeCloseTo(w / 2, 5);
       expect(b.min[1]).toBeCloseTo(-h / 2, 5);
       expect(b.max[1]).toBeCloseTo(h / 2, 5);
-      expect(b.max[2]).toBeCloseTo(-WATER.drop, 5);
-      expect(b.max[2]).toBeLessThan(0);
-      const rip = bounds(m.moving);
-      expect(rip.min[0]).toBeGreaterThan(-w / 2);
-      expect(rip.max[0]).toBeLessThan(w / 2);
-      expect(rip.min[1]).toBeGreaterThan(-h / 2);
-      expect(rip.max[1]).toBeLessThan(h / 2);
-      expect(rip.max[2]).toBeLessThan(0);
-      expect(rip.min[2]).toBeGreaterThan(b.max[2]);
+      expect(WATER.drop).toBeCloseTo(-WATER_LEVEL, 9);
+      expect(b.max[2]).toBeCloseTo(WATER_LEVEL, 5);
+      expect(b.min[2]).toBeCloseTo(WATER_LEVEL, 5);
+      // each band a step darker than the one outside it
+      const l = (name: string) => luminance(partNamed(m, name).material);
+      expect(l('foam')).toBeGreaterThan(l('shallows'));
+      expect(l('shallows')).toBeGreaterThan(l('mid'));
+      expect(l('mid')).toBeGreaterThan(l('surface'));
+      // the bands fit together, with no gap and no overlap: their areas are the pond's
+      let area = 0;
+      for (const part of m.parts) area += areaOf(part.mesh);
+      expect(area).toBeCloseTo(w * h, 4);
+      // the foam is a thin edge, and the deep water is most of a pond that is big enough for it to be
+      const foam = areaOf(partNamed(m, 'foam').mesh);
+      expect(foam).toBeCloseTo(w * h - (w - 2 * WATER.foam) * (h - 2 * WATER.foam), 4);
+      // veined in a lighter blue, and glossy
+      const deep = partNamed(m, 'surface');
+      expect(deep.pattern?.kind).toBe(PATTERN.marbling);
+      expect(luminance(deep.pattern!.second)).toBeGreaterThan(luminance(deep.material));
+      expect(deep.material[3]).toBeLessThan(0.2);
+    });
+
+    it(`the ripples of water of ${w} by ${h}: one fat ring of unit size, and room for it inside the deeper water`, () => {
+      const m = water(w, h);
+      expect(m.moving.map((p) => p.name)).toEqual(['ring']);
+      const radii = points(m.moving[0].mesh).map(([x, y]) => Math.hypot(x, y));
+      // a ring, and not an outline: its inner edge is at about half its outer, so it is a wide band
+      expect(Math.max(...radii)).toBeCloseTo(1, 5);
+      expect(Math.min(...radii)).toBeGreaterThan(0.45);
+      expect(Math.min(...radii)).toBeLessThan(0.7);
+      for (const [, , z] of points(m.moving[0].mesh)) expect(z).toBeCloseTo(0, 9);
+      // where a ring, or a sparkle, may lie: in from the foam and the shallows, and the biggest a ring may be
+      expect(m.free.hx).toBeGreaterThan(0.5);
+      expect(m.free.hx).toBeLessThan(w / 2 - WATER.foam);
+      expect(m.free.hy).toBeLessThan(h / 2 - WATER.foam);
+      expect(m.reach).toBeGreaterThan(0.3);
+      expect(m.reach).toBeLessThanOrEqual(Math.min(m.free.hx, m.free.hy) + 1e-9);
+      expect(m.reach).toBeLessThanOrEqual(1.1);
     });
 
     it(`a bunker of ${w} by ${h}, flush with the grass, with a slight lip, speckled`, () => {

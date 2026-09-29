@@ -17,7 +17,8 @@
  * `test-results/`. Look at all three before deciding which is right.
  */
 import { expect, test, type Page } from '@playwright/test';
-import { DOWNS, type HoleDef } from '../src/course';
+import { layoutOf } from '../src/arena';
+import { COURSE, DOWNS, type HoleDef } from '../src/course';
 import { glint } from '../src/glints';
 import { drag, start, watch } from './game';
 
@@ -242,6 +243,85 @@ test.describe('what it looks like', () => {
     // half a second of game time on: the same place, the grass bent another way, and the gust gone further downwind
     await page.evaluate(() => window.game!.step(30));
     await expect(page.locator('#view')).toHaveScreenshot('grass-later.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
+  /** The middle of the first hole's pond, by name, in world units. */
+  const pondOf = (name: string) => {
+    const hole = COURSE.find((h) => h.name === name)!;
+    const l = layoutOf(hole.map);
+    let x = 0,
+      y = 0,
+      n = 0;
+    for (let t = 0; t < l.cols * l.rows; t++)
+      if (l.water[t]) {
+        x += l.originX + ((t % l.cols) + 0.5) * 3;
+        y += l.originY + (Math.floor(t / l.cols) + 0.5) * 3;
+        n++;
+      }
+    return { x: x / n, y: y / n };
+  };
+
+  test('the water, close to: sunk below the grass in its earth, foam and bands, veined, with its rings spreading and the sun on it', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true });
+    const at = pondOf('Pond');
+    await page.evaluate((c) => {
+      const g = window.game!;
+      g.startHole(g.content().holes.findIndex((h) => h.name === 'Pond'));
+      g.step(90);
+      // on to a moment the sun is on the water in two places at least, so the picture has its sparkles in it
+      for (let f = 0; f < 240 && g.motions().sparkles < 2; f++) g.step(1);
+      g.look(c.x, c.y - 6, 22);
+      g.step(1);
+    }, at);
+    expect((await page.evaluate(() => window.game!.motions())).sparkles, 'the sun on the water').toBeGreaterThanOrEqual(
+      2,
+    );
+    await hideStats(page);
+    await expect(page.locator('#view')).toHaveScreenshot('water.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
+  test('a ball splashing into the pond, a third of a second after: the ring spreading from where it went in', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true });
+    const at = pondOf('Pond');
+    await page.evaluate((c) => {
+      const g = window.game!;
+      g.startHole(g.content().holes.findIndex((h) => h.name === 'Pond'));
+      g.step(30);
+      g.shoot(Math.PI / 2 + 0.25, 0.45);
+      for (let f = 0; f < 600 && g.state().strokes < 2; f++) g.step(1);
+      g.step(20);
+      g.look(c.x, c.y - 4, 24);
+      g.step(1);
+    }, at);
+    expect((await page.evaluate(() => window.game!.motions())).splash, 'a ring').toBeGreaterThan(0.3);
+    await hideStats(page);
+    await expect(page.locator('#view')).toHaveScreenshot('splash.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
+  test('the sand, close to: raked in stripes, its lip lit on the outside and shaded within', async ({ page }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true });
+    await page.evaluate(() => {
+      const g = window.game!;
+      g.startHole(g.content().holes.findIndex((h) => h.name === 'The Bunker'));
+      g.step(90);
+      const { sand } = g.content();
+      const x = sand.reduce((a, s) => a + s.x, 0) / sand.length,
+        y = sand.reduce((a, s) => a + s.y, 0) / sand.length;
+      g.look(x, y - 6, 22);
+      g.step(1);
+    });
+    await hideStats(page);
+    await expect(page.locator('#view')).toHaveScreenshot('sand.png', TOLERANCE);
     expect(problems).toEqual([]);
   });
 

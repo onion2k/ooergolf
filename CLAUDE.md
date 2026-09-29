@@ -221,8 +221,9 @@ change meant to move it, and the commit says why. Look at every picture.
   ball at rest toward flat, as a coin, so its turn is no good for this),
   and the ball wears a band so the roll shows; `src/sway.ts` flies the flag
   down the hole's wind and leans the trees with it, in the renderer's own
-  gusts, and swells the ripples; `src/bursts.ts` is the
-  particles for a stroke, the cup and water. The particles move only as a
+  gusts, and the ripples that spread over a pond (`ripples`, `ringPlace`)
+  and the ring where a ball went in (`splashRing`); `src/bursts.ts` is the
+  particles for a stroke (grass, or sand from a bunker), the cup and water. The particles move only as a
   frame is drawn, so a test that pictures them steps a frame at a time, and
   their gravity is set on the renderer in world units (30, as Miner has).
   And everything answers, as `LOOK.md`'s stage 7 has it: the game tells of
@@ -231,7 +232,9 @@ change meant to move it, and the commit says why. Look at every picture.
   a slope or a belt, and one knock in `KNOCK.apart` unless a harder one),
   and `src/squash.ts` flattens the drawn ball against what it met and
   springs it round again within a tenth of a second; `waggle` in `sway.ts`
-  swings the flag as a ball drops and `flash` in `glints.ts` lights the gold;
+  swings the flag as a ball drops and `flash` in `glints.ts` lights the gold,
+  and `sparkle` there twinkles the sun on the water (at most six on a hole,
+  in the effects the gold leaves free);
   `src/pulse.ts` swells the aim's dots while a drag is held; and the
   camera's `glide` eases it to each new tee.
 - `src/models.ts` and `src/models/` are the models: the cup with its
@@ -240,9 +243,17 @@ change meant to move it, and the commit says why. Look at every picture.
   ball (`golfBall`, smooth, with its band), each rounded and smooth-shaded
   from `lathe` and the other shapes in `models/shapes.ts`; the obstacles at the sizes the physics will give them
   (bumper, barrier, windmill with its turning blades, water, bunker,
-  conveyor), with `sandBed` for a hole's sand of any shape, the lip only
-  where it meets grass, which the game draws where `bunker` is only the
-  showcase's; and the decoration, moulded smooth from `models/smooth.ts`:
+  conveyor). Water is a pond `WATER_LEVEL` (0.3) below the grass, in the
+  earth `ground.ts` brings down to it from every edge of grass or sand that
+  meets it, in a rim of foam, two bands of shallows and deep water veined
+  in a lighter blue, filling its tiles exactly; its `moving` part is one
+  fat ring of unit size, which the scene places as three ripples a pond
+  and one where a ball went in, each coloured from its fade by a tint
+  written every frame. `sandBed` is a hole's sand of any shape, raked in
+  stripes 0.75 wide in two tones laid by world position so they run on
+  across tiles, with the lip only where it meets grass, lit outside and
+  shaded within, which the game draws where `bunker` is only the
+  showcase's, built from it; and the decoration, moulded smooth from `models/smooth.ts`:
   puffball trees with a lighter crown, stacked pines rounded at every rim,
   pebbles, rounded hedges, flowering bushes and round posts and strings.
   Each returns its parts, a mesh and a
@@ -323,7 +334,8 @@ change meant to move it, and the commit says why. Look at every picture.
   best score by name. A step the
   ball rolls up; three (1.2) are a wall to it. Water is a floor below the
   world's bottom: a ball in it is lost, a stroke is added, and it is put back
-  where it was struck from. `src/obstacles.ts` says where a barrier, a
+  where it was struck from; what is drawn is a surface at `WATER_LEVEL`,
+  which the ball never meets. `src/obstacles.ts` says where a barrier, a
   windmill's gate and a belt are at any moment of game time, as the physics'
   boxes and belts. `arena.ts` reads a map into a layout, and holds
   the kinds of body, the hardest shot and how the ball rolls. Each hole is a
@@ -415,7 +427,9 @@ and far, and the wind; `bladesAround(x, y, radius)` how many the GPU drew
 with roots there; `motions()` where each of
 the things that answer is (the ball's squash, the flag's waggle, the gold's
 flash and the glints the last frame lit, the camera's glide and the aim's
-pulse), read back from what the last frame placed. `?rung=N` on the page puts the picture
+pulse, the sparkles of the water and where on the page each was drawn, how
+wide the ring is where a ball went into the water, and what the last stroke
+threw up, sand or grass), read back from what the last frame placed. `?rung=N` on the page puts the picture
 on a rung and holds it; paused, the governor never moves it, so pictures are
 always taken at the top rung unless a test asks. In unit tests, `game.place(x, y)` puts the
 ball down at a lie.

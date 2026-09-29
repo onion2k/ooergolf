@@ -16,7 +16,7 @@ export type { Colour, Material, Model, Part, Pattern, V3 } from './models/part';
 export { PATTERN, bounds, group, triangles } from './models/part';
 export { FLAG_COLOURS, FLOWER_COLOURS, PALETTE, PENNANT_COLOURS, ROUGH } from './models/palette';
 export { CUP, collar, cup, flag, golfBall, teeMarkers } from './models/course';
-export type { Conveyor, Footprint, Windmill } from './models/obstacles';
+export type { Conveyor, Footprint, Pond, Windmill } from './models/obstacles';
 export {
   BUNKER,
   WATER,
@@ -42,7 +42,8 @@ export { bunting, fence, flowers, hedge, rock, tree } from './models/decor';
  * turned just finely enough to be shaded round. The decoration's were set
  * anew when it was moulded smooth, as enough round its edge to read round
  * from the tee and no more: a bloom a few pixels across from the far view is
- * one lobed ball, not five. The flowers carry their blooms on stems now, up out of
+ * one lobed ball, not five. The sand is raked in stripes a tile has four of, two triangles each, and a bunker that
+ * is twenty-five tiles is three hundred. The flowers carry their blooms on stems now, up out of
  * the long grass, forty triangles more on the fullest clump.
  */
 export const BUDGET = {
@@ -56,8 +57,8 @@ export const BUDGET = {
   barrier: 44,
   windmill: 260,
   water: 160,
-  bunker: 30,
-  'sand bed': 120,
+  bunker: 300,
+  'sand bed': 140,
   conveyor: 120,
   tree: 860,
   hedge: 300,

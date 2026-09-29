@@ -6,6 +6,7 @@
  * drawn by the GPU and are nothing to the game.
  */
 import type { Emit } from 'artshape-render/game/particles';
+import { WATER_LEVEL } from './arena';
 
 /** The confetti's colours: the bright plastic of the course. */
 const CONFETTI: [number, number, number][] = [
@@ -16,8 +17,11 @@ const CONFETTI: [number, number, number][] = [
   [1, 0.45, 0.8],
 ];
 
-/** A puff of grass from under the ball at (x, y), struck at `power` of the hardest shot. */
-export function strikePuff(x: number, y: number, power: number): Emit[] {
+/** The colour of what a stroke throws up from under the ball: grass, or sand where the ball lay in a bunker. */
+const PUFF = { grass: [0.3, 0.75, 0.25], sand: [0.96, 0.82, 0.52] } as const;
+
+/** A puff from under the ball at (x, y), struck at `power` of the hardest shot: grass, or sand from a bunker. */
+export function strikePuff(x: number, y: number, power: number, ground: 'grass' | 'sand' = 'grass'): Emit[] {
   return [
     {
       position: [x, y, 0.1],
@@ -28,7 +32,7 @@ export function strikePuff(x: number, y: number, power: number): Emit[] {
       lifeSpread: 0.2,
       size: 0.12,
       growth: 0.3,
-      colour: [0.3, 0.75, 0.25],
+      colour: [...PUFF[ground]],
       alpha: 0.9,
       gravity: 1,
       floor: 0,
@@ -74,7 +78,8 @@ export function cupBurst(x: number, y: number, holeInOne: boolean): Emit[] {
 export function splash(x: number, y: number): Emit[] {
   return [
     {
-      position: [x, y, 0],
+      // from the water's own surface, which lies below the grass, and falling back onto it
+      position: [x, y, WATER_LEVEL],
       velocity: [0, 0, 9],
       spread: 5,
       count: 60,
@@ -85,7 +90,7 @@ export function splash(x: number, y: number): Emit[] {
       colour: [0.75, 0.9, 1],
       alpha: 0.8,
       gravity: 1,
-      floor: -0.1,
+      floor: WATER_LEVEL - 0.1,
     },
   ];
 }

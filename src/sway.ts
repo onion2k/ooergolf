@@ -44,7 +44,77 @@ export function waggle(since: number): number {
   return WAGGLE.most * (1 - tau) ** 2 * Math.sin(2 * Math.PI * WAGGLE.often * since);
 }
 
-/** How big a pond's ripples are at time `t`, against their drawn size, each pond by its own `seed`. */
-export function ripple(t: number, seed: number): number {
-  return 1 + 0.12 * Math.sin(t * 1.3 + seed * 1.9);
+/**
+ * How the ripples on a pond move: each is born small and bright at a place of its own, spreads to its full size as it
+ * fades to the water's colour, and is gone before it is born again somewhere else, so a place changing is never seen.
+ * `each` are on a pond at once, at different points of their lives, so the water is never still.
+ */
+export const RIPPLES = { period: 3.5, each: 3 } as const;
+
+/** A hash of three integers, a number from nought to one: chance from a place and a time and never from a generator. */
+function unit(a: number, b: number, c: number): number {
+  let h = Math.imul(a | 0, 0x27d4eb2d) ^ Math.imul(b | 0, 0x165667b1) ^ Math.imul(c | 0, 0x9e3779b1);
+  h = Math.imul(h ^ (h >>> 15), 0x85ebca6b);
+  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+
+/** A ripple at a moment. The functions here write into `out` when they are given one, so a frame makes nothing. */
+export interface Ripple {
+  u: number;
+  v: number;
+  grow: number;
+  fade: number;
+}
+
+/**
+ * Ripple `k` of a pond called `seed` at time `t`: where it is, as a share of the room on the water from minus one to
+ * one across and along (`u`, `v`); how far it has grown, from a small ring toward one; and how much of its brightness
+ * is left, from one to nought at the end of its life.
+ */
+export function ripples(t: number, seed: number, k: number, out: Ripple = { u: 0, v: 0, grow: 0, fade: 0 }): Ripple {
+  const x = t / RIPPLES.period + k / RIPPLES.each;
+  const cycle = Math.floor(x),
+    life = x - cycle;
+  out.u = unit(seed, k, cycle) * 2 - 1;
+  out.v = unit(seed + 7919, k, cycle) * 2 - 1;
+  out.grow = 0.2 + 0.8 * (1 - (1 - life) ** 2);
+  out.fade = (1 - life) ** 1.6;
+  return out;
+}
+
+/**
+ * Where a ripple lies on a pond with room `free` (its half sizes across and along, in from its foam and shallows), its
+ * biggest ring `reach` across, and how wide it is now: its middle from the pond's, so that the whole of the ring is
+ * on the water at every size, and its radius.
+ */
+export function ringPlace(
+  free: { hx: number; hy: number },
+  reach: number,
+  ripple: { u: number; v: number; grow: number },
+  out: { x: number; y: number; radius: number } = { x: 0, y: 0, radius: 0 },
+): { x: number; y: number; radius: number } {
+  const radius = Math.min(reach, free.hx, free.hy) * ripple.grow;
+  out.x = ripple.u * (free.hx - radius);
+  out.y = ripple.v * (free.hy - radius);
+  out.radius = radius;
+  return out;
+}
+
+/** The ring that spreads where a ball went into the water: how long it lasts, in seconds, and how wide it grows. */
+export const SPLASH_RING = { lasts: 1.2, reach: 1.6 } as const;
+
+/**
+ * The ring `since` seconds after a ball went into the water: how far it has grown, of its reach, and how bright it
+ * still is. Bright and small at once, wide and gone at `lasts`, exactly; nothing before or after.
+ */
+export function splashRing(since: number, out: { grow: number; fade: number } = { grow: 0, fade: 0 }) {
+  if (!(since >= 0) || since >= SPLASH_RING.lasts) {
+    out.grow = out.fade = 0;
+    return out;
+  }
+  const life = since / SPLASH_RING.lasts;
+  out.grow = 0.15 + 0.85 * (1 - (1 - life) ** 2);
+  out.fade = (1 - life) ** 1.5;
+  return out;
 }

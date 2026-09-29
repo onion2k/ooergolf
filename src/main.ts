@@ -8,7 +8,7 @@
 import { createContext } from 'artshape-render/gpu/context';
 import { LightPool } from 'artshape-render/game/lights';
 import { GameRenderer, antialiasFor } from 'artshape-render/game/renderer';
-import { BALL, HARDEST_SHOT, KIND_RADIUS, heightAt, rollsFor } from './arena';
+import { BALL, HARDEST_SHOT, KIND_RADIUS, heightAt, onSand, rollsFor } from './arena';
 import { CameraRig } from './camera';
 import { CLUBS } from './clubs';
 import { createApi } from './debug';
@@ -25,7 +25,7 @@ import { Scene, boxOf } from './scene';
 import { clearings } from './scenery';
 import { cupBurst, splash, strikePuff } from './bursts';
 import { Gesture } from './gesture';
-import { flash, glint } from './glints';
+import { SPARKLE, flash, glint } from './glints';
 import { Squash, squashInto, squashOf } from './squash';
 import { waggle } from './sway';
 import { EFFECT_STRIDE } from 'artshape-render/game/renderer';
@@ -132,9 +132,10 @@ async function main() {
   /**
    * What the last frame drew of what answers, read back from what was placed,
    * for the test API: the ball's squash, the nearest aim dot's swell, and how
-   * many glints of the gold were lit.
+   * many glints of the gold were lit, and how many sparkles of the water, and
+   * what the last stroke threw up.
    */
-  const drawn = { squash: 0, pulse: 0, glints: 0 };
+  const drawn = { squash: 0, pulse: 0, glints: 0, sparkles: 0, puff: null as 'sand' | 'grass' | null };
   /** Whether the camera has been put on a hole yet: the first has nowhere to glide from. */
   let looked = false;
   /** The grass of the hole being grown, which the first frame waits for so it is never drawn bare. */
@@ -165,7 +166,10 @@ async function main() {
     },
     struck(power, x, y) {
       hud.setStrokes(game?.strokes ?? 0);
-      for (const e of strikePuff(x, y, power)) renderer.emit(e);
+      // sand from a ball that lay in a bunker, and grass from any other
+      const ground = game && onSand(game.layout, x, y) ? 'sand' : 'grass';
+      drawn.puff = ground;
+      for (const e of strikePuff(x, y, power, ground)) renderer.emit(e);
     },
     // knocked off the rail, a post or the ground it dropped onto: squashed along it, and sprung back
     knocked(hard, _x, _y, dx, dy, dz) {
@@ -176,6 +180,8 @@ async function main() {
       hud.setStrokes(game?.strokes ?? 0);
       hud.splash();
       squash.clear();
+      // a splash up, and a ring spreading over the water from where it went in
+      if (game) scene.splashedAt(x, y, game.t);
       for (const e of splash(x, y)) renderer.emit(e);
     },
     // in the cup: confetti out of it, the flag waggling and its gold flashing, from the moment it dropped
@@ -287,7 +293,11 @@ async function main() {
     // the nearest dot's size, as it was placed: nought for none
     drawn.pulse = dots ? scene.aim[0] - 1 : 0;
     if (dots) renderer.tint(1, scene.aimLooks);
-    scene.writeMoving(played.t).forEach((m, k) => renderer.move(2 + k, m.matrices, m.count));
+    scene.writeMoving(played.t).forEach((m, k) => {
+      renderer.move(2 + k, m.matrices, m.count);
+      // what is coloured by game time, as the rings on the water fade, has its colours written again each frame
+      if (m.looks) renderer.tint(2 + k, m.looks);
+    });
     // the grass's wind and its track keep game time, as everything else that moves does
     renderer.time = played.t;
     shine();
@@ -308,40 +318,58 @@ async function main() {
       [cup.x, cup.y, on(cup.x, cup.y) + 8.75],
     ];
   };
-  /** Room for a glint at every place the gold is, which a flash lights all at once: as many as the renderer takes. */
+  /** Room for a glint at every place the gold is, which a flash lights all at once, and the sparkles of the water after them. */
   const glintQuad = new Float32Array(EFFECT_STRIDE * EFFECT_CAPACITY);
-  /** A glint, `brightness` from 0 to 1, at quad `k`, where (x, y, z) is on the screen. */
-  function glow(k: number, x: number, y: number, z: number, brightness: number) {
+  /** Where the water's sparkles are this frame, four numbers each: written into, never made. */
+  const sparkQuads = new Float32Array(SPARKLE.most * 4);
+  /** How a glow looks: its half size on the screen, how bright at most, its colour, and how hard its edge falls off. */
+  interface Glow {
+    size: number;
+    power: number;
+    colour: [number, number, number];
+    falloff: number;
+  }
+  /** The gold's: big, warm and star-shaped. The sun on the water is small, cool and sharp, and there are several at once. */
+  const GOLD: Glow = { size: 0.07, power: 3.5, colour: [1, 0.93, 0.7], falloff: 2.2 };
+  const SUN: Glow = { size: 0.028, power: 3.2, colour: [0.85, 0.96, 1], falloff: 3 };
+  /** A glow, `brightness` from 0 to 1, at quad `k`, where (x, y, z) is on the screen. */
+  function glow(k: number, x: number, y: number, z: number, brightness: number, look: Glow = GOLD) {
     const m = cam.viewProjection;
     const w = m[3] * x + m[7] * y + m[11] * z + m[15];
     const o = k * EFFECT_STRIDE;
     glintQuad[o] = (m[0] * x + m[4] * y + m[8] * z + m[12]) / w;
     glintQuad[o + 1] = (m[1] * x + m[5] * y + m[9] * z + m[13]) / w;
-    glintQuad[o + 2] = 0.07 * brightness;
-    glintQuad[o + 3] = 3.5 * brightness;
-    glintQuad[o + 4] = 1;
-    glintQuad[o + 5] = 0.93;
-    glintQuad[o + 6] = 0.7;
-    glintQuad[o + 7] = 2.2;
+    glintQuad[o + 2] = look.size * brightness;
+    glintQuad[o + 3] = look.power * brightness;
+    glintQuad[o + 4] = look.colour[0];
+    glintQuad[o + 5] = look.colour[1];
+    glintQuad[o + 6] = look.colour[2];
+    glintQuad[o + 7] = look.falloff;
   }
-  /** The glint of the moment, if one is lit, placed where its gold is on the screen; or all of them, as a ball drops. */
-  function shine() {
+  /** The gold's glow this frame into the first quads: how many. The glint of the moment; or all of them, as a ball drops. */
+  function gold(): number {
     const places = glinting();
     const lit = flash(played.t - scene.holedAt);
     if (lit > 0) {
       const count = Math.min(places.length, EFFECT_CAPACITY);
       for (let k = 0; k < count; k++) glow(k, places[k][0], places[k][1], places[k][2], lit);
-      renderer.setEffects(glintQuad, (drawn.glints = count));
-      return;
+      return count;
     }
     const g = glint(played.t, places.length);
-    if (g.brightness <= 0) {
-      renderer.setEffects(glintQuad, (drawn.glints = 0));
-      return;
-    }
+    if (g.brightness <= 0) return 0;
     const [x, y, z] = places[g.at];
     glow(0, x, y, z, g.brightness);
-    renderer.setEffects(glintQuad, (drawn.glints = 1));
+    return 1;
+  }
+  /** The glows of the frame: the gold's, and after them, in what room is left, the sparkles of sun on the water. */
+  function shine() {
+    let used = (drawn.glints = gold());
+    const sparks = scene.sparkleInto(played.t, sparkQuads);
+    let lit = 0;
+    for (; lit < sparks && used < EFFECT_CAPACITY; lit++)
+      glow(used++, sparkQuads[lit * 4], sparkQuads[lit * 4 + 1], sparkQuads[lit * 4 + 2], sparkQuads[lit * 4 + 3], SUN);
+    drawn.sparkles = lit;
+    renderer.setEffects(glintQuad, used);
   }
 
   /** What a frame of the scene as it stands costs, drawn to a texture of our own rather than the canvas, so no wait to be shown is counted. */
@@ -474,6 +502,15 @@ async function main() {
       glints: drawn.glints,
       glide: rig.gliding(played.t),
       pulse: drawn.pulse,
+      sparkles: drawn.sparkles,
+      // read back from the quads the frame wrote, which come after the gold's
+      sparklesAt: Array.from({ length: drawn.sparkles }, (_, k) => {
+        const o = (drawn.glints + k) * EFFECT_STRIDE;
+        const r = canvas.getBoundingClientRect();
+        return { x: r.left + ((glintQuad[o] + 1) / 2) * r.width, y: r.top + ((1 - glintQuad[o + 1]) / 2) * r.height };
+      }),
+      splash: scene.splashReach(played.t),
+      puff: drawn.puff,
     }),
     course: () => courseName,
     choosing: () => choosing,

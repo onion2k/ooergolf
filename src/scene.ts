@@ -17,7 +17,7 @@
 import { STILL, type Wind } from 'artshape-render/game/grass';
 import type { GameGroup } from 'artshape-render/game/renderer';
 import { MATERIAL_STRIDE, PATTERN_STRIDE } from 'artshape-render/game/renderer';
-import { BALL, BUMPER, KIND_RADIUS, TILE, heightAt, tileAt, type Layout } from './arena';
+import { BALL, BUMPER, KIND_RADIUS, TILE, WATER_LEVEL, heightAt, tileAt, type Layout } from './arena';
 import { CUP } from './course';
 import { place } from './matrix';
 import { ball, plane } from './meshes';
@@ -37,19 +37,22 @@ import {
   hedge,
   placeBlades,
   rock,
+  ROUGH,
   sandBed,
   teeMarkers,
   tree,
   water,
   windmill,
   type Model,
+  type Pond,
 } from './models';
 import { BARRIER, WINDMILL, type Obstacles } from './obstacles';
 import type { World } from './physics';
 import { placeRolling } from './roll';
 import { ROCK_SIZE, dress, scatter, type Piece, type SceneryKind } from './scenery';
 import { GROUND, cupGround, groundOf, railsOf } from './ground';
-import { flagTurn, lean, ripple, waggle } from './sway';
+import { RIPPLES, SPLASH_RING, flagTurn, lean, ringPlace, ripples, splashRing, waggle } from './sway';
+import { SPARKLE, sparkle, sparkles as sparkleShares } from './glints';
 import { pulse } from './pulse';
 import type { Shot } from './shot';
 import { PALETTE as COLOURS } from './models/palette';
@@ -189,7 +192,28 @@ export class Scene {
   /** The ball's turn as it rolls, kept here since the physics does not keep one for drawing a rolling ball. */
   readonly ballTurn = new Float32Array([0, 0, 0, 1]);
   /** The pools of what moves on the hole, each a group after the ball and the aim, written each frame at a time. */
-  private moving: { matrices: Float32Array; count: number; write: (out: Float32Array, t: number) => void }[] = [];
+  private moving: {
+    matrices: Float32Array;
+    count: number;
+    /** A colour and a roughness for each of its placements, when they are coloured by game time; see `tint`. */
+    looks?: Float32Array;
+    write: (out: Float32Array, t: number) => void;
+  }[] = [];
+  /**
+   * The ponds of the hole as last built, each where it is and how big, and the room on its water for a ring or a
+   * sparkle: what the rings and the sparkles are placed on.
+   */
+  ponds: { x: number; y: number; w: number; h: number; free: Pond['free']; reach: number; seed: number }[] = [];
+  /** Where and when a ball last went into the water on this hole: the ring that spreads from it. */
+  private splashed: { x: number; y: number; at: number } | null = null;
+  /** How many sparkles each pond has, worked out once for a hole; and what each frame writes into and reads, made once. */
+  private shares: number[] = [];
+  private readonly scratch = {
+    ripple: { u: 0, v: 0, grow: 0, fade: 0 },
+    place: { x: 0, y: 0, radius: 0 },
+    ring: { grow: 0, fade: 0 },
+    spark: { u: 0, v: 0, brightness: 0 },
+  };
 
   /** The hole being drawn, for the height of the ground under what moves on it. */
   private layout: Layout | null = null;
@@ -246,7 +270,7 @@ export class Scene {
       ...groups(teeMarkers(TEE_SPACING), teeAt),
       ...this.scenery(scatter(layout, name)),
       ...this.dressing(layout, name),
-      ...this.ponds(layout),
+      ...this.pondSheets(layout),
       ...this.bunkers(layout),
       ...this.posts(layout),
     ];
@@ -270,7 +294,7 @@ export class Scene {
    * to be had from the first not yet in one, so a pond is one sheet with its
    * shallows round its own edge, and not a grid of puddles.
    */
-  private ponds(layout: Layout): GameGroup[] {
+  private pondSheets(layout: Layout): GameGroup[] {
     return this.eachPond(layout).flatMap(({ model, at }) => groups(model, at));
   }
 
@@ -296,25 +320,82 @@ export class Scene {
     return groups(POST, at);
   }
 
-  /** Each pond's ripples, swelling and settling, among what moves. */
-  private ripples(
-    layout: Layout,
-    pool: (model: { parts: Model['parts'] }, write: (out: Float32Array, t: number) => void) => void,
-  ) {
-    this.eachPond(layout).forEach(({ model, x, y }, k) =>
-      pool({ parts: model.moving }, (m, t) => {
-        const s = ripple(t, k);
-        place(m, 0, x, y, 0, 0, s, s, 1);
-      }),
-    );
+  /**
+   * The rings that spread over each pond, three at once, each born small and bright at a place of its own and fading
+   * to the water's colour as it widens; and one ring for the hole, where a ball went into the water. Each is the
+   * pond's one ring mesh, placed and coloured from game time alone, and among what moves.
+   */
+  private rings(layout: Layout, out: GameGroup[]) {
+    const ponds = this.eachPond(layout);
+    this.ponds = ponds.map(({ model, x, y, w, h, seed }) => ({
+      x,
+      y,
+      w,
+      h,
+      free: model.free,
+      reach: model.reach,
+      seed,
+    }));
+    this.shares = sparkleShares(this.ponds.length);
+    if (!ponds.length) return;
+    const mesh = ponds[0].model.moving[0].mesh;
+    const [dr, dg, db] = COLOURS.water,
+      [pr, pg, pb] = COLOURS.ripple;
+    /** A ring's colour, `fade` of the way from the water's to the ripple's, written as placement `i` of `looks`. */
+    const tint = (looks: Float32Array, i: number, fade: number) =>
+      looks.set(
+        [dr + (pr - dr) * fade, dg + (pg - dg) * fade, db + (pb - db) * fade, ROUGH.water],
+        i * MATERIAL_STRIDE,
+      );
+    for (const { model, x, y, seed } of ponds) {
+      const count = RIPPLES.each;
+      const matrices = new Float32Array(16 * count),
+        looks = new Float32Array(MATERIAL_STRIDE * count);
+      this.moving.push({
+        matrices,
+        count,
+        looks,
+        write: (m, t) => {
+          for (let i = 0; i < count; i++) {
+            const r = ripples(t, seed, i, this.scratch.ripple);
+            const p = ringPlace(model.free, model.reach, r, this.scratch.place);
+            // a hair above the water, so it does not fight it
+            place(m, i, x + p.x, y + p.y, WATER_LEVEL + 0.02, 0, p.radius, p.radius, 1);
+            tint(looks, i, r.fade);
+          }
+        },
+      });
+      out.push({ mesh, matrices, count, materials: looks });
+    }
+    const matrices = new Float32Array(16),
+      looks = new Float32Array(MATERIAL_STRIDE);
+    const entry = {
+      matrices,
+      count: 0,
+      looks,
+      write: (m: Float32Array, t: number) => {
+        const s = this.splashed;
+        const r = splashRing(s ? t - s.at : -1, this.scratch.ring);
+        entry.count = s && r.fade > 0 ? 1 : 0;
+        if (!s || !entry.count) return;
+        const radius = r.grow * SPLASH_RING.reach;
+        place(m, 0, s.x, s.y, WATER_LEVEL + 0.03, 0, radius, radius, 1);
+        tint(looks, 0, r.fade);
+      },
+    };
+    this.moving.push(entry);
+    tint(looks, 0, 0);
+    out.push({ mesh, matrices, count: 0, materials: looks });
   }
 
   /** The ponds of a hole: each the largest rectangle of water tiles from the first not yet in one. */
-  private eachPond(layout: Layout): { model: Model; at: Float32Array; x: number; y: number }[] {
+  private eachPond(
+    layout: Layout,
+  ): { model: Pond; at: Float32Array; x: number; y: number; w: number; h: number; seed: number }[] {
     return rectangles(layout, layout.water).map(({ x, y, w, h, first }) => {
       const at = new Float32Array(16);
       place(at, 0, x, y, 0);
-      return { model: water(w, h, { seed: first + 1 }), at, x, y };
+      return { model: water(w, h, { seed: first + 1 }), at, x, y, w, h, seed: first + 1 };
     });
   }
 
@@ -382,6 +463,7 @@ export class Scene {
     ];
     this.moving = [];
     this.holedAt = -Infinity;
+    this.splashed = null;
     const pool = (model: { parts: Model['parts'] }, write: (out: Float32Array, t: number) => void, count = 1) => {
       const matrices = new Float32Array(16 * count);
       for (const part of model.parts) {
@@ -412,7 +494,7 @@ export class Scene {
           trees.length,
         );
       }
-      this.ripples(layout, pool);
+      this.rings(layout, out);
     }
     obstacles?.barriers.forEach((b, k) => {
       const pusher = obstacles.pushers[k];
@@ -435,9 +517,50 @@ export class Scene {
   }
 
   /** What moves on the hole where it is at game time `t`, into its pools, in the order of the groups after the aim. */
-  writeMoving(t: number): { matrices: Float32Array; count: number }[] {
+  writeMoving(t: number): { matrices: Float32Array; count: number; looks?: Float32Array }[] {
     for (const m of this.moving) m.write(m.matrices, t);
     return this.moving;
+  }
+
+  /** A ball went into the water at (x, y) at game time `t`: a ring spreads from there until it fades. */
+  splashedAt(x: number, y: number, t: number) {
+    this.splashed = { x, y, at: t };
+  }
+
+  /** How wide the ring where a ball went in is at game time `t`, in world units: nought when there is none. */
+  splashReach(t: number): number {
+    return this.splashed ? splashRing(t - this.splashed.at, this.scratch.ring).grow * SPLASH_RING.reach : 0;
+  }
+
+  /**
+   * The sparkles of sun lit on the water at game time `t`, written four numbers each into `out`, which has room for
+   * `SPARKLE.most`: where it is, on its pond's surface, and how bright. Only those lit; none on a hole without water,
+   * and never more than `SPARKLE.most`, shared among its ponds. How many. Nothing is made.
+   */
+  sparkleInto(t: number, out: Float32Array): number {
+    let n = 0;
+    for (let k = 0; k < this.ponds.length; k++) {
+      const p = this.ponds[k];
+      for (let i = 0; i < this.shares[k]; i++) {
+        const s = sparkle(t, p.seed, i, this.scratch.spark);
+        if (s.brightness <= 0) continue;
+        out.set([p.x + s.u * p.free.hx, p.y + s.v * p.free.hy, WATER_LEVEL, s.brightness], n * 4);
+        n++;
+      }
+    }
+    return n;
+  }
+
+  /** The same, as a list: for a test. */
+  sparkles(t: number): { x: number; y: number; z: number; brightness: number }[] {
+    const buffer = new Float32Array(SPARKLE.most * 4);
+    const n = this.sparkleInto(t, buffer);
+    return Array.from({ length: n }, (_, k) => ({
+      x: buffer[k * 4],
+      y: buffer[k * 4 + 1],
+      z: buffer[k * 4 + 2],
+      brightness: buffer[k * 4 + 3],
+    }));
   }
 
   /** The ball where it is this frame, turned as it has rolled. */

@@ -1,7 +1,18 @@
 /** The course's things in the hole's wind: the flag flying down it, the trees leaning with it, the ripples swelling. */
 import { describe, expect, it } from 'vitest';
 import { gust, type Wind } from 'artshape-render/game/grass';
-import { SWAY, WAGGLE, flagTurn, lean, ripple, waggle } from '../src/sway';
+import {
+  RIPPLES,
+  SPLASH_RING,
+  SWAY,
+  WAGGLE,
+  flagTurn,
+  lean,
+  ringPlace,
+  ripples,
+  splashRing,
+  waggle,
+} from '../src/sway';
 
 const EAST: Wind = { direction: [1, 0], strength: 0.5, gustSize: 20, gustSpeed: 4 };
 const NORTH: Wind = { direction: [0, 1], strength: 0.5, gustSize: 20, gustSpeed: 4 };
@@ -61,11 +72,89 @@ describe('the wind', () => {
     expect(lean(4.2, 3, 3, calm)).toEqual([0, 0]);
   });
 
-  it('swells the ripples and lets them settle, round a size of one', () => {
-    const { least, most } = over((t) => ripple(t, 0));
-    expect(least).toBeGreaterThan(0.8);
-    expect(most).toBeLessThan(1.2);
-    expect(most - least).toBeGreaterThan(0.1);
+  it('spreads each ripple from a small ring to a wide one as it fades, over its period, and gives it another place each time round', () => {
+    const start = ripples(0, 5, 0);
+    // a whole period on, the same ring the same size and fade, at another place
+    const round = ripples(RIPPLES.period, 5, 0);
+    expect(round.grow).toBeCloseTo(start.grow, 9);
+    expect(round.fade).toBeCloseTo(start.fade, 9);
+    let moved = 0;
+    for (let c = 0; c < 20; c++) {
+      const a = ripples(c * RIPPLES.period, 5, 1),
+        b = ripples((c + 1) * RIPPLES.period, 5, 1);
+      if (a.u !== b.u || a.v !== b.v) moved++;
+    }
+    expect(moved, 'a new place each time round').toBeGreaterThan(17);
+    // over one life: growing all the while, fading all the while, small and bright at its start, wide and gone at its end
+    let grow = -1,
+      fade = 2;
+    for (let f = 0; f < 200; f++) {
+      const r = ripples(f * (RIPPLES.period / 200) + 0.0001, 3, 0);
+      if (f > 0 && r.grow < grow) throw new Error(`shrank at ${f}`);
+      if (f > 0 && r.fade > fade) throw new Error(`brightened at ${f}`);
+      expect(r.grow).toBeGreaterThan(0);
+      expect(r.grow).toBeLessThanOrEqual(1);
+      expect(r.fade).toBeGreaterThanOrEqual(0);
+      expect(r.fade).toBeLessThanOrEqual(1);
+      [grow, fade] = [r.grow, r.fade];
+    }
+    expect(ripples(0.001, 3, 0).fade, 'bright as it begins').toBeGreaterThan(0.95);
+    expect(ripples(0.001, 3, 0).grow, 'and small').toBeLessThan(0.35);
+    expect(
+      ripples(RIPPLES.period - 0.001, 3, 0).fade,
+      'gone as it ends, so its place changing is not seen',
+    ).toBeLessThan(0.02);
+    expect(ripples(RIPPLES.period - 0.001, 3, 0).grow, 'wide').toBeGreaterThan(0.95);
+  });
+
+  it('keeps several ripples on the water at once, at different points of their lives, the same at the same moment', () => {
+    expect(RIPPLES.each).toBeGreaterThanOrEqual(3);
+    for (let t = 0; t < 30; t += 0.25) {
+      const rings = Array.from({ length: RIPPLES.each }, (_, k) => ripples(t, 2, k));
+      expect(Math.max(...rings.map((r) => r.fade)), `something to see at ${t}`).toBeGreaterThan(0.4);
+      expect(new Set(rings.map((r) => r.grow.toFixed(3))).size, 'not all at one point of their lives').toBeGreaterThan(
+        1,
+      );
+    }
+    expect(ripples(7.3, 2, 1)).toEqual(ripples(7.3, 2, 1));
+    expect(ripples(7.3, 2, 1)).not.toEqual(ripples(7.3, 3, 1));
+  });
+
+  it('places every ripple inside the water it is on, at every size it has, in any pond', () => {
+    for (const free of [
+      { hx: 2.3, hy: 3.7 },
+      { hx: 0.9, hy: 0.9 },
+      { hx: 5, hy: 1.2 },
+    ])
+      for (let seed = 1; seed <= 6; seed++)
+        for (let k = 0; k < RIPPLES.each; k++)
+          for (let t = 0; t < 40; t += 0.13) {
+            const r = ripples(t, seed, k);
+            const p = ringPlace(free, 1.1, r);
+            expect(Math.abs(p.x) + p.radius, `across, seed ${seed} ring ${k} at ${t}`).toBeLessThanOrEqual(
+              free.hx + 1e-9,
+            );
+            expect(Math.abs(p.y) + p.radius, `along`).toBeLessThanOrEqual(free.hy + 1e-9);
+            expect(p.radius).toBeGreaterThan(0);
+            expect(p.radius).toBeLessThanOrEqual(1.1 + 1e-9);
+          }
+  });
+
+  it('rings out where a ball went in, wide as it fades, and is gone at its end, exactly, as before', () => {
+    expect(splashRing(-0.1).fade, 'not before').toBe(0);
+    expect(splashRing(SPLASH_RING.lasts).fade, 'and gone').toBe(0);
+    expect(splashRing(SPLASH_RING.lasts + 3).fade).toBe(0);
+    expect(splashRing(0.001).fade, 'bright at once').toBeGreaterThan(0.9);
+    expect(splashRing(0.001).grow, 'small at once').toBeLessThan(0.3);
+    let grow = 0,
+      fade = 2;
+    for (let f = 1; f < 120; f++) {
+      const r = splashRing((f / 120) * SPLASH_RING.lasts);
+      expect(r.grow).toBeGreaterThanOrEqual(grow);
+      expect(r.fade).toBeLessThanOrEqual(fade);
+      [grow, fade] = [r.grow, r.fade];
+    }
+    expect(splashRing(SPLASH_RING.lasts - 0.01).grow, 'wide').toBeGreaterThan(0.95);
   });
 
   it('waggles the flag as a ball drops: quickly either way from where it was, dying away to nothing, exactly', () => {

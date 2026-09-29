@@ -66,12 +66,26 @@ export const PALETTE = {
   /** The inside of the cup: nearly black, so the hole reads as deep. */
   hole: shown(0.1, 0.1, 0.11),
 
-  water: shown(0.14, 0.5, 0.9),
-  waterShallow: shown(0.42, 0.74, 0.96),
-  ripple: shown(0.82, 0.94, 1.0),
-  sand: shown(0.96, 0.85, 0.6),
-  sandGrain: shown(0.84, 0.68, 0.42),
-  sandLip: shown(0.9, 0.77, 0.5),
+  /**
+   * The pond, from its foam to its deep: a step darker toward the middle, as water is, and veined in the light that
+   * a bright sun throws through its ripples. The ripples that spread on it are a pale blue that fades to the water's
+   * own, and not white, which is an outline.
+   */
+  water: shown(0.1, 0.42, 0.88),
+  waterMid: shown(0.16, 0.56, 0.93),
+  waterShallow: shown(0.34, 0.78, 0.95),
+  waterFoam: shown(0.94, 0.99, 1.0),
+  waterVein: shown(0.3, 0.68, 0.97),
+  ripple: shown(0.62, 0.86, 1.0),
+  /**
+   * The bunker's sand, raked in stripes of two tones, a warm gold and not a lemon; a grain that is a shade darker and
+   * no more; and a lip lit on its outside and shaded on its inside, so it stands up off the grass and the sand.
+   */
+  sand: shown(0.95, 0.78, 0.46),
+  sandRaked: shown(0.9, 0.7, 0.38),
+  sandGrain: shown(0.91, 0.72, 0.4),
+  sandLip: shown(1.0, 0.88, 0.58),
+  sandLipInner: shown(0.8, 0.6, 0.34),
   belt: shown(0.2, 0.2, 0.24),
   steel: shown(0.74, 0.77, 0.82),
 

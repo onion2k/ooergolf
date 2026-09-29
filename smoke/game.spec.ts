@@ -8,7 +8,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { PNG } from 'pngjs';
 import { BALL, KIND_RADIUS, ROLL, heightAt, layoutOf, powerFor } from '../src/arena';
-import { COURSES, CUP, DOWNS } from '../src/course';
+import { COURSE, COURSES, CUP, DOWNS } from '../src/course';
 import { clearings } from '../src/scenery';
 import { BLADE_ROOM } from '../src/turf';
 import { drag, start, touches, watch } from './game';
@@ -297,6 +297,130 @@ test.describe('The Downs', () => {
         expect(c.y, `${hole.name}: down`).toBeLessThan(size.height);
       }
     }
+    expect(problems).toEqual([]);
+  });
+});
+
+test.describe('the water and the sand', () => {
+  test('sparkle on a pond, a few at a time and never more than six, and not at all where there is no water', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 1, paused: true });
+    /** The most sparkles lit in `seconds` of game time, looked at every fifth of a second. */
+    const most = (hole: string, seconds: number) =>
+      page.evaluate(
+        ([name, secs]) => {
+          const g = window.game!;
+          g.startHole(g.content().holes.findIndex((h) => h.name === name));
+          let best = 0;
+          for (let f = 0; f < 60 * secs; f += 12) {
+            g.step(12);
+            best = Math.max(best, g.motions().sparkles);
+          }
+          return best;
+        },
+        [hole, seconds] as const,
+      );
+    const wet = await most('Pond', 8);
+    expect(wet, 'some twinkle on the pond').toBeGreaterThan(0);
+    expect(wet, 'and never more than there is room for').toBeLessThanOrEqual(6);
+    // and they are drawn on the water: each where the pond is on the page, and not in the corner of the screen
+    const hole = COURSE.find((h) => h.name === 'Pond')!;
+    const l = layoutOf(hole.map);
+    let [x0, y0, x1, y1] = [Infinity, Infinity, -Infinity, -Infinity];
+    for (let t = 0; t < l.cols * l.rows; t++)
+      if (l.water[t]) {
+        const [x, y] = [l.originX + (t % l.cols) * 3, l.originY + Math.floor(t / l.cols) * 3];
+        [x0, y0, x1, y1] = [Math.min(x0, x), Math.min(y0, y), Math.max(x1, x + 3), Math.max(y1, y + 3)];
+      }
+    const seen = await page.evaluate(
+      ([name, box]) => {
+        const g = window.game!;
+        g.startHole(g.content().holes.findIndex((h) => h.name === name));
+        const corners = [
+          [box[0], box[1]],
+          [box[2], box[1]],
+          [box[2], box[3]],
+          [box[0], box[3]],
+        ].map(([x, y]) => g.project(x, y, -0.3));
+        const on: { x: number; y: number }[] = [];
+        for (let f = 0; f < 60 * 8; f += 12) {
+          g.step(12);
+          on.push(...g.motions().sparklesAt);
+        }
+        return { corners, on };
+      },
+      ['Pond', [x0, y0, x1, y1]] as const,
+    );
+    const [left, right] = [Math.min(...seen.corners.map((c) => c.x)), Math.max(...seen.corners.map((c) => c.x))];
+    const [top, bottom] = [Math.min(...seen.corners.map((c) => c.y)), Math.max(...seen.corners.map((c) => c.y))];
+    expect(seen.on.length, 'some were drawn').toBeGreaterThan(0);
+    for (const p of seen.on) {
+      expect(p.x, 'across, on the water').toBeGreaterThan(left);
+      expect(p.x).toBeLessThan(right);
+      expect(p.y, 'down, on the water').toBeGreaterThan(top);
+      expect(p.y).toBeLessThan(bottom);
+    }
+    expect(await most('Straight', 8), 'none where there is no water').toBe(0);
+    expect(problems).toEqual([]);
+  });
+
+  test('a ball putted into the pond rings out where it went in, wider as it fades, and the ring is gone in a second and a bit', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 1, paused: true });
+    await page.evaluate(() => {
+      const g = window.game!;
+      g.startHole(g.content().holes.findIndex((h) => h.name === 'Pond'));
+      g.step(30);
+      g.shoot(Math.PI / 2 + 0.25, 0.45);
+    });
+    expect((await page.evaluate(() => window.game!.motions())).splash, 'no ring until it goes in').toBe(0);
+    const went = await page.evaluate(() => {
+      const g = window.game!;
+      for (let f = 0; f < 600 && g.state().strokes < 2; f++) g.step(1);
+      return g.state().strokes;
+    });
+    expect(went, 'it went in').toBe(2);
+    const first = (await page.evaluate(() => window.game!.motions())).splash;
+    expect(first, 'ringing out').toBeGreaterThan(0);
+    await page.evaluate(() => window.game!.step(30));
+    const later = (await page.evaluate(() => window.game!.motions())).splash;
+    expect(later, 'wider').toBeGreaterThan(first);
+    await page.evaluate(() => window.game!.step(60));
+    expect((await page.evaluate(() => window.game!.motions())).splash, 'gone').toBe(0);
+    expect(problems).toEqual([]);
+  });
+
+  test('a stroke from sand throws sand and a stroke from grass throws grass', async ({ page }) => {
+    const problems = watch(page);
+    await start(page, { seed: 1, paused: true });
+    await page.evaluate(() => {
+      const g = window.game!;
+      g.startHole(g.content().holes.findIndex((h) => h.name === 'The Bunker'));
+      g.step(30);
+    });
+    expect((await page.evaluate(() => window.game!.motions())).puff, 'nothing thrown before a stroke').toBe(null);
+    const puffs = await page.evaluate(() => {
+      const g = window.game!;
+      const ball = g.bodies('ball')[0];
+      const { sand } = g.content();
+      // in the middle of the sand, and struck from it
+      g.place(ball.slot, sand[0].x, sand[0].y);
+      g.step(5);
+      g.shoot(Math.PI / 2, 0.2);
+      const fromSand = g.motions().puff;
+      for (let f = 0; f < 900 && !g.state().ready; f++) g.step(1);
+      // and again from the tee, on grass
+      const { tee } = g.content();
+      g.place(ball.slot, tee.x, tee.y);
+      g.step(5);
+      g.shoot(Math.PI / 2, 0.2);
+      return { fromSand, fromGrass: g.motions().puff };
+    });
+    expect(puffs).toEqual({ fromSand: 'sand', fromGrass: 'grass' });
     expect(problems).toEqual([]);
   });
 });
