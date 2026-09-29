@@ -476,7 +476,11 @@ test.describe('the grass', () => {
       return n / (clip.width * clip.height);
     };
     const now = await shot();
-    expect(changed(now, await shot()), 'the same moment, the same picture: nothing moves by the clock').toBe(0);
+    // a pixel or two may differ: the blades are appended to the list in whatever order the GPU's threads reach them, so two
+    // at the same depth may swap. A clock leaking in would move whole shares of the picture, as half a second of the wind does
+    expect(changed(now, await shot()), 'the same moment, the same picture: nothing moves by the clock').toBeLessThan(
+      0.002,
+    );
     await page.evaluate(() => window.game!.step(30));
     const later = await shot();
     // how hard it blows is the unit tests': this holds that the game's time is what moves it, and that it moves
