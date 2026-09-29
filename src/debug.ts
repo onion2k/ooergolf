@@ -140,9 +140,10 @@ export interface GameApi {
 
   /**
    * How far back the camera stands, which rung of the quality ladder the
-   * picture is on and whether it was asked for, and how its edges are drawn.
+   * picture is on and whether it was asked for, how its edges are drawn, and
+   * whether the grass bends in the wind.
    */
-  view(): { distance: number; rung: number; held: boolean; antialias: Antialias };
+  view(): { distance: number; rung: number; held: boolean; antialias: Antialias; swaying: boolean };
   /** The camera parked looking at a point, `distance` back, at once, and not following the ball until `follow`. */
   look(x: number, y: number, distance?: number): void;
   /** The camera following the ball again. */
@@ -151,6 +152,12 @@ export interface GameApi {
   project(x: number, y: number, z: number): { x: number; y: number };
   /** What drawing a frame of the scene as it stands costs, in milliseconds, after `warmup` frames drawn untimed. */
   measureFrame(warmup?: number): Promise<number>;
+  /**
+   * `frames` frames given to the quality governor as the frame loop gives them, each `gapMs` after the last and
+   * costing `workMs` to draw and have the GPU finish; the rung it is on after. The picture is drawn again on the
+   * next `step`, so what a rung takes away is seen then.
+   */
+  judge(frames: number, gapMs: number, workMs: number): number;
   /** The small motions the page draws at this moment, answering what has happened: each nought at rest. */
   motions(): Motions;
   /**
@@ -158,6 +165,8 @@ export interface GameApi {
    * of the rough near and far, read back from the GPU, and the wind it bent in.
    */
   grass(): Promise<GrassDrawn>;
+  /** How many blades of grass the last frame drew with their roots within `radius` of (x, y), on the ground plan: read back from the GPU. */
+  bladesAround(x: number, y: number, radius: number): Promise<number>;
 }
 
 /**
@@ -202,10 +211,12 @@ export interface DebugHost {
   follow(): void;
   project(x: number, y: number, z: number): { x: number; y: number };
   aiming(): { angle: number; power: number } | null;
-  view(): { distance: number; rung: number; held: boolean; antialias: Antialias };
+  view(): { distance: number; rung: number; held: boolean; antialias: Antialias; swaying: boolean };
   measureFrame(warmup?: number): Promise<number>;
+  judge(gap: number, work: number): number;
   motions(): Motions;
   grass(): Promise<GrassDrawn>;
+  bladesAround(x: number, y: number, radius: number): Promise<number>;
   /** The course being played, and whether the start screen is up; and a course chosen, as the screen does it. */
   course(): string;
   choosing(): boolean;
@@ -324,8 +335,14 @@ export function createApi(host: DebugHost): GameApi {
     follow: () => host.follow(),
     project: (x, y, z) => host.project(x, y, z),
     measureFrame: (warmup) => host.measureFrame(warmup),
+    judge(frames, gapMs, workMs) {
+      let rung = host.view().rung;
+      for (let f = 0; f < frames; f++) rung = host.judge(gapMs, workMs);
+      return rung;
+    },
     motions: () => host.motions(),
     grass: () => host.grass(),
+    bladesAround: (x, y, radius) => host.bladesAround(x, y, radius),
   };
 }
 

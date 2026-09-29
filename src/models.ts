@@ -42,7 +42,8 @@ export { bunting, fence, flowers, hedge, rock, tree } from './models/decor';
  * turned just finely enough to be shaded round. The decoration's were set
  * anew when it was moulded smooth, as enough round its edge to read round
  * from the tee and no more: a bloom a few pixels across from the far view is
- * one lobed ball, not five.
+ * one lobed ball, not five. The flowers carry their blooms on stems now, up out of
+ * the long grass, forty triangles more on the fullest clump.
  */
 export const BUDGET = {
   cup: 380,
@@ -60,7 +61,7 @@ export const BUDGET = {
   conveyor: 120,
   tree: 860,
   hedge: 300,
-  flowers: 610,
+  flowers: 650,
   rock: 150,
   bunting: 540,
   fence: 1000,

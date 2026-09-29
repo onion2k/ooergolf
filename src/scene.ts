@@ -47,7 +47,7 @@ import {
 import { BARRIER, WINDMILL, type Obstacles } from './obstacles';
 import type { World } from './physics';
 import { placeRolling } from './roll';
-import { dress, scatter, type Piece, type SceneryKind } from './scenery';
+import { ROCK_SIZE, dress, scatter, type Piece, type SceneryKind } from './scenery';
 import { GROUND, cupGround, groundOf, railsOf } from './ground';
 import { flagTurn, lean, ripple, waggle } from './sway';
 import { pulse } from './pulse';
@@ -107,7 +107,7 @@ const SCENERY_MODELS: Record<Exclude<SceneryKind, 'flowers'>, Model> = {
   'round tree': tree('round'),
   pine: tree('pine', { height: 8 }),
   hedge: hedge(4, 1.6, 1.8),
-  rock: rock(1.4),
+  rock: rock(ROCK_SIZE),
 };
 /** A post, built once, to the physics' figures for one. */
 const POST = bumper(BUMPER.radius, { height: BUMPER.height });

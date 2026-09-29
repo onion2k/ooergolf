@@ -205,6 +205,27 @@ test.describe('what it looks like', () => {
     expect(problems).toEqual([]);
   });
 
+  test('the long grass, close to: blades a unit and a half tall in the wind, flowers standing out of it and rocks on bare ground, and the same a moment on', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true });
+    await page.evaluate(() => {
+      const g = window.game!;
+      const { floor } = g.content();
+      g.step(60);
+      // the rough beside the rail at the cup's end, where a bed of flowers and a pair of rocks stand
+      g.look(floor.minX - 7, (floor.minY + floor.maxY) / 2 + 6, 24);
+      g.step(1);
+    });
+    await hideStats(page);
+    await expect(page.locator('#view')).toHaveScreenshot('grass.png', TOLERANCE);
+    // half a second of game time on: the same place, the grass bent another way, and the gust gone further downwind
+    await page.evaluate(() => window.game!.step(30));
+    await expect(page.locator('#view')).toHaveScreenshot('grass-later.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
   test('a cup on a side-hill, close to: its collar and rim lying on the slope, its floor level', async ({ page }) => {
     const problems = watch(page);
     await start(page, { seed: 11, paused: true });

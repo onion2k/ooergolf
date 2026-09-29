@@ -25,6 +25,7 @@ const ROUND = {
   trunk: 8,
   tier: 14,
   mound: 12,
+  stem: 4,
   bloom: [3, 20],
   heart: [3, 6],
   knob: [4, 12],
@@ -144,15 +145,22 @@ export function hedge(w: number, d: number, h: number): Model {
   };
 }
 
+/** How high a flower's blooms stand at the model's own size: the shortest, how much taller they may be, and the crown's. */
+export const BLOOM_TOPS = { least: 2.4, spread: 0.3, crown: 2.8 } as const;
+
 /**
  * A clump of flowers in `colour`, standing on the grass at its origin: a
- * low round mound of leaves, and `count` blooms nestled on it, each five fat
- * petals round a heart, big enough to read as a flower from the tee.
+ * low round mound of leaves, and `count` blooms on stems that carry them
+ * up out of the long grass, each five fat petals round a heart, big enough to
+ * read as a flower from the tee. The rough's blades grow to a unit and
+ * three-fifths and a third as much again, and a clump is placed as small as
+ * four fifths of this, so the blooms stand at two and a half or so: any lower
+ * and they are lost in the blades, which is what `BLOOM_TOPS` says.
  */
 export function flowers(colour: Colour, { seed = 1, count = 3 } = {}): Model {
   const random = seeded(seed * 15485863 + 3);
   const heart: Colour = colour[1] > 0.6 && colour[2] < 0.1 ? PALETTE.plastic.orange : PALETTE.plastic.yellow;
-  // a round bush a unit high: the rough's blades grow to about 0.8, and flowers any lower are lost in them
+  // a round bush a unit high, the stems' foot
   const mound: [number, number][] = [
     [1.05, 0],
     [1.02, 0.3],
@@ -162,15 +170,21 @@ export function flowers(colour: Colour, { seed = 1, count = 3 } = {}): Model {
   ];
   /** How high the mound stands `d` out from its middle. */
   const moundAt = (d: number) => Math.sqrt(Math.max(0, 1 - (d / 1.05) ** 2));
-  // a few round the mound's crown, evenly, and past three one on top; each nestled on the mound where it stands
+  // a few round the mound's crown, evenly, and past three one on top, tallest; each on a stem that leans a little out
   const ring = count > 3 ? count - 1 : count;
   const blooms: V3[] = [];
+  const stems: [V3, V3][] = [];
   const turn = random() * Math.PI * 2;
   for (let k = 0; k < count; k++) {
     const onTop = k === ring;
     const a = turn + (k / ring) * Math.PI * 2 + (random() - 0.5) * 0.4;
     const d = onTop ? 0.05 : 0.45 + random() * 0.1;
-    blooms.push([Math.cos(a) * d, Math.sin(a) * d, moundAt(d) + (onTop ? 0.1 : 0.05)]);
+    const top = onTop ? BLOOM_TOPS.crown : BLOOM_TOPS.least + random() * BLOOM_TOPS.spread;
+    blooms.push([Math.cos(a) * d, Math.sin(a) * d, top]);
+    stems.push([
+      [Math.cos(a) * d * 0.3, Math.sin(a) * d * 0.3, moundAt(d * 0.3) * 0.9],
+      [Math.cos(a) * d, Math.sin(a) * d, top - 0.05],
+    ]);
   }
   // each bloom one flat ball pushed out into five fat petals: seen from the tee a bloom is a few pixels, and five
   // balls of petals there cost a frame far more than they showed
@@ -190,7 +204,10 @@ export function flowers(colour: Colour, { seed = 1, count = 3 } = {}): Model {
     parts: [
       {
         name: 'leaves',
-        mesh: built((b) => lathe(b, at(0, 0, 0), mound, ROUND.mound)),
+        mesh: built((b) => {
+          lathe(b, at(0, 0, 0), mound, ROUND.mound);
+          for (const stem of stems) tube(b, stem, 0.07, ROUND.stem);
+        }),
         material: matte(PALETTE.stem, ROUGH.leaves),
       },
       { name: 'petals', mesh: petals, material: matte(colour, 0.5) },

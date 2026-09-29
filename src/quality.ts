@@ -11,6 +11,15 @@
  * hidden, is not a slow machine, so the governor judges on the mean of a
  * window of frames and leaves out a frame too long to be one.
  *
+ * Frames that come slowly are not frames that are slow. A browser throttled
+ * to thirty a second, a low-power mode or a slow screen spaces frames out
+ * while the machine sits idle between them, and stepping down for that only
+ * takes the picture away for nothing: the grass, once, all of it, twelve
+ * seconds in. So the governor is told two things of each frame, how long it
+ * was since the last and how long this one took to draw and have the GPU
+ * finish, and steps down only when the player sees too few frames a second
+ * and the drawing is most of what each takes.
+ *
  * It is handed the frames' lengths and says which rung; the page applies it.
  */
 import { FULL_ECONOMY, type GameEconomy } from 'artshape-render/game/renderer';
@@ -19,21 +28,33 @@ import { FULL_ECONOMY, type GameEconomy } from 'artshape-render/game/renderer';
 export const FRAME_BUDGET_MS = 20;
 /** Frames longer than this are the page hidden, or a stall, and not the drawing: left out. */
 const STALL_MS = 100;
+/**
+ * How much of the time between frames the drawing must take, on the mean, for the machine to be what is slow: over
+ * half. A page given thirty frames a second that draws each in two milliseconds spends a fifteenth.
+ */
+const DRAWING_SHARE = 0.5;
 
-/** The rungs, each what it takes away, in the order it takes them. */
+/**
+ * The rungs, each what it takes away, in the order it takes them.
+ *
+ * The grass is thinned and never given up, and it always sways: it is what the
+ * course is set in, and a course set in bare ground is a different game. The
+ * blades kept are the same ones the distance keeps, drawn wider as fewer are
+ * kept so the field's colour holds, so a quarter of them is long grass still,
+ * and the last rung is the cheapest picture that is still the same place. The
+ * wind costs a blade next to nothing, and costs the picture its life.
+ *
+ * The edges drawn at four samples a pixel cost as much again as the rough on a
+ * golf hole, so they step down with it: to the post pass, a third of the
+ * price, and to none on the last, which gives up everything that can go.
+ */
 export const RUNGS: readonly Partial<GameEconomy>[] = [
   {},
-  // the rough's grass is a quarter of a frame on a fast machine, 0.2 of 0.86 ms, and more on a phone's, so it is thinned
-  // from the first step: half the blades, the same ones the distance keeps, standing still in the wind; and given up on
-  // the last, where the ground under it is painted its colour
-  // the edges drawn at four samples a pixel cost as much again as the rough on a golf hole, so they step down with it:
-  // to the post pass, a third of the price, and to none on the last, which gives up everything that can go
-  { particles: false, grass: 0.5, wind: false, antialias: 'fxaa' },
-  { particles: false, grass: 0.5, wind: false, shadows: false, occlusion: false, antialias: 'fxaa' },
+  { particles: false, grass: 0.5, antialias: 'fxaa' },
+  { particles: false, grass: 0.5, shadows: false, occlusion: false, antialias: 'fxaa' },
   {
     particles: false,
-    grass: 0,
-    wind: false,
+    grass: 0.25,
     shadows: false,
     occlusion: false,
     post: false,
@@ -54,7 +75,8 @@ export class Governor {
   readonly held: boolean;
   /** How many frames it judges on, and waits after a step before judging again: two seconds at 60. */
   readonly window = 120;
-  private sum = 0;
+  private gaps = 0;
+  private works = 0;
   private seen = 0;
 
   constructor(rung?: number) {
@@ -62,14 +84,19 @@ export class Governor {
     this.rung = Math.max(0, Math.min(RUNGS.length - 1, rung ?? 0));
   }
 
-  /** A frame of `ms` drawn; whether the rung has just changed. */
-  frame(ms: number): boolean {
-    if (this.held || ms > STALL_MS || this.rung === RUNGS.length - 1) return false;
-    this.sum += ms;
+  /**
+   * A frame that came `gap` milliseconds after the last and took `work` to draw and have the GPU finish; whether the
+   * rung has just changed. `work` is the last that was measured, which the page samples every few frames.
+   */
+  frame(gap: number, work: number): boolean {
+    if (this.held || gap > STALL_MS || this.rung === RUNGS.length - 1) return false;
+    this.gaps += gap;
+    this.works += work;
     this.seen++;
     if (this.seen < this.window) return false;
-    const slow = this.sum / this.seen > FRAME_BUDGET_MS;
-    this.sum = this.seen = 0;
+    const seen = this.gaps / this.seen;
+    const slow = seen > FRAME_BUDGET_MS && this.works / this.seen >= seen * DRAWING_SHARE;
+    this.gaps = this.works = this.seen = 0;
     if (slow) this.rung++;
     return slow;
   }

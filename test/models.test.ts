@@ -48,6 +48,7 @@ import {
   type Part,
 } from '../src/models';
 import { BALL, KIND_RADIUS } from '../src/arena';
+import { SCALE } from '../src/scenery';
 import { KINDS, ROUGH } from '../src/turf';
 
 /** How near a figure must be to be the figure: a float's worth, and then some. */
@@ -893,10 +894,13 @@ describe('the decoration', () => {
     for (const c of FLOWER_COLOURS) expect(partNamed(flowers(c), 'petals').material.slice(0, 3)).toEqual([...c]);
     const b = bounds(flowers(FLOWER_COLOURS[1]).parts);
     expect(b.min[2]).toBeGreaterThanOrEqual(-NEAR);
-    expect(b.max[2]).toBeLessThan(2);
+    // the blooms stand on stems, high above the leaves' mound, as the grass they stand in is long
+    expect(b.max[2]).toBeLessThan(3.2);
   });
 
-  it('flowers hold every bloom above the blades of the rough they stand in, as many as are asked for', () => {
+  it('flowers hold every bloom above the blades of the rough they stand in, as many as are asked for, however small they are placed', () => {
+    // three blades in four are shorter than this: the canopy the blooms must clear
+    const canopy = KINDS[ROUGH].height * (1 + (KINDS[ROUGH].heightSpread ?? 0.3) / 2);
     for (const count of [3, 5])
       for (const seed of [1, 2, 11, 12, 13]) {
         const petals = partNamed(flowers(FLOWER_COLOURS[0], { seed, count }), 'petals').mesh;
@@ -905,7 +909,8 @@ describe('the decoration', () => {
         for (let i = 0; i < petals.normals.length; i += 3)
           if (petals.normals[i + 2] > 0.999) tops.push(petals.positions[i + 2]);
         expect(tops.length, 'a top to every bloom').toBe(count);
-        for (const z of tops) expect(z, 'a bloom lost in the grass').toBeGreaterThan(KINDS[ROUGH].height);
+        // placed at the smallest scale a scattered clump is: 0.8 of its size
+        for (const z of tops) expect(z * SCALE.least, 'a bloom lost in the grass').toBeGreaterThan(canopy);
       }
   });
 

@@ -31,6 +31,14 @@ export interface Piece {
  */
 export const SCENERY = { least: 12, most: 30, clear: 3, spacing: 4.5, reach: 16 } as const;
 
+/** How much of its model's size a scattered piece is, at the least and how much more it may be. */
+export const SCALE = { least: 0.8, spread: 0.45 } as const;
+
+/** How wide a rock is, from its middle out, at the model's own size: the scene builds it to this. */
+export const ROCK_SIZE = 1.4;
+/** How far past its own edge the rough is cleared round a rock, so the blades stand back and the whole of it is seen. */
+const CLEARING_MARGIN = 0.6;
+
 /** How often each kind is chosen. */
 const WEIGHTS: [SceneryKind, number][] = [
   ['round tree', 3],
@@ -201,9 +209,20 @@ export function scatter(layout: Layout, name: string): Piece[] {
       x,
       y,
       yaw: random() * Math.PI * 2,
-      scale: 0.8 + random() * 0.45,
+      scale: SCALE.least + random() * SCALE.spread,
       variant: Math.floor(random() * 3),
     });
   }
   return out;
+}
+
+/**
+ * Where the long grass must not grow on a hole: a disc round each rock, its
+ * clusters and the ones scattered on the rough alike, so it stands on bare
+ * ground and is seen, and not through the blades, which stand higher than a
+ * rock does. The turf is handed these; it knows nothing of rocks.
+ */
+export function clearings(layout: Layout, name: string): { x: number; y: number; r: number }[] {
+  const rocks = [...dress(layout, name).rocks, ...scatter(layout, name).filter((p) => p.kind === 'rock')];
+  return rocks.map((r) => ({ x: r.x, y: r.y, r: ROCK_SIZE * r.scale + CLEARING_MARGIN }));
 }

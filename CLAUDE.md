@@ -157,7 +157,13 @@ change meant to move it, and the commit says why. Look at every picture.
   second finger mid-drag takes the shot back. `src/camera.ts` says where the
   camera is. `src/quality.ts` is the ladder the picture steps down on a slow
   machine, and the governor that chooses the rung from the time between
-  frames. All are arithmetic, tested without a page.
+  frames and how much of it the drawing takes: frames that come slowly but
+  cost little (a page throttled to thirty a second, a low-power mode) are a
+  slow screen and not a slow machine, and the governor once took them for one
+  and gave the grass up twelve seconds in. The page measures the drawing by
+  asking the queue when a frame is done, one frame in four. The grass is
+  thinned on the ladder and never given up, and it always sways. All are
+  arithmetic, tested without a page.
 - `src/scene.ts` is a hole as it is drawn: the grass, the rail, the cup and
   flag, the tee's markers and the scenery, from the models. Each hole stands
   on the rough as a raised green: the rough lies `ROUGH_DEPTH` below the
@@ -241,18 +247,33 @@ change meant to move it, and the commit says why. Look at every picture.
   clear of the course, from the hole's name and never the game's chance;
   and dresses the hole, with bunting on tall posts round three sides just
   outside the rail, beds of flowers at the rail's foot, and rocks in
-  clusters, the scattered trees kept off the bunting.
+  clusters, the scattered trees kept off the bunting. Its `clearings` are the
+  discs of the rough round each rock, where no blade grows: the blades stand
+  higher than a rock does. The flowers carry their blooms on stems
+  (`BLOOM_TOPS`, in `models/decor.ts`) up out of the long grass, and a test
+  holds every bloom above three blades in four at the smallest scale a clump
+  is placed.
 - `src/turf.ts` is a hole's grass, as the renderer's GPU grass grows it: a
   field of quarter-unit cells saying where the rough grows (off the course,
   down where the rough lies, and on past the field as its `outside`), and
-  the hole's own gentle wind from its name. No blade grows on the course:
+  the hole's own wind from its name. The rough is long, lush grass: forty
+  blades a square unit, 1.6 tall and a third more or less, its tallest still
+  under the level of the course; the blades sway in a wind that bends them
+  about 30 degrees across the ground at one moment, in gusts eight units
+  across that the renderer carries downwind at five units a second, which
+  is the flow, so ripples roll across the rough (and the flag and trees
+  follow the same gusts). `GRASS` is how the renderer thins it: `near`,
+  `mid` and `far` are the game's own, since the renderer's scale with the
+  blade's height and would keep every blade for eighty units, and `BLADE_ROOM`
+  is its room for blades in a frame, which the smoke test holds every hole
+  at every zoom well short of. The standard view costs 2.5 ms of the 5, and
+  the ladder's rungs 1.3, 0.9 and 0.5 at the home view. No blade grows on the course:
   the green is painted, in its two stripes, by the scene (`PALETTE` in
   `scene.ts`), as `LOOK.md`'s clean look has it, and the ball leaves no
   track. The page hands the field to the renderer when a hole begins, and
   the first frame waits for the grass. Under the rough's blades, the scene
   paints the ground in the colour the renderer gives for between them
-  (`grassGround`), so the lowest rung, which gives the grass up, is the same
-  course without it.
+  (`grassGround`), so the thinned rungs hold the field's colour.
 - `src/debug.ts` is `window.game`, the test API. `src/invariants.ts` lists
   the rules that must always hold. `src/autopilot.ts` plays the game by
   itself, for the gates and for par.
@@ -360,8 +381,11 @@ for a save that is not the player's, which chooses The Meadow unless given
 `screen` to leave the start screen up, and `touches(page, steps)` for fingers, several at once.
 Looking: `look(x, y, distance)` parks the camera until `follow`, `view()`
 says how far back it stands and which rung of the quality ladder the
-picture is on, and `measureFrame`; `grass()` how many blades of the rough
-the last frame drew near and far, and the wind; `motions()` where each of
+picture is on and whether the grass sways (`swaying`), and `measureFrame`;
+`judge(frames, gapMs, workMs)` feeds the quality governor as the frame loop does, and says
+the rung; `grass()` how many blades of the rough the last frame drew near
+and far, and the wind; `bladesAround(x, y, radius)` how many the GPU drew
+with roots there; `motions()` where each of
 the things that answer is (the ball's squash, the flag's waggle, the gold's
 flash and the glints the last frame lit, the camera's glide and the aim's
 pulse), read back from what the last frame placed. `?rung=N` on the page puts the picture
@@ -441,7 +465,9 @@ For anything new on the course, check what it does:
   a frame at that many
 - **phone:** narrow screen, and a slower GPU: which rung it steps down to
 - **the grass:** whether the rough grows under it, and whether it moves
-  in the hole's wind
+  in the hole's wind; whether it is lost in the long grass (a rock is given
+  a clearing, a flower stems above the blades), and whether the grass
+  survives every rung of the ladder
 
 And the game's own, for anything new on a hole. The aim, the strokes and
 the ball at rest are here now; the rest apply from the feature that brings

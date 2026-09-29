@@ -7,7 +7,10 @@
  */
 import { expect, test, type Page } from '@playwright/test';
 import { PNG } from 'pngjs';
-import { ROLL, powerFor } from '../src/arena';
+import { ROLL, layoutOf, powerFor } from '../src/arena';
+import { COURSES } from '../src/course';
+import { clearings } from '../src/scenery';
+import { BLADE_ROOM } from '../src/turf';
 import { drag, start, touches, watch } from './game';
 import { holeOut, read, toCard } from './panels';
 
@@ -336,17 +339,20 @@ test.describe('the grass', () => {
     await start(page, { seed: 1, paused: true });
     await page.evaluate(() => window.game!.step(1));
     const first = await page.evaluate(() => window.game!.grass());
-    // with the green's blades, 51 thousand were drawn near the camera; the rough at the edge of the view is 13 of them
-    expect(first.near, 'no green blades near the camera').toBeLessThan(20_000);
-    expect(first.far, 'the rough round the course').toBeGreaterThan(1_000);
-    expect(first.wind.strength, 'a gentle wind').toBeGreaterThanOrEqual(0.3);
-    expect(first.wind.strength).toBeLessThanOrEqual(0.65);
+    const drawn = first.near + first.far;
+    // long, lush grass: at the home view several times what the short sparse rough drew (22 thousand), and never so many
+    // that the renderer runs out of room for blades and leaves the far rough bare; no blade grows on the course, which
+    // the unit tests hold on the field itself
+    expect(drawn, 'lush').toBeGreaterThan(60_000);
+    expect(drawn, "within the renderer's room for blades").toBeLessThan(BLADE_ROOM * 0.85);
+    expect(first.wind.strength, 'a wind that moves long grass').toBeGreaterThanOrEqual(0.7);
+    expect(first.wind.strength).toBeLessThanOrEqual(1);
     await page.evaluate(() => {
       window.game!.startHole(1);
       window.game!.step(1);
     });
     const second = await page.evaluate(() => window.game!.grass());
-    expect(second.far, 'grown again on the next hole').toBeGreaterThan(1_000);
+    expect(second.near + second.far, 'grown again on the next hole').toBeGreaterThan(60_000);
     expect(second.wind, 'a wind of its own').not.toEqual(first.wind);
     expect(problems).toEqual([]);
   });
@@ -363,6 +369,174 @@ test.describe('the grass', () => {
     const share = (half.near + half.far) / (full.near + full.far);
     expect(share).toBeGreaterThan(0.4);
     expect(share).toBeLessThan(0.6);
+  });
+
+  test('is thinned to a quarter on the last rung, still there and still swaying', async ({ page }) => {
+    const drawn = async (rung: number) => {
+      await start(page, { rung, seed: 1, paused: true });
+      await page.evaluate(() => window.game!.step(1));
+      const [grass, view] = await Promise.all([
+        page.evaluate(() => window.game!.grass()),
+        page.evaluate(() => window.game!.view()),
+      ]);
+      return { blades: grass.near + grass.far, swaying: view.swaying };
+    };
+    const full = await drawn(0),
+      last = await drawn(3);
+    expect(last.blades, 'the grass is never given up').toBeGreaterThan(0);
+    expect(last.blades / full.blades).toBeGreaterThan(0.15);
+    expect(last.blades / full.blades).toBeLessThan(0.35);
+    for (const rung of [0, 1, 2, 3]) expect((await drawn(rung)).swaying, `rung ${rung} sways`).toBe(true);
+  });
+
+  test('never runs the renderer out of blades, at the home view, the widest and the closest, on any hole of either course', async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    const problems = watch(page);
+    await start(page, { seed: 1, paused: true, screen: true });
+    let most = 0;
+    for (const course of ['The Meadow', 'The Hills']) {
+      await page.evaluate((name) => window.game!.chooseCourse(name), course);
+      const holes = await page.evaluate(() => window.game!.content().holes.length);
+      for (let hole = 0; hole < holes; hole++) {
+        await page.evaluate((i) => window.game!.startHole(i), hole);
+        // the home view from the tee, the closest zoom there is, and the widest, whole course in view
+        for (const zoom of [62, 30, 110]) {
+          const blades = await page.evaluate(async (distance) => {
+            const g = window.game!;
+            const { floor, tee } = g.content();
+            const middle = { x: (floor.minX + floor.maxX) / 2, y: (floor.minY + floor.maxY) / 2 };
+            const at = distance === 110 ? middle : tee;
+            g.look(at.x, at.y, distance);
+            g.step(2);
+            const drawn = await g.grass();
+            return drawn.near + drawn.far;
+          }, zoom);
+          most = Math.max(most, blades);
+          expect(blades, `${course} hole ${hole + 1} at zoom ${zoom}: grass there`).toBeGreaterThan(10_000);
+          expect(blades, `${course} hole ${hole + 1} at zoom ${zoom}: room to spare`).toBeLessThan(BLADE_ROOM * 0.85);
+        }
+      }
+    }
+    console.log(`grass: the most blades drawn in any scene ${most}, of room for ${BLADE_ROOM}`);
+    expect(problems).toEqual([]);
+  });
+
+  test('grows no blade in the clearing round a rock, on every hole of The Meadow, and grows them right up to its edge', async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    const problems = watch(page);
+    await start(page, { seed: 1, paused: true });
+    const holes = COURSES[0].holes;
+    let ringed = 0;
+    for (const [i, hole] of holes.entries()) {
+      const bare = clearings(layoutOf(hole.map, hole.terrain), hole.name);
+      await page.evaluate((k) => {
+        const g = window.game!;
+        g.startHole(k);
+        const { floor } = g.content();
+        // the whole course in view: every rock is drawn round
+        g.look((floor.minX + floor.maxX) / 2, (floor.minY + floor.maxY) / 2, 110);
+        g.step(2);
+      }, i);
+      for (const c of bare) {
+        // the field is cut in quarter-unit cells, so its edge is true to within one's half diagonal, 0.18
+        const inside = await page.evaluate(([x, y, r]) => window.game!.bladesAround(x, y, r - 0.25), [c.x, c.y, c.r]);
+        expect(inside, `${hole.name}: blades in the clearing at ${c.x.toFixed(1)},${c.y.toFixed(1)}`).toBe(0);
+        // and grass all round it, so it is a clearing and not a place the grass never reached
+        const round = await page.evaluate(([x, y, r]) => window.game!.bladesAround(x, y, r + 2.5), [c.x, c.y, c.r]);
+        if (round > 0) ringed++;
+      }
+    }
+    expect(ringed, 'grass grows round the clearings that are in view').toBeGreaterThan(10);
+    expect(problems).toEqual([]);
+  });
+
+  test('sways in the wind: the rough is another picture half a second on, and the same picture at the same moment', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 1, paused: true });
+    await page.evaluate(() => window.game!.step(60));
+    // a stretch of rough at the side of the home view, clear of the words and the course
+    const clip = { x: 880, y: 250, width: 400, height: 300 };
+    const shot = async () => PNG.sync.read(await page.screenshot({ clip, animations: 'disabled' }));
+    const changed = (a: PNG, b: PNG) => {
+      let n = 0;
+      for (let i = 0; i < a.data.length; i += 4)
+        if (
+          Math.abs(a.data[i] - b.data[i]) +
+            Math.abs(a.data[i + 1] - b.data[i + 1]) +
+            Math.abs(a.data[i + 2] - b.data[i + 2]) >
+          12
+        )
+          n++;
+      return n / (clip.width * clip.height);
+    };
+    const now = await shot();
+    expect(changed(now, await shot()), 'the same moment, the same picture: nothing moves by the clock').toBe(0);
+    await page.evaluate(() => window.game!.step(30));
+    const later = await shot();
+    // how hard it blows is the unit tests': this holds that the game's time is what moves it, and that it moves
+    expect(changed(now, later), 'the wind moved the grass').toBeGreaterThan(0.2);
+    expect(problems).toEqual([]);
+  });
+
+  test('keeps its grass and its wind on a page given thirty frames a second, for as long as it is played', async ({
+    page,
+  }) => {
+    // the one test here that runs on the clock, since the clock is what it is about: the governor once took the gap
+    // between frames for a slow machine and, at thirty a second, gave up half the grass at four seconds and all of it
+    // at twelve
+    test.setTimeout(60_000);
+    const problems = watch(page);
+    await page.addInitScript(() => {
+      const raf = window.requestAnimationFrame.bind(window);
+      let last = 0;
+      window.requestAnimationFrame = (cb) =>
+        raf((t) => {
+          if (t - last < 30) window.requestAnimationFrame(cb);
+          else {
+            last = t;
+            cb(t);
+          }
+        });
+    });
+    await start(page, { seed: 1 });
+    // 300 frames at thirty a second: long past the point the gap alone stepped the picture down
+    await expect.poll(() => page.evaluate(() => window.game!.state().frame), { timeout: 40_000 }).toBeGreaterThan(330);
+    const view = await page.evaluate(() => window.game!.view());
+    expect(view.rung, 'no slow machine, only a slow screen').toBe(0);
+    expect(view.swaying).toBe(true);
+    const grass = await page.evaluate(() => window.game!.grass());
+    expect(grass.near + grass.far, 'all of the grass').toBeGreaterThan(60_000);
+    expect(problems).toEqual([]);
+  });
+
+  test('keeps a quarter of the grass swaying on a machine too slow for the drawing, on the last rung', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 1, paused: true });
+    const drawn = async () => {
+      await page.evaluate(() => window.game!.step(1));
+      const grass = await page.evaluate(() => window.game!.grass());
+      return grass.near + grass.far;
+    };
+    const full = await drawn();
+    // frames that take as long as they are apart are a slow machine, and step the picture down a rung at a time
+    expect(await page.evaluate(() => window.game!.judge(1000, 60, 55))).toBe(3);
+    // the share, and not only some: a renderer told to draw none reads back the blades of the frame before
+    const last = await drawn();
+    expect(last / full, 'a quarter of the grass on the last rung').toBeGreaterThan(0.15);
+    expect(last / full).toBeLessThan(0.35);
+    expect((await page.evaluate(() => window.game!.view())).swaying, 'swaying on the last rung').toBe(true);
+    // and the same frames, apart by as much and cheap to draw, leave the picture as it was
+    await start(page, { seed: 1, paused: true });
+    expect(await page.evaluate(() => window.game!.judge(1000, 33, 2))).toBe(0);
+    expect(problems).toEqual([]);
   });
 });
 
@@ -453,7 +627,8 @@ test.describe('on a phone', () => {
       window.game!.step(120);
     });
     const grass = await page.evaluate(() => window.game!.grass());
-    expect(grass, 'no grass drawn at all').toMatchObject({ near: 0, far: 0 });
+    // a phone's narrow view sees little of the rough, and this is a quarter of that: some grass, and not none
+    expect(grass.near + grass.far, 'the grass is not given up on the last rung').toBeGreaterThan(1_000);
     expect(await page.evaluate(() => window.game!.invariants())).toEqual([]);
     expect(problems).toEqual([]);
   });

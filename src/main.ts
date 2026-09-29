@@ -20,8 +20,9 @@ import { daylight } from './look';
 import { Progress } from './progress';
 import { seeded } from './random';
 import { roll } from './roll';
-import { fieldOf, windOf } from './turf';
+import { GRASS, fieldOf, windOf } from './turf';
 import { Scene, boxOf } from './scene';
+import { clearings } from './scenery';
 import { cupBurst, splash, strikePuff } from './bursts';
 import { Gesture } from './gesture';
 import { flash, glint } from './glints';
@@ -150,7 +151,7 @@ async function main() {
       renderer.setStatic(scene.static(layout, name, game.obstacles));
       renderer.setDynamic(scene.dynamic(game.obstacles, layout, name, wind));
       // the hole's rough, round the painted green
-      grown = renderer.setGrass(fieldOf(layout, name));
+      grown = renderer.setGrass(fieldOf(layout, name, clearings(layout, name)), GRASS);
       renderer.wind = wind;
       renderer.setSunShadow(boxOf(layout));
       // the camera glides to the tee from wherever it was looking, but for the first hole, with nowhere it was; and the
@@ -385,7 +386,8 @@ async function main() {
     // the camera keeps game time, so a test stepping the game sees it follow the same way every run
     if (!parked) rig.follow(world.x[ball], world.y[ball], dt, heightAt(played.layout, world.x[ball], world.y[ball]));
   }
-  function draw(dt: number) {
+  /** The frame drawn, and when it was begun, for the governor to measure the drawing against. */
+  function draw(dt: number): number {
     rig.place(cam, played.t);
     cam.update();
     upload();
@@ -393,6 +395,29 @@ async function main() {
     renderer.frame(ctx.context.getCurrentTexture().createView(), 'redraw', dt);
     smoothed += (performance.now() - t - smoothed) * 0.05;
     if (frames % 30 === 0) stats.textContent = `${smoothed.toFixed(1)} ms`;
+    return t;
+  }
+
+  /**
+   * How long a frame took to draw and have the GPU finish, in milliseconds, as last measured: from the moment its
+   * drawing began to the moment the queue reported it done. The governor tells a slow machine from a slow screen by
+   * it. Measured on one frame in `PROBE`, one at a time, so it costs a promise every few frames and never a stall.
+   */
+  let worked = 0;
+  let probing = false;
+  const PROBE = 4;
+  function probe(began: number) {
+    if (probing || frames % PROBE !== 0) return;
+    probing = true;
+    void ctx.device.queue.onSubmittedWorkDone().then(() => {
+      worked = performance.now() - began;
+      probing = false;
+    });
+  }
+  /** A frame `gap` after the last that took `work` to draw, given to the governor; the picture stepped down if it says so. */
+  function judge(gap: number, work: number): number {
+    if (governor.frame(gap, work)) renderer.economy = governor.economy;
+    return governor.rung;
   }
 
   // ---- the test API, and the frame loop ----
@@ -438,8 +463,10 @@ async function main() {
       rung: governor.rung,
       held: governor.held,
       antialias: antialiasFor(renderer.look, renderer.economy),
+      swaying: renderer.economy.wind !== false,
     }),
     measureFrame,
+    judge,
     motions: () => ({
       squash: drawn.squash,
       waggle: waggle(played.t - scene.holedAt),
@@ -463,6 +490,13 @@ async function main() {
       const { direction, strength } = renderer.wind;
       return { ...drawn, wind: { direction: [direction[0], direction[1]], strength } };
     },
+    async bladesAround(x, y, radius) {
+      await grown;
+      const { near, far } = await renderer.grassBlades();
+      let n = 0;
+      for (const b of [...near, ...far]) if (Math.hypot(b.x - x, b.y - y) <= radius) n++;
+      return n;
+    },
     events: eventLog,
   });
 
@@ -476,10 +510,11 @@ async function main() {
       draw(0);
       return;
     }
-    // a slow machine steps the picture down: judged on the time between frames, which is what a player sees
-    if (governor.frame(gap)) renderer.economy = governor.economy;
+    // a slow machine steps the picture down: judged on the time between frames, which is what a player sees, and on how
+    // much of it the drawing takes, so a screen that is only slow to deliver frames does not lose the grass
+    judge(gap, worked);
     simulate(dt);
-    draw(dt);
+    probe(draw(dt));
   };
   ready = true;
   bootMs = performance.now();

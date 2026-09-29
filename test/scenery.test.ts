@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { TILE, layoutOf, tileAt } from '../src/arena';
 import { COURSE } from '../src/course';
-import { DRESSING, SCENERY, dress, scatter } from '../src/scenery';
+import { DRESSING, ROCK_SIZE, SCENERY, SCALE, clearings, dress, scatter } from '../src/scenery';
 
 describe('the scenery', () => {
   for (const hole of COURSE) {
@@ -107,5 +107,31 @@ describe('the dressing of a hole', () => {
   it('is the same for a hole every time', () => {
     const l = layoutOf(COURSE[2].map);
     expect(dress(l, COURSE[2].name)).toEqual(dress(l, COURSE[2].name));
+  });
+});
+
+describe('the clearings round the rocks', () => {
+  for (const hole of COURSE) {
+    it(`on ${hole.name}: a bare patch under every rock, big enough for it, on the rough and nowhere else`, () => {
+      const l = layoutOf(hole.map);
+      const rocks = [...dress(l, hole.name).rocks, ...scatter(l, hole.name).filter((p) => p.kind === 'rock')];
+      const bare = clearings(l, hole.name);
+      expect(rocks.length, 'rocks on every hole').toBeGreaterThan(0);
+      expect(bare.length, 'a clearing for each').toBe(rocks.length);
+      rocks.forEach((rock, i) => {
+        expect(bare[i].x).toBe(rock.x);
+        expect(bare[i].y).toBe(rock.y);
+        // wider than the rock is, or the blades stand over its edge and it is seen through them
+        expect(bare[i].r, 'the rock and a margin').toBeGreaterThan(ROCK_SIZE * rock.scale);
+        const t = tileAt(l, rock.x, rock.y);
+        expect(t < 0 || (l.solid[t] === 1 && l.rail[t] === 0), 'on the rough').toBe(true);
+      });
+    });
+  }
+
+  it('is the same for a hole every time', () => {
+    const l = layoutOf(COURSE[0].map);
+    expect(clearings(l, COURSE[0].name)).toEqual(clearings(l, COURSE[0].name));
+    expect(SCALE.least).toBeGreaterThan(0);
   });
 });

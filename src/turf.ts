@@ -2,13 +2,13 @@
  * A hole's grass, as the renderer grows it: a field over the course and the
  * rough round it, saying which kind grows in each quarter-unit cell and how
  * high the ground is there, and the wind that blows across it. The rough
- * grows off the course, down where it lies, and on to the horizon, long and
- * moving in the wind, and frames the course; nothing grows on the course
- * itself, whose green is painted, smooth and clean, by the scene. Content and
- * the arithmetic of reading it: the renderer grows and draws the blades, and
- * the page hands it this.
+ * grows off the course, down where it lies, and on to the horizon, long,
+ * dense and rippling in the wind like a meadow, and frames the course;
+ * nothing grows on the course itself, whose green is painted, smooth and
+ * clean, by the scene. Content and the arithmetic of reading it: the renderer
+ * grows and draws the blades, and the page hands it this.
  */
-import type { GrassField, GrassKind, Wind } from 'artshape-render/game/grass';
+import type { GrassField, GrassKind, GrassOptions, Wind } from 'artshape-render/game/grass';
 import { TILE, tileAt, type Layout } from './arena';
 import { seeded } from './random';
 
@@ -26,16 +26,18 @@ export const TURF = { cell: 0.25, reach: 34 } as const;
 export const ROUGH = 0;
 
 /**
- * The rough, as the renderer's spec recommends it for this game: long sparse
- * blades that the wind moves, deep for toon light, and a good deal darker
- * than the painted green, so the course is framed by what lies round it.
+ * The rough: long, dense blades that the wind moves, deep for toon light, and
+ * a good deal darker than the painted green, so the course is framed by what
+ * lies round it. It stands from `ROUGH_DEPTH` below the green and the tallest
+ * blade, 1.6 and a third, still ends under the level of the course, so the
+ * grass is a meadow the course is set in and never a hedge across it.
  */
 export const KINDS: readonly GrassKind[] = [
   {
-    density: 12,
-    height: 0.8,
-    heightSpread: 0.3,
-    width: 0.09,
+    density: 40,
+    height: 1.6,
+    heightSpread: 0.35,
+    width: 0.11,
     base: [0.025, 0.1, 0.04],
     tip: [0.06, 0.24, 0.09],
     variation: 0.25,
@@ -45,6 +47,27 @@ export const KINDS: readonly GrassKind[] = [
   },
 ];
 
+/**
+ * How many blades the renderer has room for in a frame. Past it a blade is not
+ * drawn, and the rough furthest from the camera is left bare: this field at
+ * forty a unit with the renderer's own rings did reach it, and 64 a unit
+ * certainly did. The smoke test holds every hole at every zoom well short.
+ */
+export const BLADE_ROOM = 262_144;
+
+/**
+ * How the renderer thins the rough with distance. Left to itself it scales the
+ * rings with the blade's height, and at this height keeps every blade out to
+ * eighty units, which is more grass than a frame has the time for (3.8 ms at
+ * the standard view, against 2.5 with these rings); here the rings are the
+ * game's own. Every blade within `near` is grown, and past it
+ * the share kept falls with the square of the distance, the kept blades drawn
+ * wider so the colour of the field holds, so each ring out from the camera
+ * costs about what the one before did. The camera stands 30 to 110 units back:
+ * `near` reaches the ground under the closest, and the far rough is thin.
+ */
+export const GRASS: GrassOptions = { near: 45, mid: 110, far: 300, capacity: BLADE_ROOM };
+
 /** A seed from a name: FNV-1a, so the same hole grows the same grass and blows the same wind. */
 function seedOf(name: string): number {
   let h = 0x811c9dc5;
@@ -52,8 +75,15 @@ function seedOf(name: string): number {
   return h >>> 0;
 }
 
-/** The field of grass for a hole laid out as `layout`, called `name`. */
-export function fieldOf(layout: Layout, name: string): GrassField {
+/** A disc of the rough where no blade grows: a rock stands there, and would be lost in the grass. */
+export interface Clearing {
+  x: number;
+  y: number;
+  r: number;
+}
+
+/** The field of grass for a hole laid out as `layout`, called `name`, with none in the `bare` discs. */
+export function fieldOf(layout: Layout, name: string, bare: readonly Clearing[] = []): GrassField {
   const { cell, reach } = TURF;
   const origin: [number, number] = [layout.originX - reach, layout.originY - reach];
   const cols = Math.ceil((layout.cols * TILE + 2 * reach) / cell),
@@ -70,6 +100,16 @@ export function fieldOf(layout: Layout, name: string): GrassField {
         heights[i] = -ROUGH_DEPTH;
       }
     }
+  for (const { x, y, r } of bare) {
+    const x0 = Math.max(0, Math.floor((x - r - origin[0]) / cell)),
+      x1 = Math.min(cols - 1, Math.floor((x + r - origin[0]) / cell)),
+      y0 = Math.max(0, Math.floor((y - r - origin[1]) / cell)),
+      y1 = Math.min(rows - 1, Math.floor((y + r - origin[1]) / cell));
+    for (let cy = y0; cy <= y1; cy++)
+      for (let cx = x0; cx <= x1; cx++)
+        if (Math.hypot(origin[0] + (cx + 0.5) * cell - x, origin[1] + (cy + 0.5) * cell - y) <= r)
+          mask[cy * cols + cx] = 0;
+  }
   return {
     origin,
     cell,
@@ -83,9 +123,15 @@ export function fieldOf(layout: Layout, name: string): GrassField {
   };
 }
 
-/** The wind on a hole called `name`: a way of its own, gentle, in gusts a couple of tiles across. */
+/**
+ * The wind on a hole called `name`: a way of its own, strong enough to bend
+ * long grass a good way, in ripples a couple of tiles across that the renderer
+ * carries downwind at five units a second, so a gust is seen to roll across the
+ * rough as it does across a meadow. The flag and the trees follow the same
+ * gusts.
+ */
 export function windOf(name: string): Wind {
   const random = seeded(seedOf(`${name} wind`));
   const a = random() * Math.PI * 2;
-  return { direction: [Math.cos(a), Math.sin(a)], strength: 0.3 + random() * 0.35, gustSize: 20, gustSpeed: 4 };
+  return { direction: [Math.cos(a), Math.sin(a)], strength: 0.7 + random() * 0.3, gustSize: 8, gustSpeed: 5 };
 }

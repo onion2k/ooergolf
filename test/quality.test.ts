@@ -2,15 +2,18 @@
 import { describe, expect, it } from 'vitest';
 import { FRAME_BUDGET_MS, Governor, RUNGS, economyFor } from '../src/quality';
 
-/** Frames of `ms` each, `n` of them, into the governor; how many times it stepped. */
-function feed(g: Governor, ms: number, n: number) {
+/**
+ * Frames `gap` apart, `n` of them, into the governor, each of which cost `work` to draw and have the GPU finish (as
+ * long as the gap unless said); how many times it stepped.
+ */
+function feed(g: Governor, gap: number, n: number, work = gap) {
   let stepped = 0;
-  for (let i = 0; i < n; i++) if (g.frame(ms)) stepped++;
+  for (let i = 0; i < n; i++) if (g.frame(gap, work)) stepped++;
   return stepped;
 }
 
 describe('the quality ladder', () => {
-  it('has rungs that only ever take things away: particles and half the grass, then shade, then the rest and the grass', () => {
+  it('has rungs that only ever take things away: particles and half the grass, then shade, then the rest and most of the grass', () => {
     expect(RUNGS.length).toBeGreaterThanOrEqual(4);
     const off = RUNGS.map((r) => economyFor(r));
     expect(off[0]).toMatchObject({
@@ -30,7 +33,7 @@ describe('the quality ladder', () => {
       post: true,
       fog: true,
       grass: 0.5,
-      wind: false,
+      wind: true,
     });
     expect(off[2]).toMatchObject({
       particles: false,
@@ -39,7 +42,7 @@ describe('the quality ladder', () => {
       post: true,
       fog: true,
       grass: 0.5,
-      wind: false,
+      wind: true,
     });
     expect(off[3]).toMatchObject({
       particles: false,
@@ -48,8 +51,20 @@ describe('the quality ladder', () => {
       post: false,
       fog: false,
       effects: 0,
-      grass: 0,
+      grass: 0.25,
+      wind: true,
     });
+  });
+
+  it('never gives the grass up, nor stills it: every rung draws some of it, thinned as the distance thins it, swaying', () => {
+    const grass = RUNGS.map((r) => economyFor(r).grass!);
+    for (const [i, r] of RUNGS.entries()) {
+      const e = economyFor(r);
+      expect(e.grass, `rung ${i} has grass`).toBeGreaterThan(0);
+      expect(e.wind, `rung ${i} sways`).toBe(true);
+    }
+    expect(grass, 'thinner with each rung, never thicker').toEqual([...grass].sort((a, b) => b - a));
+    expect(grass[grass.length - 1], 'a quarter of it on the last').toBe(0.25);
   });
 
   it('draws edges at four samples a pixel on the top rung, with the cheaper post pass below it, and plain on the last', () => {
@@ -79,11 +94,35 @@ describe('the quality ladder', () => {
     expect(g.rung, 'never back up by itself').toBe(RUNGS.length - 1);
   });
 
+  it('stays where it is when the frames come slowly but cost little: a page given thirty a second, a throttled pane', () => {
+    const g = new Governor();
+    // a frame every 33 ms, each drawn and finished in 2: the machine is idle between them, and stepping down helps nothing
+    expect(feed(g, 33, 10_000, 2)).toBe(0);
+    expect(g.rung).toBe(0);
+    // and one that is less than half spent drawing, even when the drawing is not small
+    expect(feed(new Governor(), 40, 10_000, 15)).toBe(0);
+  });
+
+  it('steps down when the drawing is what takes the time, on any screen', () => {
+    const slow = new Governor();
+    // a GPU that takes 45 ms to finish a frame: frames come every 48
+    feed(slow, 48, 10_000, 45);
+    expect(slow.rung).toBe(RUNGS.length - 1);
+    // a fast screen is no excuse: over the budget in what it draws, and in what the player sees
+    const fast = new Governor();
+    feed(fast, 24, 10_000, 22);
+    expect(fast.rung).toBe(RUNGS.length - 1);
+    // and a machine that draws well within the frame keeps its rung however fast the screen
+    const kept = new Governor();
+    feed(kept, 8, 10_000, 6);
+    expect(kept.rung).toBe(0);
+  });
+
   it('pays no mind to a stall, or to a gap where the page was hidden', () => {
     const g = new Governor();
-    for (let i = 0; i < 2000; i++) g.frame(i % 100 === 0 ? 60 : 8);
+    for (let i = 0; i < 2000; i++) g.frame(i % 100 === 0 ? 60 : 8, i % 100 === 0 ? 60 : 8);
     expect(g.rung, 'a hitch now and then').toBe(0);
-    for (let i = 0; i < 50; i++) g.frame(2000);
+    for (let i = 0; i < 50; i++) g.frame(2000, 2000);
     expect(g.rung, 'the page hidden').toBe(0);
   });
 
