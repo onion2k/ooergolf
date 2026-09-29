@@ -17,6 +17,7 @@
  * round.
  */
 import { Autopilot } from '../src/autopilot';
+import { COURSES } from '../src/course';
 import { Game } from '../src/game';
 import { Progress, memoryStore } from '../src/progress';
 import { seeded } from '../src/random';
@@ -31,10 +32,14 @@ export interface TwiceOptions {
   every?: number;
   /** For testing the check itself: something done to the game at each step of a pass. */
   meddle?: (game: Game, pass: number) => void;
+  /** The name of the course to play, the first's if left out: by name, since the options are handed to a worker. */
+  course?: string;
 }
 
 export interface TwiceResult {
   seed: number;
+  /** The course played. */
+  course: string;
   frames: number;
   /** The frame the two runs first parted at, or null if they never did. */
   diverged: number | null;
@@ -84,10 +89,12 @@ export function hashGame(game: Game): string {
 }
 
 /** Play a seed twice, hashing every `every` frames, and say where the two runs first parted. */
-export function playTwice({ seed, frames, every = 300, meddle }: TwiceOptions): TwiceResult {
+export function playTwice({ seed, frames, every = 300, meddle, course = COURSES[0].name }: TwiceOptions): TwiceResult {
+  const holes = COURSES.find((c) => c.name === course)?.holes;
+  if (!holes) throw new Error(`no course called ${course}`);
   const passes: string[][] = [];
   for (let pass = 0; pass < 2; pass++) {
-    const game = new Game(new Progress(memoryStore()), {}, { random: seeded(seed) });
+    const game = new Game(new Progress(memoryStore()), {}, { random: seeded(seed), course: holes });
     const pilot = new Autopilot(game, { skill: PLAYER, random: seeded(seed * 13 + 5), replay: true });
     const hashes: string[] = [];
     for (let f = 1; f <= frames; f++) {
@@ -99,13 +106,15 @@ export function playTwice({ seed, frames, every = 300, meddle }: TwiceOptions): 
   }
   const [one, two] = passes;
   const at = one.findIndex((h, k) => h !== two[k]);
-  if (at < 0) return { seed, frames, diverged: null, checkpoints: one, note: `seed ${seed}: the same, twice` };
+  if (at < 0)
+    return { seed, course, frames, diverged: null, checkpoints: one, note: `${course}, seed ${seed}: the same, twice` };
   const frame = (at + 1) * every;
   return {
     seed,
+    course,
     frames,
     diverged: frame,
     checkpoints: one,
-    note: `seed ${seed}: the two runs parted by frame ${frame} (${one[at]} against ${two[at]}); the last they agreed on was ${at ? `frame ${at * every}` : 'the start'}`,
+    note: `${course}, seed ${seed}: the two runs parted by frame ${frame} (${one[at]} against ${two[at]}); the last they agreed on was ${at ? `frame ${at * every}` : 'the start'}`,
   };
 }

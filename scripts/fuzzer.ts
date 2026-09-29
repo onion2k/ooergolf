@@ -18,7 +18,7 @@
  */
 import { Autopilot } from '../src/autopilot';
 import { CLUBS } from '../src/clubs';
-import { COURSES } from '../src/course';
+import { COURSES, type HoleDef } from '../src/course';
 import { Game, type GameEvents } from '../src/game';
 import { checkInvariants, knockProblems } from '../src/invariants';
 import { Progress, memoryStore } from '../src/progress';
@@ -47,13 +47,20 @@ export interface FuzzResult {
   /** How often each thing was done, and each event happened: to see that the monkey got about. */
   done: Record<string, number>;
   happened: Record<string, number>;
+  /** How many times each hole was begun, by name: which holes the monkey played. */
+  visited: Record<string, number>;
 }
 
-/** Play `frames` frames of the game at random from `seed`. */
-export function fuzz(seed: number, frames: number): FuzzResult {
+/**
+ * Play `frames` frames of the game at random from `seed`. Left to itself it starts on the first course and comes to
+ * the others by choosing them, as a player does; given `course` it plays that one throughout, at the start, after a
+ * reload and whenever it chooses, so a course of its own gets the whole of a run and not a share of it.
+ */
+export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]): FuzzResult {
   // the monkey's own chance, apart from the game's, so what it decides does not shift what the game does
   const random = seeded(seed * 7 + 1);
   const happened: Record<string, number> = {};
+  const visited: Record<string, number> = {};
   const done: Record<string, number> = {};
   const count = (into: Record<string, number>, key: string) => (into[key] = (into[key] ?? 0) + 1);
   /** The game being played, once there is one, and what was wrong with a knock as it was told, for the next check. */
@@ -66,6 +73,7 @@ export function fuzz(seed: number, frames: number): FuzzResult {
         (_, name: string) =>
         (...args: number[]) => {
           count(happened, name);
+          if (name === 'started' && playing) count(visited, playing.def.name);
           if (name === 'knocked' && playing) told.push(...knockProblems(playing, ...(args as Knock)));
         },
     },
@@ -78,12 +86,13 @@ export function fuzz(seed: number, frames: number): FuzzResult {
     failure: { seed, frame, problems, log: log.slice(-LOG_TAIL) },
     done,
     happened,
+    visited,
   });
 
   try {
     // a new player, or, on odd seeds, one come back with coins and gems enough for the shop
     let store = memoryStore(seed % 2 ? JSON.stringify({ coins: 700, gems: 6 }) : null);
-    let game = new Game(new Progress(store), events, { random: seeded(seed) });
+    let game = new Game(new Progress(store), events, { random: seeded(seed), course });
     playing = game;
     // a player part way round, on a hole of the seed's: every hole is played, where a monkey starting from the first
     // and reloading now and then would seldom get to the last
@@ -176,7 +185,8 @@ export function fuzz(seed: number, frames: number): FuzzResult {
           // card's button when a round is over
           const atStart = game.hole === 0 && game.strokes === 0 && game.card.length === 0;
           if (game.phase !== 'over' && !atStart) return;
-          game.playCourse(COURSES[Math.floor(random() * COURSES.length)].holes);
+          const chosen = COURSES[Math.floor(random() * COURSES.length)].holes;
+          game.playCourse(course ?? chosen);
           did('choose a course');
         },
       ],
@@ -187,7 +197,7 @@ export function fuzz(seed: number, frames: number): FuzzResult {
           game.persist();
           const kept = JSON.stringify(game.progress.save);
           store = memoryStore(store.json);
-          game = new Game(new Progress(store), events, { random: seeded(seed + frame) });
+          game = new Game(new Progress(store), events, { random: seeded(seed + frame), course });
           playing = game;
           const loaded = JSON.stringify(game.progress.save);
           if (loaded !== kept) throw new Error(`the save was ${kept} and loaded as ${loaded}`);
@@ -214,7 +224,7 @@ export function fuzz(seed: number, frames: number): FuzzResult {
         if (problems.length) return fail(problems);
       }
     }
-    return { seed, frames, failure: null, done, happened };
+    return { seed, frames, failure: null, done, happened, visited };
   } catch (err) {
     return fail([`threw: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`]);
   }

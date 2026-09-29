@@ -84,6 +84,7 @@ fixed, and no baseline is moved to make it green.
     src/debug.ts       window.game, the test API
     src/invariants.ts  what must always hold
     src/course.ts      the courses, and their holes: a map, a par, what moves on each, and its slopes
+    src/noise.ts       ground made from Perlin noise: smooth, seeded, and legal to the physics
     src/obstacles.ts   where a barrier, a windmill's gate and a belt are at any moment
     src/arena.ts       a hole's map read into a layout; the kinds of body, the hardest shot
     src/autopilot.ts   the game played by itself, for the gates and for par

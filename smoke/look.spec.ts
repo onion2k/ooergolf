@@ -17,7 +17,7 @@
  * `test-results/`. Look at all three before deciding which is right.
  */
 import { expect, test, type Page } from '@playwright/test';
-import type { HoleDef } from '../src/course';
+import { DOWNS, type HoleDef } from '../src/course';
 import { glint } from '../src/glints';
 import { drag, start, watch } from './game';
 
@@ -178,6 +178,25 @@ test.describe('what it looks like', () => {
       );
       await hideStats(page);
       await expect(page.locator('#view')).toHaveScreenshot(file, TOLERANCE);
+      expect(problems).toEqual([]);
+    });
+  }
+
+  // The Downs, a hole each from its tee: half as long again as the others, so the whole of it is in view from further back
+  for (const [i, hole] of DOWNS.entries()) {
+    test(`${hole.name}, hole ${i + 1} of The Downs, from its tee`, async ({ page }) => {
+      const problems = watch(page);
+      await start(page, { seed: 11, paused: true });
+      await page.evaluate((k) => {
+        window.game!.chooseCourse('The Downs');
+        window.game!.startHole(k);
+        window.game!.step(75);
+        const { floor } = window.game!.content();
+        window.game!.look((floor.minX + floor.maxX) / 2, (floor.minY + floor.maxY) / 2 - 12, 100);
+        window.game!.step(1);
+      }, i);
+      await hideStats(page);
+      await expect(page.locator('#view')).toHaveScreenshot(`downs-${i + 1}.png`, TOLERANCE);
       expect(problems).toEqual([]);
     });
   }

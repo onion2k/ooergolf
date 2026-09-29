@@ -68,6 +68,41 @@ describe('a hole that slopes', () => {
     expect(flat.terrain.every((h) => h === 0)).toBe(true);
   });
 
+  it('takes real heights as well as digits: one for every tile, row by row from the south, copied and never shared', () => {
+    const cols = MAP[0].length,
+      rows = MAP.length;
+    const heights = new Float32Array(cols * rows);
+    heights[3 * cols + 4] = 1.234;
+    const l = layoutOf(MAP, heights);
+    expect(l.terrain[3 * cols + 4]).toBeCloseTo(1.234, 6);
+    expect(l.terrain.filter((h) => h !== 0).length).toBe(1);
+    // the hole's own, and not the content's: what the content holds is never written to by a game
+    heights.fill(0);
+    expect(l.terrain[3 * cols + 4]).toBeCloseTo(1.234, 6);
+    expect(() => layoutOf(MAP, new Float32Array(cols * rows - 1)), 'a tile short').toThrow(/terrain/);
+    for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, -0.5]) {
+      const h = new Float32Array(cols * rows);
+      h[7] = bad;
+      expect(() => layoutOf(MAP, h), `${bad}`).toThrow(/terrain/);
+    }
+    // heights that are digits' heights are read as the digits are: the same ground, to the last place
+    const drawn = layoutOf(
+      MAP,
+      terrain([
+        [4, 10, '2'],
+        [5, 10, '1'],
+      ]),
+    );
+    const given = layoutOf(MAP, Float32Array.from(drawn.terrain));
+    expect(given.terrain).toEqual(drawn.terrain);
+    for (const [x, y] of [
+      [0.3, 1.1],
+      [-2.4, -6.5],
+      [4.4, 3.3],
+    ])
+      expect(heightAt(given, x, y)).toBe(heightAt(drawn, x, y));
+  });
+
   it('smooths the heights between the tiles as the physics does: a lone raised tile a mound four ninths as high', () => {
     const l = layoutOf(MAP, terrain([[4, 10, '2']]));
     const top = middle(l, 4, 10),

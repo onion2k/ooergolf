@@ -1,6 +1,7 @@
 /** The monkey itself: it gets about, and a clean seed is clean. `npm run fuzz` is the long form. */
 import { describe, expect, it } from 'vitest';
 import { fuzz } from '../scripts/fuzzer';
+import { DOWNS } from '../src/course';
 
 describe('the fuzzer', () => {
   it('plays a seed through without breaking a rule, and does everything a player can', () => {
@@ -37,6 +38,28 @@ describe('the fuzzer', () => {
     expect(r.happened.holed, 'holed out').toBeGreaterThan(0);
     expect(r.happened.finished, 'round the whole course').toBeGreaterThan(0);
     expect(r.happened.knocked, 'knocked off the rail and the rest, each knock told as a knock is').toBeGreaterThan(0);
+  });
+
+  it('plays The Downs at random from start to finish, every seed clean, holing out and getting round all nine', () => {
+    // the whole of the run on the course, not a share of it: nine long holes of noise, struck any way at any power
+    let holed = 0,
+      finished = 0,
+      knocked = 0;
+    const visited = new Set<string>();
+    for (const seed of [17, 40, 3, 8]) {
+      const r = fuzz(seed, 12000, DOWNS);
+      expect(r.failure, `seed ${seed}: ${JSON.stringify(r.failure)}`).toBe(null);
+      holed += r.happened.holed || 0;
+      finished += r.happened.finished || 0;
+      knocked += r.happened.knocked || 0;
+      for (const name of Object.keys(r.visited)) visited.add(name);
+    }
+    const names = DOWNS.map((h) => h.name);
+    expect(visited.size, 'a good many of its holes played').toBeGreaterThanOrEqual(5);
+    for (const name of visited) expect(names, `${name} is not a hole of The Downs`).toContain(name);
+    expect(holed, 'holed out').toBeGreaterThan(0);
+    expect(finished, 'round the whole course').toBeGreaterThan(0);
+    expect(knocked, 'and knocked about, on ground that rises and falls').toBeGreaterThan(0);
   });
 
   it('plays the same way twice from a seed', () => {

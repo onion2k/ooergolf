@@ -6,6 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import { hashGame, playTwice } from '../scripts/determinism';
 import { BALL } from '../src/arena';
+import { COURSES } from '../src/course';
 import { DT, newGame } from './helpers';
 
 describe('the same seed gives the same game', () => {
@@ -15,6 +16,16 @@ describe('the same seed gives the same game', () => {
     expect(run.checkpoints.length).toBe(12);
     // and the ball was played: the checkpoints are not all one still course
     expect(new Set(run.checkpoints).size).toBeGreaterThan(6);
+  });
+
+  it('plays out the same, twice from a seed, on every course: ground that slopes, and ground from noise, as well as the level', () => {
+    for (const course of COURSES.map((c) => c.name)) {
+      const run = playTwice({ seed: 3, frames: 1200, every: 100, course });
+      expect(run.course).toBe(course);
+      expect(run.diverged, run.note).toBe(null);
+      expect(new Set(run.checkpoints).size, `${course} was played`).toBeGreaterThan(6);
+    }
+    expect(() => playTwice({ seed: 3, frames: 10, course: 'The Nowhere' })).toThrow(/no course/);
   });
 
   it('hashes what a game is, so anything moved shows', () => {

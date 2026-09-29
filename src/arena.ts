@@ -152,12 +152,14 @@ export interface Layout extends Ground {
  * first, one character a tile: `#` rail, `.` grass, `T` the tee and `C` the
  * cup on level grass, a digit for grass raised that many steps, `~` water,
  * `s` sand, `o` a post standing on grass, and a space for off the course.
- * `terrain`, if given, is a grid the shape of the map with a digit a tile,
- * how high the ground slopes there. Whether the physics will take it is the
+ * `terrain`, if given, is how high the ground slopes on each tile: a grid the
+ * shape of the map with a digit a tile, or real heights, one a tile, row by
+ * row from the south as a layout has them, which is how ground made from
+ * noise comes (see `noise.ts`). Whether the physics will take it is the
  * physics' to say: see `terrainRefusal`. The grid is centred on the origin. A map with anything else in it, not exactly one tee and one cup, or
  * grass on its edge, where a ball would leave the world, is refused.
  */
-export function layoutOf(map: readonly string[], terrain?: readonly string[]): Layout {
+export function layoutOf(map: readonly string[], terrain?: readonly string[] | Float32Array): Layout {
   const rows = map.length;
   const cols = Math.max(...map.map((r) => r.length));
   const originX = -(cols * TILE) / 2,
@@ -318,10 +320,23 @@ function smoothed(l: Layout, x: number, y: number, dx: boolean, dy: boolean): nu
   return h;
 }
 
-/** The heights a hole's `terrain` grid gives each tile, row by row from the south; all nought without one. */
-function terrainOf(grid: readonly string[] | undefined, cols: number, rows: number): Float32Array {
+/**
+ * The heights a hole's `terrain` gives each tile, row by row from the south;
+ * all nought without one. Real heights are the hole's own copy, so nothing a
+ * game does to a layout reaches the content they came from.
+ */
+function terrainOf(grid: readonly string[] | Float32Array | undefined, cols: number, rows: number): Float32Array {
   const out = new Float32Array(cols * rows);
   if (!grid) return out;
+  if (grid instanceof Float32Array) {
+    if (grid.length !== cols * rows)
+      throw new Error(`a hole's terrain is not the shape of its map, ${cols} by ${rows}`);
+    for (const h of grid)
+      if (!Number.isFinite(h) || h < 0)
+        throw new Error(`a hole's terrain has ${h} in it, which is not a height above nought`);
+    out.set(grid);
+    return out;
+  }
   if (grid.length !== rows || grid.some((r) => r.length !== cols))
     throw new Error(`a hole's terrain is not the shape of its map, ${cols} by ${rows}`);
   for (let r = 0; r < rows; r++)

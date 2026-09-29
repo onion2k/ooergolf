@@ -7,8 +7,8 @@
  */
 import { expect, test, type Page } from '@playwright/test';
 import { PNG } from 'pngjs';
-import { ROLL, layoutOf, powerFor } from '../src/arena';
-import { COURSES } from '../src/course';
+import { BALL, KIND_RADIUS, ROLL, heightAt, layoutOf, powerFor } from '../src/arena';
+import { COURSES, CUP, DOWNS } from '../src/course';
 import { clearings } from '../src/scenery';
 import { BLADE_ROOM } from '../src/turf';
 import { drag, start, touches, watch } from './game';
@@ -177,7 +177,9 @@ test.describe('the start screen', () => {
     const problems = watch(page);
     await start(page, { seed: 1, paused: true, screen: true });
     await expect(page.locator('#start')).toBeVisible();
-    await expect(page.locator('#start .course')).toHaveCount(2);
+    await expect(page.locator('#start .course')).toHaveCount(3);
+    await expect(page.locator('#start .course').nth(2)).toContainText('The Downs');
+    await expect(page.locator('#start .course').nth(2)).toContainText('9 holes');
     await expect(page.locator('#start .course').first()).toContainText('The Meadow');
     await expect(page.locator('#start .course').first()).toContainText('9 holes');
     expect(await page.evaluate(() => window.game!.state())).toMatchObject({ choosing: true, course: 'The Meadow' });
@@ -215,6 +217,86 @@ test.describe('the start screen', () => {
     await expect(page.locator('#start')).toBeVisible();
     await page.locator('#start .course', { hasText: 'The Hills' }).click();
     expect(await page.evaluate(() => window.game!.state())).toMatchObject({ course: 'The Hills', hole: 0, card: [] });
+    expect(problems).toEqual([]);
+  });
+});
+
+test.describe('The Downs', () => {
+  test('is chosen on the start screen, and a hole of it is holed with the ball rising and falling with the ground', async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    const problems = watch(page);
+    await start(page, { seed: 1, paused: true, screen: true });
+    await page.locator('#start .course', { hasText: 'The Downs' }).click();
+    await expect(page.locator('#holeName')).toContainText('Hole 1 of 9');
+    expect(await page.evaluate(() => window.game!.state())).toMatchObject({
+      course: 'The Downs',
+      hole: 0,
+      choosing: false,
+    });
+    // the autopilot's shots, a frame at a time, and where the ball was at each
+    const trace = await page.evaluate(() => {
+      const g = window.game!;
+      const seen: { x: number; y: number; z: number }[] = [];
+      for (let stroke = 0; stroke < 12 && g.state().phase === 'play'; stroke++) {
+        const shot = g.suggest();
+        if (shot) g.shoot(shot.angle, shot.power);
+        for (let f = 0; f < 900 && g.state().phase === 'play' && !g.state().ready; f++) {
+          g.step(1);
+          const { x, y, z } = g.ball();
+          seen.push({ x, y, z });
+        }
+      }
+      return { seen, state: g.state() };
+    });
+    expect(trace.state.phase, 'the hole was holed').toBe('done');
+    expect(trace.state.card[0]).toBeLessThanOrEqual(DOWNS[0].par);
+    const l = layoutOf(DOWNS[0].map, DOWNS[0].terrain);
+    const r = KIND_RADIUS[BALL];
+    for (const { x, y, z } of trace.seen) {
+      // never under the ground it is on, but for the cup, which is a hole in it
+      if (Math.hypot(x - l.cup.x, y - l.cup.y) < CUP.radius + r) continue;
+      expect(z, `the ball at ${x.toFixed(1)},${y.toFixed(1)} is not under the ground`).toBeGreaterThanOrEqual(
+        heightAt(l, x, y) + r - 0.05,
+      );
+    }
+    const under = trace.seen.map(({ x, y }) => heightAt(l, x, y)),
+      zs = trace.seen.map((p) => p.z);
+    expect(Math.max(...under) - Math.min(...under), 'the ground under the ball rose and fell').toBeGreaterThan(0.4);
+    expect(Math.max(...zs) - Math.min(...zs), 'and so did the ball').toBeGreaterThan(0.4);
+    expect(await page.evaluate(() => window.game!.invariants())).toEqual([]);
+    expect(problems).toEqual([]);
+  });
+
+  test('has the whole of every hole in view at the widest zoom, rail and all, on a desktop screen', async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    const problems = watch(page);
+    await start(page, { seed: 1, paused: true, screen: true });
+    await page.evaluate(() => window.game!.chooseCourse('The Downs'));
+    const size = page.viewportSize()!;
+    for (const [i, hole] of DOWNS.entries()) {
+      const corners = await page.evaluate((k) => {
+        const g = window.game!;
+        g.startHole(k);
+        const { floor } = g.content();
+        // as far back as the wheel takes it, on the middle of the hole
+        g.look((floor.minX + floor.maxX) / 2, (floor.minY + floor.maxY) / 2, 110);
+        g.step(2);
+        // the rail's four corners at the ground and at the top of the highest ground and the rail on it
+        return [floor.minX, floor.maxX].flatMap((x) =>
+          [floor.minY, floor.maxY].flatMap((y) => [0, 6].map((z) => g.project(x, y, z))),
+        );
+      }, i);
+      for (const c of corners) {
+        expect(c.x, `${hole.name}: across`).toBeGreaterThan(0);
+        expect(c.x, `${hole.name}: across`).toBeLessThan(size.width);
+        expect(c.y, `${hole.name}: down`).toBeGreaterThan(0);
+        expect(c.y, `${hole.name}: down`).toBeLessThan(size.height);
+      }
+    }
     expect(problems).toEqual([]);
   });
 });
@@ -396,7 +478,7 @@ test.describe('the grass', () => {
     const problems = watch(page);
     await start(page, { seed: 1, paused: true, screen: true });
     let most = 0;
-    for (const course of ['The Meadow', 'The Hills']) {
+    for (const course of ['The Meadow', 'The Hills', 'The Downs']) {
       await page.evaluate((name) => window.game!.chooseCourse(name), course);
       const holes = await page.evaluate(() => window.game!.content().holes.length);
       for (let hole = 0; hole < holes; hole++) {

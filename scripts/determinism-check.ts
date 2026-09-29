@@ -1,7 +1,7 @@
 /**
  * Every seed played twice, side by side: see `determinism.ts`.
  *
- *   npm run determinism                      seeds 1-6, 3600 frames each
+ *   npm run determinism                      seeds 1-6 on every course, 3600 frames each
  *   npm run determinism -- --seeds 1-12 --frames 7200 --every 600
  *
  * Fails, and says at which frame, if any seed does not play out the same way
@@ -10,6 +10,7 @@
  */
 import { availableParallelism } from 'node:os';
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
+import { COURSES } from '../src/course';
 import { playTwice, type TwiceOptions, type TwiceResult } from './determinism';
 
 async function main() {
@@ -23,10 +24,11 @@ async function main() {
   const frames = +(value('frames') ?? 3600);
   const every = +(value('every') ?? 300);
   const started = performance.now();
-  const queue: TwiceOptions[] = seeds.map((seed) => ({ seed, frames, every }));
+  // every course, since a course whose ground slopes is stepped by other arithmetic than a level one
+  const queue: TwiceOptions[] = COURSES.flatMap((c) => seeds.map((seed) => ({ seed, frames, every, course: c.name })));
   const results: TwiceResult[] = [];
   await Promise.all(
-    Array.from({ length: Math.max(1, Math.min(seeds.length, availableParallelism() - 1)) }, async () => {
+    Array.from({ length: Math.max(1, Math.min(queue.length, availableParallelism() - 1)) }, async () => {
       for (let job = queue.shift(); job !== undefined; job = queue.shift()) {
         const at = job;
         results.push(
@@ -39,19 +41,19 @@ async function main() {
       }
     }),
   );
-  results.sort((a, b) => a.seed - b.seed);
+  results.sort((a, b) => a.seed - b.seed || a.course.localeCompare(b.course));
   const parted = results.filter((r) => r.diverged !== null);
   console.log(
-    `${seeds.length} seed${seeds.length === 1 ? '' : 's'}, played twice, ${frames} frames each (${((performance.now() - started) / 1000).toFixed(1)} s)`,
+    `${seeds.length} seed${seeds.length === 1 ? '' : 's'} on each of ${COURSES.length} courses, played twice, ${frames} frames each (${((performance.now() - started) / 1000).toFixed(1)} s)`,
   );
   for (const r of parted) console.error(`  ${r.note}`);
   if (parted.length) {
     console.error(
-      `\n${parted.length} seed${parted.length === 1 ? ' does' : 's do'} not play out the same twice: look for chance taken from somewhere other than the game's own source, state kept in a module between runs, or an order that is not the same twice`,
+      `\n${parted.length} run${parted.length === 1 ? ' does' : 's do'} not play out the same twice: look for chance taken from somewhere other than the game's own source, state kept in a module between runs, or an order that is not the same twice`,
     );
     process.exitCode = 1;
   } else {
-    console.log(`  the same twice, every seed (${results[0].checkpoints.length} checkpoints each)`);
+    console.log(`  the same twice, every seed on every course (${results[0].checkpoints.length} checkpoints each)`);
   }
 }
 

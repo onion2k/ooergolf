@@ -16,7 +16,9 @@
  * The Meadow is the nine holes in DESIGN.md, level but for its steps:
  * grass, rail, sand, water, raised grass, posts, barriers, windmills and
  * belts. The Hills are four whose ground slopes, drawn in a second grid, the
- * hole's `terrain`, beside the map.
+ * hole's `terrain`, beside the map. The Downs are nine long holes whose ground
+ * is noise, a smooth surface made from a seed and a feel, and nothing else on
+ * them.
  *
  *   ~   water, which the ball rolls onto and is lost in
  *   s   sand, level, which slows the ball hard
@@ -27,6 +29,8 @@
  * at, counted as the map is drawn: its column, and its row from the top.
  */
 
+import { layoutOf } from './arena';
+import { noiseGround, type Feel } from './noise';
 import type { ObstacleDef } from './obstacles';
 
 /** A hole: what it is called, its par, its map, and what moves on it. */
@@ -35,8 +39,11 @@ export interface HoleDef {
   par: number;
   map: readonly string[];
   obstacles?: readonly ObstacleDef[];
-  /** How high the ground slopes, a digit a tile in a grid the shape of the map: flat without it. See `layoutOf`. */
-  terrain?: readonly string[];
+  /**
+   * How high the ground slopes: a digit a tile in a grid the shape of the map, or real heights, one a tile, from
+   * noise: flat without it. See `layoutOf`.
+   */
+  terrain?: readonly string[] | Float32Array;
 }
 
 /**
@@ -407,6 +414,78 @@ export const HILLS: readonly HoleDef[] = [
   },
 ];
 
+/**
+ * A green `cols` tiles across and `rows` long inside a rail, the tee and the cup
+ * on it at a column and a row from the top of the map, each in from the rail.
+ */
+function fairway(cols: number, rows: number, tee: [number, number], cup: [number, number]): string[] {
+  return Array.from({ length: rows }, (_, r) =>
+    Array.from({ length: cols }, (_, c) => {
+      if (r === 0 || r === rows - 1 || c === 0 || c === cols - 1) return '#';
+      if (c === tee[0] && r === tee[1]) return 'T';
+      if (c === cup[0] && r === cup[1]) return 'C';
+      return '.';
+    }).join(''),
+  );
+}
+
+/** How a hole of The Downs is made: its name and par, its shape, and its ground. */
+interface DownsSpec {
+  name: string;
+  par: number;
+  /** Tiles across and long, the map, and the tee's and the cup's column and row from the top. */
+  shape: [cols: number, rows: number, tee: [number, number], cup: [number, number]];
+  feel: Feel;
+  steepness: number;
+  seed: number;
+}
+
+/**
+ * The Downs: nine holes half as long again as the others, tee to cup thirteen
+ * tiles and a bit against eight and three quarters, whose ground is a smooth
+ * curve of noise and whose only obstacle it is. Gentle ground first, that a ball
+ * rests on wherever it lies; rolling ground, that carries a putt across it;
+ * choppy ground, that turns one every few tiles; and, for the last three, a
+ * rolling swell with choppy detail on it, each steeper than the one before. Par
+ * is each hole's intent, as The Hills' is: the autopilot does not read a
+ * break.
+ */
+const DOWNS_SPECS: readonly DownsSpec[] = [
+  { name: 'Easy Does It', par: 3, shape: [11, 17, [5, 15], [5, 2]], feel: 'gentle', steepness: 0.3, seed: 9 },
+  { name: 'The Roll', par: 3, shape: [13, 17, [3, 15], [9, 2]], feel: 'rolling', steepness: 0.55, seed: 24 },
+  { name: 'Lazy Lawn', par: 3, shape: [9, 16, [6, 14], [3, 2]], feel: 'gentle', steepness: 0.3, seed: 5 },
+  { name: 'Washboard', par: 3, shape: [13, 16, [10, 14], [3, 2]], feel: 'choppy', steepness: 0.6, seed: 23 },
+  { name: 'Long Swell', par: 3, shape: [11, 16, [2, 14], [6, 2]], feel: 'rolling', steepness: 0.65, seed: 17 },
+  { name: 'Cobbles', par: 3, shape: [15, 17, [6, 15], [9, 2]], feel: 'choppy', steepness: 0.65, seed: 26 },
+  { name: 'Sea Legs', par: 3, shape: [13, 16, [4, 14], [9, 2]], feel: 'rolling and choppy', steepness: 0.6, seed: 26 },
+  {
+    name: 'Whitecaps',
+    par: 3,
+    shape: [11, 17, [6, 15], [4, 2]],
+    feel: 'rolling and choppy',
+    steepness: 0.66,
+    seed: 23,
+  },
+  {
+    name: 'The Big Dipper',
+    par: 4,
+    shape: [15, 17, [4, 15], [11, 2]],
+    feel: 'rolling and choppy',
+    steepness: 0.72,
+    seed: 8,
+  },
+];
+
+/** Each hole of The Downs' feel, in order: what it is made of, and what a test holds its ground to. */
+export const DOWNS_FEELS: readonly Feel[] = DOWNS_SPECS.map((d) => d.feel);
+
+export const DOWNS: readonly HoleDef[] = DOWNS_SPECS.map(
+  ({ name, par, shape: [cols, rows, tee, cup], feel, steepness, seed }) => {
+    const map = fairway(cols, rows, tee, cup);
+    return { name, par, map, terrain: noiseGround(layoutOf(map), { seed, feel, steepness }) };
+  },
+);
+
 /** A course: what it is called, and its holes, played from the first to the last as a round. */
 export interface Course {
   name: string;
@@ -417,4 +496,5 @@ export interface Course {
 export const COURSES: readonly Course[] = [
   { name: 'The Meadow', holes: COURSE },
   { name: 'The Hills', holes: HILLS },
+  { name: 'The Downs', holes: DOWNS },
 ];

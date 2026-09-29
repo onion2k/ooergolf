@@ -11,12 +11,14 @@ made. The house
 rules in `~/.claude/CLAUDE.md` apply too. What is in `src/` is a round of
 a course, chosen on a start screen: holes drawn as maps, each played from
 its tee to its cup with a drag pulled back and let go, scored against par,
-and the card at the end. Two courses are here, on artshape-physics v0.8.0.
+and the card at the end. Three courses are here, on artshape-physics v0.8.0.
 The Meadow is nine holes of grass, rail, sand, water, raised grass, posts,
 sliding barriers, a windmill and a conveyor, with a green that lets a putt
 die, a rail and obstacles that bounce, posts that throw a ball back faster
 than it came, and a cup with a rim. The Hills is four whose ground slopes,
-each cup on the slope with its rim following the ground. The golf goes in
+each cup on the slope with its rim following the ground. The Downs is nine
+holes half as long again, whose ground is a smooth surface of Perlin noise
+and nothing else. The golf goes in
 a feature at a time, in the order `DESIGN.md` gives.
 
 ## The factory
@@ -95,7 +97,7 @@ today, and what the next features must hand it:
   well at the cup (the autopilot's shot, slipped), tries to strike it while
   it rolls or between holes, waits, reloads, asks for another round when
   one is over, and chooses a course at the start or at the card. It gets
-  round both courses. Each thing a player can do is
+  round every course. Each thing a player can do is
   an action in `scripts/fuzzer.ts`.
 - **Invariants:** bodies are of a kind, are numbers and are out of the rock;
   the world's count is right; the time is a time; the ball is there while a
@@ -189,9 +191,13 @@ change meant to move it, and the commit says why. Look at every picture.
   uses; `stepAt` is the step alone, which is what makes a wall, so the
   autopilot judges a rise and a ball is put down level by it; `slopeAt` and
   `restingAbove` say how the ground slopes and how high a ball rests on it.
-  A hole's slopes are an optional `terrain` grid the shape of its map, a
-  digit a tile, half a unit each, handed to the world in `physics.ts` on a
-  hole that has any. The physics says what it refuses, `terrainRefusal`
+  A hole's slopes are an optional `terrain`: a grid the shape of its map, a
+  digit a tile, half a unit each, or real heights, one a tile, row by row
+  from the south (a `Float32Array`, which `layoutOf` copies and checks:
+  finite, and not below nought). Digits are drawn, and heights are made,
+  which is what `noise.ts` is for: quantised to digits, noise carries a
+  ripple in its slope a third as big as the slope itself. Either is handed
+  to the world in `physics.ts` on a hole that has any. The physics says what it refuses, `terrainRefusal`
   there asking its `terrainProblem`: neighbours side by side more than half
   a tile apart, rock and all. A cup may stand on a slope since v0.7.0, its
   rim following the ground, and the game draws it so: the cup's rim, liner
@@ -288,8 +294,27 @@ change meant to move it, and the commit says why. Look at every picture.
   pill buttons that sink when pressed, the score popped in as a tilted
   sticker, and every panel arriving with a short spring, none under reduced
   motion; in the system's rounded face, as decided.
+- `src/noise.ts` makes ground from noise: `gradientNoise(seed)` is Perlin's,
+  and `noiseGround(layout, { seed, feel, steepness })` a hole's heights from
+  it, the same for a seed every time, never below nought, the steepest step
+  between neighbouring tiles exactly `steepness` of the physics' limit of
+  half a tile, and flat round the tee and the cup so a ball rests on the one
+  and beside the other. A feel (`FEELS`) is the noise's shape: `gentle`, a
+  broad swell a ball rests on everywhere; `rolling`, swells the width of the
+  hole; `choppy`, small bumps (a height a tile cannot draw one smaller than
+  about three tiles, so choppy is no more than about 1.4 times as bumpy as
+  rolling); and `rolling and choppy`. `test/ground-metrics.ts` says what a
+  feel is in figures (relief, steepest slope, bumpiness, detail, and how much
+  of the ground a ball rests on), which the tests hold each hole to.
 - The courses are content in `course.ts`, `COURSES`, each a name and its
-  holes: The Meadow (`COURSE`) and The Hills (`HILLS`). A hole is a map drawn
+  holes: The Meadow (`COURSE`), The Hills (`HILLS`) and The Downs (`DOWNS`,
+  built from `DOWNS_SPECS`: a shape, a feel, a steepness and a seed a hole,
+  and nothing on it but the ground, which is the obstacle). The Downs' holes
+  are 1.5 times as long, tee to cup, as the thirteen there were, on the mean
+  (a test holds it to 1.45 to 1.55 against them), and a seed was chosen for
+  each by measuring the figures of forty and looking at the pictures; the
+  last three build in steepness. The cup stands at least two tiles in from
+  the rail. A hole is a map drawn
   as seen from the tee (`#` rail, `.` grass, `T` tee, `C` cup, `~` water,
   `s` sand, `o` a post on grass, a digit for grass raised that many steps of
   0.4, space for off the course),
@@ -351,7 +376,9 @@ What to copy the shape of, when building something new:
   autopilot's say how far a shot rolls, that it sees round a corner, and
   that it finishes every hole.
 - **Test helpers:** `newGame(seed)` in `test/helpers.ts`, `onGreen()` for a
-  practice green whose cup is out of the way of tests of the ball, and
+  practice green whose cup is out of the way of tests of the ball,
+  `groundFigures(layout)` in `test/ground-metrics.ts` for a ground's relief,
+  steepness and bumpiness, and
   `memoryStore` in `src/progress.ts` for a save that is not the player's;
   and in `smoke/panels.ts`, `read(page)` for every text's contrast against
   its panel, what reaches past the screen's edges and each button's height,
