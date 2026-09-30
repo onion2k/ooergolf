@@ -26,6 +26,7 @@
  */
 import { BUMPER, KINDS, KIND_NAME, KNOCK, fromPosts, heightAt, restingAbove, tileAt } from './arena';
 import { TILT, VIEW, type CameraRig } from './camera';
+import type { Plan } from './autopilot';
 import { BAG } from './bag';
 import { CLUBS } from './clubs';
 import { LIMIT_OVER_PAR, fastest, type Game } from './game';
@@ -195,5 +196,25 @@ export function knockProblems(
     out.push(`a knock told at ${x},${y}, not where the ball is`);
   if (!(hard >= KNOCK.least) || !Number.isFinite(hard)) out.push(`a knock of ${hard}, softer than a knock is`);
   if (!(Math.abs(Math.hypot(dx, dy, dz) - 1) < 1e-6)) out.push(`a knock along ${dx},${dy},${dz}, along no direction`);
+  return out;
+}
+
+/**
+ * What is wrong with a plan the autopilot made, checked as it is made: it is a shot, which is an aim that is a number
+ * and a power over nought and no more than all; on a golf hole the club it names is one of the bag's, and on any other
+ * it names none; and what it expects, if it says, is a place. A plan that is not one is struck as no shot at all, and
+ * a round played by it would be a round of refused strokes that the gate counts as nothing.
+ */
+export function planProblems(game: Game, plan: Plan): string[] {
+  const out: string[] = [];
+  if (!Number.isFinite(plan.angle)) out.push(`the plan's aim is ${plan.angle}`);
+  if (!(plan.power > 0 && plan.power <= 1))
+    out.push(`the plan's power is ${plan.power}, not over nought and no more than all`);
+  const golf = game.layout.golf;
+  if (golf && !BAG.some((c) => c.id === plan.club))
+    out.push(`the plan's club on a golf hole is ${plan.club}, which is not in the bag`);
+  if (!golf && plan.club !== undefined) out.push(`the plan names a club, ${plan.club}, on a hole of minigolf`);
+  if (plan.expect && !(Number.isFinite(plan.expect.x) && Number.isFinite(plan.expect.y)))
+    out.push(`the plan expects the ball at ${plan.expect.x},${plan.expect.y}`);
   return out;
 }

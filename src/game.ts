@@ -37,7 +37,7 @@ import { COURSE, CUP, type HoleDef } from './course';
 import { strike } from './flight';
 import { Obstacles } from './obstacles';
 import { PHYSICS, THE_CUP, makeWorld, type World } from './physics';
-import { Progress } from './progress';
+import { Progress, memoryStore } from './progress';
 import type { Random } from './random';
 import { LANDING, SURFACES } from './surfaces';
 
@@ -81,6 +81,8 @@ export interface GameOptions {
   random?: Random;
   /** The holes to play; the course unless told otherwise. */
   course?: readonly HoleDef[];
+  /** A game to try shots in and not to play: see `Game.rehearsal`. */
+  rehearsal?: boolean;
 }
 
 /** Where a round is: a hole in play, a hole done and the next about to begin, or the round over. */
@@ -151,6 +153,8 @@ export class Game {
   private knockHard = 0;
   /** Whether the physics' next step is the first since the ball was struck. */
   private firstStep = false;
+  /** Whether this is a rehearsal, a game made to try shots in, which no one plays: only it may be `trial`led. */
+  private readonly rehearsing: boolean;
 
   constructor(
     readonly progress: Progress,
@@ -159,7 +163,40 @@ export class Game {
   ) {
     this.random = options.random ?? Math.random;
     this.course = options.course ?? COURSE;
+    this.rehearsing = options.rehearsal === true;
     this.begin(0);
+  }
+
+  /**
+   * A game of the hole in play that no one plays, to try a shot in before it is taken: its own world, chance held in the
+   * middle so a shot is struck true (the scatter is a swing's and not a plan's), its own save and no one listening.
+   * What it does is what this game would do to the same shot, struck true, from the same lie, since it is the same
+   * game; and nothing this game has, its strokes, its time, its chance or its card, is touched by it. Cheap, a
+   * millisecond or so to make, and a trial in it a fraction of one.
+   */
+  rehearsal(): Game {
+    return new Game(new Progress(memoryStore()), {}, { random: () => 0.5, course: [this.def], rehearsal: true });
+  }
+
+  /**
+   * A rehearsal made ready for the next trial: the ball down at (x, y) as a real ball lies there (put where it is,
+   * never refused for being near the cup or on a slope, since a real ball may lie so), no stroke taken, and the hole
+   * begun again in every way that matters, however the last trial ended, holed or lost in the water. Only a
+   * rehearsal may be tried in: a trial in a game that is played would take its card and its strokes away.
+   */
+  trial(x: number, y: number) {
+    if (!this.rehearsing) throw new Error('a trial is made only in a rehearsal, which no one plays');
+    const { world } = this;
+    if (world.alive[this.ball]) world.remove(this.ball);
+    this.phase = 'play';
+    this.strokes = 0;
+    // a ball holed in a trial is a score on the card, which a rehearsal would keep for ever
+    this.card.length = 0;
+    this.moving = false;
+    this.firstLanding = false;
+    this.firstStep = false;
+    this.knockAt = -Infinity;
+    this.spawnAt(x, y);
   }
 
   /** The hole being played. */
@@ -348,8 +385,7 @@ export class Game {
     this.strokes = Math.min(this.limit, this.strokes + 1);
     this.moving = false;
     this.events.splash?.(x, y);
-    this.ball = this.world.spawn(BALL, this.lie.x, this.lie.y, this.restingZ(this.lie.x, this.lie.y));
-    this.settle();
+    this.spawnAt(this.lie.x, this.lie.y);
     if (this.strokes >= this.limit) this.done('pickedUp');
   }
 
@@ -437,6 +473,14 @@ export class Game {
     this.knockAt = this.stepped;
     this.knockHard = hard;
     this.events.knocked?.(hard, world.x[ball], world.y[ball], dx / hard, dy / hard, dz / hard);
+  }
+
+  /** A new ball put down at (x, y), resting on the floor there, and left to settle until it is at rest, and it is the ball. */
+  private spawnAt(x: number, y: number) {
+    this.ball = this.world.spawn(BALL, x, y, this.restingZ(x, y));
+    this.lie.x = x;
+    this.lie.y = y;
+    this.settle();
   }
 
   /** How high a ball's middle is, resting on the floor at (x, y). */

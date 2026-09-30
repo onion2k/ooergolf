@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { BALL, BUMPER, FASTEST, HARDEST_SHOT } from '../src/arena';
 import type { HoleDef } from '../src/course';
 import { CameraRig, TILT } from '../src/camera';
-import { checkInvariants, viewProblems } from '../src/invariants';
-import { newGame as newOn, onGreen as newGame, settle } from './helpers';
+import { checkInvariants, planProblems, viewProblems } from '../src/invariants';
+import { Autopilot } from '../src/autopilot';
+import { field, golfGame, newGame as newOn, onGreen as newGame, settle } from './helpers';
 
 describe('what must always hold', () => {
   it('holds of a new game, and of one played on a little', () => {
@@ -200,5 +201,24 @@ describe('what must always hold of the camera', () => {
     rig.azimuth = 0;
     rig.distance = 1;
     expect(viewProblems(rig).join('\n')).toMatch(/distance/);
+  });
+});
+
+describe('what must always hold of a plan', () => {
+  it('is a shot: an aim that is a number, a power over nought and no more than all, and on a golf hole a club of the bag', () => {
+    const { game } = golfGame(field('f'));
+    const plan = new Autopilot(game).plan()!;
+    expect(planProblems(game, plan)).toEqual([]);
+    expect(planProblems(game, { ...plan, angle: NaN }).join('\n')).toMatch(/aim/);
+    expect(planProblems(game, { ...plan, power: 0 }).join('\n')).toMatch(/power/);
+    expect(planProblems(game, { ...plan, power: 1.2 }).join('\n')).toMatch(/power/);
+    expect(planProblems(game, { ...plan, club: 'mashie' }).join('\n')).toMatch(/club/);
+    expect(planProblems(game, { ...plan, club: undefined }).join('\n')).toMatch(/club/);
+    expect(planProblems(game, { ...plan, expect: { x: NaN, y: 0, holed: false } }).join('\n')).toMatch(/expects/);
+    // and on a hole of minigolf a plan names no club
+    const mini = newGame();
+    const putt = new Autopilot(mini.game).plan()!;
+    expect(planProblems(mini.game, putt)).toEqual([]);
+    expect(planProblems(mini.game, { ...putt, club: 'driver' }).join('\n')).toMatch(/club/);
   });
 });

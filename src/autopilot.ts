@@ -36,11 +36,13 @@ import {
   tileAt,
   type Layout,
 } from './arena';
-import { BAG, PUTTER } from './bag';
+import { BAG, PUTTER, bagClub } from './bag';
+import type { HoleDef } from './course';
 import { carryFrom } from './flight';
 import type { Game } from './game';
 import { Obstacles } from './obstacles';
 import { PHYSICS } from './physics';
+import { Rehearsal, refine } from './planner';
 import type { Random } from './random';
 import type { Shot } from './shot';
 import { LIE } from './surfaces';
@@ -151,7 +153,17 @@ export function timeTo(distance: number, speed: number): number {
 export interface Plan extends Shot {
   to?: { x: number; y: number };
   club?: string;
+  /**
+   * On a golf hole, where a rehearsal of the shot, struck true, says the ball will come to rest, or that it will drop
+   * in the cup: what the plan expects, which is what happens when the swing is true.
+   */
+  expect?: { x: number; y: number; holed: boolean };
 }
+
+/** The farthest the putter is tried from the fairway or the tee, in units: a chip and run, which it rolls out as far as. */
+const CHIP_AND_RUN = 45;
+/** How much nearer the cup another shot may leave the ball than the best and still be the one that scatters less. */
+const AS_NEAR = 0.75;
 
 /**
  * How far a lofted ball runs on after it lands, as a share of its carry, by the club's loft in degrees: a driver runs
@@ -161,6 +173,44 @@ export interface Plan extends Shot {
  */
 function runOn(loft: number): number {
   return Math.max(0.01, 0.15 - 0.0025 * loft);
+}
+
+/**
+ * The arithmetic's shots on a golf hole from (x, y), best first, as guesses for the planner to correct: from the green,
+ * the putt, at the speed that arrives at the cup gently enough to drop; from anywhere else the two shortest clubs that
+ * reach the cup from the ground the ball lies on, each at the power that lands it short of the cup by what it will run
+ * on (or, for a distance none reaches, the longest club, flat out), and the putter too when the cup is a chip and run
+ * away from a tee or the fairway. What the autopilot planned before it tried its shots, and the first guess still.
+ */
+export function golfCandidates(game: Game, x: number, y: number): Plan[] {
+  const { layout } = game;
+  const dx = layout.cup.x - x,
+    dy = layout.cup.y - y;
+  const distance = Math.hypot(dx, dy);
+  const angle = Math.atan2(dy, dx);
+  const lie = lieAt(layout, x, y);
+  const putt = (): Plan => {
+    const speed = speedAcross(layout, x, y, layout.cup.x, layout.cup.y, ARRIVE);
+    return { angle, power: Math.min(1, powerFor(speed, PUTTER.hardest)), club: PUTTER.id };
+  };
+  if (lie === LIE.green) return [putt()];
+  // from the shortest club to the longest, those that reach; and the longest, flat out, for a distance none does
+  const reaching: Plan[] = [];
+  for (const club of BAG.filter((c) => c !== PUTTER).reverse()) {
+    const reach = carryFrom(club, 1, lie) * (1 + runOn(club.loft));
+    if (reach >= distance) reaching.push({ angle, power: distance / reach, club: club.id });
+  }
+  const out = reaching.length ? reaching.slice(0, 2) : [{ angle, power: 1, club: BAG[0].id }];
+  if ((lie === LIE.tee || lie === LIE.fairway) && distance <= CHIP_AND_RUN) {
+    const roll = putt();
+    if (speedAcross(layout, x, y, layout.cup.x, layout.cup.y, ARRIVE) <= PUTTER.hardest) out.push(roll);
+  }
+  return out;
+}
+
+/** The arithmetic's first shot on a golf hole from (x, y): the one the planner starts from, and what the autopilot took before it tried its shots. */
+export function golfGuess(game: Game, x: number, y: number): Plan {
+  return golfCandidates(game, x, y)[0];
 }
 
 export interface Skill {
@@ -181,6 +231,9 @@ export interface AutopilotOptions {
 export class Autopilot {
   /** Its own copy of what moves on the hole, to look ahead with without moving the game's, and the hole it is for. */
   private foresight: { hole: number; t: number; obstacles: Obstacles } | null = null;
+  /** Its rehearsal of the golf hole in play, and the trials struck in the rehearsals it has let go of. */
+  private rehearsing: { def: HoleDef; rehearsal: Rehearsal } | null = null;
+  private spent = 0;
   /** When it began waiting to strike, in game time, or -1. */
   private waitingSince = -1;
 
@@ -260,30 +313,51 @@ export class Autopilot {
   }
 
   /**
-   * The shot on a golf hole, straight at the cup: a putt from the green, at the speed that arrives at the cup gently
-   * enough to drop; and from anywhere else the shortest club that reaches, from the ground it lies on, at the power
-   * that lands it short of the cup by what it will run on. Nothing is in its way on the range, so nothing is looked
-   * for: water, trees and out of bounds are the holes' that have them, and a planner's.
+   * The shot on a golf hole, tried before it is taken: the arithmetic's candidates (the two shortest clubs that reach,
+   * and the putter for a chip and run) each corrected in a rehearsal until its ball rests on the cup or drops in it, and
+   * of them the one that lands nearest, the shortest club among those about as near, and the putter before any. From the green it is
+   * the putt, as it was. Nothing is in its way on the range, so nothing is looked for: water, trees and out of bounds
+   * are the holes' that have them.
    */
   private golfPlan(x: number, y: number): Plan {
     const { game } = this;
     const { layout } = game;
-    const dx = layout.cup.x - x,
-      dy = layout.cup.y - y;
-    const distance = Math.hypot(dx, dy);
-    const angle = Math.atan2(dy, dx);
     const lie = lieAt(layout, x, y);
-    if (lie === LIE.green) {
-      const speed = speedAcross(layout, x, y, layout.cup.x, layout.cup.y, ARRIVE);
-      return { angle, power: Math.min(1, powerFor(speed, PUTTER.hardest)), club: PUTTER.id };
+    const guesses = golfCandidates(game, x, y);
+    if (lie === LIE.green) return guesses[0];
+    const rehearsal = this.rehearse();
+    const from = { x, y };
+    const tried = guesses.map((g) => ({ guess: g, ...refine(rehearsal, from, layout.cup, bagClub(g.club!), g) }));
+    const nearest = Math.min(...tried.map((t) => t.miss));
+    // no shot came to rest anywhere, every one lost in the water: the arithmetic's, which is what it was
+    if (!Number.isFinite(nearest)) return guesses[0];
+    // among those about as near, the putter if it is one (it scatters not at all), and else the shortest club, which is
+    // the first: a golfer takes the club that reaches with a full swing, though the game's own scatter, which grows with
+    // the power, would have a longer club swung easily miss less by a hair
+    const pool = tried.filter((t) => t.miss <= nearest + AS_NEAR);
+    const best = pool.find((t) => t.guess.club === PUTTER.id) ?? pool[0];
+    return {
+      angle: best.angle,
+      power: best.power,
+      club: best.guess.club,
+      expect: { x: best.trial.x, y: best.trial.y, holed: best.trial.holed },
+    };
+  }
+
+  /** The rehearsal of the hole being played, made when it is first wanted and again for another hole. */
+  private rehearse(): Rehearsal {
+    const { def } = this.game;
+    if (!this.rehearsing || this.rehearsing.def !== def) {
+      // its trials go on being counted across holes
+      this.spent += this.rehearsing?.rehearsal.trials ?? 0;
+      this.rehearsing = { def, rehearsal: new Rehearsal(this.game.rehearsal()) };
     }
-    // from the shortest club to the longest, the first that reaches; and the longest, flat out, for a distance none does
-    const clubs = BAG.filter((c) => c !== PUTTER).reverse();
-    for (const club of clubs) {
-      const reach = carryFrom(club, 1, lie) * (1 + runOn(club.loft));
-      if (reach >= distance) return { angle, power: distance / reach, club: club.id };
-    }
-    return { angle, power: 1, club: BAG[0].id };
+    return this.rehearsing.rehearsal;
+  }
+
+  /** How many trial shots it has struck in rehearsal, over every plan it has made: what planning has cost. */
+  get trials(): number {
+    return this.spent + (this.rehearsing?.rehearsal.trials ?? 0);
   }
 
   /**

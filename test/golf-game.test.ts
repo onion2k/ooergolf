@@ -216,6 +216,92 @@ describe('what a lofted ball meets', () => {
   });
 });
 
+describe('a rehearsal', () => {
+  it('is a game of the same hole that no one plays, with chance held in the middle so a shot in it is struck true', () => {
+    const { game } = golfGame(field('f'), seeded(9));
+    const r = game.rehearsal();
+    expect(r).not.toBe(game);
+    expect(r.def).toBe(game.def);
+    expect(r.layout.golf).toBe(true);
+    // the same shot from the same lie as the real game would make with a true swing
+    const { game: twin } = golfGame(field('f'));
+    r.pick('7-iron');
+    twin.pick('7-iron');
+    r.shoot(NORTH, 0.8);
+    twin.shoot(NORTH, 0.8);
+    for (let f = 0; f < 60 * 20; f++) {
+      r.step(DT);
+      twin.step(DT);
+    }
+    expect(r.world.y[r.ball]).toBe(twin.world.y[twin.ball]);
+    expect(r.world.x[r.ball]).toBe(twin.world.x[twin.ball]);
+  });
+
+  it('is tried in with `trial`, which puts the ball down where it lies, with no stroke, however the last trial ended', () => {
+    const { game } = golfGame(field('g'));
+    const r = game.rehearsal();
+    const cup = game.layout.cup;
+    // holed: a putt from six units that drops
+    r.trial(cup.x + 6, cup.y);
+    r.pick('putter');
+    r.shoot(Math.PI, 0.14);
+    for (let f = 0; f < 60 * 10 && r.phase === 'play' && !r.ready; f++) r.step(DT);
+    expect(r.phase).toBe('done');
+    r.trial(cup.x + 20, cup.y - 10);
+    expect(r.phase).toBe('play');
+    expect(r.strokes).toBe(0);
+    expect(r.card).toEqual([]);
+    expect(r.world.alive[r.ball]).toBe(1);
+    expect(r.world.x[r.ball]).toBeCloseTo(cup.x + 20, 6);
+    expect(r.ready).toBe(true);
+    // and a hundred holed trials keep nothing: the card is emptied and the bodies are one
+    for (let k = 0; k < 100; k++) {
+      r.trial(cup.x + 6, cup.y);
+      r.shoot(Math.PI, 0.14);
+      for (let f = 0; f < 60 * 10 && r.phase === 'play' && !r.ready; f++) r.step(DT);
+    }
+    r.trial(cup.x + 20, cup.y - 10);
+    expect(r.card.length).toBe(0);
+    expect(r.world.live).toBe(1);
+    expect(r.world.count).toBeLessThanOrEqual(2);
+  });
+
+  it('may be tried in from where a real ball lies too near the cup for a ball to be put down: it is not put down, it lies there', () => {
+    const { game } = golfGame(field('g'));
+    const r = game.rehearsal();
+    const cup = game.layout.cup;
+    expect(() => game.place(cup.x + 2.5, cup.y)).toThrow(/too near the cup/);
+    expect(() => r.trial(cup.x + 2.5, cup.y)).not.toThrow();
+    expect(r.phase).toBe('play');
+    expect(r.world.alive[r.ball]).toBe(1);
+    expect(r.world.x[r.ball]).toBeCloseTo(cup.x + 2.5, 3);
+  });
+
+  it('is refused to the game that is played: a trial there would wreck a round, so only a rehearsal is tried in', () => {
+    const { game } = golfGame(field('f'));
+    expect(() => game.trial(0, 0)).toThrow(/rehearsal/);
+  });
+
+  it('leaves the game it was made from as it was: no stroke, no time, no chance spent, nothing told', () => {
+    const rehearsed = golfGame(field('f'), seeded(3)),
+      untouched = golfGame(field('f'), seeded(3));
+    const r = rehearsed.game.rehearsal();
+    r.trial(0, 0);
+    r.pick('driver');
+    r.shoot(NORTH, 1);
+    for (let f = 0; f < 600; f++) r.step(DT);
+    const state = (g: typeof rehearsed) => ({
+      strokes: g.game.strokes,
+      t: g.game.t,
+      x: g.game.world.x[g.game.ball],
+      y: g.game.world.y[g.game.ball],
+      told: g.told.length,
+      next: g.game.random(),
+    });
+    expect(state(rehearsed)).toEqual(state(untouched));
+  });
+});
+
 describe('what must always hold on a golf hole', () => {
   it('holds of a shot from every club, on every surface, the whole way to rest', () => {
     for (const surface of ['f', 'r', 'g', 's'] as const)

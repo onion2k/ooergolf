@@ -24,7 +24,7 @@ import { CLUBS } from '../src/clubs';
 import { COURSES, type HoleDef } from '../src/course';
 import { Game, type GameEvents } from '../src/game';
 import { Input } from '../src/input';
-import { checkInvariants, knockProblems, landingProblems, viewProblems } from '../src/invariants';
+import { checkInvariants, knockProblems, landingProblems, planProblems, viewProblems } from '../src/invariants';
 import { BAG } from '../src/bag';
 import { Progress, memoryStore } from '../src/progress';
 import { seeded } from '../src/random';
@@ -133,6 +133,9 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
           // a player who can play: the autopilot's shot at the cup, slipped a little
           const shot = new Autopilot(game).plan();
           if (!shot) return;
+          // what it plans is a shot, from wherever the ball lies
+          const bad = planProblems(game, shot);
+          if (bad.length) throw new Error(`the autopilot planned no shot: ${bad.join('; ')}`);
           if (shot.club) game.pick(shot.club);
           if (game.shoot(shot.angle + between(-0.08, 0.08), shot.power * between(0.85, 1.15))) did('shoot well');
           busy = Math.floor(between(10, 90));

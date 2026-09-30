@@ -132,10 +132,12 @@ today, and what the next features must hand it:
   chance, round after round, and the hash takes in the hole and the card.
 - **Pace:** the strokes a round of each course takes; see above. The
   autopilot does not read a slope's break, so on The Hills it is a player
-  who aims straight and is carried by the ground. The Range's figure, 6.88
-  for pars of 3, 3 and 4, is a first: its autopilot picks the club from the
-  distance and the loft by arithmetic and does not try its shots, so it is
-  moved, with a reason, when stage 2's planner replaces it.
+  who aims straight and is carried by the ground. The Range's figure is 6.88
+  for pars of 3, 3 and 4 (2, 2 and 3 on the median), and the autopilot's
+  planner did not move it: a player's slips, a tenth of the power and a few
+  degrees, and the swing's own scatter, are far bigger than the unit or two
+  the planner gains, and each hole is a shot and a putt either way. Its worth
+  is in `test/planner.test.ts`, on slopes and rises.
 - **Leaks:** ten minutes of the autopilot playing round after round, on The
   Meadow and again on The Range. The card is emptied each round and
   watched against the number of holes.
@@ -385,6 +387,20 @@ change meant to move it, and the commit says why. Look at every picture.
   painted, growing no blades inside the rail. `src/marker.ts` is the ring at a
   first landing, from game time; the camera follows a lofted ball up and
   catches up faster the faster it flies (`catchUp`).
+- The autopilot's golf shot is tried before it is taken (`src/planner.ts`).
+  `golfCandidates` is the arithmetic (the two shortest clubs that reach, the
+  putter for a chip and run within 45 units of a tee or the fairway, and the
+  putt from the green), and `Game.rehearsal()` a game of the same hole that
+  no one plays, chance held in the middle so a trial is the shot struck true,
+  which only it may `trial(x, y)` (the ball down where it lies, however the
+  last trial ended); `refine` corrects each candidate's power in proportion
+  and its aim by the angle it was out by, from where the trial rested, until
+  the ball rests on the cup or drops in it, at most five trials, and the
+  autopilot takes the nearest, the putter before any and else the shortest
+  club among those about as near. A `Plan` says where it expects the ball to
+  rest (`expect`), which is what happens, to the digit, when the swing is
+  true. A shot costs a few trials of 0.3 ms each. `planProblems` is the rule
+  that a plan is a shot, and the fuzzer checks each it takes.
 - `src/hud.ts` is the words over the course: the hole and strokes, the
   score's name when a hole is done, the card, the coins and gems, the
   shop, and the start screen, a card for each course with its holes and
@@ -573,16 +589,16 @@ ball down at a lie.
 Each of these is the first feature's to bring, with every gate green at
 each step, and a gate handed what it needs in the same change:
 
-- The rest of golf, from `~/.claude/plans/ooergolf-proper-golf.md`: stage 2, an
-  autopilot that plans a lofted shot by trying candidates in a copy of the
-  game (the range's autopilot today picks the club from the distance by
-  arithmetic, and beats par on every hole); stage 3, golf holes at yard
-  scale on hills, with trees (a post and a cone), out of bounds, rough that
-  grows, bunkers and water at scale, in a first course of nine; stage 4, the
-  camera and aim (an overview of the hole, the distance and height to the
-  pin, the aim to the landing, not only the direction); stage 5, shape, spin
-  and wind; stage 6, putting greens with contour, a fringe and the break
-  shown. What stage 1 leaves as it found it: the rail is a wall to a ball in
+- The rest of golf, from `~/.claude/plans/ooergolf-proper-golf.md`: stage 3,
+  golf holes at yard scale on hills, with trees (a post and a cone), out of
+  bounds, rough that grows, bunkers and water at scale, in a first course of
+  nine (the planner knows nothing of hazards: it aims at the cup, and a
+  hole with water on the line will want it to score where a ball may land);
+  stage 4, the camera and aim (an overview of the hole, the distance and
+  height to the pin, the aim to the landing, not only the direction); stage
+  5, shape, spin and wind; stage 6, putting greens with contour, a fringe and
+  the break shown, which the planner leaves to the arithmetic putt.
+  What stage 1 leaves as it found it: the rail is a wall to a ball in
   the air (a lofted ball cannot go out of bounds), a golf hole's rough is
   painted and grows no blades inside the rail, its round green is stepped
   by the tile, a ball landing on a post's top or a box is left as the
