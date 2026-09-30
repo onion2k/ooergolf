@@ -21,7 +21,7 @@ import {
   stepAt,
 } from '../src/arena';
 import { Autopilot, restsOn, speedAcross, timeAlong, timeTo } from '../src/autopilot';
-import type { HoleDef } from '../src/course';
+import { COURSES, type HoleDef } from '../src/course';
 import { checkInvariants } from '../src/invariants';
 import { Obstacles } from '../src/obstacles';
 import { AIM_DOTS, Scene } from '../src/scene';
@@ -465,5 +465,84 @@ describe('the physics on ground that slopes', () => {
       if (f % 15 === 0) expect(checkInvariants(round), `frame ${f}`).toEqual([]);
     }
     expect(round.phase, 'holed out').not.toBe('play');
+  });
+});
+
+/**
+ * A ball begins a hole resting on its tee, wherever the tee stands. It was once put down at the height of its own radius
+ * whatever the ground was, so on a tee raised above that it began inside the ground, and the physics put it right by
+ * the shortest way, which was not up but along, to the nearest ground low enough for it: on a hole whose ground fell
+ * away to a pond, into the pond, before the first stroke.
+ */
+describe('a ball beginning a hole', () => {
+  /** A tee on a plateau a unit and a half high, the ground falling to the level over three tiles toward a pond, and the cup beyond. */
+  const RIDGE: HoleDef = {
+    name: 'test ridge',
+    par: 3,
+    map: [
+      '#########',
+      '#...C...#',
+      '#.......#',
+      '#.......#',
+      '#.......#',
+      '#.......#',
+      '#..~~~..#',
+      '#.......#',
+      '#.......#',
+      '#.......#',
+      '#.......#',
+      '#.......#',
+      '#.......#',
+      '#...T...#',
+      '#########',
+    ],
+    // from the top: level ground, then the ground rising a step at a time to a plateau a unit and a half up under the tee
+    terrain: [
+      '000000000',
+      '000000000',
+      '000000000',
+      '000000000',
+      '000000000',
+      '000000000',
+      '000000000',
+      '000000000',
+      '000000000',
+      '000000000',
+      '011111110',
+      '022222220',
+      '033333330',
+      '033333330',
+      '033333330',
+    ],
+  };
+
+  it('is at rest on the tee, alive, and has not moved, on a tee standing a unit and a half up with ground falling away to a pond', () => {
+    const { game } = newGame(1, null, [RIDGE]);
+    const { tee } = game.layout;
+    expect(game.world.alive[game.ball], 'alive').toBe(1);
+    expect(Math.hypot(game.world.x[game.ball] - tee.x, game.world.y[game.ball] - tee.y), 'on the tee').toBeLessThan(
+      0.05,
+    );
+    expect(game.ready).toBe(true);
+    expect(game.strokes).toBe(0);
+    for (let f = 0; f < 120; f++) game.step(DT);
+    expect(
+      Math.hypot(game.world.x[game.ball] - tee.x, game.world.y[game.ball] - tee.y),
+      'and stays there',
+    ).toBeLessThan(0.05);
+  });
+
+  it('begins every hole of every course on its tee, alive and at rest, and every one there can be', () => {
+    for (const course of COURSES)
+      for (const hole of course.holes) {
+        const { game } = newGame(1, null, [hole]);
+        const { tee } = game.layout;
+        expect(game.world.alive[game.ball], `${hole.name} alive`).toBe(1);
+        expect(
+          Math.hypot(game.world.x[game.ball] - tee.x, game.world.y[game.ball] - tee.y),
+          `${hole.name} on its tee`,
+        ).toBeLessThan(0.05);
+        expect(game.ready, `${hole.name} ready`).toBe(true);
+      }
   });
 });

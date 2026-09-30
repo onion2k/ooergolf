@@ -181,7 +181,15 @@ export class Game {
     this.world.pushers = this.obstacles.pushers;
     this.world.belts = this.obstacles.belts;
     this.obstacles.update(this.t, 0);
-    this.ball = this.world.spawn(BALL, this.layout.tee.x, this.layout.tee.y, KIND_RADIUS[BALL]);
+    // resting on the tee, at whatever height it stands: a ball put down at the height of its own radius on a tee higher
+    // than that begins inside the ground, and the physics puts it right by the shortest way, which is sideways, to the
+    // nearest ground low enough, and on a hole whose ground falls away to a pond that is into the pond
+    this.ball = this.world.spawn(
+      BALL,
+      this.layout.tee.x,
+      this.layout.tee.y,
+      this.restingZ(this.layout.tee.x, this.layout.tee.y),
+    );
     this.lie.x = this.layout.tee.x;
     this.lie.y = this.layout.tee.y;
     this.strokes = 0;
