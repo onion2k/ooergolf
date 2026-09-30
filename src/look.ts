@@ -38,7 +38,10 @@ export const HAZE = { halfWay: 3000, colour: [0.2, 0.3, 0.42] as [number, number
  * ball can roll on takes more of this high sun than the top band's edge, and
  * a hill was drawn exactly as bright as the flat: at 2.5 the Volcano's flank
  * facing the sun reads 1.46 times as bright as the one turned from it, where
- * it read 1.00, and the steepest slopes reach the band beneath.
+ * it read 1.00, and the steepest slopes reach the band beneath. The toy
+ * finish (a highlight on what is smooth, the sky in a clear coat, one smooth
+ * ramp of light, shade in a crease toward the shade colour) is not asked for
+ * here: the renderer gives it to every toon look.
  */
 export const TOY = {
   antialias: 'msaa',

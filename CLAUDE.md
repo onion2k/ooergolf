@@ -171,7 +171,7 @@ change meant to move it, and the commit says why. Look at every picture.
   on the rough as a raised green: the rough lies `ROUGH_DEPTH` below the
   grass, under the bottom of the cup, so the cup is seen into, and the rail
   comes down to meet it. The look is `LOOK.md`'s clean toy, toon daylight
-  on artshape-render v0.21.0, in `src/look.ts`, shared by the game and the
+  on artshape-render v0.22.2, in `src/look.ts`, shared by the game and the
   showcase: edges drawn at four samples a pixel (the post pass one rung
   down the ladder, and none on the last), the toon bands eased at their
   edges, a cool blue-violet shade, a warm rim, the sky's light from above
@@ -179,7 +179,9 @@ change meant to move it, and the commit says why. Look at every picture.
   of the sun's fall-off in the top band so a slope turned from the sun is
   darker than the flat and one facing it brighter (without it every slope
   a ball can roll on was drawn as bright as the flat, and the Hills had no
-  shape), the renderer's screen-space
+  shape), the toy finish the renderer gives every toon look (a highlight on
+  what is smooth, the sky in a clear coat, one smooth ramp of light, shade
+  toward the shade colour in a crease), the renderer's screen-space
   occlusion where things meet, no film grain, and a haze so thin it only
   pales the far rough. The colours are named in `src/models/palette.ts`,
   the green, rough and rail among them, so the scene and the showcase are

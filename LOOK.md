@@ -315,6 +315,27 @@ it read 1.00, held by the look metrics' shape figure. It lights everything,
 so every rounded thing reads rounder too. A putting grid and a flow of
 dots downhill were tried beside it, and not taken.
 
+## After the stages: the toy finish
+
+The toon surfaces were flat paint, where the look wants moulded plastic.
+artshape-render v0.22.2 finishes every toon look as a toy is, and the look
+takes all of it as the renderer gives it: a clean highlight from the sun on
+what is smooth (the ball, the rail, the bumpers), and none on the grass; the
+sky in a clear coat where a surface turns from the eye; one smooth ramp of
+light where the bands stepped, flat ground lit exactly as before and a
+slope turned from the sun exactly as the form light lit it; and shade in a
+crease toward the cool shade colour, not grey. The look metrics read saturation 0.699, framing 2.42, contrast
+3.14, cool shade 0.037 and shape 1.485, each over its floor; the shape read
+1.350 under v0.22.0, whose ramp lit the Volcano's shaded flank too
+brightly, and the renderer's fix is v0.22.1. The finish's code first cost
+the rough 0.45 ms a frame, compiled into every blade with none of it seen;
+from v0.22.2 the grass is built matte, and the frame is 0.2 ms over what
+it was before the finish (+8%, five rounds alternated with it), inside
+the perf gate's tolerance. The blades at a rail's foot lost the finish's tint
+with it, and are a shade greyer in the knock's picture. Rounded rails are the
+renderer's `roundedBox` and `roundCorners`, and remodelling the rail with
+them is left for a feature of its own.
+
 ## Across every stage
 
 - **The frame:** measured before and after at the standard view and the
