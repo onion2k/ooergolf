@@ -19,7 +19,7 @@ than it came, and a cup with a rim. The Hills is four whose ground slopes,
 each cup on the slope with its rim following the ground. The Downs is nine
 holes half as long again, whose ground is a smooth surface of Perlin noise
 and nothing else. The Moors is nine open holes six to fourteen times the size,
-made by a generator, with ponds, bunkers and stands of posts on noise ground.
+made by a generator, with ponds, bunkers and stands of posts on rolling hills.
 The golf goes in
 a feature at a time, in the order `DESIGN.md` gives.
 
@@ -394,7 +394,11 @@ change meant to move it, and the commit says why. Look at every picture.
   route three tiles wide is left from the tee to the cup; a pond is centred in
   the lowest of the ground and levelled at nought, since the game's water is at
   a fixed height under the ground and a pond on a hill would be a pit, and a
-  bunker is on a level bed, both through `noiseGround`'s level discs. A spec
+  bunker is on a level bed, both through `noiseGround`'s level discs, whose
+  blend is a share of the feel's swell (`BLEND`): over the two tiles a disc
+  used to come back in, a pond's bed at nought under a bank several units high
+  was the steepest step in the hole, and the ground is scaled so that is what
+  was asked, which left the hills round a pond a third of their height. A spec
   that cannot be made is refused by name. Each Moors seed was chosen by playing
   forty with the pace gate's player, and a hole's name draws its wind, which
   must move the grass (`test/turf.test.ts`): two names were changed because

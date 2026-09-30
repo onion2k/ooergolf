@@ -12,7 +12,7 @@
  */
 import { layoutOf } from './arena';
 import type { HoleDef } from './course';
-import { noiseGround, type Feel, type Flat } from './noise';
+import { FEELS, noiseGround, type Feel, type Flat } from './noise';
 import { seeded, type Random } from './random';
 
 /** What is put on a hole: a kind, how many, and how big each is. */
@@ -54,6 +54,12 @@ const HOLLOW = 0.4;
  * ponds are placed on every seed of every feel.
  */
 const LOW = 0.3;
+/**
+ * How far a pond's ground and a bunker's take to come back to the noise, as a share of the feel's swell: on hills a pond's
+ * bed at nought may lie several units under its bank, and over the two tiles a disc used to come back in that is the steepest
+ * step in the hole, which flattens the hills round it. Two tiles at the least, the old blend, for the feels of small swells.
+ */
+const BLEND = { pond: 0.5, sand: 0.25 };
 /** How much a blob's edge wanders, as a share of its radius: at most 0.4, so it is never more than 1.4 times as wide as it says. */
 const WOBBLE = { two: 0.25, three: 0.15 };
 /** How many tiles either side of the middle of a route must be open as well, so it is three tiles wide: room for a ball to roll along. */
@@ -230,7 +236,8 @@ export function openHole(spec: OpenSpec): HoleDef {
         if (!lay(tiles, kind === 'pond' ? '~' : 's')) continue;
         // levelled as far as its farthest tile, and no farther, so its bed never reaches the next feature
         const radius = Math.max(0.5, ...tiles.map(([c, r]) => Math.hypot(c - cx, r - cy)));
-        flats.push({ x: cx, y: rows - 1 - cy, r: radius, floor: kind === 'pond' });
+        const blend = Math.max(2, BLEND[kind] * FEELS[feel].swell.size);
+        flats.push({ x: cx, y: rows - 1 - cy, r: radius, floor: kind === 'pond', blend });
         placed = true;
       }
       if (!placed) throw new Error(`${name}: could not place ${kind} ${n + 1} of ${count} in ${TRIES} tries`);

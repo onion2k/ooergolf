@@ -489,58 +489,61 @@ const across = (cols: number, rows: number): OpenSpec['shape'] => [
  * The Moors: nine open holes, each six to fourteen times the size of The Downs' mean, a hundred to a hundred and
  * fifty units from the tee to the cup, so a hole is three to five shots of the putter and a round is a long walk. Made
  * by `openHole` from a spec and a seed: ground, and ponds, bunkers and stands of posts on it, placed so a route wide
- * enough to putt along is always left. The ground goes from gentle to rolling and choppy, each steeper than the last,
- * and the hazards from none to all three. Each seed was chosen by playing forty of them, eight rounds each, with the
- * pace gate's player: none of the chosen took the limit or went into the water, a hazard of each was near the line
- * from the tee to the cup, and the mean was about a stroke under par, as The Downs' is; then by looking at the pictures.
- * Par is each hole's intent.
+ * enough to putt along is always left. The ground is hills, swells ninety and a hundred and thirty-five units across
+ * (`hills` and `long hills`) at a steepness from 0.55 to 0.7, so a hole stands seven to eighteen units from its lowest
+ * ground to its highest and its steepest slope is about nineteen degrees, and a ball rests on nearly all of it; a pond
+ * lies in a valley and a bunker on a bed cut into a slope. Each seed was chosen by playing forty of them, eight rounds
+ * each, with the pace gate's player: none of the chosen took the limit or went into the water, a hazard of each was
+ * near the line from the tee to the cup, there were at least seven units of relief and the ball rested on nine tenths of
+ * the ground, and the mean was about a stroke under par, as The Downs' is; then by looking at the pictures. Par is each
+ * hole's intent.
  */
 const MOORS_SPECS: readonly OpenSpec[] = [
-  { name: 'Wide Open', par: 4, shape: across(30, 34), feel: 'gentle', steepness: 0.25, seed: 1, features: [] },
+  { name: 'Wide Open', par: 4, shape: across(30, 34), feel: 'hills', steepness: 0.55, seed: 8, features: [] },
   {
     name: 'Lily Ponds',
     par: 5,
     shape: across(33, 39),
-    feel: 'gentle',
-    steepness: 0.3,
-    seed: 14,
+    feel: 'hills',
+    steepness: 0.6,
+    seed: 6,
     features: [{ ...POND, count: 2 }],
   },
   {
     name: 'Sandy Reach',
     par: 5,
     shape: across(36, 39),
-    feel: 'rolling',
-    steepness: 0.45,
-    seed: 27,
+    feel: 'hills',
+    steepness: 0.6,
+    seed: 13,
     features: [BUNKERS(3)],
   },
-  { name: 'The Grove', par: 5, shape: across(36, 42), feel: 'rolling', steepness: 0.5, seed: 8, features: [STANDS(2)] },
-  { name: 'Long Roll', par: 5, shape: across(39, 45), feel: 'rolling', steepness: 0.55, seed: 1, features: [POND] },
+  { name: 'The Grove', par: 5, shape: across(36, 42), feel: 'hills', steepness: 0.65, seed: 6, features: [STANDS(2)] },
+  { name: 'Long Roll', par: 5, shape: across(39, 45), feel: 'long hills', steepness: 0.65, seed: 29, features: [POND] },
   {
     name: 'Broken Ground',
     par: 5,
     shape: across(39, 45),
-    feel: 'choppy',
-    steepness: 0.5,
-    seed: 27,
+    feel: 'long hills',
+    steepness: 0.7,
+    seed: 21,
     features: [BUNKERS(2)],
   },
   {
     name: 'Water Meadow',
     par: 6,
     shape: across(42, 48),
-    feel: 'rolling',
-    steepness: 0.55,
-    seed: 8,
+    feel: 'hills',
+    steepness: 0.7,
+    seed: 28,
     features: [{ ...POND, count: 2 }, BUNKERS(2)],
   },
   {
     name: 'The Ridge',
     par: 6,
     shape: across(45, 48),
-    feel: 'rolling and choppy',
-    steepness: 0.55,
+    feel: 'long hills',
+    steepness: 0.7,
     seed: 21,
     features: [STANDS(2), BUNKERS(1)],
   },
@@ -548,9 +551,9 @@ const MOORS_SPECS: readonly OpenSpec[] = [
     name: 'The Far Pin',
     par: 6,
     shape: across(45, 51),
-    feel: 'rolling and choppy',
-    steepness: 0.6,
-    seed: 25,
+    feel: 'long hills',
+    steepness: 0.7,
+    seed: 27,
     features: [POND, BUNKERS(2), STANDS(1)],
   },
 ];

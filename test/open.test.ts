@@ -215,6 +215,39 @@ describe('an open hole', () => {
     expect(ponds).toBe(80);
   });
 
+  it('keeps its hills with a pond in them: the relief is most of what the same hole has without one, and not a third of it', () => {
+    // measured over twenty seeds of hills at a steepness of 0.7: with the old blend of two tiles one pond left 0.32 of the
+    // relief on the mean and two 0.28; with a blend of half the swell 0.93, and 0.85
+    const relief = (h: { map: readonly string[]; terrain?: readonly string[] | Float32Array }) => {
+      const l = layoutOf(h.map, h.terrain);
+      let lo = Infinity,
+        hi = -Infinity;
+      for (let ty = 1; ty < l.rows - 1; ty++)
+        for (let tx = 1; tx < l.cols - 1; tx++) {
+          lo = Math.min(lo, l.terrain[ty * l.cols + tx]);
+          hi = Math.max(hi, l.terrain[ty * l.cols + tx]);
+        }
+      return hi - lo;
+    };
+    const hill = (seed: number, ponds: number) =>
+      openHole(
+        spec({
+          shape: [45, 51, [11, 48], [33, 2]],
+          feel: 'hills',
+          steepness: 0.7,
+          seed,
+          features: ponds ? [{ kind: 'pond', count: ponds, size: [2.5, 4] }] : [],
+        }),
+      );
+    for (const ponds of [1, 2]) {
+      const ratios: number[] = [];
+      for (let seed = 1; seed <= 20; seed++) ratios.push(relief(hill(seed, ponds)) / relief(hill(seed, 0)));
+      const mean = ratios.reduce((a, b) => a + b, 0) / ratios.length;
+      expect(mean, `${ponds} pond(s), the mean`).toBeGreaterThanOrEqual(ponds === 1 ? 0.85 : 0.78);
+      expect(Math.min(...ratios), `${ponds} pond(s), the worst`).toBeGreaterThanOrEqual(0.5);
+    }
+  });
+
   it('has ground as steep as was asked, and no steeper, with its ponds and beds levelled', () => {
     for (const steepness of [0.3, 0.6, 0.9]) {
       const hole = openHole(spec({ steepness }));

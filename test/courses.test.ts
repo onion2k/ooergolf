@@ -160,7 +160,7 @@ describe('the courses', () => {
 
 /**
  * The Moors: nine open holes made by the generator, each far bigger than any drawn by hand, with ponds, bunkers and
- * stands of posts on ground that goes from gentle to rolling and choppy. Held to what it is for.
+ * stands of posts on hills. Held to what it is for.
  */
 describe('The Moors', () => {
   /** The playable floor inside the rail, in square units. */
@@ -235,13 +235,29 @@ describe('The Moors', () => {
     expect([count('The Far Pin', '~'), count('The Far Pin', 's'), count('The Far Pin', 'o')]).toEqual([1, 2, 1]);
   });
 
-  it('goes from gentle to rolling and choppy ground, each steeper than the one before it in its kind, and the physics takes every hole', () => {
-    for (const hole of MOORS) {
+  it('is hills and not bumps: seven to eighteen units from the lowest ground to the highest, smooth, and the ball rests on nearly all of it', () => {
+    const downs = DOWNS.map((h) => groundFigures(layoutOf(h.map, h.terrain)));
+    const figures = MOORS.map((h) => groundFigures(layoutOf(h.map, h.terrain)));
+    for (const [i, hole] of MOORS.entries()) {
       expect(hole.terrain, `${hole.name} slopes`).toBeInstanceOf(Float32Array);
       expect(terrainRefusal(layoutOf(hole.map, hole.terrain), CUP), hole.name).toBeNull();
+      const f = figures[i];
+      // measured: 7.4 to 17.8 units, against The Downs' 1.7 to 3.2, on holes twice the size
+      expect(f.relief, `${hole.name}: how high its hills stand`).toBeGreaterThanOrEqual(i === 0 ? 7 : 9);
+      expect(f.relief).toBeLessThanOrEqual(20);
+      // smooth: the slope turns a fifth as often as on The Downs' bumps (0.003 to 0.009, against 0.010 to 0.039)
+      expect(f.bumpiness, `${hole.name}: how quickly the slope turns`).toBeLessThanOrEqual(0.012);
+      expect(f.detail, `${hole.name}: small detail on the swell`).toBeLessThanOrEqual(0.1);
+      // a slope of twenty degrees at the steepest, and a ball rests where it lies on nine tenths of the ground
+      expect(f.steepest, `${hole.name}: its steepest slope`).toBeLessThanOrEqual(0.37);
+      expect(f.rests, `${hole.name}: where a ball rests`).toBeGreaterThanOrEqual(0.9);
     }
-    const relief = MOORS.map((h) => groundFigures(layoutOf(h.map, h.terrain)).relief);
-    expect(relief[0], 'gentle is shallow').toBeLessThan(relief[8]);
+    const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
+    expect(mean(figures.map((f) => f.relief)), 'the mean').toBeGreaterThanOrEqual(11.5);
+    expect(
+      mean(figures.map((f) => f.relief)) / mean(downs.map((f) => f.relief)),
+      'against The Downs',
+    ).toBeGreaterThanOrEqual(4.5);
   });
 
   it('is played out from the tee to the cup by the autopilot, on every hole, holing out within the limit, and breaking no rule', () => {
