@@ -98,20 +98,21 @@ describe('a gesture in look mode', () => {
   it('turns one pointer’s drag into an orbit, in proportion to how far it goes and not how far it has gone', () => {
     const g = look();
     expect(g.down(1, 400, 300)).toEqual({ kind: 'none' });
-    // across half the screen's shorter side: the world turns with the finger, so the view turns the other way
+    // across half the screen's shorter side: the ground near the ball follows the finger, so the camera swings the other
+    // way round it, toward the side the finger came from
     const across = g.move(1, 400 + SHORT / 2, 300);
-    expect(across).toEqual({ kind: 'orbit', turn: -ORBIT.turn / 2, tilt: 0 });
+    expect(across).toEqual({ kind: 'orbit', turn: ORBIT.turn / 2, tilt: 0 });
     // down a quarter of it, no further across: what is new since the last move, and nothing of what came before
     const down = g.move(1, 400 + SHORT / 2, 300 + SHORT / 4);
     expect(down.kind).toBe('orbit');
     if (down.kind === 'orbit') {
       expect(down.turn).toBeCloseTo(0, 9);
-      // dragging down brings the camera higher, more from above: a smaller polar angle
-      expect(down.tilt).toBeCloseTo(-ORBIT.tilt / 4, 9);
+      // dragging down brings the camera lower, more toward the horizon: a bigger angle from the vertical
+      expect(down.tilt).toBeCloseTo(ORBIT.tilt / 4, 9);
     }
     // back the other way it turns and tilts the other
     const back = g.move(1, 400, 300);
-    expect(back.kind === 'orbit' && back.turn > 0 && back.tilt > 0).toBe(true);
+    expect(back.kind === 'orbit' && back.turn < 0 && back.tilt < 0).toBe(true);
   });
 
   it('never strikes the ball, shows no aim, and lets go without a shot however hard the drag was', () => {

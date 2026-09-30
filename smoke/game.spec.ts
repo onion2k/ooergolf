@@ -458,23 +458,31 @@ test.describe('looking round', () => {
     await expect(page.locator('#help')).toContainText('look round');
     expect((await page.evaluate(() => window.game!.view())).mode).toBe('look');
 
-    // across the screen, as far as a fifth of its shorter side is: the world turns with the finger
+    // across the screen, as far as a quarter of its shorter side is: the ground near the ball goes with the finger
+    const nearOnPage = () =>
+      page.evaluate(() => {
+        const g = window.game!;
+        const ball = g.ball();
+        return g.project(ball.x, ball.y - 8, 0);
+      });
+    const near = await nearOnPage();
     const short = await page.evaluate(() => Math.min(innerWidth, innerHeight));
     await drag(page, { x: 640, y: 400 }, { x: 640 + short / 4, y: 400 });
     await page.evaluate(() => window.game!.step(1));
     const turned = await page.evaluate(() => window.game!.view());
-    expect(turned.azimuth, 'turned by the drag, the other way from it').toBeCloseTo(-ORBIT.turn / 4, 3);
+    expect(turned.azimuth, 'turned by the drag').toBeCloseTo(ORBIT.turn / 4, 3);
+    expect((await nearOnPage()).x, 'the ground near the ball went across with the finger').toBeGreaterThan(near.x + 30);
     expect(turned.tilt, 'not tilted by a drag straight across').toBeCloseTo(0.78, 3);
     const moved = await cupOnPage(page);
     expect(Math.hypot(moved.x - cup.x, moved.y - cup.y), 'the cup is somewhere else on the page').toBeGreaterThan(30);
     expect((await page.evaluate(() => window.game!.state())).strokes, 'nothing was struck').toBe(0);
     expect(await page.evaluate(() => window.game!.aiming()), 'and no aim was shown').toBe(null);
 
-    // up the screen: the view comes lower, and no lower than it may
-    await drag(page, { x: 640, y: 600 }, { x: 640, y: 200 });
+    // down the screen: the view comes lower, and no lower than it may
+    await drag(page, { x: 640, y: 200 }, { x: 640, y: 600 });
     await page.evaluate(() => window.game!.step(1));
     expect((await page.evaluate(() => window.game!.view())).tilt, 'as low as it goes').toBe(1);
-    await drag(page, { x: 640, y: 100 }, { x: 640, y: 700 });
+    await drag(page, { x: 640, y: 700 }, { x: 640, y: 100 });
     await page.evaluate(() => window.game!.step(1));
     expect((await page.evaluate(() => window.game!.view())).tilt, 'and as high').toBe(0.3);
 
@@ -964,7 +972,7 @@ test.describe('on a phone', () => {
     await drag(page, { x: 100, y: 500 }, { x: 300, y: 500 }, { touch: true });
     await page.evaluate(() => window.game!.step(1));
     const turned = await page.evaluate(() => window.game!.view());
-    expect(turned.azimuth, 'turned').toBeLessThan(-0.3);
+    expect(turned.azimuth, 'turned').toBeGreaterThan(0.3);
     const before = turned.distance;
     await touches(page, [
       [{ id: 1, x: 200, y: 500 }],

@@ -21,9 +21,10 @@ export const PINCH_REACH = 80;
 /**
  * How far a drag in look mode turns the camera, and how far it tilts it, for a drag across the whole of the screen's
  * shorter side, in radians: half a turn across, and a little over a radian of tilt up or down, which is more than the
- * camera's whole range of tilt, so a hand's width of drag takes it from one end to the other. The world turns with the
- * finger, as a turntable does, so a drag to the right turns the view to the left, and a drag down brings the camera
- * higher, more from above.
+ * camera's whole range of tilt, so a hand's width of drag takes it from one end to the other. The camera goes round
+ * the ball as the ground near it goes with the finger, so a drag to the right swings the camera to the left (more is
+ * toward +X, so the turn is the drag's), and a drag down brings it lower, toward the horizon, and one up higher. A
+ * turn about a point cannot follow the finger at both ends of the hole at once: it is the near end that does.
  */
 export const ORBIT = { turn: Math.PI, tilt: 1.2 };
 
@@ -98,8 +99,8 @@ export class Gesture {
       this.turning.at = [x, y];
       this.down_.set(id, [x, y]);
       const short = this.options.shortSide();
-      const turn = -((x - px) / short) * ORBIT.turn,
-        tilt = -((y - py) / short) * ORBIT.tilt;
+      const turn = ((x - px) / short) * ORBIT.turn,
+        tilt = ((y - py) / short) * ORBIT.tilt;
       return turn || tilt ? { kind: 'orbit', turn: turn || 0, tilt: tilt || 0 } : NONE;
     }
     if (this.down_.size !== 2) {

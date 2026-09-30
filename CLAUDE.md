@@ -161,8 +161,9 @@ change meant to move it, and the commit says why. Look at every picture.
   and a power, and the pointer onto the ground. `src/gesture.ts` says what
   the pointers mean, by `Mode`: in Aim one pulled back is a shot, and in
   Look one dragged turns and tilts the camera (`ORBIT`: half a turn across
-  the screen's short side, the world turning with the finger, a drag down
-  bringing the view higher) and never strikes; in both two are a pinch, and
+  the screen's short side, the ground near the ball going with the finger,
+  so a drag right swings the camera left round the ball, and a drag down
+  bringing the view lower) and never strikes; in both two are a pinch, and
   a second finger mid-drag takes the drag back. `src/input.ts` turns what
   the gesture says into the ball struck or the camera moved, through ports
   it is handed, so the page and the fuzzer press on the course alike.
