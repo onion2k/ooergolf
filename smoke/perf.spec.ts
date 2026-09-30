@@ -28,7 +28,15 @@ const BASELINE = 'smoke/perf-baseline.json';
  * The frame is `LOOK.md`'s: the look may spend up to 5 ms of it at the top
  * rung, and a slower machine steps down the ladder.
  */
-export const BUDGET = { bootMs: 3000, frameMs: 5, bundleKb: 400, beginMs: 400, bigFrameMs: 5 };
+export const BUDGET = {
+  bootMs: 3000,
+  frameMs: 5,
+  bundleKb: 400,
+  beginMs: 400,
+  bigFrameMs: 5,
+  linksBeginMs: 400,
+  linksFrameMs: 5,
+};
 /** How far a figure may move from the baseline before it is a change: a share, and a slack for the noisy ones. */
 // the frame, timed ten at a time after the GPU is warmed, wobbles about 5% between runs (0.83 to 0.91 ms over ten):
 // three times that, and a tenth of a millisecond for a frame so small
@@ -40,6 +48,9 @@ const TOLERANCE = {
   // that spread, and narrower than a hole costing twice as much to begin or half as much again to draw
   beginMs: [0.5, 30],
   bigFrameMs: [0.25, 0.3],
+  // the same for the biggest hole of The Links, which is golf's: a hole of 24,000 tiles of map, hills, trees and water
+  linksBeginMs: [0.5, 40],
+  linksFrameMs: [0.25, 0.4],
 } as const;
 
 interface Figures {
@@ -50,6 +61,9 @@ interface Figures {
   beginMs: number;
   /** A frame of that hole at the worst of three views: from its tee, and from outside its rail's corner at two zooms. */
   bigFrameMs: number;
+  /** The same for the biggest hole of The Links, begun in turn with its smallest, and a frame of it at the worst of four views. */
+  linksBeginMs: number;
+  linksFrameMs: number;
 }
 
 /** The built game's download: every script and stylesheet in dist/, gzipped, in kilobytes. */
@@ -112,16 +126,49 @@ test('boots, draws and downloads within budget, and as it did before', async ({ 
     }
     return { begin: begins[Math.floor(begins.length / 2)], frame: Math.max(...frames) };
   });
+  // and the same of the biggest hole of The Links, the par five that bends: golf's holes are of a different sort, tens of
+  // thousands of tiles of map with hills and trees and out of bounds on them, and what they cost is held on their own
+  const links = await page.evaluate(async () => {
+    const g = window.game!;
+    g.chooseCourse('The Links');
+    g.step(2);
+    await g.grass();
+    const begins: number[] = [];
+    for (let k = 0; k < 11; k++) {
+      const t = performance.now();
+      g.startHole(k % 2 ? 1 : 6);
+      await g.grass();
+      if (k % 2 === 0) begins.push(performance.now() - t);
+    }
+    begins.sort((a, b) => a - b);
+    g.startHole(6);
+    g.step(120);
+    const { floor, tee, cup } = g.content();
+    const frames: number[] = [];
+    for (const [x, y, distance] of [
+      [g.ball().x, g.ball().y, 62],
+      [(tee.x + cup.x) / 2, (tee.y + cup.y) / 2, 110],
+      [floor.minX - 12, floor.minY - 12, 62],
+      [floor.maxX + 12, floor.maxY + 12, 110],
+    ]) {
+      g.look(x, y, distance);
+      g.step(2);
+      frames.push(await g.measureFrame(120));
+    }
+    return { begin: begins[Math.floor(begins.length / 2)], frame: Math.max(...frames) };
+  });
   const now: Figures = {
     bootMs: Math.round(boot),
     frameMs: Math.round(frame * 100) / 100,
     bundleKb: bundle,
     beginMs: Math.round(big.begin),
     bigFrameMs: Math.round(big.frame * 100) / 100,
+    linksBeginMs: Math.round(links.begin),
+    linksFrameMs: Math.round(links.frame * 100) / 100,
   };
   info.annotations.push({ type: 'perf', description: JSON.stringify(now) });
   console.log(
-    `perf: boot ${now.bootMs} ms, frame ${now.frameMs} ms, download ${now.bundleKb} kB, begin the biggest hole ${now.beginMs} ms, its frame ${now.bigFrameMs} ms`,
+    `perf: boot ${now.bootMs} ms, frame ${now.frameMs} ms, download ${now.bundleKb} kB, begin the biggest hole ${now.beginMs} ms, its frame ${now.bigFrameMs} ms; of The Links, begin ${now.linksBeginMs} ms, frame ${now.linksFrameMs} ms`,
   );
 
   if (process.env.PERF_UPDATE) {
@@ -135,7 +182,15 @@ test('boots, draws and downloads within budget, and as it did before', async ({ 
       throw new Error('no baseline: run npm run perf:update first');
     }
     const moved: string[] = [];
-    for (const key of ['bootMs', 'frameMs', 'bundleKb', 'beginMs', 'bigFrameMs'] as const) {
+    for (const key of [
+      'bootMs',
+      'frameMs',
+      'bundleKb',
+      'beginMs',
+      'bigFrameMs',
+      'linksBeginMs',
+      'linksFrameMs',
+    ] as const) {
       const was = baseline[key];
       if (was === undefined) {
         moved.push(`${key} ${now[key]} (not in the baseline)`);
@@ -153,5 +208,9 @@ test('boots, draws and downloads within budget, and as it did before', async ({ 
   expect(now.bundleKb, 'download within budget').toBeLessThanOrEqual(BUDGET.bundleKb);
   expect(now.beginMs, 'the biggest hole begun within budget').toBeLessThanOrEqual(BUDGET.beginMs);
   expect(now.bigFrameMs, 'a frame of the biggest hole within budget').toBeLessThanOrEqual(BUDGET.bigFrameMs);
+  expect(now.linksBeginMs, 'the biggest hole of The Links begun within budget').toBeLessThanOrEqual(
+    BUDGET.linksBeginMs,
+  );
+  expect(now.linksFrameMs, 'a frame of it within budget').toBeLessThanOrEqual(BUDGET.linksFrameMs);
   expect(problems).toEqual([]);
 });

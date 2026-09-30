@@ -17,8 +17,8 @@ import type { Club } from './clubs';
 import type { Mode } from './gesture';
 import { SCORE_KINDS, againstPar, scoreKind, scoreName } from './score';
 
-/** Each kind of word the callout over the course says, which the stylesheet colours: a score's kind, or the water. */
-export const CALLOUTS = [...SCORE_KINDS, 'splash'] as const;
+/** Each kind of word the callout over the course says, which the stylesheet colours: a score's kind, the water, or out of bounds. */
+export const CALLOUTS = [...SCORE_KINDS, 'splash', 'out'] as const;
 export type Callout = (typeof CALLOUTS)[number];
 
 export interface HudHandlers {
@@ -251,7 +251,8 @@ export class Hud {
 
   /** The strokes taken; a new stroke takes away the water's word left over the course by the last. */
   setStrokes(n: number) {
-    if (this.strokes.textContent !== String(n) && this.toast.dataset.kind === 'splash') this.toast.hidden = true;
+    const loss = this.toast.dataset.kind === 'splash' || this.toast.dataset.kind === 'out';
+    if (this.strokes.textContent !== String(n) && loss) this.toast.hidden = true;
     this.strokes.textContent = String(n);
     this.unit.textContent = n === 1 ? 'stroke' : 'strokes';
   }
@@ -266,6 +267,11 @@ export class Hud {
   /** The ball into the water: a word for it, until the next stroke. */
   splash() {
     this.callout('In the water! +1', 'splash');
+  }
+
+  /** The ball out of bounds: a word for it, until the next stroke. */
+  outOfBounds() {
+    this.callout('Out of bounds! +1', 'out');
   }
 
   /** A hole done: what the score is called, large, until the next begins. */

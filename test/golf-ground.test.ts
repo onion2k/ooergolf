@@ -5,9 +5,9 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { Mesh } from 'artshape-render/mesh/types';
-import { layoutOf } from '../src/arena';
+import { TILE, heightAt, layoutOf, tileAt } from '../src/arena';
 import { COURSE } from '../src/course';
-import { GROUND, groundOf } from '../src/ground';
+import { GROUND, groundOf, stakesOf } from '../src/ground';
 import { PALETTE } from '../src/scene';
 
 /** How many triangles a mesh has. */
@@ -76,5 +76,74 @@ describe('the ground of a golf hole', () => {
 describe('the ground of a hole of minigolf', () => {
   it('has no golf meshes: it is drawn exactly as it was', () => {
     for (const hole of COURSE) expect(groundOf(layoutOf(hole.map, hole.terrain)).golf, hole.name).toBeUndefined();
+  });
+});
+
+describe('the ground out of bounds', () => {
+  const map = ['#########', '#xxxxxxx#', '#xxgCgxx#', '#xffffxx#', '#xffffxx#', '#xrrTrrx#', '#xxxxxxx#', '#########'];
+  const l = layoutOf(map);
+  const g = groundOf(l);
+
+  it('is a mesh of its own, a tile of it a tile of out of bounds, and is not laid twice', () => {
+    let oob = 0;
+    for (let t = 0; t < l.cols * l.rows; t++) if (l.oob[t]) oob++;
+    expect(oob).toBeGreaterThan(10);
+    expect(triangles(g.golf!.oob)).toBe(oob * PER_TILE);
+    // and none of the rough’s: the rough is `r`, and out of bounds is not it, though a ball is played from it as rough
+    expect(triangles(g.golf!.rough)).toBe(4 * PER_TILE);
+  });
+
+  it('is a colour of its own, drier and yellower than the rough it is played from', () => {
+    expect(PALETTE.oobGround[0]).toBeGreaterThan(PALETTE.playRough[0]);
+    expect(PALETTE.oobGround[1]).not.toBeCloseTo(PALETTE.playRough[1], 2);
+  });
+});
+
+describe('the stakes along the line', () => {
+  const map = ['#########', '#xxxxxxx#', '#xxgCgxx#', '#xffffxx#', '#xffffxx#', '#xrrTrrx#', '#xxxxxxx#', '#########'];
+  const l = layoutOf(map);
+
+  it('stand on out of bounds, on the side of the line that faces in bounds, and never in play', () => {
+    const stakes = stakesOf(l);
+    expect(stakes.length).toBeGreaterThan(3);
+    for (const s of stakes) {
+      const t = tileAt(l, s.x, s.y);
+      expect(l.oob[t], `a stake at ${s.x.toFixed(1)},${s.y.toFixed(1)} is on out of bounds`).toBe(1);
+      // within a tile of a tile that is in play
+      let near = false;
+      for (const [dx, dy] of [
+        [TILE, 0],
+        [-TILE, 0],
+        [0, TILE],
+        [0, -TILE],
+      ]) {
+        const u = tileAt(l, s.x + dx, s.y + dy);
+        if (u >= 0 && !l.oob[u] && !l.solid[u]) near = true;
+      }
+      expect(near, `a stake at ${s.x.toFixed(1)},${s.y.toFixed(1)} is on the line`).toBe(true);
+    }
+  });
+
+  it('are spaced along the line, no two on the one tile and none nearer than a tile and a bit, and none on a hole with no out of bounds', () => {
+    const stakes = stakesOf(l);
+    for (let i = 0; i < stakes.length; i++)
+      for (let j = i + 1; j < stakes.length; j++)
+        expect(
+          Math.hypot(stakes[i].x - stakes[j].x, stakes[i].y - stakes[j].y),
+          'two stakes close',
+        ).toBeGreaterThanOrEqual(4);
+    const tiles = stakes.map((s) => tileAt(l, s.x, s.y));
+    expect(new Set(tiles).size).toBe(tiles.length);
+    expect(stakesOf(layoutOf(['#####', '#gCg#', '#gTg#', '#####']))).toEqual([]);
+    for (const hole of COURSE) expect(stakesOf(layoutOf(hole.map, hole.terrain)), hole.name).toEqual([]);
+  });
+
+  it('stand on the ground, which on a hole that slopes is as high as the ground there', () => {
+    const rows = l.rows,
+      cols = l.cols;
+    const heights = new Float32Array(rows * cols);
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) heights[r * cols + c] = c * 0.2;
+    const sloped = layoutOf(map, heights);
+    for (const s of stakesOf(sloped)) expect(s.z).toBeCloseTo(heightAt(sloped, s.x, s.y), 6);
   });
 });

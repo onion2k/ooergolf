@@ -36,6 +36,32 @@ describe('a course made by the generator', () => {
     vi.resetModules();
   });
 
+  it('is the same for The Links, whose holes are made by `golfHole`: not as the module loads, and once', async () => {
+    vi.resetModules();
+    const made: string[] = [];
+    vi.doMock('../src/golf', async () => {
+      const real = await vi.importActual<typeof import('../src/golf')>('../src/golf');
+      return {
+        ...real,
+        golfHole: (spec: Parameters<typeof real.golfHole>[0]) => {
+          made.push(spec.name);
+          return real.golfHole(spec);
+        },
+      };
+    });
+    const course = await import('../src/course');
+    expect(made, 'nothing made as the module loads, or as the courses are summarised').toEqual([]);
+    const links = course.COURSES.find((c) => c.name === 'The Links')!;
+    expect(links.summary).toEqual({ holes: 9, par: 36 });
+    expect(made).toEqual([]);
+    const holes = links.holes;
+    expect(made.length).toBe(9);
+    expect(links.holes).toBe(holes);
+    expect(made.length, 'once').toBe(9);
+    vi.doUnmock('../src/golf');
+    vi.resetModules();
+  });
+
   it('says in its summary what its holes say, for every course there is', () => {
     for (const c of COURSES) {
       expect(c.summary.holes, `${c.name}: how many holes`).toBe(c.holes.length);

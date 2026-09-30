@@ -43,11 +43,14 @@
     --leaf-tint: #d9f6e2;
     --orange: #ffa53d;
     --orange-deep: #e07a0b;
+    --orange-ink: #8a4a00;
     --grape: #b58cff;
     --grape-deep: #7a52e6;
     --grape-ink: #4a2da6;
     --rose: #ff7a9a;
     --rose-deep: #d63f68;
+    --teal: #38d1c0;
+    --teal-deep: #159888;
     --water: #2bb8ea;
     --water-deep: #1487b8;
     --water-ink: #0a5a86;
@@ -442,11 +445,17 @@
     --lip: var(--stone);
     color: var(--ink-soft);
   }
-  #toast[data-kind='splash'] {
+  #toast[data-kind='splash'],
+  #toast[data-kind='out'] {
     --edge: var(--water);
     --lip: var(--water-deep);
     color: var(--water-ink);
     font-size: clamp(28px, 7vw, 40px);
+  }
+  #toast[data-kind='out'] {
+    --edge: var(--orange);
+    --lip: var(--orange-deep);
+    color: var(--orange-ink);
   }
 
   /* ---- the card, the shop and the start screen: in the middle, over everything ---- */
@@ -652,21 +661,25 @@
       0 6px 0 var(--deep),
       0 12px 20px var(--shade);
   }
-  #courses .course:nth-child(5n + 2) {
+  #courses .course:nth-child(6n + 2) {
     --face: var(--orange);
     --deep: var(--orange-deep);
   }
-  #courses .course:nth-child(5n + 3) {
+  #courses .course:nth-child(6n + 3) {
     --face: var(--sky-face);
     --deep: var(--sky-deep);
   }
-  #courses .course:nth-child(5n + 4) {
+  #courses .course:nth-child(6n + 4) {
     --face: var(--grape);
     --deep: var(--grape-deep);
   }
-  #courses .course:nth-child(5n + 5) {
+  #courses .course:nth-child(6n + 5) {
     --face: var(--rose);
     --deep: var(--rose-deep);
+  }
+  #courses .course:nth-child(6n + 6) {
+    --face: var(--teal);
+    --deep: var(--teal-deep);
   }
   @media (hover: hover) {
     #courses .course:hover {
@@ -728,16 +741,16 @@
   }
 
   @media (max-width: 600px) {
-    /* five cards fit a tall phone's screen at this height, and a short one scrolls */
+    /* six cards fit a tall phone's screen at this height, and a short one scrolls */
     #courses {
-      gap: 14px 16px;
+      gap: 12px 16px;
     }
     #courses .course {
-      min-height: 104px;
-      padding: 12px 16px 14px;
+      min-height: 88px;
+      padding: 10px 16px 12px;
     }
     .course b {
-      font-size: 24px;
+      font-size: 23px;
     }
   }
 

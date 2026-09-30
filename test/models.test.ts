@@ -35,10 +35,12 @@ import {
   flag,
   flowers,
   golfBall,
+  golfTree,
   group,
   hedge,
   placeBlades,
   rock,
+  stake,
   teeMarkers,
   tree,
   triangles,
@@ -48,6 +50,7 @@ import {
   type Part,
 } from '../src/models';
 import { BALL, KIND_RADIUS, WATER_LEVEL } from '../src/arena';
+import { TREE, insideCanopy, treeCone } from '../src/trees';
 import { SCALE } from '../src/scenery';
 import { KINDS, ROUGH } from '../src/turf';
 
@@ -83,6 +86,8 @@ function catalogue(): [string, Model][] {
     ['conveyor', conveyor(6, 12)],
     ['round tree', tree('round')],
     ['pine', tree('pine', { height: 10, seed: 3 })],
+    ['golf tree', golfTree(TREE, { seed: 2 })],
+    ['stake', stake()],
     ['hedge', hedge(6, 1.5, 1.8)],
     ['flowers', flowers(FLOWER_COLOURS[0])],
     ['rock', rock(1.5)],
@@ -289,6 +294,8 @@ const SMOOTH = new Set(['ball', 'liner', 'rim', 'pole', 'knob', 'flag', 'markers
 const ROUND: Partial<Record<string, readonly string[]>> = {
   'round tree': ['trunk', 'leaves', 'crown'],
   pine: ['trunk', 'leaves'],
+  'golf tree': ['trunk', 'leaves'],
+  stake: ['post', 'cap'],
   hedge: ['hedge'],
   flowers: ['leaves', 'petals', 'hearts'],
   rock: ['rock'],
@@ -1057,6 +1064,75 @@ describe('the decoration', () => {
   });
 });
 
+describe('the golf tree and the stake', () => {
+  it('a golf tree stands on the ground to the tip the physics gives it, with its canopy off the ground at the base it gives', () => {
+    for (const seed of [1, 2, 3, 4]) {
+      const m = golfTree(TREE, { seed });
+      const all = bounds(m.parts);
+      const leaves = bounds([partNamed(m, 'leaves')]);
+      expect(all.min[2]).toBeCloseTo(0, 5);
+      expect(all.max[2]).toBeCloseTo(TREE.apex, 5);
+      expect(leaves.min[2], 'the canopy’s underside is at the base').toBeCloseTo(TREE.base, 5);
+      // as wide at its base as the tree says, to a twentieth, and centred on its trunk
+      const wide = (leaves.max[0] - leaves.min[0]) / 2;
+      expect(wide).toBeGreaterThan(TREE.radius * 0.9);
+      expect(wide).toBeLessThan(TREE.radius * 1.02);
+      for (const a of [0, 1]) expect(Math.abs(leaves.max[a] + leaves.min[a]) / 2).toBeLessThan(0.05 * TREE.radius);
+      // the trunk is as wide as the physics' post and goes up into the canopy
+      const trunk = bounds([partNamed(m, 'trunk')]);
+      expect((trunk.max[0] - trunk.min[0]) / 2).toBeGreaterThan(TREE.trunk * 0.9);
+      expect((trunk.max[0] - trunk.min[0]) / 2).toBeLessThan(TREE.trunk * 1.5);
+      expect(trunk.max[2]).toBeGreaterThan(TREE.base);
+      expect(trunk.max[2]).toBeLessThan(TREE.apex - 4);
+    }
+  });
+
+  it('a golf tree’s leaves are all inside the cone the game tests a ball against, which is a ball’s radius bigger: no ball is seen in a branch', () => {
+    const cone = treeCone(0, 0, 0);
+    const m = golfTree(TREE);
+    for (const [x, y, z] of points(partNamed(m, 'leaves').mesh))
+      expect(
+        insideCanopy(cone, [x, y, z], KIND_RADIUS[BALL]),
+        `${x.toFixed(2)},${y.toFixed(2)},${z.toFixed(2)}`,
+      ).toBeGreaterThan(0);
+    // and it is not a much bigger cone than the tree: some of the leaves reach close to its surface
+    let nearest = Infinity;
+    for (const [x, y, z] of points(partNamed(m, 'leaves').mesh))
+      nearest = Math.min(nearest, insideCanopy(cone, [x, y, z], KIND_RADIUS[BALL]));
+    expect(nearest).toBeLessThan(0.5);
+  });
+
+  it('is a different tree for each seed and the same for the same', () => {
+    const a = golfTree(TREE, { seed: 1 }),
+      b = golfTree(TREE, { seed: 2 });
+    expect(Array.from(partNamed(a, 'leaves').mesh.positions)).not.toEqual(
+      Array.from(partNamed(b, 'leaves').mesh.positions),
+    );
+    expect(Array.from(partNamed(golfTree(TREE, { seed: 1 }), 'leaves').mesh.positions)).toEqual(
+      Array.from(partNamed(a, 'leaves').mesh.positions),
+    );
+  });
+
+  it('a stake is as tall as it is asked, standing on the ground, white with a red cap at the top', () => {
+    for (const height of [1.2, 1.8, 2.6]) {
+      const m = stake({ height });
+      const b = bounds(m.parts);
+      expect(b.min[2]).toBeCloseTo(0, 5);
+      expect(b.max[2]).toBeGreaterThan(height * 0.9);
+      expect(b.max[2]).toBeLessThan(height * 1.15);
+      const post = partNamed(m, 'post'),
+        cap = partNamed(m, 'cap');
+      const light = (p: Part) => p.material[0] + p.material[1] + p.material[2];
+      expect(light(post)).toBeGreaterThan(light(cap));
+      // the cap sits on the top of the post and stands over it
+      expect(bounds([cap]).max[2]).toBeGreaterThan(bounds([post]).max[2]);
+      expect(bounds([cap]).min[2]).toBeGreaterThan(bounds([post]).max[2] * 0.6);
+      // slim: a stake, and not a post
+      expect(b.max[0] - b.min[0], 'slim: less than a ball’s width').toBeLessThan(2 * KIND_RADIUS[BALL] * 0.4);
+    }
+  });
+});
+
 describe('every model keeps to its triangle budget', () => {
   it('a tree is under 860, whatever its kind, size and seed', () => {
     expect(BUDGET.tree).toBeLessThanOrEqual(860);
@@ -1084,8 +1160,14 @@ describe('every model keeps to its triangle budget', () => {
       ['rock', rock(3)],
       ['bunting', bunting(24)],
       ['fence', fence(12)],
+      ['golfTree', golfTree(TREE, { seed: 9 })],
+      ['stake', stake({ height: 2.4, radius: 0.3 })],
     ];
     for (const [name, m] of at) expect(triangles(m), name).toBeLessThanOrEqual(BUDGET[name]);
+  });
+
+  it('a golf hole, a hundred trees and two hundred stakes and all, is under 60,000', () => {
+    expect(triangles(golfTree(TREE)) * 100 + triangles(stake()) * 200).toBeLessThan(BUDGET.golfHole);
   });
 
   it('a whole hole, forty decorations and everything on it, is under 20,000', () => {

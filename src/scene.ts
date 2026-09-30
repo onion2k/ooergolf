@@ -46,12 +46,15 @@ import {
   windmill,
   type Model,
   type Pond,
+  golfTree,
+  stake,
 } from './models';
 import { BARRIER, WINDMILL, type Obstacles } from './obstacles';
 import type { World } from './physics';
 import { placeRolling } from './roll';
 import { ROCK_SIZE, dress, scatter, type Piece, type SceneryKind } from './scenery';
-import { GROUND, cupGround, groundOf, railsOf } from './ground';
+import { GROUND, cupGround, groundOf, railsOf, stakesOf } from './ground';
+import { TREE } from './trees';
 import { RIPPLES, SPLASH_RING, flagTurn, lean, ringPlace, ripples, splashRing, waggle } from './sway';
 import { SPARKLE, sparkle, sparkles as sparkleShares } from './glints';
 import { MARK, markSize } from './marker';
@@ -92,6 +95,7 @@ export const PALETTE = {
   rough: [...COLOURS.rough, 0.95],
   /** A golf hole's other grounds: the rough it is played from, the putting green in its two stripes, and the tee's box. */
   playRough: [...COLOURS.playRough, 0.95],
+  oobGround: [...COLOURS.oobGround, 0.95],
   puttingGreen: [...COLOURS.puttingGreen, 0.8],
   puttingGreenMown: [...COLOURS.puttingGreenMown, 0.8],
   teeBox: [...COLOURS.teeBox, 0.85],
@@ -124,6 +128,10 @@ const SCENERY_MODELS: Record<Exclude<SceneryKind, 'flowers'>, Model> = {
 };
 /** A post, built once, to the physics' figures for one. */
 const POST = bumper(BUMPER.radius, { height: BUMPER.height });
+/** A golf tree, built once, to the figures the game tests a ball against: what is seen is what the ball meets. */
+const GOLF_TREE = golfTree(TREE);
+/** A stake that marks out of bounds, built once. */
+const STAKE = stake();
 /** The kinds of scenery that lean in the breeze. */
 const TREES = new Set<SceneryKind>(['round tree', 'pine']);
 /** The flowers of a bed at the foot of the rail: fuller than a clump in the rough, and few enough to read as flowers. */
@@ -294,6 +302,7 @@ export class Scene {
         [ground.golf.putting, PALETTE.puttingGreen, 0.3],
         [ground.golf.puttingMown, PALETTE.puttingGreenMown, 0.8],
         [ground.golf.tee, PALETTE.teeBox, 0.5],
+        [ground.golf.oob, PALETTE.oobGround, 0.6],
       );
     const out: GameGroup[] = [
       ...laid
@@ -312,6 +321,8 @@ export class Scene {
       ...this.pondSheets(layout),
       ...this.bunkers(layout),
       ...this.posts(layout),
+      ...this.trees(layout),
+      ...this.stakes(layout),
     ];
     if (ground.banks.indices.length) out.push({ mesh: ground.banks, matrices: still, ...look(PALETTE.bank) });
     for (const w of obstacles?.windmills ?? []) {
@@ -349,6 +360,23 @@ export class Scene {
     const slopes = layout.terrain.some((h) => h !== 0);
     const height = (x: number, y: number) => heightAt(layout, layout.originX + x, layout.originY + y);
     return groups(sandBed(cells, TILE, slopes ? { height, pieces: 3 } : {}), at);
+  }
+
+  /** The trees of a golf hole, all of one model, each standing where the game has its trunk and its canopy. */
+  private trees(layout: Layout): GameGroup[] {
+    if (!layout.trees.length) return [];
+    const at = new Float32Array(layout.trees.length * 16);
+    layout.trees.forEach((t, k) => place(at, k, t.x, t.y, heightAt(layout, t.x, t.y)));
+    return groups(GOLF_TREE, at);
+  }
+
+  /** The stakes along a golf hole's out of bounds, all of one model, each on the ground where it stands. */
+  private stakes(layout: Layout): GameGroup[] {
+    const stakes = stakesOf(layout);
+    if (!stakes.length) return [];
+    const at = new Float32Array(stakes.length * 16);
+    stakes.forEach((s, k) => place(at, k, s.x, s.y, s.z));
+    return groups(STAKE, at);
   }
 
   /** The posts on a hole, all of one model, each where the physics has its post. */

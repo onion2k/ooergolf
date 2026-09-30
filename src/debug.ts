@@ -94,6 +94,8 @@ export interface Content {
   sand: { x: number; y: number }[];
   /** Where each post on this hole stands. */
   posts: { x: number; y: number }[];
+  /** Where each tree of a golf hole stands: its trunk, with its canopy over it. */
+  trees: { x: number; y: number }[];
 }
 
 export interface GameApi {
@@ -121,6 +123,12 @@ export interface GameApi {
 
   /** A body moved to a point, still, and woken. */
   place(slot: number, x: number, y: number, z?: number): void;
+  /**
+   * The ball put down at (x, y) as a player's ball lies there, at rest on the ground of any height, and never in the
+   * rock, a post, a tree's trunk, the cup or out of bounds: the game's own `place`, which refuses what a ball cannot lie
+   * on by throwing. `place` above is the raw one, for a flat hole.
+   */
+  lay(x: number, y: number): void;
   /**
    * The ball struck as a let-go drag strikes it: toward `angle`, at `power` of the club's hardest, and on a golf hole
    * with `club` of the bag put in hand first, if one is named. Whether it was taken.
@@ -337,6 +345,7 @@ export function createApi(host: DebugHost): GameApi {
       holes: game.course.map((h) => ({ name: h.name, par: h.par })),
       sand: sandTiles(game.layout),
       posts: game.layout.bumpers.map((p) => ({ ...p })),
+      trees: game.layout.trees.map((t) => ({ ...t })),
     }),
     events() {
       return host.events.splice(0);
@@ -351,6 +360,7 @@ export function createApi(host: DebugHost): GameApi {
       game.world.vx[slot] = game.world.vy[slot] = game.world.vz[slot] = 0;
       game.world.wake(slot);
     },
+    lay: (x, y) => game.place(x, y),
     shoot(angle, power, club) {
       if (club !== undefined && !game.pick(club)) return false;
       return game.shoot(angle, power);

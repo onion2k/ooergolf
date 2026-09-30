@@ -11,6 +11,7 @@ import { World, type WorldOptions } from 'artshape-physics/world';
 import { BODY_CAPACITY, BOTTOM, BOUNCE, BUMPER, KIND_RADIUS, ROLL, SAND, TILE, heightAt, type Layout } from './arena';
 import type { Random } from './random';
 import { LIE, SURFACES } from './surfaces';
+import { TREE } from './trees';
 
 export { World, type Belt, type Pusher } from 'artshape-physics/world';
 
@@ -38,8 +39,9 @@ function gridOf(layout: Layout) {
   return { cols: layout.cols, rows: layout.rows, originX: layout.originX, originY: layout.originY, tile: TILE };
 }
 
-/** The physics' fixed step, and its gravity: the package's defaults, which the game steps and predicts by. */
-export const PHYSICS = { step: 1 / 120, gravity: 70 } as const;
+// the physics' fixed step and its gravity are `arena.ts`'s, which the tools that make and read holes may import: this
+// module imports the package, which a page or a test of content need not load
+export { PHYSICS } from './arena';
 
 /** The cup, as the physics sees it: a hole in the floor this wide and this deep, with a rim, and how hard it pulls. */
 export interface Cup {
@@ -124,5 +126,16 @@ export function makeWorld(layout: Layout, cup: Cup, random: Random, belted: Read
     top: heightAt(layout, p.x, p.y) + BUMPER.height,
     restitution: BUMPER.restitution,
   }));
+  // and each tree's trunk, a post too, as high as the canopy's base, which is all the physics can be given of a tree:
+  // the canopy over it is the game's own to test
+  world.bumpers.push(
+    ...layout.trees.map((t) => ({
+      x: t.x,
+      y: t.y,
+      radius: TREE.trunk,
+      top: heightAt(layout, t.x, t.y) + TREE.base,
+      restitution: TREE.restitution,
+    })),
+  );
   return world;
 }

@@ -18,7 +18,7 @@
  */
 import { BODY_CAPACITY } from '../src/arena';
 import { Autopilot } from '../src/autopilot';
-import { COURSE } from '../src/course';
+import { COURSE, COURSES } from '../src/course';
 import { RANGE } from '../src/range';
 import { Game } from '../src/game';
 import { Progress, memoryStore } from '../src/progress';
@@ -91,15 +91,15 @@ export interface LeakOptions {
   seed: number;
   /** Game minutes to play. */
   minutes: number;
-  /** Play The Range, which is golf, instead of The Meadow. */
-  range?: boolean;
+  /** Play a course of golf, The Range or The Links, instead of The Meadow. */
+  golf?: 'range' | 'links';
 }
 
 export interface LeakRun {
   seed: number;
   minutes: number;
-  /** Whether it was played on The Range. */
-  range: boolean;
+  /** Which course of golf it was played on, if not The Meadow. */
+  golf?: 'range' | 'links';
   /** Every size, sampled once a game minute. */
   samples: Record<string, number[]>;
   problems: string[];
@@ -108,11 +108,19 @@ export interface LeakRun {
 }
 
 /** Play a long game, sampling the sizes once a game minute, and say what would not stay bounded. */
-export function leakRun({ seed, minutes, range }: LeakOptions): LeakRun {
+export function leakRun({ seed, minutes, golf }: LeakOptions): LeakRun {
   const started = performance.now();
   const samples: Record<string, number[]> = {};
   try {
-    const game = new Game(new Progress(memoryStore()), {}, { random: seeded(seed), course: range ? RANGE : undefined });
+    const game = new Game(
+      new Progress(memoryStore()),
+      {},
+      {
+        random: seeded(seed),
+        course:
+          golf === 'range' ? RANGE : golf === 'links' ? COURSES.find((c) => c.name === 'The Links')!.holes : undefined,
+      },
+    );
     // round after round, as a player who never stops would
     const pilot = new Autopilot(game, { skill: PLAYER, random: seeded(seed * 17 + 3), replay: true });
     for (let minute = 0; minute < minutes; minute++) {
@@ -122,7 +130,7 @@ export function leakRun({ seed, minutes, range }: LeakOptions): LeakRun {
     return {
       seed,
       minutes,
-      range: !!range,
+      golf,
       samples,
       problems: trouble(samples),
       seconds: (performance.now() - started) / 1000,
@@ -131,7 +139,7 @@ export function leakRun({ seed, minutes, range }: LeakOptions): LeakRun {
     return {
       seed,
       minutes,
-      range: !!range,
+      golf,
       samples,
       problems: [`seed ${seed}: threw ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`],
       seconds: (performance.now() - started) / 1000,

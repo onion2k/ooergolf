@@ -11,7 +11,7 @@
  * which cannot follow a slope, with boxes of earth under the raised ones.
  */
 import { MeshBuilder, type Mesh } from 'artshape-render/mesh/types';
-import { TILE, WATER_LEVEL, slopeAt, stepAt, terrainAt, tileAt, type Layout } from './arena';
+import { TILE, WATER_LEVEL, heightAt, slopeAt, stepAt, terrainAt, tileAt, type Layout } from './arena';
 import { face, tri } from './meshes';
 import { LIE } from './surfaces';
 
@@ -33,7 +33,7 @@ export interface Ground {
    * What a golf hole's ground is besides its fairway, each in a mesh of its own so that each is its own colour: the
    * rough, the putting green in its two stripes, and the tee. None on a hole of minigolf, which is all one grass.
    */
-  golf?: { rough: Mesh; putting: Mesh; puttingMown: Mesh; tee: Mesh };
+  golf?: { rough: Mesh; putting: Mesh; puttingMown: Mesh; tee: Mesh; oob: Mesh };
 }
 
 /** Whether a tile is sand the ball rolls on: not rock, and not water. */
@@ -56,7 +56,8 @@ export function groundOf(l: Layout): Ground {
   const rough = new MeshBuilder(),
     putting = new MeshBuilder(),
     puttingMown = new MeshBuilder(),
-    tee = new MeshBuilder();
+    tee = new MeshBuilder(),
+    oob = new MeshBuilder();
   const n = GROUND.pieces;
   // the height of the ground of tile `t` at a point: its own step, whichever tile the point's edge also bounds
   const at = (t: number, x: number, y: number) => l.floor[t] + terrainAt(l, x, y);
@@ -74,7 +75,8 @@ export function groundOf(l: Layout): Ground {
       let b = odd ? mown : green;
       if (l.golf) {
         const lie = l.lie[t];
-        if (lie === LIE.rough) b = rough;
+        if (l.oob[t]) b = oob;
+        else if (lie === LIE.rough) b = rough;
         else if (lie === LIE.tee) b = tee;
         else if (lie === LIE.green) b = odd ? puttingMown : putting;
       }
@@ -136,7 +138,13 @@ export function groundOf(l: Layout): Ground {
   }
   const out: Ground = { green: green.build(), mown: mown.build(), banks: banks.build() };
   if (l.golf)
-    out.golf = { rough: rough.build(), putting: putting.build(), puttingMown: puttingMown.build(), tee: tee.build() };
+    out.golf = {
+      rough: rough.build(),
+      putting: putting.build(),
+      puttingMown: puttingMown.build(),
+      tee: tee.build(),
+      oob: oob.build(),
+    };
   return out;
 }
 
@@ -434,4 +442,39 @@ export function railsOf(l: Layout, height: number, depth: number, leftOut: Reado
       }
   }
   return { cap: top.build(), sides: timber.build() };
+}
+
+/**
+ * Where the stakes that mark out of bounds stand, on a golf hole: on the tiles of out of bounds that lie against a tile in
+ * play, at the edge they share with it, one to every second such tile along the line so a stake is six units from the
+ * next, each on the ground there. None on a hole that has no out of bounds.
+ */
+export function stakesOf(l: Layout): { x: number; y: number; z: number }[] {
+  const out: { x: number; y: number; z: number }[] = [];
+  if (!l.golf) return out;
+  for (let t = 0; t < l.cols * l.rows; t++) {
+    if (!l.oob[t]) continue;
+    const tx = t % l.cols,
+      ty = Math.floor(t / l.cols);
+    if ((tx + ty) % 2) continue;
+    // the side of the tile that meets a tile in play, if it has one
+    for (const [ox, oy] of [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ]) {
+      const nx = tx + ox,
+        ny = ty + oy;
+      if (nx < 0 || ny < 0 || nx >= l.cols || ny >= l.rows) continue;
+      const u = ny * l.cols + nx;
+      if (l.oob[u] || l.solid[u]) continue;
+      // on the shared edge, a hair into out of bounds
+      const x = l.originX + (tx + 0.5 + ox * 0.45) * TILE,
+        y = l.originY + (ty + 0.5 + oy * 0.45) * TILE;
+      out.push({ x, y, z: heightAt(l, x, y) });
+      break;
+    }
+  }
+  return out;
 }

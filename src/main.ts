@@ -208,6 +208,12 @@ async function main() {
       if (game) scene.splashedAt(x, y, game.t);
       for (const e of splash(x, y)) renderer.emit(e);
     },
+    // out of bounds: a word for it, and the stroke it cost; the ball put back is round
+    outOfBounds() {
+      hud.setStrokes(game?.strokes ?? 0);
+      hud.outOfBounds();
+      squash.clear();
+    },
     // in the cup: confetti out of it, the flag waggling and its gold flashing, from the moment it dropped
     holed(strokes, par) {
       hud.done(strokes, par, false);

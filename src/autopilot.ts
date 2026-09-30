@@ -42,7 +42,8 @@ import { carryFrom } from './flight';
 import type { Game } from './game';
 import { Obstacles } from './obstacles';
 import { PHYSICS } from './physics';
-import { Rehearsal, refine } from './planner';
+import { choose, Rehearsal, type Candidate } from './planner';
+import { Route } from './route';
 import type { Random } from './random';
 import type { Shot } from './shot';
 import { LIE } from './surfaces';
@@ -162,8 +163,8 @@ export interface Plan extends Shot {
 
 /** The farthest the putter is tried from the fairway or the tee, in units: a chip and run, which it rolls out as far as. */
 const CHIP_AND_RUN = 45;
-/** How much nearer the cup another shot may leave the ball than the best and still be the one that scatters less. */
-const AS_NEAR = 0.75;
+/** A lay-up is at a share of a club's full reach along the route, for the clubs that fall short of the cup by less than this share of the way, and how many are tried. */
+const LAY_UP = { share: 0.94, within: 0.98, most: 4 };
 
 /**
  * How far a lofted ball runs on after it lands, as a share of its carry, by the club's loft in degrees: a driver runs
@@ -208,6 +209,33 @@ export function golfCandidates(game: Game, x: number, y: number): Plan[] {
   return out;
 }
 
+/**
+ * The shots that lay up, from (x, y) on a golf hole: for each of the longest few clubs that do not reach the cup by the
+ * way it has to be played, a shot at the place on the route a full swing of it comes to, so a dogleg is turned at its
+ * corner and a hazard is stopped short of, and never a place that is on no way. None where the cup is in reach of every
+ * club, or the ball has no way to it.
+ */
+export function golfLayUps(game: Game, route: Route, x: number, y: number): Candidate[] {
+  const { layout } = game;
+  const lie = lieAt(layout, x, y);
+  const way = route.distance(x, y);
+  if (!Number.isFinite(way) || lie === LIE.green) return [];
+  const out: Candidate[] = [];
+  for (const club of BAG.filter((c) => c !== PUTTER).reverse()) {
+    const reach = carryFrom(club, 1, lie) * (1 + runOn(club.loft));
+    if (reach >= way * LAY_UP.within) continue;
+    const to = route.waypoint(x, y, reach * LAY_UP.share);
+    const distance = Math.hypot(to.x - x, to.y - y);
+    out.push({
+      club,
+      guess: { angle: Math.atan2(to.y - y, to.x - x), power: Math.min(1, distance / reach) },
+      target: to,
+    });
+  }
+  // the longest few, longest first: the farthest a ball can be got, and then the sorts of distance short of that
+  return out.slice(-LAY_UP.most).reverse();
+}
+
 /** The arithmetic's first shot on a golf hole from (x, y): the one the planner starts from, and what the autopilot took before it tried its shots. */
 export function golfGuess(game: Game, x: number, y: number): Plan {
   return golfCandidates(game, x, y)[0];
@@ -234,6 +262,8 @@ export class Autopilot {
   /** Its rehearsal of the golf hole in play, and the trials struck in the rehearsals it has let go of. */
   private rehearsing: { def: HoleDef; rehearsal: Rehearsal } | null = null;
   private spent = 0;
+  /** The route to the cup on the golf hole in play. */
+  private ways: { def: HoleDef; route: Route } | null = null;
   /** When it began waiting to strike, in game time, or -1. */
   private waitingSince = -1;
 
@@ -314,10 +344,10 @@ export class Autopilot {
 
   /**
    * The shot on a golf hole, tried before it is taken: the arithmetic's candidates (the two shortest clubs that reach,
-   * and the putter for a chip and run) each corrected in a rehearsal until its ball rests on the cup or drops in it, and
-   * of them the one that lands nearest, the shortest club among those about as near, and the putter before any. From the green it is
-   * the putt, as it was. Nothing is in its way on the range, so nothing is looked for: water, trees and out of bounds
-   * are the holes' that have them.
+   * and the putter for a chip and run) at the cup, and the longest clubs laid up at places on the way to it, each corrected
+   * in a rehearsal until its ball rests where it is meant to or drops in the cup, and judged by where it comes to rest
+   * and by what it does a little off (`choose`): so a dogleg is played round, a lake carried or laid up short of, and a
+   * tree gone over or round. From the green it is the putt, as it was.
    */
   private golfPlan(x: number, y: number): Plan {
     const { game } = this;
@@ -325,23 +355,32 @@ export class Autopilot {
     const lie = lieAt(layout, x, y);
     const guesses = golfCandidates(game, x, y);
     if (lie === LIE.green) return guesses[0];
-    const rehearsal = this.rehearse();
+    const route = this.routeOf();
     const from = { x, y };
-    const tried = guesses.map((g) => ({ guess: g, ...refine(rehearsal, from, layout.cup, bagClub(g.club!), g) }));
-    const nearest = Math.min(...tried.map((t) => t.miss));
-    // no shot came to rest anywhere, every one lost in the water: the arithmetic's, which is what it was
-    if (!Number.isFinite(nearest)) return guesses[0];
-    // among those about as near, the putter if it is one (it scatters not at all), and else the shortest club, which is
-    // the first: a golfer takes the club that reaches with a full swing, though the game's own scatter, which grows with
-    // the power, would have a longer club swung easily miss less by a hair
-    const pool = tried.filter((t) => t.miss <= nearest + AS_NEAR);
-    const best = pool.find((t) => t.guess.club === PUTTER.id) ?? pool[0];
+    // the shots at the cup, by the arithmetic, and the shots that lay up on the way to it
+    // in the order to prefer them where they are about as good: the putter, which scatters not at all, and then the shortest club
+    const atTheCup = guesses.map((g) => ({ club: bagClub(g.club!), guess: g, target: layout.cup }));
+    const candidates: Candidate[] = [
+      ...atTheCup.filter((c) => c.club === PUTTER),
+      ...atTheCup.filter((c) => c.club !== PUTTER),
+      ...golfLayUps(game, route, x, y),
+    ];
+    const chosen = choose(this.rehearse(), { layout, route }, from, candidates);
+    // no shot came to rest anywhere, every one lost: the arithmetic's, which is what it was
+    if (!chosen) return guesses[0];
     return {
-      angle: best.angle,
-      power: best.power,
-      club: best.guess.club,
-      expect: { x: best.trial.x, y: best.trial.y, holed: best.trial.holed },
+      angle: chosen.angle,
+      power: chosen.power,
+      club: candidates[chosen.index].club.id,
+      expect: { x: chosen.trial.x, y: chosen.trial.y, holed: chosen.trial.holed },
     };
+  }
+
+  /** The route to the cup on the hole being played, made when it is first wanted and again for another hole. */
+  private routeOf(): Route {
+    const { def } = this.game;
+    if (!this.ways || this.ways.def !== def) this.ways = { def, route: new Route(this.game.layout) };
+    return this.ways.route;
   }
 
   /** The rehearsal of the hole being played, made when it is first wanted and again for another hole. */

@@ -9,8 +9,13 @@
  * plan is what happens, to the last digit, when the swing is true. The scatter of a real swing is the swing's, and is
  * not planned for.
  */
+import { fromTrees, lieAt, type Layout } from './arena';
 import type { BagClub } from './bag';
+import { DISPERSION, maxScatter } from './flight';
 import type { Game } from './game';
+import type { Route } from './route';
+import { LIE } from './surfaces';
+import { TREE } from './trees';
 
 /** How long a trial is let run, in seconds of game time, before the ball is taken to be at rest: far longer than any shot. */
 const LONGEST = 25;
@@ -119,4 +124,112 @@ export function refine(
       miss: Infinity,
     }
   );
+}
+
+/** What the planner knows of a hole to judge a ball at rest by: its layout, and the way to the cup. */
+export interface Ground {
+  layout: Layout;
+  route: Route;
+}
+
+/** The putts a ball on the green is, from `d` units from the cup: one at the cup, two from a long way, and between in between. */
+export function putts(d: number): number {
+  return 1 + (1 - Math.exp(-d / 9));
+}
+
+/** What a lie costs of the next shot, in strokes: the rough is hard to play from and the sand harder. */
+const LIE_COST: Partial<Record<number, number>> = { [LIE.rough]: 0.35, [LIE.sand]: 0.55 };
+/** What a ball under a tree's canopy costs of the next shot, in strokes: there is no playing it up, and it is played out. */
+const UNDER_A_TREE = 0.6;
+
+/**
+ * The strokes still to go for a ball at rest at (x, y), by a golfer's rule of thumb: on the green, the putts; off it, a
+ * shot to get to the green, which leaves what its accuracy leaves, and the putts from there, and a share of another
+ * shot for each two hundred yards more than a hundred of the way; less by the lie it is played from, and a tree
+ * over it. The way is the route's, which goes round water, out of bounds and trees, so a ball on the wrong side of a
+ * lake is further off than it looks.
+ */
+export function strokesToGo({ layout, route }: Ground, x: number, y: number): number {
+  const lie = lieAt(layout, x, y);
+  const d = Math.hypot(x - layout.cup.x, y - layout.cup.y);
+  if (lie === LIE.green) return putts(d);
+  let way = route.distance(x, y);
+  if (!Number.isFinite(way)) way = d * 1.6;
+  const under = layout.trees.length && fromTrees(layout, x, y) + TREE.trunk < TREE.radius ? UNDER_A_TREE : 0;
+  return 1 + putts(0.06 * way + 4) + Math.max(0, way - 100) / 220 + (LIE_COST[lie] ?? 0) + under;
+}
+
+/** A shot to try: a club and a first guess at its aim and power, and the place it is meant to come to rest. */
+export interface Candidate {
+  club: BagClub;
+  guess: { angle: number; power: number };
+  target: { x: number; y: number };
+}
+
+/** The candidate chosen: its aim, its power, and the trial of them struck true. */
+export interface Chosen {
+  index: number;
+  angle: number;
+  power: number;
+  trial: Trial;
+}
+
+/** How much better a shot must be, in strokes, to be taken before one earlier in the list: the list is in the order to prefer. */
+const AS_GOOD = 0.06;
+/** How many shots are looked at more closely, at most, for what they do when the swing is not true. */
+const LOOKED_AT = 4;
+/** How much of a shot's worth is what it does struck true, and how much each of the three ways it may go wrong shares. */
+const TRUE_SHARE = 0.4;
+
+/** What a trial is worth, in strokes still to go: nothing for a ball that dropped, the stroke again and one more for one lost. */
+export function worth(ground: Ground, from: { x: number; y: number }, t: Trial): number {
+  if (t.holed) return 0;
+  if (t.lost) return strokesToGo(ground, from.x, from.y) + 1;
+  return strokesToGo(ground, t.x, t.y);
+}
+
+/**
+ * The shot to take, of `candidates`, in the order to prefer them: each corrected in the rehearsal until it comes to
+ * rest on its target, or drops, or as near as the trials allow; each judged by where its true shot comes to rest; and the
+ * best few judged again by what they do a little to either side and a little short, as a swing's scatter has them, so a
+ * shot that is fine struck true and lost in the water struck a hair off is not the one taken. Of those about as good the
+ * earliest in the list is the choice. Null where there is nothing to choose from.
+ */
+export function choose(
+  rehearsal: Rehearsal,
+  ground: Ground,
+  from: { x: number; y: number },
+  candidates: Candidate[],
+): Chosen | null {
+  const lie = lieAt(ground.layout, from.x, from.y);
+  const tried = candidates.map((c, index) => {
+    const r = refine(rehearsal, from, c.target, c.club, c.guess);
+    return { index, c, r, main: worth(ground, from, r.trial) };
+  });
+  const order = tried.slice().sort((a, b) => a.main - b.main || a.index - b.index);
+  const judged: { index: number; e: number }[] = [];
+  for (const cand of order.slice(0, LOOKED_AT)) {
+    const { c, r } = cand;
+    let e = cand.main;
+    // a club with no scatter is as good struck a little off as struck true, and a ball lost is lost already
+    if (!r.trial.lost && c.club.spread > 0) {
+      const delta = 0.5 * maxScatter(c.club, lie, r.power);
+      const short = r.power * (1 - DISPERSION.loss * r.power);
+      const off = [
+        rehearsal.shot(from, c.club.id, r.angle - delta, r.power),
+        rehearsal.shot(from, c.club.id, r.angle + delta, r.power),
+        rehearsal.shot(from, c.club.id, r.angle, short),
+      ];
+      e = TRUE_SHARE * cand.main + ((1 - TRUE_SHARE) / 3) * off.reduce((sum, t) => sum + worth(ground, from, t), 0);
+    }
+    judged.push({ index: cand.index, e });
+    // no need to look further if the best so far is better than the next shot is even struck true
+    if (judged.length >= order.length || Math.min(...judged.map((j) => j.e)) <= order[judged.length].main) break;
+  }
+  const best = Math.min(...judged.map((j) => j.e));
+  if (!Number.isFinite(best)) return null;
+  const pick = judged.filter((j) => j.e <= best + AS_GOOD).sort((a, b) => a.index - b.index)[0];
+  const { r } = tried[pick.index];
+  if (r.miss === Infinity) return null;
+  return { index: pick.index, angle: r.angle, power: r.power, trial: r.trial };
 }

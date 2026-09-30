@@ -19,6 +19,7 @@ import {
   KIND_RADIUS,
   KNOCK,
   fromPosts,
+  fromTrees,
   heightAt,
   highestTerrain,
   layoutOf,
@@ -29,6 +30,7 @@ import {
   stepAt,
   strikeSpeed,
   terrainAt,
+  tileAt,
   type Layout,
 } from './arena';
 import { BAG, PUTTER, bagClub, type BagClub } from './bag';
@@ -40,6 +42,7 @@ import { PHYSICS, THE_CUP, makeWorld, type World } from './physics';
 import { Progress, memoryStore } from './progress';
 import type { Random } from './random';
 import { LANDING, SURFACES } from './surfaces';
+import { hitCanopy, treeCone, turned, type Cone } from './trees';
 
 /** What happens, for whoever shows it. Every one may be left out. */
 export interface GameEvents {
@@ -64,6 +67,8 @@ export interface GameEvents {
   holed?(strokes: number, par: number): void;
   /** The ball lost in water at (x, y): a stroke more, and it is put back where it was struck from. */
   splash?(x: number, y: number): void;
+  /** The ball on the ground out of bounds at (x, y), on a golf hole: lost as one in water is, a stroke more, and put back. */
+  outOfBounds?(x: number, y: number): void;
   /** The limit reached without the ball holed: the hole scored at `strokes`, the limit. */
   pickedUp?(strokes: number, par: number): void;
   /** The last hole done: the round's strokes, and its par. */
@@ -106,6 +111,8 @@ export const KEPT_MOVING = 10;
  * nothing draws a ball in from further off.
  */
 export const CLEAR_OF_CUP = CUP.radius + KIND_RADIUS[BALL] + 0.5;
+/** How near the ground a ball's middle is above where it would rest for it to be on the ground, and not in the air: out of bounds is lost on it. */
+const ON_THE_GROUND = 0.3;
 /** The clubs of the bag by their ids. */
 const BAG_IDS = new Map(BAG.map((c) => [c.id, c]));
 /** The most a ball is left to settle before it is played, in physics frames: far more than it takes. */
@@ -120,6 +127,8 @@ export class Game {
   world!: World;
   /** What moves on the hole: its barriers, its windmills' gates, and its belts. */
   obstacles!: Obstacles;
+  /** The canopy of each tree on the hole, which the ball's path is tested against every step: the physics has the trunks. */
+  cones: Cone[] = [];
   /** Where the ball was struck from last, where water puts it back. */
   readonly lie = { x: 0, y: 0 };
   /** The ball's slot in the world. There is only ever the one. */
@@ -232,6 +241,7 @@ export class Game {
     this.hole = index;
     this.layout = layoutOf(this.def.map, this.def.terrain);
     this.obstacles = new Obstacles(this.def.obstacles ?? [], this.layout);
+    this.cones = this.layout.trees.map((t) => treeCone(t.x, t.y, heightAt(this.layout, t.x, t.y)));
     this.world = makeWorld(this.layout, CUP, () => this.random(), this.obstacles.belted);
     this.world.pushers = this.obstacles.pushers;
     this.world.belts = this.obstacles.belts;
@@ -344,7 +354,7 @@ export class Game {
     }
     // the physics a step at a time, what moves put where it is before each: a box must move less in a step than its
     // half thickness and the ball's radius, or the ball could be passed by it
-    const fell = { holed: false, wet: false, x: 0, y: 0 };
+    const fell = { holed: false, wet: false, out: false, x: 0, y: 0 };
     const collect = (_kind: number, x: number, y: number, _slot: number, hole: number) => {
       // the only body is the ball, so whatever leaves the world is the ball: down the cup, or out of the bottom into water
       if (hole === THE_CUP) fell.holed = true;
@@ -359,15 +369,25 @@ export class Game {
       const vx = world.vx[ball],
         vy = world.vy[ball],
         vz = world.vz[ball];
+      const px = world.x[ball],
+        py = world.y[ball],
+        pz = world.z[ball];
       world.step(PHYSICS.step, collect);
+      this.canopies(px, py, pz);
       this.landing(vx, vy, vz);
+      // on the ground out of bounds it is lost, as in water; in the air over the line it is not
+      if (this.isOut()) {
+        Object.assign(fell, { out: true, x: world.x[ball], y: world.y[ball] });
+        break;
+      }
       this.heldToFastest();
       this.knock(vx, vy, vz);
       if (fell.holed || fell.wet) break;
     }
     if (this.phase !== 'play') return;
     if (fell.holed) return this.done('holed');
-    if (fell.wet) return this.splashed(fell.x, fell.y);
+    if (fell.wet) return this.putBack(fell.x, fell.y, (x, y) => this.events.splash?.(x, y));
+    if (fell.out) return this.putBack(fell.x, fell.y, (x, y) => this.events.outOfBounds?.(x, y));
     if (this.moving && this.ready) {
       this.moving = false;
       this.events.stopped?.(this.world.x[this.ball], this.world.y[this.ball]);
@@ -376,17 +396,67 @@ export class Game {
   }
 
   /**
-   * The ball lost in water: a stroke more, told of, and a new ball put down
-   * where the last was struck from; or picked up, if that takes it to the
-   * limit. The last stroke allowed into the water is picked up at the limit,
-   * and the water costs nothing past it.
+   * The ball lost, in water or out of bounds: a stroke more, told of (by `tell`), and a new ball put down where the
+   * last was struck from; or picked up, if that takes it to the limit. The last stroke allowed lost is picked up at
+   * the limit, and the loss costs nothing past it.
    */
-  private splashed(x: number, y: number) {
+  private putBack(x: number, y: number, tell?: (x: number, y: number) => void) {
     this.strokes = Math.min(this.limit, this.strokes + 1);
     this.moving = false;
-    this.events.splash?.(x, y);
+    tell?.(x, y);
+    // a ball lost in water has left the world by the bottom; one out of bounds is still in it, and is taken out
+    if (this.world.alive[this.ball]) this.world.remove(this.ball);
     this.spawnAt(this.lie.x, this.lie.y);
     if (this.strokes >= this.limit) this.done('pickedUp');
+  }
+
+  /**
+   * Whether the ball is on the ground over out of bounds, on a golf hole: as near the ground as a ball resting there,
+   * so one in flight over the line is not, and a hop off it is not until it lands.
+   */
+  private isOut(): boolean {
+    const { world, ball, layout } = this;
+    if (!layout.golf || !world.alive[ball]) return false;
+    const x = world.x[ball],
+      y = world.y[ball];
+    const t = tileAt(layout, x, y);
+    if (t < 0 || !layout.oob[t]) return false;
+    return world.z[ball] - heightAt(layout, x, y) - restingAbove(layout, x, y, world.r[ball]) < ON_THE_GROUND;
+  }
+
+  /**
+   * The ball's step just taken, from (px, py, pz), tested against the canopy of each tree, since the physics has the
+   * trunks and no shape for a cone: where it first met one, it is put on its face and turned, its speed along the face
+   * cut to a third and what it had into it given back at a fifth, so a drive that flies into a tree is stopped and
+   * drops; and one that rose into the underside is knocked down. Told as a knock, since it turned the ball as one
+   * does. A ball that missed every canopy, over the tip or under the base or round, is left as the physics has it.
+   */
+  private canopies(px: number, py: number, pz: number) {
+    const { world, ball, cones } = this;
+    if (!cones.length || !world.alive[ball]) return;
+    const x = world.x[ball],
+      y = world.y[ball],
+      z = world.z[ball];
+    const r = world.r[ball];
+    // only the trees near enough to be met by this step: the canopy's width and a ball's, from either end of it
+    const step = Math.hypot(x - px, y - py, z - pz);
+    let first: { t: number; nx: number; ny: number; nz: number } | null = null;
+    for (const c of cones) {
+      const reach = c.radius + r + 2 + step;
+      if (Math.abs(x - c.x) > reach || Math.abs(y - c.y) > reach) continue;
+      const hit = hitCanopy(c, [px, py, pz], [x, y, z], r);
+      if (hit && (!first || hit.t < first.t)) first = hit;
+    }
+    if (!first) return;
+    const { t, nx, ny, nz } = first;
+    // put on the face, a hair out of it, and turned by it: the underside is the one that looks straight down
+    world.x[ball] = px + (x - px) * t + nx * 1e-3;
+    world.y[ball] = py + (y - py) * t + ny * 1e-3;
+    world.z[ball] = pz + (z - pz) * t + nz * 1e-3;
+    const out = turned([world.vx[ball], world.vy[ball], world.vz[ball]], first);
+    world.vx[ball] = out[0];
+    world.vy[ball] = out[1];
+    world.vz[ball] = out[2];
   }
 
   /**
@@ -570,6 +640,9 @@ export class Game {
         throw new Error(`the ball cannot be put down at ${x},${y}: not on level grass`);
     }
     if (fromPosts(layout, x, y) < r + 0.1) throw new Error(`the ball cannot be put down at ${x},${y}: on a post`);
+    if (layout.oob[tileAt(layout, x, y)]) throw new Error(`the ball cannot be put down at ${x},${y}: out of bounds`);
+    if (fromTrees(layout, x, y) < r + 0.1)
+      throw new Error(`the ball cannot be put down at ${x},${y}: on a tree's trunk`);
     if (Math.hypot(x - layout.cup.x, y - layout.cup.y) < CLEAR_OF_CUP)
       throw new Error(`the ball cannot be put down at ${x},${y}: too near the cup`);
     if (this.phase !== 'play') throw new Error('the ball cannot be put down between holes');

@@ -179,7 +179,7 @@ test.describe('the start screen', () => {
     const problems = watch(page);
     await start(page, { seed: 1, paused: true, screen: true });
     await expect(page.locator('#start')).toBeVisible();
-    await expect(page.locator('#start .course')).toHaveCount(5);
+    await expect(page.locator('#start .course')).toHaveCount(6);
     await expect(page.locator('#start .course').nth(2)).toContainText('The Downs');
     await expect(page.locator('#start .course').nth(2)).toContainText('9 holes');
     await expect(page.locator('#start .course').nth(3)).toContainText('The Moors');
@@ -188,6 +188,9 @@ test.describe('the start screen', () => {
     await expect(page.locator('#start .course').nth(4)).toContainText('The Range');
     await expect(page.locator('#start .course').nth(4)).toContainText('3 holes');
     await expect(page.locator('#start .course').nth(4)).toContainText('par 10');
+    await expect(page.locator('#start .course').nth(5)).toContainText('The Links');
+    await expect(page.locator('#start .course').nth(5)).toContainText('9 holes');
+    await expect(page.locator('#start .course').nth(5)).toContainText('par 36');
     await expect(page.locator('#start .course').first()).toContainText('The Meadow');
     await expect(page.locator('#start .course').first()).toContainText('9 holes');
     expect(await page.evaluate(() => window.game!.state())).toMatchObject({ choosing: true, course: 'The Meadow' });
@@ -613,6 +616,42 @@ test.describe('golf', () => {
     });
     console.log(
       `the range: tee ${cost.tee.toFixed(2)} ms, in the air ${cost.air.toFixed(2)} ms, the worst view ${cost.worst.toFixed(2)} ms a frame`,
+    );
+    for (const [where, ms] of Object.entries(cost)) expect(ms, `${where}: inside the 5 ms budget`).toBeLessThan(5);
+    expect(problems).toEqual([]);
+  });
+});
+
+test.describe('golf on The Links', () => {
+  test('costs a frame inside the budget on the longest hole of The Links: from its tee, in the air over it, and at the worst view', async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true });
+    const cost = await page.evaluate(async () => {
+      const g = window.game!;
+      g.chooseCourse('The Links');
+      g.startHole(6);
+      g.step(120);
+      const tee = await g.measureFrame(60);
+      g.shoot(Math.PI / 2, 1, 'driver');
+      g.step(40);
+      const air = await g.measureFrame(60);
+      for (let f = 0; f < 900 && !g.state().ready; f++) g.step(1);
+      g.orbit(Math.PI, 10);
+      g.step(2);
+      const worst = await g.measureFrame(60);
+      // the whole hole from the middle of it, as far back as the zoom goes: every tree and every tile of it in view
+      g.orbit(-Math.PI, -10);
+      const { tee: t, cup } = g.content();
+      g.look((t.x + cup.x) / 2, (t.y + cup.y) / 2, 110);
+      g.step(2);
+      const whole = await g.measureFrame(60);
+      return { tee, air, worst, whole };
+    });
+    console.log(
+      `the links: tee ${cost.tee.toFixed(2)} ms, in the air ${cost.air.toFixed(2)} ms, the worst view ${cost.worst.toFixed(2)} ms, the whole hole ${cost.whole.toFixed(2)} ms a frame`,
     );
     for (const [where, ms] of Object.entries(cost)) expect(ms, `${where}: inside the 5 ms budget`).toBeLessThan(5);
     expect(problems).toEqual([]);

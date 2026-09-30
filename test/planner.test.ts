@@ -305,7 +305,9 @@ describe('the planner', () => {
     const { game } = golfGame(RANGE[2]);
     const pilot = new Autopilot(game);
     const plan = pilot.plan()!;
-    expect(pilot.trials, 'aimed true and out of reach: no more than the one trial or two').toBeLessThanOrEqual(2);
+    expect(pilot.trials, 'a few dozen at most: the drive, and the lay-ups it is judged against').toBeLessThanOrEqual(
+      30,
+    );
     expect(plan.club).toBe('driver');
     expect(plan.power).toBeCloseTo(1, 6);
     const { tee, cup } = game.layout;

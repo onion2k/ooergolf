@@ -16,7 +16,7 @@
  * among them, and the club in hand is one of them. On a golf hole the club in
  * hand is one of the bag's, and the ball is never going faster in all, in the
  * air as on the ground, than the club that struck it could send it, and a
- * fall from the highest ground could make it. And a knock told is of
+ * fall from the highest ground could make it, never at rest out of bounds, and never inside a tree's trunk or canopy. And a knock told is of
  * the ball, where it is, as hard as a knock is, along a direction: a rule of
  * what is told rather than of what is, so `knockProblems` is asked of each
  * knock as it is told, and `landingProblems` of each landing.
@@ -24,13 +24,14 @@
  * Checked by the fuzzer after everything it does, by the test API on asking,
  * and by the unit tests. Each broken rule is a line saying what and where.
  */
-import { BUMPER, KINDS, KIND_NAME, KNOCK, fromPosts, heightAt, restingAbove, tileAt } from './arena';
+import { BUMPER, KINDS, KIND_NAME, KNOCK, fromPosts, fromTrees, heightAt, restingAbove, tileAt } from './arena';
 import { TILT, VIEW, type CameraRig } from './camera';
 import type { Plan } from './autopilot';
 import { BAG } from './bag';
 import { CLUBS } from './clubs';
 import { LIMIT_OVER_PAR, fastest, type Game } from './game';
 import { LANDING } from './surfaces';
+import { TREE, insideCanopy } from './trees';
 
 /** How many broken rules of one sort are reported before the rest are only counted. */
 const EACH = 3;
@@ -97,6 +98,16 @@ export function checkInvariants(game: Game): string[] {
     // hand since; and a ball rolled down a slope is faster by what the drop gives it
     if (speed > fastest(game, world.x[ball], world.y[ball]) * 1.001)
       out.push(`the ball is going ${speed.toFixed(2)} along the ground, faster than a post and a slope may make it`);
+    // inside a tree: a trunk is a post, met by the physics, and a canopy is met by the game; the ball is in neither
+    if (layout.trees.length) {
+      const trunk = -fromTrees(layout, world.x[ball], world.y[ball]) + world.r[ball];
+      if (trunk > 0.1 && world.z[ball] < heightAt(layout, world.x[ball], world.y[ball]) + TREE.base)
+        out.push(`the ball is inside a tree's trunk, ${trunk.toFixed(2)} into it`);
+      for (const c of game.cones) {
+        const depth = insideCanopy(c, [world.x[ball], world.y[ball], world.z[ball]], world.r[ball]);
+        if (depth > 0.05) out.push(`the ball is inside a tree's canopy, ${depth.toFixed(2)} into it`);
+      }
+    }
     // a lofted ball's speed in all: no club sends it faster than it has, and a fall only adds what the height gives
     if (layout.golf) {
       const all = Math.hypot(world.vx[ball], world.vy[ball], world.vz[ball]);
@@ -107,6 +118,11 @@ export function checkInvariants(game: Game): string[] {
     const into = -fromPosts(layout, world.x[ball], world.y[ball]) + world.r[ball];
     const postTop = heightAt(layout, world.x[ball], world.y[ball]) + BUMPER.height;
     if (into > 0.1 && world.z[ball] < postTop) out.push(`the ball is inside a post, ${into.toFixed(2)} into it`);
+    // a ball played never lies out of bounds: it is lost the moment it is on the ground there
+    if (layout.golf && world.asleep[ball]) {
+      const t = tileAt(layout, world.x[ball], world.y[ball]);
+      if (t >= 0 && layout.oob[t]) out.push(`the ball is at rest out of bounds: ${at(ball)}`);
+    }
     // at rest with nothing under it: asleep where a bounce left it, which a player could never strike from
     if (world.asleep[ball]) {
       const r = world.r[ball];

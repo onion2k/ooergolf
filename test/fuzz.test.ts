@@ -2,9 +2,11 @@
 import { describe, expect, it } from 'vitest';
 import { fuzz } from '../scripts/fuzzer';
 import { DOWNS, moors } from '../src/course';
+import { COURSES } from '../src/course';
 import { RANGE } from '../src/range';
 
 const MOORS = moors();
+const LINKS = COURSES.find((c) => c.name === 'The Links')!.holes;
 
 describe('the fuzzer', () => {
   it('plays a seed through without breaking a rule, and does everything a player can', () => {
@@ -72,6 +74,32 @@ describe('the fuzzer', () => {
     expect(clubs, 'and clubs chosen from the bag').toBeGreaterThan(10);
     expect(holed, 'holed out').toBeGreaterThan(0);
     expect(finished, 'round the whole course').toBeGreaterThan(0);
+  });
+
+  it('plays The Links at random from start to finish, every seed clean: trees met, balls lost out of bounds and in the water, and the holes got round', () => {
+    let holed = 0,
+      finished = 0,
+      lostOut = 0,
+      knocked = 0,
+      clubs = 0;
+    const visited = new Set<string>();
+    for (const seed of [4, 9, 21, 30]) {
+      const r = fuzz(seed, 16000, LINKS);
+      expect(r.failure, `seed ${seed}: ${JSON.stringify(r.failure)}`).toBe(null);
+      holed += r.happened.holed || 0;
+      finished += r.happened.finished || 0;
+      lostOut += r.happened.outOfBounds || 0;
+      knocked += r.happened.knocked || 0;
+      clubs += r.done['choose a club'] || 0;
+      for (const name of Object.keys(r.visited)) visited.add(name);
+    }
+    const names = LINKS.map((h) => h.name);
+    expect(visited.size, 'a good many of its holes played').toBeGreaterThanOrEqual(5);
+    for (const name of visited) expect(names, `${name} is not a hole of The Links`).toContain(name);
+    expect(lostOut, 'balls lost out of bounds, each told').toBeGreaterThan(20);
+    expect(knocked, 'and knocked about, by trees among the rest').toBeGreaterThan(50);
+    expect(clubs, 'clubs chosen from the bag').toBeGreaterThan(10);
+    expect(holed + finished, 'and holed out, or round').toBeGreaterThan(0);
   });
 
   it('plays The Downs at random from start to finish, every seed clean, holing out and getting round all nine', () => {

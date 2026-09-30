@@ -36,6 +36,7 @@ import { layoutOf } from './arena';
 import { noiseGround, type Feel } from './noise';
 import type { ObstacleDef } from './obstacles';
 import { fairway, openHole, type Feature, type OpenSpec } from './open';
+import { LINKS_SUMMARY, links } from './links';
 import { RANGE } from './range';
 
 /** A hole: what it is called, its par, its map, and what moves on it. */
@@ -598,4 +599,12 @@ export const COURSES: readonly Course[] = [
     summary: { holes: MOORS_SPECS.length, par: MOORS_SPECS.reduce((a, s) => a + s.par, 0) },
   },
   { name: 'The Range', holes: RANGE, summary: summaryOf(RANGE), golf: true },
+  {
+    name: 'The Links',
+    get holes() {
+      return links();
+    },
+    summary: LINKS_SUMMARY,
+    golf: true,
+  },
 ];

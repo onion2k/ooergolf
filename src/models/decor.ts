@@ -94,6 +94,82 @@ export function tree(kind: 'round' | 'pine', { height = 7, seed = 1 } = {}): Mod
   };
 }
 
+/** How many sides a golf tree's tier has: a hole may have a hundred of them, so fewer than the decoration's, which are few. */
+const GOLF_TIER = 10;
+
+/** The figures of a golf tree that the game tests a ball against: its trunk, and its canopy's base, width and tip. */
+export interface GolfTreeFigures {
+  trunk: number;
+  base: number;
+  radius: number;
+  apex: number;
+}
+
+/**
+ * A tree of golf: a trunk standing up into a canopy of two rounded tiers, a wide low one and a narrower one above it, to
+ * the figures the game gives its physics (the canopy's base, its width there, and its tip, over a post for the trunk),
+ * so what is seen is what the ball meets. The tiers lie a whisker inside the physics' cone, which is a ball's radius
+ * bigger than they are all round by the time it is met, so a ball is never seen inside a branch.
+ */
+export function golfTree({ trunk: post, base, radius, apex }: GolfTreeFigures, { seed = 1 } = {}): Model {
+  const random = seeded(seed * 7919 + 3);
+  const h = apex - base;
+  const leaves = built((b) => {
+    lathe(
+      b,
+      at(0, 0, 0),
+      tier(radius * (0.95 + random() * 0.03), base, base + 0.62 * h, false),
+      GOLF_TIER,
+      random() * Math.PI,
+    );
+    lathe(
+      b,
+      at(0, 0, 0),
+      tier(radius * (0.66 + random() * 0.03), base + 0.4 * h, apex, true),
+      GOLF_TIER,
+      random() * Math.PI,
+    );
+  });
+  return {
+    name: 'golf tree',
+    parts: [
+      { name: 'trunk', material: matte(PALETTE.trunk, ROUGH.wood), mesh: trunk(post, post * 0.8, base + 0.3 * h) },
+      { name: 'leaves', mesh: leaves, material: matte(PALETTE.pine, ROUGH.leaves) },
+    ],
+    moving: [],
+  };
+}
+
+/**
+ * A stake that marks out of bounds: a slim white post with a red cap, standing on the ground at its origin, a yard or
+ * two tall, which is drawn along the line where the course ends. The physics never sees it.
+ */
+export function stake({ height = 1.8, radius = 0.2 } = {}): Model {
+  const post = built((b) =>
+    lathe(
+      b,
+      at(0, 0, 0),
+      [
+        [radius * 1.15, 0],
+        [radius, height * 0.12],
+        [radius, height * 0.82],
+      ],
+      ROUND.stem + 4,
+    ),
+  );
+  const cap = built((b) =>
+    ball(b, at(0, 0, height * 0.88), [radius * 1.25, radius * 1.25, radius * 1.5], ...ROUND.knob),
+  );
+  return {
+    name: 'stake',
+    parts: [
+      { name: 'post', material: matte(PALETTE.cream, ROUGH.wood), mesh: post },
+      { name: 'cap', material: matte(PALETTE.plastic.red, ROUGH.wood), mesh: cap },
+    ],
+    moving: [],
+  };
+}
+
 /** A trunk from `r0` at the grass to `r1` at `top`, flaring at its foot, open at both ends: its top is in the leaves. */
 function trunk(r0: number, r1: number, top: number) {
   return built((b) =>

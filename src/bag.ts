@@ -9,8 +9,7 @@
  * a loft goes speed squared times the sine of twice the loft over gravity, which the tests hold the game to) and then
  * measured in the game, since a landing on real ground is not the formula's.
  */
-import { HARDEST_SHOT, strikeSpeed } from './arena';
-import { PHYSICS } from './physics';
+import { HARDEST_SHOT, PHYSICS, strikeSpeed } from './arena';
 
 export interface BagClub {
   id: string;

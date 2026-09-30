@@ -19,8 +19,15 @@ const length = (h: { map: readonly string[]; terrain?: readonly string[] | Float
 };
 
 describe('the courses', () => {
-  it('are The Meadow, the first nine as they were, The Hills, four holes that slope, The Downs, nine on noise, The Moors, and The Range, the first of golf', () => {
-    expect(COURSES.map((c) => c.name)).toEqual(['The Meadow', 'The Hills', 'The Downs', 'The Moors', 'The Range']);
+  it('are The Meadow, the first nine as they were, The Hills, four holes that slope, The Downs, nine on noise, The Moors, The Range, the first of golf, and The Links', () => {
+    expect(COURSES.map((c) => c.name)).toEqual([
+      'The Meadow',
+      'The Hills',
+      'The Downs',
+      'The Moors',
+      'The Range',
+      'The Links',
+    ]);
     expect(COURSES[3].holes).toBe(MOORS);
     expect(COURSES[0].holes).toBe(COURSE);
     expect(COURSE.length).toBe(9);

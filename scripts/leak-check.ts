@@ -23,10 +23,11 @@ async function main() {
   const seeds = Array.from({ length: (range[1] ?? range[0]) - range[0] + 1 }, (_, k) => range[0] + k);
   const minutes = +(value('minutes') ?? 60);
   const started = performance.now();
-  // each seed on The Meadow, and again on The Range, which is golf: a lofted ball and a bag are what it adds to keep
+  // each seed on The Meadow, and again on The Range and The Links, which are golf: a lofted ball, a bag, trees and a rehearsal are what it adds to keep
   const queue: LeakOptions[] = seeds.flatMap((seed) => [
     { seed, minutes },
-    { seed, minutes, range: true },
+    { seed, minutes, golf: 'range' as const },
+    { seed, minutes, golf: 'links' as const },
   ]);
   const runs: LeakRun[] = [];
   await Promise.all(
@@ -43,7 +44,7 @@ async function main() {
       }
     }),
   );
-  runs.sort((a, b) => a.seed - b.seed || +a.range - +b.range);
+  runs.sort((a, b) => a.seed - b.seed || String(a.golf).localeCompare(String(b.golf)));
   console.log(
     `${runs.length} game${runs.length === 1 ? '' : 's'} of ${minutes} minutes (${((performance.now() - started) / 1000).toFixed(1)} s)`,
   );
@@ -58,10 +59,10 @@ async function main() {
   );
   if (args.includes('--show'))
     for (const r of runs) {
-      console.log(`  seed ${r.seed}${r.range ? ' on The Range' : ''}:`);
+      console.log(`  seed ${r.seed}${r.golf ? ` on ${r.golf}` : ''}:`);
       for (const [key, series] of Object.entries(r.samples)) console.log(`    ${key.padEnd(14)} ${series.join(' ')}`);
     }
-  const problems = runs.flatMap((r) => r.problems.map((p) => `seed ${r.seed}${r.range ? ' on The Range' : ''}: ${p}`));
+  const problems = runs.flatMap((r) => r.problems.map((p) => `seed ${r.seed}${r.golf ? ` on ${r.golf}` : ''}: ${p}`));
   for (const p of problems) console.error(`  ${p}`);
   if (problems.length) {
     console.error(

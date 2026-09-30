@@ -11,7 +11,7 @@ made. The house
 rules in `~/.claude/CLAUDE.md` apply too. What is in `src/` is a round of
 a course, chosen on a start screen: holes drawn as maps, each played from
 its tee to its cup with a drag pulled back and let go, scored against par,
-and the card at the end. Five courses are here, on artshape-physics v0.8.0.
+and the card at the end. Six courses are here, on artshape-physics v0.8.0.
 The Meadow is nine holes of grass, rail, sand, water, raised grass, posts,
 sliding barriers, a windmill and a conveyor, with a green that lets a putt
 die, a rail and obstacles that bounce, posts that throw a ball back faster
@@ -22,8 +22,10 @@ and nothing else. The Moors is nine open holes six to fourteen times the size,
 made by a generator, with ponds, bunkers and stands of posts on rolling hills.
 The Range is the first of golf proper: three flat holes at a yard a unit, each
 a tee, a fairway, rough and a green, played with a bag of eight clubs that
-loft the ball into the air, from the plan in `~/.claude/plans/ooergolf-proper-golf.md`
-(stage 1 of six is built). The golf goes in
+loft the ball into the air. The Links is nine holes of it, a par three to a par
+five, made by a generator on hills, with bunkers, water, trees and out of
+bounds, from the plan in `~/.claude/plans/ooergolf-proper-golf.md` (stage 3
+of six is built). The golf goes in
 a feature at a time, in the order `DESIGN.md` gives.
 
 ## The factory
@@ -107,10 +109,10 @@ today, and what the next features must hand it:
   switch back, and nothing struck. It gets round every course. Each thing a
   player can do is an action in `scripts/fuzzer.ts`. On a golf hole it also
   chooses a club from the bag (and is refused one that is not in it) before
-  most of its shots. `npm run fuzz` plays every seed twice, as a player who
-  chooses among the courses and on The Range alone, since a monkey choosing
-  among five is on golf too seldom to hold it to anything; each landing the
-  game tells of is checked as it is told (`landingProblems`).
+  most of its shots. `npm run fuzz` plays every seed three times, as a player who
+  chooses among the courses and on The Range and The Links alone, since a monkey
+  choosing among six is on golf too seldom to hold it to anything; each landing
+  the game tells of is checked as it is told (`landingProblems`).
 - **Invariants:** bodies are of a kind, are numbers and are out of the rock;
   the world's count is right; the time is a time; the ball is there while a
   hole is played, alone, never inside a post, and never faster along the
@@ -126,20 +128,22 @@ today, and what the next features must hand it:
   after each look round). On a golf hole the club in hand is one of the
   bag's, and the ball is never faster in all, in the air as on the ground,
   than the club that struck it could send it and a fall from the highest
-  ground make it; each landing told is of the live ball, where it is, and
-  at least `LANDING.least` hard (`landingProblems`).
+  ground make it, never at rest out of bounds and never inside a tree's trunk
+  or canopy; each landing told is of the live ball, where it is, and at
+  least `LANDING.least` hard (`landingProblems`).
 - **Determinism:** the autopilot plays, with a player's slips from its own
   chance, round after round, and the hash takes in the hole and the card.
 - **Pace:** the strokes a round of each course takes; see above. The
   autopilot does not read a slope's break, so on The Hills it is a player
-  who aims straight and is carried by the ground. The Range's figure is 6.88
-  for pars of 3, 3 and 4 (2, 2 and 3 on the median), and the autopilot's
-  planner did not move it: a player's slips, a tenth of the power and a few
-  degrees, and the swing's own scatter, are far bigger than the unit or two
-  the planner gains, and each hole is a shot and a putt either way. Its worth
-  is in `test/planner.test.ts`, on slopes and rises.
+  who aims straight and is carried by the ground. The golf courses are a player one under par on every hole: The Range 6.94 for
+  pars of 3, 3 and 4, and The Links 30.25 for 36, each hole a stroke or so better than its par, since the
+  autopilot plays like a good golfer and par is each hole's intent. The planner did not move The Range's
+  figure (6.88 to 6.94): a player's slips, a tenth of the power and a few degrees, and the swing's own scatter,
+  are far bigger than the unit or two it gains on the level; its worth is in `test/planner.test.ts`, on slopes
+  and rises, and in `test/strategy.test.ts`, on a dogleg (3.4 strokes a round on a par four, and no ball lost
+  in twenty-four rounds, where aiming at the cup across the corner lost one in every round).
 - **Leaks:** ten minutes of the autopilot playing round after round, on The
-  Meadow and again on The Range. The card is emptied each round and
+  Meadow and again on The Range and The Links. The card is emptied each round and
   watched against the number of holes.
 - **Bench:** the physics on a green of its own, the size the course was
   before it had holes, so its figures are the physics' and not the
@@ -387,20 +391,33 @@ change meant to move it, and the commit says why. Look at every picture.
   painted, growing no blades inside the rail. `src/marker.ts` is the ring at a
   first landing, from game time; the camera follows a lofted ball up and
   catches up faster the faster it flies (`catchUp`).
-- The autopilot's golf shot is tried before it is taken (`src/planner.ts`).
-  `golfCandidates` is the arithmetic (the two shortest clubs that reach, the
-  putter for a chip and run within 45 units of a tee or the fairway, and the
-  putt from the green), and `Game.rehearsal()` a game of the same hole that
-  no one plays, chance held in the middle so a trial is the shot struck true,
-  which only it may `trial(x, y)` (the ball down where it lies, however the
-  last trial ended); `refine` corrects each candidate's power in proportion
-  and its aim by the angle it was out by, from where the trial rested, until
-  the ball rests on the cup or drops in it, at most five trials, and the
-  autopilot takes the nearest, the putter before any and else the shortest
-  club among those about as near. A `Plan` says where it expects the ball to
-  rest (`expect`), which is what happens, to the digit, when the swing is
-  true. A shot costs a few trials of 0.3 ms each. `planProblems` is the rule
-  that a plan is a shot, and the fuzzer checks each it takes.
+- Out of bounds is `x` in a golf map: rough to roll on and play from, and a ball on the ground on it is lost, as one
+  in water is (a stroke, `outOfBounds(x, y)`, the ball put back where it was struck from; `Game.putBack` is both), and
+  one in the air over it is not. It is drawn dry and pale, with a stake (`stakesOf`, `models/decor.ts`'s `stake`)
+  every second tile of the line; `place` refuses it, and an invariant says a ball never rests on it. A tree is `^`:
+  its trunk is a post the physics has (`TREE`, in `src/trees.ts`) and its canopy a cone the game tests the ball's
+  step against (`hitCanopy`, `turned`): a drive at twenty units high is stopped and drops, a high wedge (about 26 to
+  51 units short of it) goes over, and one rising into the underside is knocked down. What is drawn is what is met:
+  `golfTree`'s tiers lie inside the cone a ball's radius bigger, which a test holds.
+- `src/golf.ts` makes a golf hole from a `GolfSpec` and a seed (`golfHole`): a fairway along a way of play bent once
+  (`bend`), rough, out of bounds and rock round it, a green, a tee's box, bunkers at the green and along the fairway,
+  ponds set in hollows, trees in clusters in the rough, all placed clear of the tee and the cup, and the ground hills
+  with the tee, the green and every bed levelled, made gentler until the tee, fairway and green rest a ball. It refuses
+  a spec that cannot be made, by name. `src/links.ts` is The Links: nine specs, made when first asked for, each seed
+  chosen by playing forty with the pace gate's player and looking. A hole of 560 yards is 24,000 tiles of map and
+  8,500 of ground: 82 ms to begin in the page, 3.9 ms a frame at its worst view, held by `perf`.
+- The autopilot's golf shot is tried before it is taken. `Game.rehearsal()` is a game of the same hole that no one
+  plays, chance held in the middle so a trial is the shot struck true, and only it may `trial(x, y)`; `refine`
+  (`src/planner.ts`) corrects a candidate's power in proportion and its aim by the angle it was out by until the
+  ball rests where it is meant to or drops. `src/route.ts` is the way to the cup over ground a ball is played from
+  (round water, out of bounds, rock and canopies; the fairway cheapest), and `strokesToGo` judges a resting ball by it,
+  by its lie and by whether it is under a tree. The candidates are the arithmetic's (`golfCandidates`: the two shortest
+  clubs that reach, the putter for a chip and run) at the cup, and lay-ups (`golfLayUps`): the longest few clubs at the
+  place on the route they reach; `choose` tries each, judges it by where it rests (a ball lost is the stroke again and
+  one more) and the best few again a little to either side and short, as a swing's scatter has them, and takes the best,
+  the putter before any and then the earliest. A `Plan` says where it expects the ball to rest (`expect`), which is
+  what happens, to the digit, when the swing is true. A shot is fifteen or so trials of 0.3 ms. `planProblems` is the
+  rule that a plan is a shot, and the fuzzer checks each it takes.
 - `src/hud.ts` is the words over the course: the hole and strokes, the
   score's name when a hole is done, the card, the coins and gems, the
   shop, and the start screen, a card for each course with its holes and
@@ -546,7 +563,7 @@ What to copy the shape of, when building something new:
 it. Time: `pause`, `resume`, `step(frames)`, `seed(n)`, and `?seed=N` and
 `?paused=1` on the page. Reading: `state` (with `strokes` and `ready`),
 `ball`, `bodies`, `content` (the hole's grass, tee and cup, its sand and
-posts, the hardest shot, and every hole's name and par), `events`,
+posts, trees, the hardest shot, and every hole's name and par), `events`,
 `invariants`, and `aiming`,
 the shot a drag under way would make. `state` has the hole, its par, the
 phase (`play`, `done`, `over`), the card, the coins and gems, the club in
@@ -562,7 +579,8 @@ holes of the test's own that are not on a course, `newRound()`, `buy(id)`,
 `equip(id)`, and `drag(page, from, to, { touch, hold })` in
 `smoke/game.ts` for a real mouse or finger, pressed where `project(x, y,
 z)` says a point on the course is on the page. Setting a scene: `place` for
-a body that exists, `save`, and `start(page, { save, seed, paused, rung })`
+a body that exists (raw: on a hole that slopes, `lay(x, y)`, the game's own, puts the ball down on the ground there),
+`save`, and `start(page, { save, seed, paused, rung })`
 for a save that is not the player's, which chooses The Meadow unless given
 `screen` to leave the start screen up, and `touches(page, steps)` for fingers, several at once.
 Looking: `look(x, y, distance)` parks the camera until `follow`, `view()`
@@ -589,20 +607,15 @@ ball down at a lie.
 Each of these is the first feature's to bring, with every gate green at
 each step, and a gate handed what it needs in the same change:
 
-- The rest of golf, from `~/.claude/plans/ooergolf-proper-golf.md`: stage 3,
-  golf holes at yard scale on hills, with trees (a post and a cone), out of
-  bounds, rough that grows, bunkers and water at scale, in a first course of
-  nine (the planner knows nothing of hazards: it aims at the cup, and a
-  hole with water on the line will want it to score where a ball may land);
-  stage 4, the camera and aim (an overview of the hole, the distance and
-  height to the pin, the aim to the landing, not only the direction); stage
-  5, shape, spin and wind; stage 6, putting greens with contour, a fringe and
-  the break shown, which the planner leaves to the arithmetic putt.
-  What stage 1 leaves as it found it: the rail is a wall to a ball in
-  the air (a lofted ball cannot go out of bounds), a golf hole's rough is
-  painted and grows no blades inside the rail, its round green is stepped
-  by the tile, a ball landing on a post's top or a box is left as the
-  physics has it, and the club in hand is not saved.
+- The rest of golf, from `~/.claude/plans/ooergolf-proper-golf.md`: stage 4, the camera and aim (an overview of the
+  hole, the distance and height to the pin, the aim to the landing, not only the direction); stage 5, shape, spin
+  and wind; stage 6, putting greens with contour, a fringe and the break shown, which the planner leaves to the
+  arithmetic putt. What stage 3 leaves as it found it: a golf hole's rough is painted and grows no blades inside
+  the rough's edge (its wild grass beyond the stakes does grow, which is the turf's own), its green is round and
+  stepped by the tile, so are its bunkers, there is no first cut, an invisible wall stands beyond out of bounds, a ball
+  landing on a post's top or a box is left as the physics has it, the club in hand is not saved, the camera can lose
+  the ball behind a tree at a low tilt, and the planner aims at the cup or a place on the route and knows nothing of
+  the wind (there is none), a green's contour (there is none) or a lay-up chosen for the next shot's sake.
 
 - An autopilot that keeps a margin from water that grows with the shot. It
   skirts a pond by 1.3 units, and a 5% slip over a 45-unit shot wanders 2.3,

@@ -6,8 +6,15 @@
  * on knowing nothing of any hole.
  */
 import { LIE, type Lie } from './surfaces';
+import { TREE } from './trees';
 
 export const TILE = 3;
+/**
+ * The physics' fixed step, and its gravity: the package's defaults, which the game steps and predicts by. Here, with the
+ * figures a hole is made of, since a hole's ground is judged by what it holds a ball against gravity, and the tools that
+ * make holes must not import the package. `physics.ts` gives them again for what steps a world.
+ */
+export const PHYSICS = { step: 1 / 120, gravity: 70 } as const;
 /** The most bodies the world can hold. */
 export const BODY_CAPACITY = 64;
 /** The kinds of body there are, one radius each, and what each is called. */
@@ -154,6 +161,13 @@ export interface Layout extends Ground {
   lie: Uint8Array;
   /** Whether this is a golf hole, drawn with golf's tiles: a ball on it is struck with a club from the bag, and lands. */
   golf: boolean;
+  /**
+   * One byte a tile, of a golf hole: 1 where the ground is out of bounds, drawn `x`: rough to the physics, and lost the
+   * moment a ball is on it, as one in water is. All nought on a hole of minigolf, whose edge is a rail.
+   */
+  oob: Uint8Array;
+  /** Where each tree stands, in the middle of its tile, of a golf hole: a trunk of `TREE.trunk` and a canopy over it. None on minigolf. */
+  trees: { x: number; y: number }[];
   /** Where each post stands: in the middle of its tile, on grass. */
   bumpers: { x: number; y: number }[];
   /** How high the floor stands on each tile: nought for level grass, a step a digit, and far below for water. */
@@ -171,7 +185,7 @@ export interface Layout extends Ground {
  * first, one character a tile: `#` rail, `.` grass, `T` the tee and `C` the
  * cup on level grass, a digit for grass raised that many steps, `~` water,
  * `s` sand, `o` a post standing on grass, and a space for off the course. A golf hole is drawn in `f` fairway, `r` rough,
- * `g` green and `t` the tee's box instead of `.` and the digits, with the same `T`, `C`, `s`, `~` and `o`: the tee is
+ * `g` green, `t` the tee's box and `x` out of bounds instead of `.` and the digits, with the same `T`, `C`, `s`, `~` and `o`, and `^`, a tree: the tee is
  * a tee and the cup a green whatever they are drawn on, and a post stands in the rough.
  * `terrain`, if given, is how high the ground slopes on each tile: a grid the
  * shape of the map with a digit a tile, or real heights, one a tile, row by
@@ -190,8 +204,11 @@ export function layoutOf(map: readonly string[], terrain?: readonly string[] | F
     water = new Uint8Array(cols * rows),
     sand = new Uint8Array(cols * rows),
     lie = new Uint8Array(cols * rows),
+    oob = new Uint8Array(cols * rows),
     floor = new Float32Array(cols * rows);
   const bumpers: { x: number; y: number }[] = [];
+  const trees: { x: number; y: number }[] = [];
+  const treeTiles: number[] = [];
   const tees: [number, number][] = [],
     cups: [number, number][] = [];
   // the tiles that are not of a kind of ground by their letter, which a golf hole gives their own, and whether either
@@ -230,6 +247,16 @@ export function layoutOf(map: readonly string[], terrain?: readonly string[] | F
       else if (c === 'o') {
         bumpers.push({ x, y });
         postTiles.push(t);
+      } else if (c === '^') {
+        // a tree stands in the rough: a trunk and a canopy
+        golf = true;
+        trees.push({ x, y });
+        treeTiles.push(t);
+      } else if (c === 'x') {
+        // out of bounds: rough to roll on and play from, and a line the ball is lost across
+        golf = true;
+        lie[t] = LIE.rough;
+        oob[t] = 1;
       } else if (c in GOLF_TILES) {
         golf = true;
         lie[t] = GOLF_TILES[c];
@@ -257,6 +284,7 @@ export function layoutOf(map: readonly string[], terrain?: readonly string[] | F
     for (const t of teeTiles) lie[t] = LIE.tee;
     for (const t of cupTiles) lie[t] = LIE.green;
     for (const t of postTiles) lie[t] = LIE.rough;
+    for (const t of treeTiles) lie[t] = LIE.rough;
   }
   const heights = terrainOf(terrain, cols, rows);
   return {
@@ -270,6 +298,8 @@ export function layoutOf(map: readonly string[], terrain?: readonly string[] | F
     sand,
     lie,
     golf,
+    oob,
+    trees,
     bumpers,
     floor,
     terrain: heights,
@@ -419,6 +449,13 @@ export function lieAt(l: Layout, x: number, y: number): Lie {
 export function onFloor(g: Ground, x: number, y: number): boolean {
   const t = tileAt(g, x, y);
   return t >= 0 && g.solid[t] === 0 && g.water[t] === 0;
+}
+
+/** How far a point is from the side of the nearest tree's trunk, or Infinity on a hole with none. */
+export function fromTrees(l: Layout, x: number, y: number): number {
+  let near = Infinity;
+  for (const t of l.trees) near = Math.min(near, Math.hypot(x - t.x, y - t.y) - TREE.trunk);
+  return near;
 }
 
 /** How far a point is from the side of the nearest post, or Infinity on a hole with none. */

@@ -573,3 +573,110 @@ test('a full drive is followed the whole way: the ball is in the middle of the s
   expect(seen.invariants).toEqual([]);
   expect(problems).toEqual([]);
 });
+
+test('a ball struck out of bounds on The Links is lost: told, a word over the course, a stroke more, and the ball back where it was struck from', async ({
+  page,
+}, info) => {
+  const problems = watch(page);
+  await start(page, { seed: 1, paused: true });
+  await page.evaluate(() => {
+    window.game!.chooseCourse('The Links');
+    window.game!.startHole(0);
+    window.game!.step(75);
+  });
+  const tee = await page.evaluate(() => window.game!.ball());
+  // the driver, as it is at a tee; struck by a drag pulled to the right across the screen, so the ball goes off to the left,
+  // at full power, across the rough and over the stakes
+  const at = await page.evaluate(() => {
+    const b = window.game!.ball();
+    return window.game!.project(b.x, b.y, b.z);
+  });
+  const short = await page.evaluate(() => Math.min(innerWidth, innerHeight));
+  await drag(page, at, { x: at.x + 0.36 * short, y: at.y }, { steps: 10 });
+  expect(await page.evaluate(() => window.game!.state().strokes), 'the stroke is taken').toBe(1);
+  let told: string | undefined;
+  for (let f = 0; f < 20 * 60 && !told; f += 5) {
+    await play(page, 5, 'in the air');
+    told = (await page.evaluate(() => window.game!.events())).find((e) => e.startsWith('outOfBounds'));
+  }
+  expect(told, 'told of a ball lost out of bounds').toBeDefined();
+  // a word over the course, of its own kind, and the stroke it cost; the ball is where it was struck from, at rest
+  await expect(page.locator('#toast')).toBeVisible();
+  await expect(page.locator('#toast')).toHaveText('Out of bounds! +1');
+  await expect(page.locator('#toast')).toHaveAttribute('data-kind', 'out');
+  await expect(page.locator('#strokes b')).toHaveText('2');
+  const back = await page.evaluate(() => window.game!.ball());
+  expect(Math.hypot(back.x - tee.x, back.y - tee.y), 'put back on the tee').toBeLessThan(0.5);
+  expect(await page.evaluate(() => window.game!.state())).toMatchObject({ strokes: 2, ready: true, phase: 'play' });
+  await info.attach('out of bounds', { body: await page.screenshot(), contentType: 'image/png' });
+  // the camera comes back to the tee, as a player waits a moment for it, and then the next stroke takes the word away
+  await play(page, 90, 'the camera coming back');
+  await putt(page, 0, 40);
+  await expect(page.locator('#toast')).toBeHidden();
+  expect(problems).toEqual([]);
+});
+
+/** A fairway a long way up a field with one tree standing on it, thirty-six tiles from the tee: a hole for a tree to be met on. */
+function treeHole() {
+  const cols = 41,
+    rows = 130;
+  const tee = rows - 4;
+  const map = Array.from({ length: rows }, (_, r) =>
+    Array.from({ length: cols }, (_, c) => {
+      if (r === 0 || r === rows - 1 || c === 0 || c === cols - 1) return '#';
+      if (r === tee) return c === 20 ? 'T' : c === 19 || c === 21 ? 't' : 'f';
+      if (r === tee - 36 && c === 20) return '^';
+      if (r === 2 && c === 3) return 'C';
+      return 'f';
+    }).join(''),
+  );
+  return { name: 'A tree', par: 4, map };
+}
+
+test('a drive that flies into a tree is stopped by its canopy and drops, told as a knock, and a wedge over it is not', async ({
+  page,
+}) => {
+  const problems = watch(page);
+  await start(page, { seed: 1, paused: true });
+  const hole = treeHole();
+  const tree = await page.evaluate((h) => {
+    const g = window.game!;
+    g.playCourse([h]);
+    g.step(75);
+    return g.content().trees[0];
+  }, hole);
+  expect(tree, 'a tree on the hole').toBeDefined();
+  const shootAt = (from: number, club: string, power: number) =>
+    page.evaluate(
+      ({ tree, from, club, power }) => {
+        const g = window.game!;
+        // the ball put down `from` units short of the tree, straight up the field, and struck straight at it
+        g.lay(tree.x, tree.y - from);
+        g.step(60);
+        g.events();
+        g.shoot(Math.PI / 2, power, club);
+        let farthest = -Infinity;
+        for (let f = 0; f < 15 * 60; f++) {
+          g.step(1);
+          farthest = Math.max(farthest, g.ball().y - tree.y);
+          if (f > 5 && g.state().ready) break;
+        }
+        return {
+          farthest,
+          knocks: g.events().filter((e) => e.startsWith('knocked')).length,
+          invariants: g.invariants(),
+        };
+      },
+      { tree, from, club, power },
+    );
+  // a drive from 30 short: in the canopy at ten or twelve up, stopped, never beyond the tree by more than its width
+  const drive = await shootAt(30, 'driver', 1);
+  expect(drive.invariants).toEqual([]);
+  expect(drive.knocks, 'a knock, told').toBeGreaterThan(0);
+  expect(drive.farthest, 'never through it').toBeLessThan(6);
+  // and a sand wedge at full power from 38 short goes over the top, and comes down well beyond
+  const over = await shootAt(38, 'sand-wedge', 1);
+  expect(over.invariants).toEqual([]);
+  expect(over.farthest, 'over it, and on').toBeGreaterThan(15);
+  expect(problems).toEqual([]);
+});

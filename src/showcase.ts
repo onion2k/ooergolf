@@ -15,6 +15,7 @@ import { createContext } from 'artshape-render/gpu/context';
 import { layoutOf } from './arena';
 import { frameCost } from './frame-cost';
 import { railsOf } from './ground';
+import { TREE } from './trees';
 import { daylight } from './look';
 import { place } from './matrix';
 import { square } from './meshes';
@@ -35,9 +36,11 @@ import {
   flowers,
   golfBall,
   group,
+  golfTree,
   hedge,
   placeBlades,
   rock,
+  stake,
   teeMarkers,
   tree,
   water,
@@ -207,6 +210,18 @@ function exhibits(seed: number): Exhibit[] {
       })),
     },
     { name: 'rock', label: 'rock', row: 'decoration', items: [{ model: rock(1.5, { seed }), x: 6, y: 14.5 }] },
+    {
+      name: 'golf-tree',
+      label: 'golf tree',
+      row: 'decoration',
+      items: [{ model: golfTree(TREE, { seed }), x: 27, y: 19 }],
+    },
+    {
+      name: 'stakes',
+      label: 'out of bounds stakes',
+      row: 'decoration',
+      items: [0, 1, 2].map((k) => ({ model: stake(), x: 12 + k * 2.4, y: 14.5 })),
+    },
   ];
 }
 

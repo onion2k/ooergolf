@@ -19,6 +19,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { layoutOf } from '../src/arena';
 import { COURSE, DOWNS, moors, type HoleDef } from '../src/course';
+import { LINKS_SPECS } from '../src/links';
 
 const MOORS = moors();
 import { glint } from '../src/glints';
@@ -517,6 +518,93 @@ test.describe('what it looks like', () => {
     });
   });
 
+  // golf, on The Links: nine holes made by the generator, each seen from its tee, some of their greens, the stakes at the
+  // line of out of bounds, and a drive that has met a tree
+  test.describe('golf, on The Links', () => {
+    async function links(page: Page, hole: number) {
+      await start(page, { seed: 11, paused: true });
+      await page.evaluate((k) => {
+        window.game!.chooseCourse('The Links');
+        window.game!.startHole(k);
+        window.game!.step(75);
+      }, hole);
+      await hideStats(page);
+    }
+
+    for (const [k, spec] of LINKS_SPECS.entries()) {
+      test(`${spec.name}, hole ${k + 1} of The Links, from its tee`, async ({ page }) => {
+        const problems = watch(page);
+        await links(page, k);
+        await expect(page).toHaveScreenshot(`links-tee-${k + 1}.png`, TOLERANCE);
+        expect(problems).toEqual([]);
+      });
+    }
+
+    // the greens of the holes with water beside them, from short of them, where the bunkers and the pond are in view
+    for (const k of [1, 4, 5]) {
+      test(`the green of ${LINKS_SPECS[k].name}, from short of it`, async ({ page }) => {
+        const problems = watch(page);
+        await links(page, k);
+        await page.evaluate(() => {
+          const { cup } = window.game!.content();
+          window.game!.look(cup.x, cup.y - 22, 78);
+          window.game!.step(1);
+        });
+        await expect(page.locator('#view')).toHaveScreenshot(`links-green-${k + 1}.png`, TOLERANCE);
+        expect(problems).toEqual([]);
+      });
+    }
+
+    test('the line of out of bounds, close to: white stakes on the ground’s edge, the dry grass beyond, the rough within', async ({
+      page,
+    }) => {
+      const problems = watch(page);
+      await links(page, 0);
+      await page.evaluate(() => {
+        const { tee } = window.game!.content();
+        window.game!.look(tee.x - 34, tee.y + 46, 46);
+        window.game!.step(1);
+      });
+      await expect(page.locator('#view')).toHaveScreenshot('links-oob.png', TOLERANCE);
+      expect(problems).toEqual([]);
+    });
+
+    test('a drive that has met a tree, the frame it is knocked: the canopy, the ball against it', async ({ page }) => {
+      const problems = watch(page);
+      const cols = 41,
+        rows = 130;
+      const map = Array.from({ length: rows }, (_, r) =>
+        Array.from({ length: cols }, (_, c) => {
+          if (r === 0 || r === rows - 1 || c === 0 || c === cols - 1) return '#';
+          if (r === rows - 4) return c === 20 ? 'T' : c === 19 || c === 21 ? 't' : 'f';
+          if (r === rows - 4 - 36 && c === 20) return '^';
+          if (r === 2 && c === 3) return 'C';
+          return 'f';
+        }).join(''),
+      );
+      await start(page, { seed: 11, paused: true });
+      await page.evaluate((m) => {
+        const g = window.game!;
+        g.playCourse([{ name: 'A tree', par: 4, map: m }]);
+        g.step(75);
+        const { trees } = g.content();
+        g.lay(trees[0].x, trees[0].y - 30);
+        g.step(60);
+        g.shoot(Math.PI / 2, 1, 'driver');
+        // to the frame the canopy first turned it, and no further
+        for (let f = 0; f < 200; f++) {
+          g.step(1);
+          if (g.events().some((e) => e.startsWith('knocked'))) break;
+        }
+        g.look(trees[0].x, trees[0].y - 14, 40);
+        g.step(1);
+      }, map);
+      await hideStats(page);
+      await expect(page.locator('#view')).toHaveScreenshot('links-tree.png', TOLERANCE);
+      expect(problems).toEqual([]);
+    });
+  });
+
   test.describe('what answers what happens, at a fixed frame of each', () => {
     test('the ball squashed against the rail the frame it is knocked, close to', async ({ page }) => {
       const problems = watch(page);
@@ -669,6 +757,18 @@ test.describe('what it looks like', () => {
         window.game!.step(75);
       });
       await expect(page).toHaveScreenshot('phone-range.png', TOLERANCE);
+      expect(problems).toEqual([]);
+    });
+
+    test('a hole of The Links, from its tee, on a phone: the bag, the trees and the bend', async ({ page }) => {
+      const problems = watch(page);
+      await start(page, { seed: 11, paused: true });
+      await page.evaluate(() => {
+        window.game!.chooseCourse('The Links');
+        window.game!.startHole(2);
+        window.game!.step(75);
+      });
+      await expect(page).toHaveScreenshot('phone-links.png', TOLERANCE);
       expect(problems).toEqual([]);
     });
 

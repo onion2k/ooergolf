@@ -180,7 +180,8 @@ describe('the rail', () => {
 
   /** The rail of every hole, or those the slow tests are run on, with the tiles under a windmill's tower left out as the scene leaves them. */
   const everyHole = (): [string, Layout, Set<number>][] =>
-    SAMPLE_HOLES.map((h): [string, Layout, Set<number>] => {
+    // a hole with no rail, as a golf hole of The Links is, has none to try
+    SAMPLE_HOLES.filter((h) => h.map.some((row) => row.includes('#'))).map((h): [string, Layout, Set<number>] => {
       const l = layoutOf(h.map, h.terrain);
       const under = new Set<number>();
       for (const o of h.obstacles ?? [])

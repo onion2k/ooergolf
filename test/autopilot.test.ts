@@ -331,9 +331,11 @@ describe('the autopilot’s route over the tiles', () => {
     });
   }
 
-  it('is the route the plain way finds, from forty lies on every hole of every course', () => {
+  it('is the route the plain way finds, from forty lies on every hole of every course of minigolf', () => {
+    // golf holes have their own route, tested in route.test.ts, and the plain way over twenty thousand tiles is n squared
     let routes = 0;
-    for (const course of COURSES)
+    const courses = COURSES.filter((c) => !c.golf);
+    for (const course of courses)
       for (const hole of course.holes) {
         const l = layoutOf(hole.map, hole.terrain);
         for (const [x, y] of lies(l, seeded(hole.name.length * 31 + 7), 40)) {
@@ -341,7 +343,7 @@ describe('the autopilot’s route over the tiles', () => {
           routes++;
         }
       }
-    expect(routes, 'every lie was tried').toBe(COURSES.reduce((n, c) => n + c.holes.length, 0) * 40);
+    expect(routes, 'every lie was tried').toBe(courses.reduce((n, c) => n + c.holes.length, 0) * 40);
   });
 
   it('is the route the plain way finds on sixty maps of sand, water, posts and steps, and the same none where the cup is walled in', () => {

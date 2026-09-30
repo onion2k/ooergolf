@@ -28,10 +28,11 @@ const GREEN = [0.105, 0.41, 0.024] as const,
   STRIPE = 0.11;
 /**
  * A golf hole's other grounds, already linear: the rough a player plays from, darker and a hair yellower than the
- * fairway that is the game's own green; the putting green, finer and lighter, in the same two stripes; and the tee's
+ * fairway that is the game's own green, and out of bounds, the dry pale grass beyond the stakes; the putting green, finer and lighter, in the same two stripes; and the tee's
  * box, paler still, mown flat.
  */
 const PLAY_ROUGH = [0.056, 0.235, 0.024] as const,
+  OUT_OF_BOUNDS = [0.16, 0.27, 0.045] as const,
   PUTTING = [0.15, 0.5, 0.034] as const,
   TEE_BOX = [0.19, 0.5, 0.09] as const;
 /** The rail's paint, already linear: a warm timber. */
@@ -47,6 +48,7 @@ export const PALETTE = {
   grassMown: rgb(GREEN.map((c) => c * (1 + STRIPE))),
   rough: [0.0455882, 0.1823529, 0.0694118] as Colour,
   playRough: rgb(PLAY_ROUGH),
+  oobGround: rgb(OUT_OF_BOUNDS),
   puttingGreen: rgb(PUTTING.map((c) => c * (1 - STRIPE))),
   puttingGreenMown: rgb(PUTTING.map((c) => c * (1 + STRIPE))),
   teeBox: rgb(TEE_BOX),
