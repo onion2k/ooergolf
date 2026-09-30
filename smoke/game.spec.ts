@@ -10,8 +10,9 @@ import { PNG } from 'pngjs';
 import { BALL, KIND_RADIUS, ROLL, heightAt, layoutOf, powerFor } from '../src/arena';
 import { COURSE, COURSES, CUP, DOWNS } from '../src/course';
 import { ORBIT } from '../src/gesture';
+import { noiseGround } from '../src/noise';
 import { clearings } from '../src/scenery';
-import { BLADE_ROOM } from '../src/turf';
+import { BLADE_ROOM, cellFor } from '../src/turf';
 import { drag, start, touches, watch } from './game';
 import { holeOut, read, toCard } from './panels';
 
@@ -715,6 +716,67 @@ test.describe('the grass', () => {
     const second = await page.evaluate(() => window.game!.grass());
     expect(second.near + second.far, 'grown again on the next hole').toBeGreaterThan(60_000);
     expect(second.wind, 'a wind of its own').not.toEqual(first.wind);
+    expect(problems).toEqual([]);
+  });
+
+  test('grows the rough round a hole too big for the finest cell, and none on its course, and plays it', async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    const problems = watch(page);
+    await start(page, { seed: 1, paused: true });
+    // a hundred tiles across is a field of a half-unit cell, three hundred one of a unit: each a hole the renderer
+    // would refuse at the quarter-unit cell every hole has had, which is how the size of a hole was once limited
+    for (const [tiles, cell] of [
+      [100, 0.5],
+      [300, 1],
+    ] as const) {
+      const map = Array.from({ length: tiles }, (_, r) =>
+        Array.from({ length: tiles }, (_, c) => {
+          if (r === 0 || r === tiles - 1 || c === 0 || c === tiles - 1) return '#';
+          if (r === tiles - 3 && c === Math.floor(tiles / 2)) return 'T';
+          if (r === 2 && c === Math.floor(tiles / 2)) return 'C';
+          return '.';
+        }).join(''),
+      );
+      const layout = layoutOf(map);
+      expect(cellFor(layout), `${tiles} tiles across`).toBe(cell);
+      const terrain = Array.from(noiseGround(layout, { seed: 8, feel: 'gentle', steepness: 0.3 }));
+      const seen = await page.evaluate(
+        async ({ map, terrain }) => {
+          const g = window.game!;
+          g.playCourse([{ name: 'Big', par: 9, map, terrain: Float32Array.from(terrain), moving: {} } as never]);
+          g.step(120);
+          const { floor, tee } = g.content();
+          // the rough from just outside the rail's corner
+          g.look(floor.minX - 12, floor.minY - 12, 62);
+          g.step(2);
+          const rough = await g.grass();
+          // and the course underfoot at the tee, in view, where a blade that grew on it would be drawn: within four units of
+          // it is all green, the rail's outer face being seven and a half away
+          g.look(tee.x, tee.y, 62);
+          g.step(2);
+          const onCourse = await g.bladesAround(tee.x, tee.y, 4);
+          const cost = await g.measureFrame(60);
+          g.follow();
+          return { blades: rough.near + rough.far, onCourse, cost };
+        },
+        { map, terrain },
+      );
+      expect(seen.blades, `${tiles} tiles: the rough grows round it`).toBeGreaterThan(20_000);
+      expect(seen.blades, `${tiles} tiles: within the renderer's room`).toBeLessThan(BLADE_ROOM * 0.85);
+      expect(seen.onCourse, `${tiles} tiles: no blade on the course`).toBe(0);
+      expect(seen.cost, `${tiles} tiles: a frame inside the budget`).toBeLessThan(5);
+      // and it is played: the autopilot's first shot from the tee is struck and comes to rest
+      const played = await page.evaluate(() => {
+        const g = window.game!;
+        const shot = g.suggest();
+        if (shot) g.shoot(shot.angle, shot.power);
+        for (let f = 0; f < 1800 && !g.state().ready; f++) g.step(1);
+        return g.state();
+      });
+      expect(played.strokes, `${tiles} tiles: a stroke taken`).toBe(1);
+    }
     expect(problems).toEqual([]);
   });
 

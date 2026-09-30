@@ -1,10 +1,13 @@
 /** A hole's grass as the renderer grows it: the rough round the course, and no blade on the course, whose green is painted. */
-import { MAX_BEND, bend, checkField, gust, levels } from 'artshape-render/game/grass';
+import { createHash } from 'node:crypto';
+import { MAX_BEND, MAX_SIDE, bend, checkField, gust, levels } from 'artshape-render/game/grass';
 import { describe, expect, it } from 'vitest';
-import { layoutOf, tileAt } from '../src/arena';
-import { COURSE, COURSES, type HoleDef } from '../src/course';
+import { TILE, layoutOf, tileAt } from '../src/arena';
+import { COURSE, COURSES, DOWNS, HILLS, type HoleDef } from '../src/course';
 import { ROUGH_DEPTH } from '../src/scene';
-import { BLADE_ROOM, GRASS, KINDS, ROUGH, TURF, fieldOf, windOf } from '../src/turf';
+import { SAMPLE_HOLES } from './helpers';
+import { clearings } from '../src/scenery';
+import { BLADE_ROOM, CELLS, FIELD_SIDE, GRASS, KINDS, ROUGH, TURF, cellFor, fieldOf, windOf } from '../src/turf';
 
 const HOLE: HoleDef = {
   name: 'test turf',
@@ -41,7 +44,7 @@ describe('the turf of a hole', () => {
   });
 
   it('grows no blade on the course, on any hole of either course: the green is painted, and the rough frames it', () => {
-    for (const hole of COURSES.flatMap((c) => c.holes)) {
+    for (const hole of SAMPLE_HOLES) {
       const hl = layoutOf(hole.map, hole.terrain);
       const f = fieldOf(hl, hole.name);
       let rough = 0;
@@ -187,5 +190,171 @@ describe('the wind of a hole', () => {
     const w = windOf(COURSE[0].name);
     const g = [0, 1, 2, 3].map((t) => gust(0, 0, w, t));
     expect(new Set(g.map((v) => v.toFixed(4))).size).toBeGreaterThan(1);
+  });
+});
+
+/**
+ * The grass of a hole too big for the finest cell. The field is a texture the renderer limits to `MAX_SIDE` cells a
+ * side, and the finest cell, a quarter of a unit, covers a hole of sixty tiles across and no more; a coarser cell covers
+ * a bigger one, since all the field says is where the course is (in whole tiles) and where a rock has cleared the
+ * rough, and past its edge the renderer grows the same rough on its own. Every hole that exists keeps the finest.
+ */
+describe('the grass of a big hole', () => {
+  /** An open green `cols` tiles across and `rows` long inside a rail, the tee and the cup on it. */
+  const open = (cols: number, rows: number) =>
+    layoutOf(
+      Array.from({ length: rows }, (_, r) =>
+        Array.from({ length: cols }, (_, c) => {
+          if (r === 0 || r === rows - 1 || c === 0 || c === cols - 1) return '#';
+          if (r === rows - 3 && c === Math.floor(cols / 4)) return 'T';
+          if (r === 2 && c === Math.floor((cols * 3) / 4)) return 'C';
+          return '.';
+        }).join(''),
+      ),
+    );
+
+  /** The fields of every hole that exists, made as the page makes them, hashed: written from the game before any coarser cell was. */
+  const GOLDEN = '47c5f0e840447698275ac03a6c4fd2cf7ee299ca39996228743521a3e96a47d8';
+
+  it('is the very field every hole that exists had, bit for bit, at the finest cell', () => {
+    const all = createHash('sha256');
+    let holes = 0;
+    for (const hole of [...COURSE, ...HILLS, ...DOWNS]) {
+      const layout = layoutOf(hole.map, hole.terrain);
+      expect(cellFor(layout), hole.name).toBe(TURF.cell);
+      const f = fieldOf(layout, hole.name, clearings(layout, hole.name));
+      const h = createHash('sha256');
+      h.update(JSON.stringify([f.origin, f.cell, f.cols, f.rows, f.seed, f.outside, f.kinds.length]));
+      h.update(Buffer.from(f.mask.buffer, f.mask.byteOffset, f.mask.byteLength));
+      h.update(Buffer.from(f.heights.buffer, f.heights.byteOffset, f.heights.byteLength));
+      all.update(h.digest());
+      holes++;
+    }
+    expect(holes).toBe(22);
+    expect(all.digest('hex')).toBe(GOLDEN);
+  });
+
+  it('takes the finest cell whose field the renderer takes: finer for a smaller hole, and none for one past the last', () => {
+    expect(FIELD_SIDE, 'the renderer’s own limit').toBe(MAX_SIDE);
+    expect(CELLS[0], 'the finest is the one the holes had').toBe(TURF.cell);
+    for (const cell of CELLS)
+      expect(TILE / cell, `${cell} goes a whole number of times into a tile`).toBe(Math.round(TILE / cell));
+    // sixty by sixty-eight, two hundred, three hundred and four hundred tiles: each needs the next cell down
+    expect(cellFor(open(60, 60))).toBe(0.25);
+    expect(cellFor(open(60, 68))).toBe(0.5);
+    expect(cellFor(open(200, 200))).toBe(0.75);
+    expect(cellFor(open(300, 300))).toBe(1);
+    expect(cellFor(open(400, 400))).toBe(1.5);
+    // each cell's last hole and the first past it: a field of exactly the limit is taken, and one more cell is not
+    for (const [tiles, cell] of [
+      [62, 0.25],
+      [63, 0.5],
+      [148, 0.5],
+      [149, 0.75],
+      [233, 0.75],
+      [234, 1],
+      [318, 1],
+      [319, 1.5],
+    ] as const)
+      expect(cellFor(open(tiles, 40)), `${tiles} tiles across`).toBe(cell);
+    // the biggest hole a field covers, and one tile more is refused, and by name
+    expect(cellFor(open(489, 489))).toBe(1.5);
+    expect(() => cellFor(open(490, 400))).toThrow(/490 by 400 tiles.*at most 489/);
+    expect(() => fieldOf(open(400, 500), 'too big')).toThrow(RangeError);
+  });
+
+  it('is a field the renderer takes, at every cell there is', () => {
+    for (const [cols, rows] of [
+      [60, 68],
+      [200, 200],
+      [300, 300],
+      [400, 400],
+      [489, 489],
+    ]) {
+      const layout = open(cols, rows);
+      const f = fieldOf(layout, 'big', clearings(layout, 'big'));
+      expect(() => checkField(f, GRASS), `${cols} by ${rows}`).not.toThrow();
+      expect(f.cols).toBeLessThanOrEqual(MAX_SIDE);
+      expect(f.rows).toBeLessThanOrEqual(MAX_SIDE);
+      expect(f.cell).toBe(cellFor(layout));
+      expect(f.outside, 'the rough goes on past it').toEqual({ kind: ROUGH, height: -ROUGH_DEPTH });
+    }
+  });
+
+  it('keeps the course’s edge exact at every cell: each cell is wholly on the course or wholly off it, and grows nothing on it', () => {
+    for (const [cols, rows] of [
+      [60, 68],
+      [200, 200],
+      [300, 300],
+      [400, 400],
+    ]) {
+      const layout = open(cols, rows);
+      const f = fieldOf(layout, 'edge');
+      const inset = 1e-6;
+      let on = 0,
+        off = 0;
+      for (let cy = 0; cy < f.rows; cy++)
+        for (let cx = 0; cx < f.cols; cx++) {
+          const x0 = f.origin[0] + cx * f.cell,
+            y0 = f.origin[1] + cy * f.cell;
+          const course = [
+            [f.cell / 2, f.cell / 2],
+            [inset, inset],
+            [f.cell - inset, inset],
+            [inset, f.cell - inset],
+            [f.cell - inset, f.cell - inset],
+          ].map(([dx, dy]) => {
+            const t = tileAt(layout, x0 + dx, y0 + dy);
+            return t >= 0 && (!layout.solid[t] || layout.rail[t] === 1);
+          });
+          if (!course.every((c) => c === course[0]))
+            throw new Error(`${cols} by ${rows}: cell ${cx},${cy} is on the edge`);
+          const mask = f.mask[cy * f.cols + cx];
+          if (course[0]) {
+            on++;
+            if (mask !== 0) throw new Error(`${cols} by ${rows}: a blade on the course at cell ${cx},${cy}`);
+          } else {
+            off++;
+            if (mask !== ROUGH + 1) throw new Error(`${cols} by ${rows}: no rough off the course at cell ${cx},${cy}`);
+          }
+        }
+      expect(on, `${cols} by ${rows}: the course is there`).toBeGreaterThan(0);
+      expect(off, `${cols} by ${rows}: and the rough round it`).toBeGreaterThan(0);
+    }
+  });
+
+  it('clears every cell a rock’s clearing touches at a coarse cell, and grows the rough right up to the ones it does not', () => {
+    const layout = open(400, 400);
+    const f = fieldOf(layout, 'rocks', [{ x: layout.originX - 10, y: layout.originY - 8, r: 1.4 }]);
+    expect(f.cell).toBe(1.5);
+    const cellOf = (x: number, y: number) =>
+      Math.floor((y - f.origin[1]) / f.cell) * f.cols + Math.floor((x - f.origin[0]) / f.cell);
+    // every point of the disc, on a grid a tenth of a unit apart, is in a cell with no rough
+    let touched = 0;
+    for (let dx = -1.4; dx <= 1.4; dx += 0.1)
+      for (let dy = -1.4; dy <= 1.4; dy += 0.1)
+        if (Math.hypot(dx, dy) <= 1.4) {
+          expect(
+            f.mask[cellOf(layout.originX - 10 + dx, layout.originY - 8 + dy)],
+            `at ${dx.toFixed(1)},${dy.toFixed(1)}`,
+          ).toBe(0);
+          touched++;
+        }
+    expect(touched).toBeGreaterThan(200);
+    // and not a cell more than a cell and a half's reach from it
+    let cleared = 0;
+    for (let i = 0; i < f.mask.length; i++) {
+      if (f.mask[i] !== 0) continue;
+      const x = f.origin[0] + ((i % f.cols) + 0.5) * f.cell,
+        y = f.origin[1] + (Math.floor(i / f.cols) + 0.5) * f.cell;
+      const t = tileAt(layout, x, y);
+      if (t >= 0 && (!layout.solid[t] || layout.rail[t] === 1)) continue;
+      cleared++;
+      expect(
+        Math.hypot(x - (layout.originX - 10), y - (layout.originY - 8)),
+        'no cell far from it is cleared',
+      ).toBeLessThan(1.4 + f.cell);
+    }
+    expect(cleared).toBeGreaterThan(0);
   });
 });

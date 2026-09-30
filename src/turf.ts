@@ -1,6 +1,7 @@
 /**
  * A hole's grass, as the renderer grows it: a field over the course and the
- * rough round it, saying which kind grows in each quarter-unit cell and how
+ * rough round it, saying which kind grows in each cell (a quarter of a unit,
+ * and coarser only for a hole too big for a field of those) and how
  * high the ground is there, and the wind that blows across it. The rough
  * grows off the course, down where it lies, and on to the horizon, long,
  * dense and rippling in the wind like a meadow, and frames the course;
@@ -16,11 +17,45 @@ import { seeded } from './random';
 const ROUGH_DEPTH = 3;
 
 /**
- * The field's figures: its cells, a quarter of a unit, fine enough for the
- * rough's edge along the course's; and how far round the course it reaches
+ * The field's figures: its finest cell, a quarter of a unit, fine enough for
+ * the rough's edge round a rock; and how far round the course it reaches
  * before the rough carries on as the renderer's `outside`.
  */
 export const TURF = { cell: 0.25, reach: 34 } as const;
+
+/**
+ * The cells a field may be made of, finest first. Each goes a whole number of
+ * times into a tile, which is what the course's edge is made of, so the edge
+ * falls between two cells and never in one, whichever is used. The finest is
+ * every hole's until a hole is too big for it.
+ */
+export const CELLS = [0.25, 0.5, 0.75, 1, 1.5] as const;
+
+/**
+ * Cells a side a field may have: the renderer's `MAX_SIDE`, kept here too so the
+ * turf imports no drawing, and held equal to it by a test.
+ */
+export const FIELD_SIDE = 1024;
+
+/** How far the field reaches past the course at `cell`: `TURF.reach`, up to a whole number of cells, so its edge lies on a tile's. */
+const marginAt = (cell: number) => Math.ceil(TURF.reach / cell) * cell;
+
+/** How many cells a side a field of `tiles` tiles has at `cell`. */
+const sideAt = (tiles: number, cell: number) => Math.ceil((tiles * TILE + 2 * marginAt(cell)) / cell);
+
+/**
+ * The finest cell whose field the renderer takes for a hole laid out as `layout`: a quarter of a unit for every
+ * hole there is, and coarser for one bigger than sixty tiles a side. A hole no cell covers is refused, by its size.
+ */
+export function cellFor(layout: Layout): number {
+  const tiles = Math.max(layout.cols, layout.rows);
+  for (const cell of CELLS) if (sideAt(tiles, cell) <= FIELD_SIDE) return cell;
+  const coarsest = CELLS[CELLS.length - 1];
+  const most = Math.floor((FIELD_SIDE * coarsest - 2 * marginAt(coarsest)) / TILE);
+  throw new RangeError(
+    `a hole of ${layout.cols} by ${layout.rows} tiles is more than a field of grass covers: at most ${most} tiles a side`,
+  );
+}
 
 /** The rough, the only kind: the green had blades of its own, and was painted clean for the look. */
 export const ROUGH = 0;
@@ -82,12 +117,21 @@ export interface Clearing {
   r: number;
 }
 
-/** The field of grass for a hole laid out as `layout`, called `name`, with none in the `bare` discs. */
-export function fieldOf(layout: Layout, name: string, bare: readonly Clearing[] = []): GrassField {
-  const { cell, reach } = TURF;
+/**
+ * The field of grass for a hole laid out as `layout`, called `name`, with none in the `bare` discs, made of cells
+ * of `cell`: the finest one that fits, unless it is told. A coarser cell clears every cell a disc touches, and not
+ * only those whose middles it holds, so a rock is never left with a blade standing in it.
+ */
+export function fieldOf(
+  layout: Layout,
+  name: string,
+  bare: readonly Clearing[] = [],
+  cell = cellFor(layout),
+): GrassField {
+  const reach = marginAt(cell);
   const origin: [number, number] = [layout.originX - reach, layout.originY - reach];
-  const cols = Math.ceil((layout.cols * TILE + 2 * reach) / cell),
-    rows = Math.ceil((layout.rows * TILE + 2 * reach) / cell);
+  const cols = sideAt(layout.cols, cell),
+    rows = sideAt(layout.rows, cell);
   const mask = new Uint8Array(cols * rows),
     heights = new Float32Array(cols * rows);
   // the rough everywhere off the course; the course, rail and all, grows nothing
@@ -100,14 +144,17 @@ export function fieldOf(layout: Layout, name: string, bare: readonly Clearing[] 
         heights[i] = -ROUGH_DEPTH;
       }
     }
+  // a cell is cleared when its middle is in the disc; and, at a cell coarser than the finest, when any of it is: the
+  // half of its diagonal more
+  const grow = cell > TURF.cell ? cell * Math.SQRT1_2 : 0;
   for (const { x, y, r } of bare) {
-    const x0 = Math.max(0, Math.floor((x - r - origin[0]) / cell)),
-      x1 = Math.min(cols - 1, Math.floor((x + r - origin[0]) / cell)),
-      y0 = Math.max(0, Math.floor((y - r - origin[1]) / cell)),
-      y1 = Math.min(rows - 1, Math.floor((y + r - origin[1]) / cell));
+    const x0 = Math.max(0, Math.floor((x - r - grow - origin[0]) / cell)),
+      x1 = Math.min(cols - 1, Math.floor((x + r + grow - origin[0]) / cell)),
+      y0 = Math.max(0, Math.floor((y - r - grow - origin[1]) / cell)),
+      y1 = Math.min(rows - 1, Math.floor((y + r + grow - origin[1]) / cell));
     for (let cy = y0; cy <= y1; cy++)
       for (let cx = x0; cx <= x1; cx++)
-        if (Math.hypot(origin[0] + (cx + 0.5) * cell - x, origin[1] + (cy + 0.5) * cell - y) <= r)
+        if (Math.hypot(origin[0] + (cx + 0.5) * cell - x, origin[1] + (cy + 0.5) * cell - y) <= r + grow)
           mask[cy * cols + cx] = 0;
   }
   return {

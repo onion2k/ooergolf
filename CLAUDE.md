@@ -290,9 +290,15 @@ change meant to move it, and the commit says why. Look at every picture.
   higher than a rock does. The flowers carry their blooms on stems
   (`BLOOM_TOPS`, in `models/decor.ts`) up out of the long grass, and a test
   holds every bloom above three blades in four at the smallest scale a clump
-  is placed.
+  is placed. All of it grows with the hole: `bigness(layout)` is the perimeter
+  over that of the biggest hole drawn by hand (fifteen tiles by seventeen), and
+  one for every hole that size or less, so a hole that was there has the very
+  scenery it had (a test holds every one to a hash), and a bigger has as many
+  pieces, tries and rock clusters again as it is bigger, and its bunting on
+  each side in strings of at most `REFERENCE.string` (60) units, each between
+  posts of its own.
 - `src/turf.ts` is a hole's grass, as the renderer's GPU grass grows it: a
-  field of quarter-unit cells saying where the rough grows (off the course,
+  field of cells saying where the rough grows (off the course,
   down where the rough lies, and on past the field as its `outside`), and
   the hole's own wind from its name. The rough is long, lush grass: forty
   blades a square unit, 1.6 tall and a third more or less, its tallest still
@@ -311,7 +317,18 @@ change meant to move it, and the commit says why. Look at every picture.
   track. The page hands the field to the renderer when a hole begins, and
   the first frame waits for the grass. Under the rough's blades, the scene
   paints the ground in the colour the renderer gives for between them
-  (`grassGround`), so the thinned rungs hold the field's colour.
+  (`grassGround`), so the thinned rungs hold the field's colour. The field
+  is a texture the renderer limits to `MAX_SIDE` (1024) cells a side, and
+  the finest cell, a quarter of a unit, covers a hole of sixty tiles across
+  and no more: `cellFor` takes the finest of `CELLS` (each goes a whole
+  number of times into a tile, so the course's edge falls between cells)
+  that fits, which for every hole drawn by hand is the quarter, and for a
+  bigger one coarser, up to 489 tiles a side with the 1.5 cell, and refuses
+  a bigger by its size. A coarse cell clears every cell a rock's clearing
+  touches, and the margin round the course is a whole number of cells so its
+  edge lies on a tile's. What a hole costs to begin grows with its tiles,
+  about 8 microseconds each, and not with its cells: the `perf` gate holds
+  the biggest.
 - `src/debug.ts` is `window.game`, the test API. `src/invariants.ts` lists
   the rules that must always hold. `src/autopilot.ts` plays the game by
   itself, for the gates and for par; its route over the tiles (`pathToCup`)
@@ -418,7 +435,8 @@ What to copy the shape of, when building something new:
 - **Test helpers:** `newGame(seed)` in `test/helpers.ts`, `onGreen()` for a
   practice green whose cup is out of the way of tests of the ball,
   `groundFigures(layout)` in `test/ground-metrics.ts` for a ground's relief,
-  steepness and bumpiness, and
+  steepness and bumpiness, `SAMPLE_HOLES` in `test/helpers.ts` for the slow
+  tests that try every tile of every hole (all but three of The Moors), and
   `memoryStore` in `src/progress.ts` for a save that is not the player's;
   and in `smoke/panels.ts`, `read(page)` for every text's contrast against
   its panel, what reaches past the screen's edges and each button's height,

@@ -1,10 +1,20 @@
 /** What the tests share: a new game in memory, from a seed, with a note of every event it tells, and a green to practise on. */
-import type { HoleDef } from '../src/course';
+import { COURSES, type HoleDef } from '../src/course';
 import { Game, type GameEvents } from '../src/game';
 import { Progress, memoryStore } from '../src/progress';
 import { seeded } from '../src/random';
 
 export const DT = 1 / 60;
+
+/**
+ * The holes the slow tests that try every tile of every hole are run on: every hole of the courses drawn by hand or
+ * made small, and of The Moors the smallest, the middle and the biggest. Its nine holes are one open green with other
+ * things on it, and each has tiles to the thousand, so what their size costs is tried on three, and what is on them is
+ * held by the tests of the generator and the course, which do try all nine.
+ */
+export const SAMPLE_HOLES: HoleDef[] = COURSES.flatMap((c) =>
+  c.name === 'The Moors' ? [c.holes[0], c.holes[4], c.holes[8]] : c.holes,
+);
 
 /**
  * A wide square green with the tee near the south rail and the cup tucked

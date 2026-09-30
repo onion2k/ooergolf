@@ -31,6 +31,21 @@ export interface Piece {
  */
 export const SCENERY = { least: 12, most: 30, clear: 3, spacing: 4.5, reach: 16 } as const;
 
+/**
+ * What the scenery was placed for: the perimeter of the biggest hole there was when it was, fifteen tiles by seventeen,
+ * in units, and the longest string of bunting one pair of posts held. Past them the scenery grows with the hole.
+ */
+export const REFERENCE = { perimeter: 2 * (15 + 17) * TILE, string: 60 } as const;
+
+/**
+ * How many times bigger a hole is than the biggest there was, by its perimeter, and one for every hole that size or
+ * smaller: so a hole that was there is given exactly the scenery it always had, and a bigger one the more it needs to
+ * be dressed as densely round its edge.
+ */
+export function bigness(layout: Layout): number {
+  return Math.max(1, (2 * (layout.cols + layout.rows) * TILE) / REFERENCE.perimeter);
+}
+
 /** How much of its model's size a scattered piece is, at the least and how much more it may be. */
 export const SCALE = { least: 0.8, spread: 0.45 } as const;
 
@@ -95,7 +110,20 @@ export function dress(layout: Layout, name: string): Dressing {
     length: Math.hypot(bx - ax, by - ay),
     height: DRESSING.buntingHeight,
   });
-  const bunting = [string(x0, y1, x1, y1), string(x0, y0, x0, y1), string(x1, y0, x1, y1)];
+  // one string a side, and a side longer than a string can be strung, in as many equal strings as it takes, each between
+  // posts of its own
+  const along = (ax: number, ay: number, bx: number, by: number): Bunting[] => {
+    const parts = Math.ceil(Math.hypot(bx - ax, by - ay) / REFERENCE.string);
+    return Array.from({ length: parts }, (_, k) =>
+      string(
+        ax + ((bx - ax) * k) / parts,
+        ay + ((by - ay) * k) / parts,
+        ax + ((bx - ax) * (k + 1)) / parts,
+        ay + ((by - ay) * (k + 1)) / parts,
+      ),
+    );
+  };
+  const bunting = [...along(x0, y1, x1, y1), ...along(x0, y0, x0, y1), ...along(x1, y0, x1, y1)];
 
   const beds: Dressing['beds'] = [];
   let seen = 0;
@@ -133,7 +161,9 @@ export function dress(layout: Layout, name: string): Dressing {
     minY = originY - SCENERY.reach,
     w = cols * TILE + SCENERY.reach * 2,
     h = rows * TILE + SCENERY.reach * 2;
-  for (let clusters = 0, tries = 0; clusters < 3 && tries < 200; tries++) {
+  // three clusters, and more as the hole is bigger
+  const big = bigness(layout);
+  for (let clusters = 0, tries = 0; clusters < Math.ceil(3 * big) && tries < Math.ceil(200 * big); tries++) {
     const cx = minX + random() * w,
       cy = minY + random() * h;
     if (!onRough(layout, cx, cy) || underBunting(bunting, cx, cy)) continue;
@@ -189,7 +219,10 @@ export function scatter(layout: Layout, name: string): Piece[] {
     h = rows * TILE + SCENERY.reach * 2;
   const total = WEIGHTS.reduce((a, [, n]) => a + n, 0);
   const out: Piece[] = [];
-  for (let tries = 0; tries < 800 && out.length < SCENERY.most; tries++) {
+  // thirty pieces, and as many more as the hole is bigger, with the tries to place them
+  const big = bigness(layout);
+  const most = Math.ceil(SCENERY.most * big);
+  for (let tries = 0; tries < Math.ceil(800 * big) && out.length < most; tries++) {
     const x = minX + random() * w,
       y = minY + random() * h;
     if (!onRough(layout, x, y)) continue;

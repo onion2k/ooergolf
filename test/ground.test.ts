@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import type { Mesh } from 'artshape-render/mesh/types';
 import { BALL, KIND_RADIUS, STEP, TILE, WATER_LEVEL, heightAt, layoutOf, terrainAt, type Layout } from '../src/arena';
 import { COURSES, CUP } from '../src/course';
+import { SAMPLE_HOLES } from './helpers';
 import { GROUND, RAIL, cupGround, groundOf, railsOf, type Rails } from '../src/ground';
 import { BUDGET, collar, type V3 } from '../src/models';
 import { PALETTE as MODELS } from '../src/models/palette';
@@ -177,20 +178,18 @@ describe('the rail', () => {
     '#######    ',
   ];
 
-  /** The rail of every hole of every course, with the tiles under a windmill's tower left out as the scene leaves them. */
+  /** The rail of every hole, or those the slow tests are run on, with the tiles under a windmill's tower left out as the scene leaves them. */
   const everyHole = (): [string, Layout, Set<number>][] =>
-    COURSES.flatMap((c) =>
-      c.holes.map((h): [string, Layout, Set<number>] => {
-        const l = layoutOf(h.map, h.terrain);
-        const under = new Set<number>();
-        for (const o of h.obstacles ?? [])
-          if (o.kind === 'windmill') {
-            const ty = l.rows - 1 - o.at[1];
-            for (const side of [-1, 1]) under.add(ty * l.cols + o.at[0] + side);
-          }
-        return [h.name, l, under];
-      }),
-    );
+    SAMPLE_HOLES.map((h): [string, Layout, Set<number>] => {
+      const l = layoutOf(h.map, h.terrain);
+      const under = new Set<number>();
+      for (const o of h.obstacles ?? [])
+        if (o.kind === 'windmill') {
+          const ty = l.rows - 1 - o.at[1];
+          for (const side of [-1, 1]) under.add(ty * l.cols + o.at[0] + side);
+        }
+      return [h.name, l, under];
+    });
   /** Every layout the rail is tried on: every hole, and those made here for what no hole has. */
   const everyRail = (): [string, Layout, Set<number>][] => [
     ...everyHole(),
