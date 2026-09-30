@@ -18,9 +18,9 @@ import { STILL, type Wind } from 'artshape-render/game/grass';
 import type { GameGroup } from 'artshape-render/game/renderer';
 import { MATERIAL_STRIDE, PATTERN_STRIDE } from 'artshape-render/game/renderer';
 import type { Mesh } from 'artshape-render/mesh/types';
-import { BALL, BUMPER, KIND_RADIUS, TILE, WATER_LEVEL, heightAt, tileAt, type Layout } from './arena';
+import { BALL, BUMPER, KIND_RADIUS, TILE, WATER_LEVEL, heightAt, slopeInto, tileAt, type Layout } from './arena';
 import { CUP } from './course';
-import { place } from './matrix';
+import { place, placeOnSlope } from './matrix';
 import { ball, plane } from './meshes';
 import {
   FLAG_COLOURS,
@@ -58,6 +58,7 @@ import { TREE } from './trees';
 import { RIPPLES, SPLASH_RING, flagTurn, lean, ringPlace, ripples, splashRing, waggle } from './sway';
 import { SPARKLE, sparkle, sparkles as sparkleShares } from './glints';
 import { MARK, markSize } from './marker';
+import type { Preview } from './preview';
 import { pulse } from './pulse';
 import type { Shot } from './shot';
 import { PALETTE as COLOURS } from './models/palette';
@@ -107,6 +108,18 @@ export const PALETTE = {
   ball: [0.98, 0.98, 0.96, 0.25],
   /** The ring where a lofted ball first came down. */
   marker: [1.0, 0.86, 0.18, 0.4],
+  /**
+   * The preview of a shot: its arc of dots, and the ring where it would come down, which is the marker's own yellow
+   * where it comes down on the course and a warning where it does not: blue for water, red for out of bounds, and lime
+   * for a ball that drops in the cup. The spread of a swing that is not true, and the tree that knocks it, are
+   * quieter and louder respectively.
+   */
+  arc: [0.99, 0.97, 0.9, 0.5],
+  ringWater: [...COLOURS.plastic.blue, 0.4],
+  ringOut: [...COLOURS.plastic.red, 0.4],
+  ringHoled: [...COLOURS.plastic.lime, 0.4],
+  spread: [1.0, 0.86, 0.18, 0.5],
+  knock: [...COLOURS.plastic.red, 0.4],
   /** The band round the ball's middle, so it is seen to roll. */
   ballBand: [0.9, 0.16, 0.12],
   /** The aim's dots, from a gentle putt to the hardest shot. */
@@ -139,6 +152,51 @@ const BED_MODELS = FLOWER_COLOURS.slice(0, 3).map((c, k) => flowers(c, { seed: k
 /** The landing mark's ring, a flat one of unit outer radius, made when a golf hole first wants it. */
 let markRing: Mesh | undefined;
 const markMesh = () => (markRing ??= built((b) => annulus(b, at(0, 0, 0), 32, 0.72, 1, 0)));
+/** The swing's spread, a thinner ring of the same sort, which is drawn as an ellipse. */
+let spreadRing: Mesh | undefined;
+const spreadMesh = () => (spreadRing ??= built((b) => annulus(b, at(0, 0, 0), 48, 0.9, 1, 0)));
+
+/**
+ * The preview of a golf shot as it is drawn: how many dots its arc has and how big each is at the home view, how big
+ * its ring is (the marker's own), and how big the spot where a tree knocks it is: at the home view, the page then
+ * scales them for how far back the camera stands (`markScale`), so they are as easy to see from a drive's view as from a putt's.
+ */
+export const ARC = { dots: 28, radius: 0.42, knock: 0.9, ring: 1.35 } as const;
+/** The least a mark of the preview is lifted off the ground, in yards at the home view, so it is not fighting the turf. */
+export const RING_LIFT = 0.12;
+/** How many points round a mark's edge the ground is sampled at, to find how far it must be lifted to clear it. */
+const RING_SAMPLES = 24;
+
+/**
+ * How high above the plane through a mark's middle (the ground there, sloping by `slopeX` and `slopeY`) it must be
+ * lifted, vertically, for its whole edge to be over the ground and not in it: `RING_LIFT` where the ground falls away
+ * or is level, and more where it rises toward the edge, as a hollow does. The mark is an ellipse of half axes `rx` and
+ * `ry`, turned `yaw`. Nothing is made.
+ */
+export function ringLift(
+  layout: Layout,
+  x: number,
+  y: number,
+  slopeX: number,
+  slopeY: number,
+  rx: number,
+  ry: number,
+  yaw: number,
+): number {
+  const z0 = heightAt(layout, x, y);
+  const c = Math.cos(yaw),
+    s = Math.sin(yaw);
+  let rise = 0;
+  for (let k = 0; k < RING_SAMPLES; k++) {
+    const a = (k / RING_SAMPLES) * Math.PI * 2;
+    const u = rx * Math.cos(a),
+      v = ry * Math.sin(a);
+    const dx = u * c - v * s,
+      dy = u * s + v * c;
+    rise = Math.max(rise, heightAt(layout, x + dx, y + dy) - (z0 + slopeX * dx + slopeY * dy));
+  }
+  return RING_LIFT + rise;
+}
 /** The rough, as one great square out past the fog. */
 const ROUGH_SIZE = 600;
 const FLOWER_MODELS = FLOWER_COLOURS.slice(0, 3).map((c, k) => flowers(c, { seed: k + 1 }));
@@ -205,6 +263,15 @@ function groups(model: Model, matrices: Float32Array): GameGroup[] {
   return model.parts.map((part) => group(part, matrices));
 }
 
+/** A pool of what moves, as a group after the aim: its placements, how many are drawn, and how it is written at a time. */
+interface Entry {
+  matrices: Float32Array;
+  count: number;
+  /** A colour and a roughness for each of its placements, when they are coloured by game time; see `tint`. */
+  looks?: Float32Array;
+  write: (out: Float32Array, t: number) => void;
+}
+
 export class Scene {
   /** The moving placements, one pool a group: the ball, then the aim's dots and their colours. */
   readonly ball = new Float32Array(16);
@@ -213,13 +280,7 @@ export class Scene {
   /** The ball's turn as it rolls, kept here since the physics does not keep one for drawing a rolling ball. */
   readonly ballTurn = new Float32Array([0, 0, 0, 1]);
   /** The pools of what moves on the hole, each a group after the ball and the aim, written each frame at a time. */
-  private moving: {
-    matrices: Float32Array;
-    count: number;
-    /** A colour and a roughness for each of its placements, when they are coloured by game time; see `tint`. */
-    looks?: Float32Array;
-    write: (out: Float32Array, t: number) => void;
-  }[] = [];
+  private moving: Entry[] = [];
   /**
    * The ponds of the hole as last built, each where it is and how big, and the room on its water for a ring or a
    * sparkle: what the rings and the sparkles are placed on.
@@ -231,6 +292,10 @@ export class Scene {
   private landed: { x: number; y: number; at: number } | null = null;
   /** The ring as the last frame placed it, and whether it is drawn: what the page reads back, and never the state it came from. */
   private mark: { matrices: Float32Array; count: number } | null = null;
+  /** The shot in hand as the page last handed it, and how much bigger its marks are drawn for the view, and which way it is aimed. */
+  private shot: { preview: Preview; scale: number; angle: number } | null = null;
+  /** What the last frame placed of its preview, for the page to read back: the arc, the ring, the spread and the knock. */
+  private drawnShot: { arc: Entry; ring: Entry; spread: Entry; knock: Entry; ringLooks: Float32Array } | null = null;
   /** How many sparkles each pond has, worked out once for a hole; and what each frame writes into and reads, made once. */
   private shares: number[] = [];
   private readonly scratch = {
@@ -533,6 +598,7 @@ export class Scene {
     this.splashed = null;
     this.landed = null;
     this.mark = null;
+    this.drawnShot = null;
     const pool = (model: { parts: Model['parts'] }, write: (out: Float32Array, t: number) => void, count = 1) => {
       const matrices = new Float32Array(16 * count);
       for (const part of model.parts) {
@@ -603,8 +669,148 @@ export class Scene {
       this.mark = entry;
       const [mr, mg, mb, mrough] = PALETTE.marker;
       out.push({ mesh: markMesh(), matrices, count: 0, albedo: [mr, mg, mb], roughness: mrough });
+      this.shotGroups(layout, out);
     }
     return out;
+  }
+
+  /**
+   * The groups of the shot's preview, after the marker's and only on a golf hole: the arc of dots, the ring where it
+   * would come down (its colour written each frame, from what the flight comes to), the spread of a swing that is not
+   * true as a ring stretched into an ellipse, and the spot a tree or the rail would knock it. Each is written from the
+   * preview the page last handed in, and drawn for none.
+   */
+  private shotGroups(layout: Layout, out: GameGroup[]) {
+    const tmp = [0, 0, 0];
+    const slope: [number, number] = [0, 0];
+    const entry = (count: number, write: Entry['write'], looks?: Float32Array): Entry => {
+      const e: Entry = { matrices: new Float32Array(16 * count), count: 0, write, looks };
+      this.moving.push(e);
+      return e;
+    };
+    const arc: Entry = entry(ARC.dots, (m) => {
+      const s = this.shot;
+      arc.count = 0;
+      if (!s || s.preview.n < 2) return;
+      const { preview: p, scale } = s;
+      const size = ARC.radius * scale;
+      const total = p.length[p.n - 1];
+      for (let k = 0; k < ARC.dots; k++) {
+        p.along((total * (k + 1)) / (ARC.dots + 1), tmp);
+        place(m, k, tmp[0], tmp[1], tmp[2], 0, size);
+      }
+      arc.count = ARC.dots;
+    });
+    const ringLooks = new Float32Array(MATERIAL_STRIDE);
+    const ring: Entry = entry(
+      1,
+      (m) => {
+        const s = this.shot;
+        ring.count = 0;
+        if (!s || s.preview.n < 2) return;
+        const p = s.preview;
+        const r = MARK.radius * ARC.ring * s.scale;
+        // on the pond's surface for a ball that goes in it, and on the ground anywhere else, lying along the slope there
+        // and lifted a little more the further the camera stands, or a ring over a hill is a crescent in the turf
+        if (p.end === 'water') place(m, 0, p.x, p.y, WATER_LEVEL + 0.06, 0, r, r, 1);
+        else {
+          // vertically, so along the slope's upright it is a little more
+          const lift = ringLift(layout, p.x, p.y, p.slope.x, p.slope.y, r, r, 0) * Math.hypot(p.slope.x, p.slope.y, 1);
+          placeOnSlope(m, 0, p.x, p.y, heightAt(layout, p.x, p.y), p.slope.x, p.slope.y, 0, r, r, lift);
+        }
+        ringLooks.set(
+          p.end === 'water'
+            ? PALETTE.ringWater
+            : p.end === 'out'
+              ? PALETTE.ringOut
+              : p.end === 'holed'
+                ? PALETTE.ringHoled
+                : PALETTE.marker,
+          0,
+        );
+        ring.count = 1;
+      },
+      ringLooks,
+    );
+    const spread: Entry = entry(1, (m) => {
+      const s = this.shot;
+      spread.count = 0;
+      if (!s || s.preview.n < 2) return;
+      const { preview: p, angle } = s;
+      const { across, along } = p.footprint;
+      // where a ball goes in water or drops in the cup has no spread to show, and a tap hardly any
+      if (p.end === 'holed' || p.end === 'water' || (across < 0.4 && along < 0.4)) return;
+      const cx = p.x - Math.cos(angle) * along,
+        cy = p.y - Math.sin(angle) * along;
+      slopeInto(layout, cx, cy, slope);
+      const rx = Math.max(along, 0.4),
+        ry = Math.max(across, 0.4);
+      const lift = ringLift(layout, cx, cy, slope[0], slope[1], rx, ry, angle) * Math.hypot(slope[0], slope[1], 1);
+      placeOnSlope(m, 0, cx, cy, heightAt(layout, cx, cy), slope[0], slope[1], angle, rx, ry, lift);
+      spread.count = 1;
+    });
+    const knock: Entry = entry(1, (m) => {
+      const s = this.shot;
+      knock.count = 0;
+      const hit = s?.preview.n ? s.preview.hit : null;
+      if (!s || !hit) return;
+      place(m, 0, hit.x, hit.y, hit.z, 0, ARC.knock * s.scale);
+      knock.count = 1;
+    });
+    this.drawnShot = { arc, ring, spread, knock, ringLooks };
+    const [ar, ag, ab, arough] = PALETTE.arc;
+    const [sr, sg, sb, srough] = PALETTE.spread;
+    const [kr, kg, kb, krough] = PALETTE.knock;
+    out.push(
+      { mesh: ball(ARC.radius, 4, 8), matrices: arc.matrices, count: 0, albedo: [ar, ag, ab], roughness: arough },
+      { mesh: markMesh(), matrices: ring.matrices, count: 0, materials: ringLooks },
+      { mesh: spreadMesh(), matrices: spread.matrices, count: 0, albedo: [sr, sg, sb], roughness: srough },
+      { mesh: ball(ARC.radius, 4, 8), matrices: knock.matrices, count: 0, albedo: [kr, kg, kb], roughness: krough },
+    );
+  }
+
+  /**
+   * The shot in hand, which is drawn from the next frame: its preview, how much bigger its marks are for how far back
+   * the camera stands, and which way it is aimed. None puts it away.
+   */
+  setShot(preview: Preview | null, scale = 1, angle = 0) {
+    this.shot = preview ? { preview, scale, angle } : null;
+  }
+
+  /**
+   * What the last frame placed of the shot's preview, read back from what was written for drawing and never from the
+   * state it came from: how many dots of arc, and where and how big the ring, the spread (its two half axes) and the
+   * spot a tree knocks it are; null for each that was not drawn.
+   */
+  shotMarks(): {
+    arc: number;
+    ring: { x: number; y: number; radius: number; colour: [number, number, number] } | null;
+    spread: { x: number; y: number; across: number; along: number } | null;
+    knock: { x: number; y: number } | null;
+  } {
+    const d = this.drawnShot;
+    if (!d) return { arc: 0, ring: null, spread: null, knock: null };
+    const m = (e: Entry) => e.matrices;
+    return {
+      arc: d.arc.count,
+      ring: d.ring.count
+        ? {
+            x: m(d.ring)[12],
+            y: m(d.ring)[13],
+            radius: Math.hypot(m(d.ring)[0], m(d.ring)[1], m(d.ring)[2]),
+            colour: [d.ringLooks[0], d.ringLooks[1], d.ringLooks[2]],
+          }
+        : null,
+      spread: d.spread.count
+        ? {
+            x: m(d.spread)[12],
+            y: m(d.spread)[13],
+            along: Math.hypot(m(d.spread)[0], m(d.spread)[1], m(d.spread)[2]),
+            across: Math.hypot(m(d.spread)[4], m(d.spread)[5], m(d.spread)[6]),
+          }
+        : null,
+      knock: d.knock.count ? { x: m(d.knock)[12], y: m(d.knock)[13] } : null,
+    };
   }
 
   /** What moves on the hole where it is at game time `t`, into its pools, in the order of the groups after the aim. */

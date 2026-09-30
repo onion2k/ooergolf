@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { BALL, BUMPER, FASTEST, HARDEST_SHOT } from '../src/arena';
 import type { HoleDef } from '../src/course';
-import { CameraRig, TILT } from '../src/camera';
-import { checkInvariants, planProblems, viewProblems } from '../src/invariants';
+import { CameraRig, TILT, VIEW } from '../src/camera';
+import { checkInvariants, planProblems, previewProblems, viewProblems } from '../src/invariants';
+import { Previewer } from '../src/preview';
+import { bagClub } from '../src/bag';
 import { Autopilot } from '../src/autopilot';
 import { field, golfGame, newGame as newOn, onGreen as newGame, settle } from './helpers';
 
@@ -201,6 +203,94 @@ describe('what must always hold of the camera', () => {
     rig.azimuth = 0;
     rig.distance = 1;
     expect(viewProblems(rig).join('\n')).toMatch(/distance/);
+  });
+
+  it('allows a golf hole the further zoom it has, and nothing of it to a hole of minigolf', () => {
+    const golf = new CameraRig();
+    golf.setGolf(true);
+    golf.zoom(1e6);
+    expect(golf.distance).toBe(VIEW.golfFar);
+    expect(viewProblems(golf)).toEqual([]);
+    // a distance that is further than either allows is reported
+    golf.distance = VIEW.golfFar + 1;
+    expect(viewProblems(golf).join('\n')).toMatch(/distance/);
+    const mini = new CameraRig();
+    mini.distance = VIEW.far + 1;
+    expect(viewProblems(mini).join('\n')).toMatch(/distance/);
+  });
+
+  it('reports a lead that is not a number or is under nought', () => {
+    const rig = new CameraRig();
+    rig.lead = Number.NaN;
+    expect(viewProblems(rig).join('\n')).toMatch(/lead/);
+    rig.lead = -1;
+    expect(viewProblems(rig).join('\n')).toMatch(/lead/);
+    rig.lead = 48;
+    expect(viewProblems(rig)).toEqual([]);
+  });
+});
+
+describe('what must always hold of a preview', () => {
+  const hole = field('f', 200, 81);
+  const aimed = () => {
+    const { game } = golfGame(hole);
+    const at = { x: game.world.x[game.ball], y: game.world.y[game.ball] };
+    const club = bagClub('driver');
+    const p = new Previewer(game).run(at, club, Math.PI / 2, 1);
+    return { game, at, club, p };
+  };
+
+  it('holds of a preview the game made, of every club, at every power', () => {
+    const { game } = golfGame(hole);
+    const previewer = new Previewer(game);
+    const at = { x: game.world.x[game.ball], y: game.world.y[game.ball] };
+    for (const id of ['driver', '3-wood', '5-iron', '7-iron', '9-iron', 'pitching-wedge', 'sand-wedge']) {
+      for (const power of [0.05, 0.4, 1]) {
+        const club = bagClub(id);
+        const p = previewer.run(at, club, Math.PI / 2 + power / 4, power);
+        expect(previewProblems(game, at, club, p), `${id} at ${power}`).toEqual([]);
+      }
+    }
+  });
+
+  it('reports a flight that is not numbers, that does not begin at the ball, or that goes further than a club can send a ball', () => {
+    const { game, at, club, p } = aimed();
+    expect(previewProblems(game, at, club, p)).toEqual([]);
+    const z = p.points[4];
+    p.points[4] = NaN;
+    expect(previewProblems(game, at, club, p).join('\n')).toMatch(/not a number/);
+    p.points[4] = z;
+    expect(previewProblems(game, { x: at.x + 5, y: at.y }, club, p).join('\n')).toMatch(/begin/);
+    const carry = p.carry;
+    p.carry = 600;
+    expect(previewProblems(game, at, club, p).join('\n')).toMatch(/carries/);
+    p.carry = carry;
+    expect(previewProblems(game, at, club, p)).toEqual([]);
+  });
+
+  it('reports a landing that is not where the flight ends, a length that goes backwards, and a spread that is not a spread', () => {
+    const { game, at, club, p } = aimed();
+    const x = p.x;
+    p.x = x + 10;
+    expect(previewProblems(game, at, club, p).join('\n')).toMatch(/ends/);
+    p.x = x;
+    const len = p.length[5];
+    p.length[5] = p.length[6] + 1;
+    expect(previewProblems(game, at, club, p).join('\n')).toMatch(/length/);
+    p.length[5] = len;
+    p.footprint.across = -1;
+    expect(previewProblems(game, at, club, p).join('\n')).toMatch(/spread/);
+    p.footprint.across = 3;
+    p.footprint.along = p.carry;
+    expect(previewProblems(game, at, club, p).join('\n')).toMatch(/spread/);
+  });
+
+  it('is nothing to check for a club that has no loft, which is aimed by its dots', () => {
+    const { game } = golfGame(hole);
+    const at = { x: game.world.x[game.ball], y: game.world.y[game.ball] };
+    const putter = bagClub('putter');
+    const p = new Previewer(game).run(at, putter, Math.PI / 2, 0.5);
+    expect(previewProblems(game, at, putter, p)).toEqual([]);
   });
 });
 

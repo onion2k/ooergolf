@@ -31,7 +31,12 @@ ball flying at the club's loft, coming down in a ring that marks where, hopping
 and running on by what it landed on, with a scatter that grows the harder it is
 struck. The Links is nine holes of it on hills, with bunkers and water, trees that
 stop a drive and a high wedge goes over, and out of bounds past the white stakes,
-where a ball lost costs a stroke and is played again from where it was struck. A
+where a ball lost costs a stroke and is played again from where it was struck. On a
+golf hole the camera stands back and tips lower for the club in hand until where it
+would come down is on the screen; a drag draws the shot's flight as an arc to a ring
+(blue over water, red out of bounds, with a spread showing how far a swing may miss
+it), the bag says how far and onto what, the strokes say how far the pin is and how
+much higher or lower, and a map of the hole sits at the side. A
 machine that cannot keep up has the picture stepped down a rung at a time.
 
 The green is painted smooth in its mown stripes, and the rough round it is
@@ -106,6 +111,10 @@ fixed, and no baseline is moved to make it green.
     src/route.ts       the way to the cup round water, out of bounds and trees
     src/planner.ts     a golf shot tried in a rehearsal, judged, and chosen
     src/marker.ts      the ring where a lofted ball first came down
+    src/preview.ts     the flight a drag would make, worked out in a rehearsal before it is taken
+    src/aimview.ts     the view a golf shot is aimed from: back and low enough to see where it lands
+    src/readout.ts     the pin's distance and rise, and where a shot comes down, in words
+    src/holemap.ts     a hole's ground painted from above, to sit over the course
     src/autopilot.ts   the game played by itself, for the gates and for par
     src/clubs.ts       the clubs, what they cost, and what a hole pays
     src/hud.ts         the words over the course, the card and the shop

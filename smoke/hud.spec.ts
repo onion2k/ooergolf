@@ -125,6 +125,89 @@ for (const [where, device] of [
       expect(problems).toEqual([]);
     });
 
+    test('the pin and the map, on a golf hole: the pin under the strokes, the map at the side, clear of every other panel and the edges, and the longest words for a landing fit the bag', async ({
+      page,
+    }) => {
+      const problems = watch(page);
+      await start(page, { seed: 11, paused: true, screen: true });
+      await expect(page.locator('#pin')).toBeHidden();
+      await expect(page.locator('#holeMap')).toBeHidden();
+      await page.evaluate(() => {
+        window.game!.chooseCourse('The Links');
+        window.game!.startHole(2);
+        window.game!.step(60);
+      });
+      await expect(page.locator('#pin')).toBeVisible();
+      await expect(page.locator('#holeMap')).toBeVisible();
+      // the longest thing the bag says: a club with a long name, a tree in the way, and the longest ground
+      await page.locator('#bagClubs button[data-club="pitching-wedge"]').click();
+      await page
+        .locator('#bagInfo')
+        .evaluate(
+          (el: HTMLElement) =>
+            (el.textContent = 'Pitching wedge \u00b7 hits a tree \u00b7 lands 100 yd \u00b7 putting green'),
+        );
+      const r = await read(page);
+      expect(r.outside, 'nothing past the screen').toEqual([]);
+      expect(r.scrollWidth, 'nothing scrolls sideways').toBeLessThanOrEqual(page.viewportSize()!.width);
+      expect(r.texts.filter((t) => t.ratio < CONTRAST).map((t) => `"${t.text}" ${t.ratio}:1`)).toEqual([]);
+      const box = async (sel: string) => (await page.locator(sel).boundingBox())!;
+      const apart = (a: { x: number; y: number; width: number; height: number }, b: typeof a) =>
+        a.x + a.width <= b.x || b.x + b.width <= a.x || a.y + a.height <= b.y || b.y + b.height <= a.y;
+      const map = await box('#holePanel');
+      for (const other of ['#strokes', '#purse', '#bag', '#viewMode', '#help'])
+        expect(apart(map, await box(other)), `the map and ${other} do not overlap`).toBe(true);
+      expect(map.x).toBeGreaterThanOrEqual(0);
+      expect(map.x + map.width).toBeLessThanOrEqual(page.viewportSize()!.width);
+      expect(map.y).toBeGreaterThanOrEqual(0);
+      expect(map.y + map.height).toBeLessThanOrEqual(page.viewportSize()!.height);
+      // the pin is inside the strokes panel, which is clear of the purse as it always was
+      const strokes = await box('#strokes');
+      const pin = await box('#pin');
+      expect(pin.x).toBeGreaterThanOrEqual(strokes.x);
+      expect(pin.x + pin.width).toBeLessThanOrEqual(strokes.x + strokes.width + 1);
+      expect(pin.y + pin.height).toBeLessThanOrEqual(strokes.y + strokes.height + 1);
+      expect(apart(strokes, await box('#purse')), 'the strokes and the purse do not overlap').toBe(true);
+      // the words in the bag fit inside it, and it inside the screen
+      const info = await box('#bagInfo');
+      const bag = await box('#bag');
+      expect(info.x).toBeGreaterThanOrEqual(bag.x);
+      expect(info.x + info.width).toBeLessThanOrEqual(bag.x + bag.width + 1);
+      expect(bag.x).toBeGreaterThanOrEqual(0);
+      expect(bag.x + bag.width).toBeLessThanOrEqual(page.viewportSize()!.width);
+      // on a hole of minigolf, neither is there
+      await page.evaluate(() => {
+        window.game!.chooseCourse('The Meadow');
+        window.game!.step(60);
+      });
+      await expect(page.locator('#pin')).toBeHidden();
+      await expect(page.locator('#holeMap')).toBeHidden();
+      expect(problems).toEqual([]);
+    });
+
+    test('the map is put away under the start screen, from the card of a round of golf, and is back with the next course of golf', async ({
+      page,
+    }) => {
+      const problems = watch(page);
+      await start(page, { seed: 11, paused: true, screen: true });
+      await page.evaluate(() => {
+        window.game!.chooseCourse('The Range');
+        window.game!.step(60);
+      });
+      await expect(page.locator('#holeMap')).toBeVisible();
+      expect((await toCard(page)).phase, 'the round over').toBe('over');
+      await expect(page.locator('#card')).toBeVisible();
+      await page.locator('#cardCourses').click();
+      await expect(page.locator('#start')).toBeVisible();
+      await expect(page.locator('#holeMap'), 'no map over the start screen').toBeHidden();
+      await expect(page.locator('#bag')).toBeHidden();
+      await page.locator('#start .course', { hasText: 'The Range' }).click();
+      await page.evaluate(() => window.game!.step(60));
+      await expect(page.locator('#holeMap')).toBeVisible();
+      await expect(page.locator('#pin')).toBeVisible();
+      expect(problems).toEqual([]);
+    });
+
     test("a hole done: its score's name, large, over the course, until the next hole begins", async ({ page }) => {
       const problems = watch(page);
       await start(page, { seed: 11, paused: true });

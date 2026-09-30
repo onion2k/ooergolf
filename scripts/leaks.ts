@@ -21,6 +21,7 @@ import { Autopilot } from '../src/autopilot';
 import { COURSE, COURSES } from '../src/course';
 import { RANGE } from '../src/range';
 import { Game } from '../src/game';
+import { Previewer } from '../src/preview';
 import { Progress, memoryStore } from '../src/progress';
 import { seeded } from '../src/random';
 import { PLAYER } from './pace';
@@ -38,6 +39,9 @@ export const WATCH: Partial<Record<string, { ceiling: number; steady?: boolean }
   'save bytes': { ceiling: 2_000 },
   // emptied at every new round: never more than a score a hole
   'card scores': { ceiling: COURSE.length },
+  // the bodies in the rehearsal a golf hole's shots are previewed in: the ball, however many shots are tried, and the
+  // rehearsal of a hole let go of when the next begins
+  'preview bodies': { ceiling: 1 },
   // the catch-all for what is leaking and has no name here; noisy, so it is given a lot of room
   'heap MB': { ceiling: 300, steady: true },
 };
@@ -123,9 +127,28 @@ export function leakRun({ seed, minutes, golf }: LeakOptions): LeakRun {
     );
     // round after round, as a player who never stops would
     const pilot = new Autopilot(game, { skill: PLAYER, random: seeded(seed * 17 + 3), replay: true });
+    // the preview of a golf hole's shots, which the page makes with the hole and let go of with it: made here as it is there,
+    // and a shot tried from where the ball lies now and then, as a held drag does
+    let previewer: Previewer | null = null;
+    let previewed: object | null = null;
     for (let minute = 0; minute < minutes; minute++) {
-      for (let f = 0; f < 3600; f++) pilot.step(DT);
+      for (let f = 0; f < 3600; f++) {
+        pilot.step(DT);
+        if (!game.layout.golf) continue;
+        if (previewed !== game.def) {
+          previewer = new Previewer(game);
+          previewed = game.def;
+        }
+        if (game.ready && f % 20 === 0)
+          previewer!.run(
+            { x: game.world.x[game.ball], y: game.world.y[game.ball] },
+            game.inHand,
+            f / 100,
+            0.3 + (f % 7) / 10,
+          );
+      }
       for (const [key, n] of Object.entries(sizes(game))) (samples[key] ??= []).push(n);
+      if (previewer) (samples['preview bodies'] ??= []).push(previewer.bodies);
     }
     return {
       seed,

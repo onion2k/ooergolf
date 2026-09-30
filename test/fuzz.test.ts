@@ -13,10 +13,11 @@ describe('the fuzzer', () => {
     // two seeds, since which of the rarer things a monkey gets round to on one is chance. A reload starts the round
     // again, the save not yet keeping where in the course a player is, so a round is seldom finished: 26 and 17 do (they were 25 and 33 until The Range was chosen from among the courses, which moved what a monkey picks),
     // chosen again when a course could be chosen, and each does everything a player can
-    // and a run of the range, which is golf: the club chosen from the bag is an action of its own, done only there
+    // and a run of the range, which is golf: the club chosen from the bag is an action of its own, done only there, and so is the
+    // aiming of a shot, whose preview is held to the game, and the shot then taken as it was aimed
     const one = fuzz(26, 12000),
       two = fuzz(17, 12000),
-      golf = fuzz(4, 8000, RANGE);
+      golf = fuzz(3, 8000, RANGE);
     const sum = (a: Record<string, number>, b: Record<string, number>) => {
       const out = { ...a };
       for (const [k, n] of Object.entries(b)) out[k] = (out[k] ?? 0) + n;
@@ -32,6 +33,7 @@ describe('the fuzzer', () => {
     };
     expect(r.failure, JSON.stringify(r.failure)).toBe(null);
     const actions = [
+      'aim a shot',
       'buy',
       'buy, refused',
       'choose a club',
@@ -41,13 +43,14 @@ describe('the fuzzer', () => {
       'play again',
       'reload',
       'shoot',
+      'shoot as aimed',
       'shoot well',
       'shoot while rolling',
       'wait',
     ];
     expect(Object.keys(r.done).sort(), 'every action there is, and no other').toEqual(actions);
     for (const action of actions) expect(r.done[action], action).toBeGreaterThan(0);
-    expect(r.happened.struck, 'the ball struck').toBe(r.done.shoot + r.done['shoot well']);
+    expect(r.happened.struck, 'the ball struck').toBe(r.done.shoot + r.done['shoot well'] + r.done['shoot as aimed']);
     expect(r.happened.stopped, 'and come to rest').toBeGreaterThan(0);
     expect(r.happened.holed, 'holed out').toBeGreaterThan(0);
     expect(r.happened.finished, 'round the whole course').toBeGreaterThan(0);

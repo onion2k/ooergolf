@@ -10,13 +10,17 @@ import { LightPool } from 'artshape-render/game/lights';
 import { GameRenderer, antialiasFor } from 'artshape-render/game/renderer';
 import { BALL, HARDEST_SHOT, KIND_RADIUS, heightAt, lieAt, onSand, rollsFor } from './arena';
 import { BAG, carryOf } from './bag';
-import { CameraRig, catchUp } from './camera';
+import { aimView, markScale } from './aimview';
+import { CameraRig, LEAD, TILT, VIEW, catchUp, tallOf } from './camera';
 import { CLUBS } from './clubs';
 import { createApi } from './debug';
 import { frameCost } from './frame-cost';
 import { COURSES, CUP } from './course';
 import { Game, type GameEvents } from './game';
 import { Hud } from './hud';
+import { mapInto, mapSize, paintMap, type MapSize } from './holemap';
+import { Previewer } from './preview';
+import { landingText, pinReadout, pinText } from './readout';
 import { daylight } from './look';
 import { Progress } from './progress';
 import { seeded } from './random';
@@ -44,6 +48,8 @@ const LIGHT_CAPACITY = 16,
 const EVENTS_KEPT = 500;
 /** How far a turn of the wheel moves the camera, in world units a pixel of scroll. */
 const WHEEL = 0.05;
+/** How much further than its formula a club comes down on the level, measured: a driver 249 against 240. */
+const LANDS_PAST = 1.045;
 
 const canvas = document.getElementById('view') as HTMLCanvasElement;
 const boot = document.getElementById('boot')!;
@@ -127,7 +133,10 @@ async function main() {
       },
       // a club of the bag chosen on a golf hole
       club(id) {
-        if (game?.pick(id)) hud.setClub(id);
+        if (game?.pick(id)) {
+          hud.setClub(id);
+          aimFor(false);
+        }
       },
     },
     CLUBS,
@@ -148,6 +157,56 @@ async function main() {
   let looked = false;
   /** The grass of the hole being grown, which the first frame waits for so it is never drawn bare. */
   let grown: Promise<void> = Promise.resolve();
+  /** The screen's shape, which how far back the camera stands depends on: kept from the camera's own, which is made after the first hole. */
+  let aspect = 1.6;
+  /** The club and the lie the camera was last sent to look at a shot from, so it is sent again only when one changes. */
+  let aimedFor = '';
+  /** The previews of this golf hole's shots, worked out in a rehearsal of it: none on a hole of minigolf. */
+  let previewer: Previewer | null = null;
+  /** The shot the preview was last worked out for, so it is worked out again only when the aim, the club or the ball changes; and whether one is shown. */
+  const previewed = { x: NaN, y: NaN, angle: NaN, power: NaN, club: '' };
+  let previewShown = false;
+  /** The hole's map as it was painted, and whether it was for a phone's box: painted again if the screen changes to the other. */
+  let mapped: { size: MapSize; small: boolean } | null = null;
+  /** Where the ball was when the pin was last read, so it is read again only when it has moved. */
+  const pinned = { x: NaN, y: NaN };
+  /** The camera's four corners on the ground, made once, and the ground a point of the map is worked out from. */
+  const corners: [number, number][] = [
+    [0, 0],
+    [0, 0],
+    [0, 0],
+    [0, 0],
+  ];
+  /**
+   * The camera sent to the view that shows where the club in hand comes down from the lie the ball is on, at the pace
+   * of an ease, or at once for the very first view. A drive is about a quarter of a hole, and from the home view the top of the
+   * screen is sixty yards off: the landing is what a shot is aimed by. Never worked out from a drag, which would move the
+   * ground under the finger.
+   */
+  const aimFor = (now: boolean) => {
+    if (!game?.layout.golf) return;
+    const { world, ball, layout, inHand } = game;
+    const lie = lieAt(layout, world.x[ball], world.y[ball]);
+    // a club goes a little further than its formula, four in a hundred on the level: the landing it is to show
+    const reach = carryFrom(inHand, 1, lie) * LANDS_PAST;
+    aimedFor = `${inHand.id}|${lie}`;
+    rig.aimAt(aimView(reach, aspect), now);
+  };
+  /** The hole's map painted for the screen it is on, or put away for a hole that is not golf. */
+  const paintHoleMap = () => {
+    if (!game?.layout.golf) {
+      mapped = null;
+      hud.setMap(null);
+      return;
+    }
+    const small = innerWidth <= 600;
+    const size = mapSize(game.layout, small ? 64 : 100, small ? 150 : 230);
+    const pixels = new Uint8ClampedArray(size.width * size.height * 4);
+    paintMap(game.layout, size, pixels);
+    mapped = { size, small };
+    mapInto(size, game.layout.cup.x, game.layout.cup.y, hud.overlay.cup);
+    hud.setMap({ width: size.width, height: size.height, pixels });
+  };
   /** What a new hole puts back: a drag a shot again, and the switch showing it. Set once the input exists, which is after the first hole. */
   let backToAim: (() => void) | null = null;
   /** What the player sees of each event, beside the note of it. */
@@ -170,7 +229,22 @@ async function main() {
       const teeZ = heightAt(layout, layout.tee.x, layout.tee.y);
       if (looked) rig.glide(layout.tee.x, layout.tee.y, teeZ, game.t);
       else rig.jump(layout.tee.x, layout.tee.y, teeZ);
+      // a golf hole lets the camera stand back as far as a drive needs, and begins looking at the tee shot from there;
+      // a hole of minigolf has its limits and its home view as it always had
+      rig.setGolf(layout.golf);
+      aimedFor = '';
+      if (layout.golf) aimFor(!looked);
       looked = true;
+      // the preview of this hole's shots is worked out in a rehearsal of it, made once here and let go with the hole
+      previewer = layout.golf ? new Previewer(game) : null;
+      previewed.club = '';
+      previewShown = false;
+      scene.setShot(null);
+      hud.setLanding(null);
+      paintHoleMap();
+      // the pin is read off the ball from the first frame of a golf hole, and is not there on a hole of minigolf
+      pinned.x = NaN;
+      if (!layout.golf) hud.setPin(null);
       // a hole is begun aiming, and the view eases home to the tee's over the glide
       backToAim?.();
       squash.clear();
@@ -262,7 +336,10 @@ async function main() {
     height = Math.max(1, Math.floor(canvas.clientHeight * dpr));
     canvas.width = width;
     canvas.height = height;
-    cam.aspect = width / height;
+    cam.aspect = aspect = width / height;
+    // a screen of another shape stands the camera at another distance: the view is worked out again
+    aimedFor = '';
+    if (mapped && mapped.small !== innerWidth <= 600) paintHoleMap();
     renderer.resize(width, height);
   };
   addEventListener('resize', resize);
@@ -309,6 +386,80 @@ async function main() {
     { passive: false },
   );
 
+  /**
+   * What a golf hole shows of the shot in hand and of where the ball is: the flight drawn, and said in words, when a
+   * lofted shot is being aimed, worked out again only when the aim, the club or the ball has changed; the pin read off
+   * the ball when it lies at rest; and the map redrawn with the ball, the aim and what the camera shows over it.
+   */
+  function aimOnGolf(flying: { angle: number; power: number } | null) {
+    const { world, ball, layout, inHand } = played;
+    const x = world.x[ball],
+      y = world.y[ball];
+    if (flying && previewer) {
+      if (
+        previewed.x !== x ||
+        previewed.y !== y ||
+        previewed.angle !== flying.angle ||
+        previewed.power !== flying.power ||
+        previewed.club !== inHand.id
+      ) {
+        Object.assign(previewed, { x, y, angle: flying.angle, power: flying.power, club: inHand.id });
+        const p = previewer.run({ x, y }, inHand, flying.angle, flying.power);
+        hud.setLanding(p.n ? landingText({ carry: p.carry, end: p.end, lie: p.lie, hit: p.hit !== null }) : null);
+      }
+      const r = Math.min(rig.distance * tallOf(aspect), VIEW.golfFar);
+      scene.setShot(previewer.result, markScale(r), flying.angle);
+      previewShown = true;
+    } else if (previewShown) {
+      scene.setShot(null);
+      hud.setLanding(null);
+      previewed.club = '';
+      previewShown = false;
+    }
+    // the pin from where the ball lies at rest, read again only when it has moved
+    if (played.ready && (pinned.x !== x || pinned.y !== y)) {
+      pinned.x = x;
+      pinned.y = y;
+      hud.setPin(pinText(pinReadout(layout, x, y)));
+    }
+    if (!mapped) return;
+    const o = hud.overlay;
+    const { size } = mapped;
+    mapInto(size, x, y, o.ball);
+    o.aim = false;
+    o.spread = false;
+    if (previewShown && previewer && previewer.result.n > 1 && flying) {
+      const p = previewer.result;
+      o.aim = true;
+      mapInto(size, p.x, p.y, o.to);
+      o.ring = p.end === 'water' ? 1 : p.end === 'out' ? 2 : p.end === 'holed' ? 3 : 0;
+      const { across, along } = p.footprint;
+      if (p.end !== 'holed' && p.end !== 'water' && (across >= 0.4 || along >= 0.4)) {
+        o.spread = true;
+        mapInto(size, p.x - Math.cos(flying.angle) * along, p.y - Math.sin(flying.angle) * along, o.ellipse);
+        o.ellipse[2] = along * size.scale;
+        o.ellipse[3] = across * size.scale;
+        // the map has north up, which turns the aim's angle the other way
+        o.ellipse[4] = -flying.angle;
+      }
+    }
+    // what the camera shows, from the four corners of the screen on the ground at the ball's height; none if any is sky
+    const z = heightAt(layout, x, y);
+    let sky = false;
+    for (let k = 0; k < 4; k++) {
+      const c = groundAt(cam, k === 0 || k === 3 ? -1 : 1, k < 2 ? -1 : 1, z, corners[k]);
+      if (!c) {
+        sky = true;
+        break;
+      }
+      mapInto(size, c[0], c[1], corners[k]);
+      o.corners[k * 2] = corners[k][0];
+      o.corners[k * 2 + 1] = corners[k][1];
+    }
+    o.view = !sky;
+    hud.drawMap();
+  }
+
   function upload() {
     const { world, ball } = played;
     scene.writeBall(world, ball);
@@ -320,10 +471,15 @@ async function main() {
     drawn.squash = world.alive[ball] ? squashOf(scene.ball, 0, n[0], n[1], n[2]) : 0;
     // the aim shows only while a shot can be taken
     // a finer club's aim reaches further, as far again as its hardest shot rolls; and a golf club's as far as it carries
-    const reach = played.layout.golf
+    const golf = played.layout.golf;
+    // a lofted shot is aimed by its flight, worked out in a rehearsal and drawn as an arc to the ring it comes down in;
+    // a putt, on a golf hole or a hole of minigolf, is aimed by its dots as it always was
+    const flying = golf && previewer !== null && played.ready && played.inHand.loft > 0 ? input.aim : null;
+    const reach = golf
       ? carryFrom(played.inHand, 1, lieAt(played.layout, world.x[ball], world.y[ball])) / AIM_REACH
       : rollsFor(played.hardest) / rollsFor(HARDEST_SHOT);
-    const dots = played.ready ? scene.writeAim(world.x[ball], world.y[ball], input.aim, reach, played.t) : 0;
+    const dots = played.ready && !flying ? scene.writeAim(world.x[ball], world.y[ball], input.aim, reach, played.t) : 0;
+    if (golf) aimOnGolf(flying);
     renderer.move(1, scene.aim, dots);
     // the nearest dot's size, as it was placed: nought for none
     drawn.pulse = dots ? scene.aim[0] - 1 : 0;
@@ -442,6 +598,16 @@ async function main() {
   function simulate(dt: number) {
     frames++;
     played.step(dt);
+    // the camera sent to see the next shot's landing from: when the ball is ready, and the club or the lie has changed
+    if (played.layout.golf) {
+      if (!played.ready) aimedFor = '';
+      else if (
+        aimedFor !==
+        `${played.inHand.id}|${lieAt(played.layout, played.world.x[played.ball], played.world.y[played.ball])}`
+      )
+        aimFor(false);
+    }
+    rig.settle(dt);
     const { world, ball } = played;
     if (!world.alive[ball]) return;
     // the ball seen to roll, as far as it went this frame
@@ -514,7 +680,10 @@ async function main() {
     look(x, y, distance) {
       parked = true;
       rig.jump(x, y, heightAt(played.layout, x, y));
-      if (distance !== undefined) rig.zoom(distance - rig.distance);
+      // the camera is parked where the test wants it, at the home view as it always was (the aim view of a golf hole is
+      // a player's and not a test's), looking at the point and not a lead beyond it: the ease to an aim view is over
+      rig.aimAt({ distance: rig.distance, tilt: rig.golf ? TILT.home : rig.tilt, lead: LEAD }, true);
+      rig.zoom(distance !== undefined ? distance - rig.distance : 0);
     },
     follow() {
       parked = false;
@@ -530,8 +699,21 @@ async function main() {
       return { x: r.left + ((nx + 1) / 2) * r.width, y: r.top + ((1 - ny) / 2) * r.height };
     },
     aiming: () => (played.ready && input.aim ? { ...input.aim } : null),
+    map: () => {
+      if (!mapped) return null;
+      const o = hud.overlay;
+      return {
+        width: mapped.size.width,
+        height: mapped.size.height,
+        ball: [o.ball[0], o.ball[1]],
+        cup: [o.cup[0], o.cup[1]],
+        aim: o.aim ? [o.to[0], o.to[1]] : null,
+      };
+    },
     view: () => ({
       distance: rig.distance,
+      lead: rig.lead,
+      aiming: rig.aiming,
       rung: governor.rung,
       held: governor.held,
       antialias: antialiasFor(renderer.look, renderer.economy),
@@ -559,6 +741,13 @@ async function main() {
       splash: scene.splashReach(played.t),
       puff: drawn.puff,
       landing: scene.landingMark(),
+      // the preview of the shot in hand as the last frame placed it, and what it comes to
+      shot: (() => {
+        const m = scene.shotMarks();
+        if (!m.ring || !previewer) return null;
+        const p = previewer.result;
+        return { ...m, end: p.end, carry: p.carry, lie: p.lie };
+      })(),
     }),
     course: () => courseName,
     choosing: () => choosing,

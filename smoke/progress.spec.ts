@@ -371,8 +371,9 @@ test('the round finished to the card, and begun again from its button', async ({
     sparklesAt: [],
     splash: 0,
     puff: null,
-    // no ball has come down on a hole of minigolf, which has no landing to mark
+    // no ball has come down on a hole of minigolf, which has no landing to mark, and no lofted shot to preview
     landing: null,
+    shot: null,
   });
   expect(card.glints).toBeLessThanOrEqual(1);
   await page.locator('#again').click();
@@ -679,4 +680,360 @@ test('a drive that flies into a tree is stopped by its canopy and drops, told as
   expect(over.invariants).toEqual([]);
   expect(over.farthest, 'over it, and on').toBeGreaterThan(15);
   expect(problems).toEqual([]);
+});
+
+// ---- aiming a golf shot: the view that shows where it lands, the flight drawn before it is taken, the pin, the map ----
+
+/** A long fairway with a pond across it 240 to 270 yards up, where a full drive goes in the water. */
+function pondHole() {
+  const cols = 81,
+    rows = 200;
+  const tee = rows - 4;
+  const map = Array.from({ length: rows }, (_, r) =>
+    Array.from({ length: cols }, (_, c) => {
+      if (r === 0 || r === rows - 1 || c === 0 || c === cols - 1) return '#';
+      if (r === tee) return c === 40 ? 'T' : c === 39 || c === 41 ? 't' : 'f';
+      if (r > tee - 90 && r < tee - 80) return '~';
+      if (r === 2 && c === 3) return 'C';
+      return 'f';
+    }).join(''),
+  );
+  return { name: 'A pond', par: 5, map };
+}
+
+/** The Links' third hole, Long Bend, a par five, begun and the camera settled on its tee. */
+async function longBend(page: Page) {
+  await start(page, { seed: 11, paused: true });
+  await page.evaluate(() => {
+    window.game!.chooseCourse('The Links');
+    window.game!.startHole(2);
+    window.game!.step(300);
+  });
+  await expect(page.locator('#start')).toBeHidden();
+}
+
+/** A drag pressed high on the page and pulled down by `share` of the most a shot takes, `across` pixels over, held. */
+async function pull(page: Page, share: number, across = 0, touch = false) {
+  const size = page.viewportSize()!;
+  const short = Math.min(size.width, size.height);
+  const from = { x: size.width / 2, y: size.height * 0.15 };
+  await drag(page, from, { x: from.x + across, y: from.y + 0.35 * short * share }, { hold: true, touch });
+  await page.evaluate(() => window.game!.step(2));
+}
+
+/** Where a ground point is on the page as a share of it across and down. */
+const onPage = (page: Page, x: number, y: number) =>
+  page.evaluate(
+    ([x, y]) => {
+      const g = window.game!;
+      const p = g.project(x, y, g.ball().z);
+      return { across: p.x / innerWidth, down: p.y / innerHeight };
+    },
+    [x, y] as const,
+  );
+
+test.describe('aiming a golf shot', () => {
+  test('the camera stands back for the club in hand until where it lands is on the screen, and comes in for a shorter one', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await longBend(page);
+    const view = () => page.evaluate(() => window.game!.view());
+    const driver = await view();
+    expect(driver.distance, 'further back than the 110 a hole of minigolf allows').toBeGreaterThan(150);
+    expect(driver.distance).toBeLessThanOrEqual(200);
+    expect(driver.tilt, 'tipped lower for the long club').toBeGreaterThan(0.95);
+    expect(driver.aiming, 'the ease is over').toBe(false);
+    // a club chosen by its button: the camera eases to its view over a moment, by game time
+    await page.locator('#bagClubs button[data-club="pitching-wedge"]').click();
+    expect((await view()).aiming, 'on its way').toBe(true);
+    await page.evaluate(() => window.game!.step(300));
+    const wedge = await view();
+    expect(wedge.distance, 'nearer for a club that goes a hundred yards').toBeLessThan(driver.distance - 50);
+    expect(wedge.distance).toBeGreaterThanOrEqual(62);
+    expect(wedge.tilt).toBeLessThan(driver.tilt);
+    await page.locator('#bagClubs button[data-club="putter"]').click();
+    await page.evaluate(() => window.game!.step(300));
+    const putter = await view();
+    expect(putter.distance, 'a putt is looked at from home').toBeCloseTo(62, 0);
+    expect(putter.tilt).toBeCloseTo(0.78, 1);
+    // a hole of minigolf is looked at as it always was
+    await page.evaluate(() => {
+      window.game!.chooseCourse('The Meadow');
+      window.game!.startHole(0);
+      window.game!.step(300);
+    });
+    const meadow = await view();
+    expect([meadow.distance, meadow.tilt.toFixed(2), meadow.lead]).toEqual([62, '0.78', 10]);
+    expect(problems).toEqual([]);
+  });
+
+  for (const [name, viewport, touch] of [
+    ['a desktop', { width: 1280, height: 800 }, false],
+    ['a phone', { width: 400, height: 860 }, true],
+  ] as const) {
+    test.describe(name, () => {
+      test.use({ viewport, hasTouch: touch, isMobile: touch });
+
+      test('every club shows where it lands at full power, on the screen, from where the ball lies', async ({
+        page,
+      }) => {
+        const problems = watch(page);
+        await longBend(page);
+        const radii: number[] = [];
+        for (const club of ['driver', '3-wood', '5-iron', '7-iron', '9-iron', 'pitching-wedge', 'sand-wedge']) {
+          await page.locator(`#bagClubs button[data-club="${club}"]`).click();
+          await page.evaluate(() => window.game!.step(300));
+          await pull(page, 1, 0, touch);
+          const shot = await page.evaluate(() => window.game!.motions().shot);
+          expect(shot, `${club}: a preview drawn`).not.toBeNull();
+          expect(shot!.arc, `${club}: the arc of dots`).toBeGreaterThan(10);
+          expect(shot!.ring, `${club}: the ring`).not.toBeNull();
+          const at = await onPage(page, shot!.ring!.x, shot!.ring!.y);
+          expect(at.across, `${club}: across the screen`).toBeGreaterThan(0.1);
+          expect(at.across).toBeLessThan(0.9);
+          expect(at.down, `${club}: up the screen, and on it`).toBeGreaterThan(0.03);
+          expect(at.down).toBeLessThan(0.93);
+          radii.push(shot!.ring!.radius);
+          await page.mouse.up().catch(() => undefined);
+          if (touch) await page.evaluate(() => window.game!.step(1));
+          expect(await page.evaluate(() => window.game!.invariants())).toEqual([]);
+        }
+        // the marks are bigger the further back the camera stands, so they read from a drive's view as from a wedge's
+        expect(radii[0], "the driver's ring against the sand wedge's").toBeGreaterThan(radii[6] * 1.3);
+        expect(problems).toEqual([]);
+      });
+    });
+  }
+
+  test('the camera comes in when the ball lies in the rough, where the club goes less far, and the pin and the map follow the ball', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 1, paused: true });
+    // a strip of fairway at the tee and the rough all round it, so a ball put down up the field lies in the rough
+    const cols = 61,
+      rows = 130;
+    const map = Array.from({ length: rows }, (_, r) =>
+      Array.from({ length: cols }, (_, c) => {
+        if (r === 0 || r === rows - 1 || c === 0 || c === cols - 1) return '#';
+        if (r === rows - 4) return c === 30 ? 'T' : c === 29 || c === 31 ? 't' : 'f';
+        if (r === 2 && c === 3) return 'C';
+        return 'r';
+      }).join(''),
+    );
+    await page.evaluate((m) => {
+      const g = window.game!;
+      g.playCourse([{ name: 'Rough', par: 4, map: m }]);
+      g.step(300);
+    }, map);
+    const view = () => page.evaluate(() => window.game!.view());
+    const tee = await view();
+    const pin = await page.locator('#pin').textContent();
+    // the ball lies in the rough thirty yards up: a driver goes little more than half as far from there, so the camera comes in
+    await page.evaluate(() => {
+      const g = window.game!;
+      const b = g.ball();
+      g.lay(b.x, b.y + 30);
+      g.step(300);
+    });
+    const rough = await view();
+    expect(rough.distance, 'nearer, for a club that goes less far from the rough').toBeLessThan(tee.distance - 15);
+    expect(rough.aiming, 'and settled').toBe(false);
+    await expect(page.locator('#pin')).not.toHaveText(pin!);
+    expect(problems).toEqual([]);
+  });
+
+  test('a held drag draws the flight and says where it lands, never moves the camera, and is gone when taken back', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await longBend(page);
+    const before = await page.evaluate(() => window.game!.view());
+    // a pull of three fifths, which a camera that looked at the drag's own landing would be moved by
+    await pull(page, 0.6);
+    const held = await page.evaluate(() => window.game!.motions().shot);
+    expect(held).not.toBeNull();
+    expect(held!.end).toBe('landed');
+    expect(held!.carry, 'three fifths of a drive carries about a hundred and fifty').toBeGreaterThan(130);
+    expect(held!.carry).toBeLessThan(175);
+    await expect(page.locator('#bagInfo')).toContainText(`lands ${Math.round(held!.carry)}`);
+    await expect(page.locator('#bagInfo')).toContainText('Driver');
+    // the camera did not move, nor the aim, for as long as it is held
+    const aim = await page.evaluate(() => window.game!.aiming());
+    for (let k = 0; k < 4; k++) {
+      await page.evaluate(() => window.game!.step(15));
+      expect(await page.evaluate(() => window.game!.aiming())).toEqual(aim);
+      expect(await page.evaluate(() => window.game!.motions().shot!.ring)).toEqual(held!.ring);
+    }
+    const after = await page.evaluate(() => window.game!.view());
+    expect([after.distance, after.tilt, after.lead, after.azimuth]).toEqual([
+      before.distance,
+      before.tilt,
+      before.lead,
+      before.azimuth,
+    ]);
+    // a spread is shown round the ring, which a swing may miss by
+    expect(held!.spread, 'the spread of a swing that is not true').not.toBeNull();
+    expect(held!.spread!.across).toBeGreaterThan(5);
+    // half that pull is about half as far, for the same aim (a little over, since a ball comes down a little below where it left)
+    await page.mouse.move(640, 120 + 0.35 * 800 * 0.3);
+    await page.evaluate(() => window.game!.step(2));
+    const half = await page.evaluate(() => window.game!.motions().shot);
+    // (on ground that rises and falls a shorter pull is not exactly half as far, so this is a bracket and not a figure)
+    expect(half!.carry / held!.carry).toBeGreaterThan(0.3);
+    expect(half!.carry / held!.carry).toBeLessThan(0.65);
+    // taken back to where it began, it is no shot: the flight goes, the words go back to the carry, and no stroke is taken
+    await page.mouse.move(640, 120);
+    await page.evaluate(() => window.game!.step(2));
+    expect(await page.evaluate(() => window.game!.motions().shot)).toBeNull();
+    await expect(page.locator('#bagInfo')).toContainText('carries');
+    await page.mouse.up();
+    expect((await page.evaluate(() => window.game!.state())).strokes).toBe(0);
+    expect(problems).toEqual([]);
+  });
+
+  test('the shot taken comes down inside the spread the preview showed, which is where the game puts the ball, struck true, at most', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    for (const seed of [3, 8, 21]) {
+      await longBend(page);
+      await page.evaluate((s) => window.game!.seed(s), seed);
+      await pull(page, 1, 12);
+      const shot = await page.evaluate(() => window.game!.motions().shot);
+      const aim = await page.evaluate(() => window.game!.aiming());
+      expect(shot && aim).toBeTruthy();
+      await page.mouse.up();
+      let landed: string | undefined;
+      for (let f = 0; f < 8 * 60 && !landed; f += 5) {
+        await play(page, 5, 'in flight');
+        landed = (await page.evaluate(() => window.game!.events())).find((e) => e.startsWith('landed'));
+      }
+      expect(landed, `seed ${seed}: told of a landing`).toBeDefined();
+      const [lx, ly] = landed!.split(' ')[1].split(',').map(Number);
+      // in the spread's own axes: along the aim and across it, from the ellipse's middle
+      const s = shot!.spread!;
+      const u = (lx - s.x) * Math.cos(aim!.angle) + (ly - s.y) * Math.sin(aim!.angle);
+      const v = -(lx - s.x) * Math.sin(aim!.angle) + (ly - s.y) * Math.cos(aim!.angle);
+      // inside what a swing can do: within its scatter across, and between the worst mishit and the ring along
+      const where = `seed ${seed}: landed ${u.toFixed(1)} along and ${v.toFixed(1)} across of a spread ${s.along.toFixed(1)} by ${s.across.toFixed(1)}`;
+      expect(Math.abs(u), where).toBeLessThan(s.along + 1.5);
+      expect(Math.abs(v), where).toBeLessThan(s.across + 1.5);
+      // and never past the ring, which is the true swing's landing, by more than the ball's own width
+      expect(Math.hypot(lx - shot!.ring!.x, ly - shot!.ring!.y)).toBeLessThan(2 * s.across + s.along + 3);
+    }
+    expect(problems).toEqual([]);
+  });
+
+  test('a tree in the way is marked where it knocks the ball, and a pond in the way is a blue ring and the words for it', async ({
+    page,
+  }, info) => {
+    const problems = watch(page);
+    await start(page, { seed: 1, paused: true });
+    const tree = await page.evaluate((h) => {
+      const g = window.game!;
+      g.playCourse([h]);
+      g.step(300);
+      return g.content().trees[0];
+    }, treeHole());
+    await pull(page, 1);
+    const hit = await page.evaluate(() => window.game!.motions().shot);
+    expect(hit!.knock, 'marked where the tree knocks it').not.toBeNull();
+    expect(Math.hypot(hit!.knock!.x - tree.x, hit!.knock!.y - tree.y), 'at the tree').toBeLessThan(9);
+    expect(hit!.carry, 'and it does not go the distance it would have').toBeLessThan(150);
+    await expect(page.locator('#bagInfo')).toContainText('tree');
+    await info.attach('a tree in the way', { body: await page.screenshot(), contentType: 'image/png' });
+    await page.mouse.up();
+
+    // a fresh hole for the pond: the ring is another colour, and the words say water
+    const dry = hit!.ring!.colour;
+    await page.evaluate((h) => {
+      const g = window.game!;
+      g.playCourse([h]);
+      g.step(300);
+    }, pondHole());
+    await pull(page, 1);
+    const wet = await page.evaluate(() => window.game!.motions().shot);
+    expect(wet!.end).toBe('water');
+    expect(wet!.ring!.colour, 'not the colour of a ball that comes down on the course').not.toEqual(dry);
+    expect(wet!.ring!.colour[2], 'blue').toBeGreaterThan(wet!.ring!.colour[0]);
+    await expect(page.locator('#bagInfo')).toContainText('water');
+    await info.attach('a pond in the way', { body: await page.screenshot(), contentType: 'image/png' });
+    await page.mouse.up();
+    expect(problems).toEqual([]);
+  });
+
+  test('the putter is aimed by its dots as it always was: no arc, no ring, and the words are the club and its carry', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await longBend(page);
+    await page.locator('#bagClubs button[data-club="putter"]').click();
+    await page.evaluate(() => window.game!.step(300));
+    await pull(page, 0.5);
+    expect(await page.evaluate(() => window.game!.motions().shot)).toBeNull();
+    expect(await page.evaluate(() => window.game!.aiming())).not.toBeNull();
+    expect(await page.evaluate(() => window.game!.motions().pulse), 'the dots').toBeGreaterThan(0);
+    await page.mouse.up();
+    expect(problems).toEqual([]);
+  });
+
+  test('the pin is read off the ball, and the hole is mapped: its ground, the ball, the cup and the aim, and only on a golf hole', async ({
+    page,
+  }, info) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true, screen: true });
+    await expect(page.locator('#pin')).toBeHidden();
+    await expect(page.locator('#holeMap')).toBeHidden();
+    await page.locator('#start .course', { hasText: 'The Meadow' }).click();
+    await page.evaluate(() => window.game!.step(75));
+    await expect(page.locator('#pin')).toBeHidden();
+    await expect(page.locator('#holeMap')).toBeHidden();
+
+    await longBend(page);
+    await expect(page.locator('#pin')).toBeVisible();
+    const hole = await page.evaluate(() => {
+      const g = window.game!;
+      const c = g.content();
+      const b = g.ball();
+      return { cup: c.cup, ball: b };
+    });
+    const yards = Math.round(Math.hypot(hole.cup.x - hole.ball.x, hole.cup.y - hole.ball.y));
+    await expect(page.locator('#pin')).toContainText(`${yards} yd`);
+    expect(yards, 'Long Bend is a par five').toBeGreaterThan(450);
+
+    await expect(page.locator('#holeMap')).toBeVisible();
+    const map = await page.evaluate(() => window.game!.map());
+    expect(map).not.toBeNull();
+    expect(map!.width).toBeGreaterThan(40);
+    expect(map!.height, 'a long thin hole').toBeGreaterThan(map!.width * 1.8);
+    expect(map!.ball[1], 'the ball at the bottom, where the tee is').toBeGreaterThan(map!.height * 0.8);
+    expect(map!.cup[1], 'the cup at the top').toBeLessThan(map!.height * 0.2);
+    // the picture is on the canvas: ground where the ball is, and the ball in white over it
+    const px = await page.evaluate(() => {
+      const c = document.getElementById('holeMap') as HTMLCanvasElement;
+      const m = window.game!.map()!;
+      const d = c.getContext('2d')!.getImageData(Math.round(m.ball[0]), Math.round(m.ball[1]), 1, 1).data;
+      const corner = c.getContext('2d')!.getImageData(0, 0, 1, 1).data;
+      return { ball: Array.from(d), corner: Array.from(corner) };
+    });
+    expect(px.ball[3], 'painted').toBe(255);
+    expect(Math.min(px.ball[0], px.ball[1], px.ball[2]), 'the ball is white').toBeGreaterThan(200);
+    expect(px.corner[3], 'nothing off the hole').toBe(0);
+    await info.attach('the map', { body: await page.screenshot(), contentType: 'image/png' });
+
+    // the aim is on the map while a shot is aimed, and the pin is read from where the ball comes to rest
+    await pull(page, 1);
+    const aimed = await page.evaluate(() => window.game!.map()!.aim);
+    expect(aimed, 'the aim line and its ring on the map').not.toBeNull();
+    expect(aimed![1], 'up the hole from the ball').toBeLessThan(map!.ball[1]);
+    await page.mouse.up();
+    await untilReady(page, 'after the drive');
+    const rest = await page.evaluate(() => window.game!.ball());
+    const left = Math.round(Math.hypot(hole.cup.x - rest.x, hole.cup.y - rest.y));
+    expect(left).toBeLessThan(yards - 100);
+    await expect(page.locator('#pin')).toContainText(`${left} yd`);
+    expect(problems).toEqual([]);
+  });
 });

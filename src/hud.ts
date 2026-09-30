@@ -42,6 +42,36 @@ export interface BagInfo {
   carry: number;
 }
 
+/**
+ * What is drawn over a hole's map, in the map's own pixels, written by the page each frame and drawn when it changes: the
+ * ball and the cup; while a shot is aimed, the line to where it lands and the ring there, which is what the flight comes to
+ * (0 the course, 1 water, 2 out of bounds, 3 the cup); the spread of a swing as an ellipse (its middle, its half axes along
+ * and across, and how it is turned); and what the camera shows, as four corners.
+ */
+export interface MapOverlay {
+  ball: [number, number];
+  cup: [number, number];
+  aim: boolean;
+  to: [number, number];
+  ring: 0 | 1 | 2 | 3;
+  spread: boolean;
+  ellipse: [number, number, number, number, number];
+  view: boolean;
+  corners: Float64Array;
+}
+/** How many numbers an overlay is, to tell whether it has changed. */
+const MAP_FIELDS = 2 + 2 + 1 + 2 + 1 + 1 + 5 + 1 + 8;
+/** The colours drawn over the map: the ball, the cup's flag, the line of the aim, the camera's view, and the ring by what it comes to. */
+const MAP_INK = {
+  ball: '#ffffff',
+  edge: '#2b3a4a',
+  flag: '#e0413a',
+  aim: '#ffffff',
+  view: 'rgba(255,255,255,0.22)',
+  viewEdge: 'rgba(255,255,255,0.85)',
+  rings: ['#ffd23f', '#3aa0ff', '#ff5a4a', '#8de03a'],
+} as const;
+
 /** What the shop needs to know of the save to show each club as for sale, owned, or in hand. */
 export interface Purse {
   coins: number;
@@ -90,6 +120,30 @@ export class Hud {
   private readonly bag = document.getElementById('bag')!;
   private readonly bagInfo = document.getElementById('bagInfo')!;
   private readonly bagClubs = document.getElementById('bagClubs')!;
+  private readonly pin = document.getElementById('pin')!;
+  private readonly mapPanel = document.getElementById('holePanel')!;
+  private readonly mapCanvas = document.getElementById('holeMap') as HTMLCanvasElement;
+  /** The map's drawing context, made when a golf hole first has a map and not at boot, which is every course's. */
+  private mapContextMade: CanvasRenderingContext2D | null = null;
+  /** The hole's map as it was painted, redrawn from under what is drawn over it, and what was last drawn over it. */
+  private mapBase: ImageData | null = null;
+  private readonly mapDrawn = new Float64Array(MAP_FIELDS);
+  private readonly mapNow = new Float64Array(MAP_FIELDS);
+  /** What the page writes each frame for what is drawn over the map, and `drawMap` draws if it changed. */
+  readonly overlay: MapOverlay = {
+    ball: [0, 0],
+    cup: [0, 0],
+    aim: false,
+    to: [0, 0],
+    ring: 0,
+    spread: false,
+    ellipse: [0, 0, 0, 0, 0],
+    view: false,
+    corners: new Float64Array(8),
+  };
+  /** The club in hand and how far it carries, which the words over the bag say: until a shot is aimed. */
+  private club = '';
+  private carryLine = '';
   /** The clubs the picker has, none on a hole of minigolf; and what a drag does, which the help says. */
   private bagList: readonly BagInfo[] = [];
   private mode: Mode = 'aim';
@@ -152,7 +206,130 @@ export class Hud {
     for (const b of Array.from(this.bagClubs.querySelectorAll('button')))
       b.setAttribute('aria-pressed', String(b.dataset.club === active));
     const c = this.bagList.find((x) => x.id === active);
-    this.bagInfo.textContent = c ? (c.carry > 0 ? `${c.name} \u00b7 carries ${Math.round(c.carry)}` : c.name) : '';
+    this.club = c ? c.name : '';
+    this.carryLine = c ? (c.carry > 0 ? `${c.name} \u00b7 carries ${Math.round(c.carry)}` : c.name) : '';
+    this.bagInfo.textContent = this.carryLine;
+  }
+
+  /** Where the shot being aimed would come down, said after the club in hand in place of how far it carries; none puts the carry back. */
+  setLanding(text: string | null) {
+    const words = text ? `${this.club} \u00b7 ${text}` : this.carryLine;
+    if (this.bagInfo.textContent !== words) this.bagInfo.textContent = words;
+  }
+
+  /** The pin from where the ball lies, as words under the strokes; none for a hole that has no such thing. */
+  setPin(text: string | null) {
+    this.pin.hidden = text === null;
+    if (text !== null && this.pin.textContent !== text) this.pin.textContent = text;
+  }
+
+  /** The hole's map, painted, put over the course; none puts it away. Drawn over from `overlay`, by `drawMap`. */
+  setMap(picture: { width: number; height: number; pixels: Uint8ClampedArray } | null) {
+    if (!picture) {
+      this.mapBase = null;
+      this.mapPanel.hidden = true;
+      return;
+    }
+    this.mapCanvas.width = picture.width;
+    this.mapCanvas.height = picture.height;
+    this.mapBase = new ImageData(picture.pixels as Uint8ClampedArray<ArrayBuffer>, picture.width, picture.height);
+    this.mapDrawn.fill(NaN);
+    this.mapContext.putImageData(this.mapBase, 0, 0);
+    this.mapPanel.hidden = !this.start.hidden;
+  }
+
+  private get mapContext(): CanvasRenderingContext2D {
+    return (this.mapContextMade ??= this.mapCanvas.getContext('2d')!);
+  }
+
+  /** The map redrawn from what is to be drawn over it, if any of that has changed since it was last drawn: nothing is made. */
+  drawMap() {
+    const base = this.mapBase;
+    if (!base || this.mapPanel.hidden) return;
+    const o = this.overlay;
+    const now = this.mapNow;
+    let k = 0;
+    now[k++] = o.ball[0];
+    now[k++] = o.ball[1];
+    now[k++] = o.cup[0];
+    now[k++] = o.cup[1];
+    now[k++] = o.aim ? 1 : 0;
+    now[k++] = o.to[0];
+    now[k++] = o.to[1];
+    now[k++] = o.ring;
+    now[k++] = o.spread ? 1 : 0;
+    for (let e = 0; e < 5; e++) now[k++] = o.ellipse[e];
+    now[k++] = o.view ? 1 : 0;
+    for (let e = 0; e < 8; e++) now[k++] = o.corners[e];
+    let same = true;
+    for (let e = 0; e < MAP_FIELDS; e++)
+      if (now[e] !== this.mapDrawn[e]) {
+        same = false;
+        break;
+      }
+    if (same) return;
+    this.mapDrawn.set(now);
+    const c = this.mapContext;
+    c.putImageData(base, 0, 0);
+    if (o.view) {
+      c.beginPath();
+      c.moveTo(o.corners[0], o.corners[1]);
+      for (let e = 1; e < 4; e++) c.lineTo(o.corners[e * 2], o.corners[e * 2 + 1]);
+      c.closePath();
+      c.fillStyle = MAP_INK.view;
+      c.fill();
+      c.strokeStyle = MAP_INK.viewEdge;
+      c.lineWidth = 1;
+      c.stroke();
+    }
+    if (o.aim) {
+      c.strokeStyle = MAP_INK.aim;
+      c.lineWidth = 1;
+      c.setLineDash([2, 2]);
+      c.beginPath();
+      c.moveTo(o.ball[0], o.ball[1]);
+      c.lineTo(o.to[0], o.to[1]);
+      c.stroke();
+      c.setLineDash([]);
+      c.strokeStyle = MAP_INK.rings[o.ring];
+      if (o.spread) {
+        c.beginPath();
+        c.ellipse(
+          o.ellipse[0],
+          o.ellipse[1],
+          Math.max(1, o.ellipse[2]),
+          Math.max(1, o.ellipse[3]),
+          o.ellipse[4],
+          0,
+          Math.PI * 2,
+        );
+        c.lineWidth = 1;
+        c.stroke();
+      }
+      c.beginPath();
+      c.arc(o.to[0], o.to[1], 3, 0, Math.PI * 2);
+      c.lineWidth = 2;
+      c.stroke();
+    }
+    // the cup's flag, and the ball on top of everything
+    c.strokeStyle = MAP_INK.edge;
+    c.lineWidth = 1;
+    c.beginPath();
+    c.moveTo(o.cup[0], o.cup[1] + 1);
+    c.lineTo(o.cup[0], o.cup[1] - 6);
+    c.stroke();
+    c.fillStyle = MAP_INK.flag;
+    c.beginPath();
+    c.moveTo(o.cup[0], o.cup[1] - 6);
+    c.lineTo(o.cup[0] + 4.5, o.cup[1] - 4.2);
+    c.lineTo(o.cup[0], o.cup[1] - 2.5);
+    c.fill();
+    c.fillStyle = MAP_INK.ball;
+    c.strokeStyle = MAP_INK.edge;
+    c.beginPath();
+    c.arc(o.ball[0], o.ball[1], 2.6, 0, Math.PI * 2);
+    c.fill();
+    c.stroke();
   }
 
   show() {
@@ -161,6 +338,7 @@ export class Hud {
     this.help.hidden = false;
     this.modes.hidden = false;
     this.bag.hidden = !this.bagList.length;
+    this.mapPanel.hidden = !this.mapBase;
   }
 
   /**
@@ -186,7 +364,17 @@ export class Hud {
         return card;
       }),
     );
-    for (const el of [this.panel, this.purse, this.help, this.modes, this.bag, this.card, this.shop, this.toast])
+    for (const el of [
+      this.panel,
+      this.purse,
+      this.help,
+      this.modes,
+      this.bag,
+      this.mapPanel,
+      this.card,
+      this.shop,
+      this.toast,
+    ])
       el.hidden = true;
     this.start.hidden = false;
   }

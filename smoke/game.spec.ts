@@ -656,6 +656,75 @@ test.describe('golf on The Links', () => {
     for (const [where, ms] of Object.entries(cost)) expect(ms, `${where}: inside the 5 ms budget`).toBeLessThan(5);
     expect(problems).toEqual([]);
   });
+
+  test('costs a frame inside the budget from the aim view of every club, on the two longest holes, facing up the hole and turned right round', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true });
+    const rows = await page.evaluate(async () => {
+      const g = window.game!;
+      g.chooseCourse('The Links');
+      const out: { where: string; ms: number; distance: number }[] = [];
+      for (const hole of [2, 6]) {
+        g.startHole(hole);
+        for (const club of ['driver', '3-wood', '5-iron', '7-iron', '9-iron', 'pitching-wedge', 'sand-wedge']) {
+          g.club(club);
+          g.step(300);
+          const v = g.view();
+          out.push({ where: `hole ${hole + 1}, the ${club}`, ms: await g.measureFrame(40), distance: v.distance });
+          // and the same view turned right round, looking back down the hole at the tee and the grass behind it
+          g.orbit(Math.PI, 0);
+          g.step(2);
+          out.push({
+            where: `hole ${hole + 1}, the ${club}, turned round`,
+            ms: await g.measureFrame(40),
+            distance: v.distance,
+          });
+          g.orbit(-Math.PI, 0);
+        }
+      }
+      return out;
+    });
+    const worst = rows.reduce((a, b) => (b.ms > a.ms ? b : a));
+    console.log(
+      `the aim view: the worst is ${worst.where}, ${worst.ms.toFixed(2)} ms a frame, of ${rows.length} measured`,
+    );
+    for (const r of rows)
+      expect(r.ms, `${r.where} (${r.distance.toFixed(0)} back): inside the 5 ms budget`).toBeLessThan(5);
+    expect(
+      rows.some((r) => r.distance > 150),
+      'the driver is looked at from well past where minigolf stops',
+    ).toBe(true);
+    expect(problems).toEqual([]);
+  });
+
+  test("draws the driver's aim view on every rung of the ladder inside the budget, and the lower rungs no dearer", async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    const costs: number[] = [];
+    for (let rung = 0; rung < 4; rung++) {
+      const problems = watch(page);
+      await start(page, { seed: 11, paused: true, rung });
+      costs.push(
+        await page.evaluate(async () => {
+          const g = window.game!;
+          g.chooseCourse('The Links');
+          g.startHole(6);
+          g.step(300);
+          return g.measureFrame(40);
+        }),
+      );
+      expect(problems).toEqual([]);
+    }
+    console.log(`the driver's aim view on each rung: ${costs.map((c) => c.toFixed(2)).join(', ')} ms a frame`);
+    for (const [rung, ms] of costs.entries()) expect(ms, `rung ${rung}: inside the 5 ms budget`).toBeLessThan(5);
+    // a rung down is never dearer by more than the wobble of a frame (a third of a millisecond, measured)
+    for (let rung = 1; rung < costs.length; rung++)
+      expect(costs[rung], `rung ${rung} against the one above`).toBeLessThan(costs[rung - 1] + 0.5);
+  });
 });
 
 test.describe('the cup and the rail', () => {

@@ -178,13 +178,13 @@ export class Game {
 
   /**
    * A game of the hole in play that no one plays, to try a shot in before it is taken: its own world, chance held in the
-   * middle so a shot is struck true (the scatter is a swing's and not a plan's), its own save and no one listening.
+   * middle so a shot is struck true (the scatter is a swing's and not a plan's), its own save and no one listening unless it is handed someone (what a flight is told by).
    * What it does is what this game would do to the same shot, struck true, from the same lie, since it is the same
    * game; and nothing this game has, its strokes, its time, its chance or its card, is touched by it. Cheap, a
    * millisecond or so to make, and a trial in it a fraction of one.
    */
-  rehearsal(): Game {
-    return new Game(new Progress(memoryStore()), {}, { random: () => 0.5, course: [this.def], rehearsal: true });
+  rehearsal(events: GameEvents = {}): Game {
+    return new Game(new Progress(memoryStore()), events, { random: () => 0.5, course: [this.def], rehearsal: true });
   }
 
   /**

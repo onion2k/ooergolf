@@ -324,6 +324,38 @@
     background: var(--sky-tint);
     border-radius: 999px;
   }
+  /* how far the pin is, and how much higher or lower, in a line under the strokes on a golf hole */
+  #pin {
+    grid-area: 5 / 1 / 6 / -1;
+    margin-top: 6px;
+    font-size: 13px;
+    font-weight: 800;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink-soft);
+  }
+  /*
+   * the map of a golf hole, at the left edge halfway down where neither the words at the top nor the bag and switch
+   * at the bottom are: a picture over the course, which a finger passes through to aim
+   */
+  #holePanel {
+    position: fixed;
+    left: 16px;
+    top: 50%;
+    translate: 0 -50%;
+    padding: 5px;
+    border-width: 3px;
+    border-radius: 14px;
+    transform-origin: left center;
+  }
+  #holePanel:not([hidden]) {
+    display: block;
+  }
+  #holeMap {
+    display: block;
+    border-radius: 8px;
+    image-rendering: pixelated;
+  }
   #purse {
     flex: none;
     margin-left: auto;
@@ -922,6 +954,7 @@
     <small id="holeName"><span class="of"></span> <span class="name"></span></small>
     <span id="holePar"></span>
     <p class="count"><b>0</b> <span class="unit">strokes</span></p>
+    <small id="pin" hidden></small>
   </div>
   <div class="panel" id="purse" hidden>
     <span class="coin"><b id="coins">0</b><em> coins</em></span
@@ -971,6 +1004,7 @@
   <small id="bagInfo"></small>
   <div id="bagClubs"></div>
 </div>
+<div class="panel" id="holePanel" hidden><canvas id="holeMap" role="img" aria-label="Map of the hole"></canvas></div>
 <div class="panel" id="viewMode" role="group" aria-label="What a drag does" hidden>
   <button id="modeAim" type="button" aria-pressed="true">Aim</button
   ><button id="modeLook" type="button" aria-pressed="false">Look</button>

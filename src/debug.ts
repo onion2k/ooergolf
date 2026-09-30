@@ -140,6 +140,17 @@ export interface GameApi {
   bag(): { id: string; name: string; loft: number; hardest: number; carry: number }[];
   /** The shot the drag under way would make if let go now, or null for none. */
   aiming(): { angle: number; power: number } | null;
+  /**
+   * The hole's map over the course, on a golf hole: its size in pixels, where the ball, the cup and the landing of the shot
+   * being aimed are on it (none when no shot is), as last drawn. Null for a hole that has no map.
+   */
+  map(): {
+    width: number;
+    height: number;
+    ball: [number, number];
+    cup: [number, number];
+    aim: [number, number] | null;
+  } | null;
   /** The shot the autopilot would take from where the ball lies, and on a golf hole with which club, or null when none can be taken. */
   suggest(): Plan | null;
   /** Hole `index` begun, from its tee, with the card as if the holes before it had not been played. */
@@ -164,6 +175,9 @@ export interface GameApi {
    */
   view(): {
     distance: number;
+    /** How far ahead of the ball it looks, and whether it is still easing to the view that shows a golf shot's landing. */
+    lead: number;
+    aiming: boolean;
     rung: number;
     held: boolean;
     antialias: Antialias;
@@ -227,6 +241,21 @@ export interface Motions {
   puff: 'sand' | 'grass' | null;
   /** The ring marking where a lofted ball first came down: where, and how wide in world units; null when there is none to see. */
   landing: { x: number; y: number; radius: number } | null;
+  /**
+   * The preview of the shot being aimed, as the last frame placed it: how many dots of arc, where the ring is (and its
+   * colour, which is another for water and out of bounds) and how big, the spread of a swing that is not true as the
+   * half of its length along the shot and of its width across it, and where a tree knocks the ball; and what the flight
+   * comes to, how far it carries and what ground it comes down on. Null when none is drawn.
+   */
+  shot: {
+    arc: number;
+    ring: { x: number; y: number; radius: number; colour: [number, number, number] } | null;
+    spread: { x: number; y: number; across: number; along: number } | null;
+    knock: { x: number; y: number } | null;
+    end: 'landed' | 'holed' | 'water' | 'out';
+    carry: number;
+    lie: number;
+  } | null;
 }
 
 /** The grass a frame drew, and the wind it bent in. */
@@ -251,6 +280,17 @@ export interface DebugHost {
   follow(): void;
   project(x: number, y: number, z: number): { x: number; y: number };
   aiming(): { angle: number; power: number } | null;
+  /**
+   * The hole's map over the course, on a golf hole: its size in pixels, where the ball, the cup and the landing of the shot
+   * being aimed are on it (none when no shot is), as last drawn. Null for a hole that has no map.
+   */
+  map(): {
+    width: number;
+    height: number;
+    ball: [number, number];
+    cup: [number, number];
+    aim: [number, number] | null;
+  } | null;
   view(): ReturnType<GameApi['view']>;
   orbit(turn: number, tilt: number): void;
   measureFrame(warmup?: number): Promise<number>;
@@ -375,6 +415,7 @@ export function createApi(host: DebugHost): GameApi {
     buy: (id) => game.buy(id),
     equip: (id) => game.equip(id),
     aiming: () => host.aiming(),
+    map: () => host.map(),
     view: () => host.view(),
     orbit: (turn, tilt) => host.orbit(turn, tilt),
     save() {

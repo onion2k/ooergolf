@@ -48,11 +48,18 @@ export function shotFromDrag(
 
 /**
  * The point on the ground at height `z` that the camera shows at (nx, ny) in
- * normalised device coordinates, or null where that is sky. The camera must
+ * normalised device coordinates, or null where that is sky, written into `out`
+ * (made for the caller unless it gives one, which a frame does). The camera must
  * have been updated, and has no roll or lens shift, which this game never
  * gives it.
  */
-export function groundAt(camera: Camera, nx: number, ny: number, z: number): [number, number] | null {
+export function groundAt(
+  camera: Camera,
+  nx: number,
+  ny: number,
+  z: number,
+  out: [number, number] = [0, 0],
+): [number, number] | null {
   const [px, py, pz] = camera.position;
   const fx = camera.target[0] - px,
     fy = camera.target[1] - py,
@@ -67,5 +74,7 @@ export function groundAt(camera: Camera, nx: number, ny: number, z: number): [nu
   // a ray level with the ground or rising never meets it
   if (dz > -1e-6) return null;
   const s = (z - pz) / dz;
-  return [px + dx * s, py + dy * s];
+  out[0] = px + dx * s;
+  out[1] = py + dy * s;
+  return out;
 }

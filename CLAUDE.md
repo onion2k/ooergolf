@@ -24,8 +24,8 @@ The Range is the first of golf proper: three flat holes at a yard a unit, each
 a tee, a fairway, rough and a green, played with a bag of eight clubs that
 loft the ball into the air. The Links is nine holes of it, a par three to a par
 five, made by a generator on hills, with bunkers, water, trees and out of
-bounds, from the plan in `~/.claude/plans/ooergolf-proper-golf.md` (stage 3
-of six is built). The golf goes in
+bounds, from the plan in `~/.claude/plans/ooergolf-proper-golf.md` (stage 4
+of six is built: a player sees where a shot lands). The golf goes in
 a feature at a time, in the order `DESIGN.md` gives.
 
 ## The factory
@@ -109,7 +109,11 @@ today, and what the next features must hand it:
   switch back, and nothing struck. It gets round every course. Each thing a
   player can do is an action in `scripts/fuzzer.ts`. On a golf hole it also
   chooses a club from the bag (and is refused one that is not in it) before
-  most of its shots. `npm run fuzz` plays every seed three times, as a player who
+  most of its shots, aims shots (a preview of any club at any angle and power,
+  which must hold `previewProblems` and leave the game, its chance and its
+  clock as they were) and takes some as aimed, which must come down within the
+  spread that was shown (where nothing in the air turns the flight), and sends
+  the camera to an aim view in its look round. `npm run fuzz` plays every seed three times, as a player who
   chooses among the courses and on The Range and The Links alone, since a monkey
   choosing among six is on golf too seldom to hold it to anything; each landing
   the game tells of is checked as it is told (`landingProblems`).
@@ -130,7 +134,11 @@ today, and what the next features must hand it:
   than the club that struck it could send it and a fall from the highest
   ground make it, never at rest out of bounds and never inside a tree's trunk
   or canopy; each landing told is of the live ball, where it is, and at
-  least `LANDING.least` hard (`landingProblems`).
+  least `LANDING.least` hard (`landingProblems`). A preview is a flight from
+  the ball to where it says it came down, in numbers, growing in length, no
+  further than the club goes and a fall adds, with a spread that is a spread
+  (`previewProblems`); and the camera's distance is within the zoom of its
+  hole, further on golf, and its lead is a number of yards.
 - **Determinism:** the autopilot plays, with a player's slips from its own
   chance, round after round, and the hash takes in the hole and the card.
 - **Pace:** the strokes a round of each course takes; see above. The
@@ -144,7 +152,9 @@ today, and what the next features must hand it:
   in twenty-four rounds, where aiming at the cup across the corner lost one in every round).
 - **Leaks:** ten minutes of the autopilot playing round after round, on The
   Meadow and again on The Range and The Links. The card is emptied each round and
-  watched against the number of holes.
+  watched against the number of holes; on golf a previewer is made with each hole, as
+  the page makes one, and tried now and then, and the bodies in its rehearsal are held
+  to the one ball.
 - **Bench:** the physics on a green of its own, the size the course was
   before it had holes, so its figures are the physics' and not the
   content's: at rest, which costs next to nothing, and full of falling balls
@@ -200,7 +210,27 @@ change meant to move it, and the commit says why. Look at every picture.
   worst view is held under the 5 ms budget by `smoke/game.spec.ts`), and its
   lead of `LEAD` units turns with the view so the ball stays low on the
   screen. A new hole puts the switch back to Aim and eases the view home
-  over the glide, by the shortest way; nothing of the view is saved.
+  over the glide, by the shortest way; nothing of the view is saved. On a
+  golf hole (`setGolf`) it may stand back `VIEW.golfFar`, 200, where minigolf
+  stops at 110 (and never further than that from what it looks at, tall
+  screen and all), since a player who cannot see where a shot comes down cannot
+  play it; and it is sent to the **aim view** of the club in hand (`aimAt`,
+  eased by `settle` in game time at a rate of four a second, taken back by the
+  first zoom or turn of the player's). `src/aimview.ts` works that view out
+  from the club's reach and the screen's shape and from nothing else: the
+  camera stood back as far as the landing needs (no nearer than home), tipped
+  lower the longer the club (from 45 degrees to the lowest, since a low view
+  shows far more depth for the same distance), looking a quarter of its
+  distance ahead of the ball so the ball sits low with the landing above it, the
+  landing at 0.85 of the way up the screen, and 0.72 on a tall one where the
+  coins and the shop are across the top. **Never worked out from a drag**: the
+  aim is the ground under the finger through the camera, and a camera that
+  moved during a drag would turn it. The view is sent at a hole's tee (the
+  driver), on a club chosen, and when the ball is ready on another lie
+  (`aimedFor` in `main.ts`). A driver's aim view is 192 back at the lowest tilt, which
+  costs 2.6 ms a frame on a quiet machine (up to 3.5 on a busy one), the worst of all
+  the clubs on the two longest holes facing either way, and each rung of the ladder
+  less (2.6, 1.5, 1.2, 0.9), held under the 5 ms budget by `smoke/game.spec.ts`.
   `src/quality.ts` is the ladder the picture steps down on a slow machine,
   and the governor that chooses the rung from the time between frames and
   how much of it the drawing takes: frames that come slowly but
@@ -385,6 +415,29 @@ change meant to move it, and the commit says why. Look at every picture.
   `roll`, is what makes a driver run on an eighth of its carry and a wedge a
   thirtieth (`surfaces.ts` says why); `landed(x, y, speed, first)` tells of
   it. Golf pays no coins, and the rail is a wall to a ball in the air.
+- `src/preview.ts` is the flight a drag would make, worked out before it is taken: a trial in a rehearsal of the hole
+  (`Game.rehearsal`, handed the events it is told by), with chance in the middle, so it is what the game does to the
+  shot struck true, exactly (the arithmetic carry is four in a hundred short, and worse on a slope), a knock by a
+  tree or the rail in the air included. A `Previewer` is made with each golf hole (a millisecond or two) and let go
+  with it, and `run` writes a `Preview` into buffers made once: the path a point a frame to the first landing, where it
+  came down, went into the water, dropped in the cup or was lost out of bounds (which the game does a step before it would
+  tell of a landing, so the `outOfBounds` event is its place), what the ground is and how it slopes there, the carry, where
+  a tree or the rail knocked it, and the swing's spread (across: the carry times the sine of the scatter; along: what the
+  worst mishit of speed falls short by, the carry going as the speed squared), an ellipse whose far end is the ring since
+  a swing never adds speed. About 0.6 to 0.8 ms a preview, once, when the aim, club or ball changes. `src/readout.ts`
+  says the pin (`pinReadout`, `pinText`: whole yards and an arrow for half a yard or more of rise) and where a shot comes
+  down in words (`landingText`). `src/holemap.ts` paints a hole's ground from above into a buffer (one pixel a yard at
+  most, off-course ground clear, trees as dots, in the scene's own palette) and says where a point is on it
+  (`mapInto`, `mapPoint`); the hud draws it on a canvas at the left edge and over it the ball, the cup's flag, the aim's
+  line, ring and spread, and what the camera shows, redrawn only when something changed.
+- On the page a lofted shot being aimed is drawn as its flight, not its dots (a putt keeps the dots): twenty-eight dots of
+  arc by length along it, a ring at the landing (the marker's yellow, blue for the water, red for out of bounds, lime for
+  the cup), the spread, and a red mark where a tree or the rail knocks it, each a group after the marker's
+  (`Scene.setShot`, `shotMarks`), scaled for the camera's distance (`markScale`) and laid along the ground's slope and
+  lifted clear of a hollow (`placeOnSlope`, `ringLift`: a flat ring over a hill is a crescent in the turf). The bag says
+  where it comes down after the club ("Driver · lands 260 yd · fairway", "hits a tree · lands 67 yd · fairway"), the
+  strokes panel says the pin ("503 yd ▲ 1"), and the map is shown on a golf hole and away on minigolf and under the start
+  screen.
 - `src/range.ts` is The Range (`rangeHole`: tee box, fairway, rough, round
   green, bunker if asked): Pitch and Putt 105, Iron Alley 175, The Long Way 330. A `Course` has `golf`, held by a test to its holes' layouts. `ground.ts`
   draws each kind of golf ground as a mesh of its own colour; the rough is
@@ -583,8 +636,10 @@ a body that exists (raw: on a hole that slopes, `lay(x, y)`, the game's own, put
 `save`, and `start(page, { save, seed, paused, rung })`
 for a save that is not the player's, which chooses The Meadow unless given
 `screen` to leave the start screen up, and `touches(page, steps)` for fingers, several at once.
-Looking: `look(x, y, distance)` parks the camera until `follow`, `view()`
-says how far back it stands and which rung of the quality ladder the
+Looking: `look(x, y, distance)` parks the camera until `follow`, at the home view (home tilt and a lead of `LEAD`, however the
+aim view of a golf hole had set it), `view()`
+says how far back it stands, how far ahead of the ball it looks (`lead`), whether it is still easing to an aim view (`aiming`)
+and which rung of the quality ladder the
 picture is on and whether the grass sways (`swaying`), what a drag is (`mode`,
 `aim` or `look`) and how the view is turned and tilted (`azimuth`, `tilt`),
 `orbit(turn, tilt)` turns it as a Look drag does, and `measureFrame`;
@@ -597,7 +652,10 @@ flash and the glints the last frame lit, the camera's glide and the aim's
 pulse, the sparkles of the water and where on the page each was drawn, how
 wide the ring is where a ball went into the water, what the last stroke
 threw up, sand or grass, and where the ring is that marks a lofted ball's
-first landing and how wide), read back from what the last frame placed. `?rung=N` on the page puts the picture
+first landing and how wide, and `shot`: the preview of the shot being aimed, its dots of arc, its ring with its
+colour and size, the spread's half axes, where a tree knocks it and what it comes to, null when none is drawn), read back
+from what the last frame placed; and `map()`, the hole's map over the course: its size and where the ball, the cup and the
+landing of the shot being aimed are on it. `?rung=N` on the page puts the picture
 on a rung and holds it; paused, the governor never moves it, so pictures are
 always taken at the top rung unless a test asks. In unit tests, `game.place(x, y)` puts the
 ball down at a lie.
@@ -607,15 +665,19 @@ ball down at a lie.
 Each of these is the first feature's to bring, with every gate green at
 each step, and a gate handed what it needs in the same change:
 
-- The rest of golf, from `~/.claude/plans/ooergolf-proper-golf.md`: stage 4, the camera and aim (an overview of the
-  hole, the distance and height to the pin, the aim to the landing, not only the direction); stage 5, shape, spin
-  and wind; stage 6, putting greens with contour, a fringe and the break shown, which the planner leaves to the
-  arithmetic putt. What stage 3 leaves as it found it: a golf hole's rough is painted and grows no blades inside
-  the rough's edge (its wild grass beyond the stakes does grow, which is the turf's own), its green is round and
-  stepped by the tile, so are its bunkers, there is no first cut, an invisible wall stands beyond out of bounds, a ball
-  landing on a post's top or a box is left as the physics has it, the club in hand is not saved, the camera can lose
-  the ball behind a tree at a low tilt, and the planner aims at the cup or a place on the route and knows nothing of
-  the wind (there is none), a green's contour (there is none) or a lay-up chosen for the next shot's sake.
+- The rest of golf, from `~/.claude/plans/ooergolf-proper-golf.md`: stage 5, shape, spin and wind; stage 6, putting
+  greens with contour, a fringe and the break shown, which the planner leaves to the arithmetic putt. What stage 3
+  leaves as it found it: a golf hole's rough is painted and grows no blades inside the rough's edge (its wild grass
+  beyond the stakes does grow, which is the turf's own), its green is round and stepped by the tile, so are its
+  bunkers, there is no first cut, an invisible wall stands beyond out of bounds, a ball landing on a post's top or a
+  box is left as the physics has it, the club in hand is not saved, and the planner aims at the cup or a place on the
+  route and knows nothing of the wind (there is none), a green's contour (there is none) or a lay-up chosen for the
+  next shot's sake. What stage 4 leaves: the preview is the true swing to the first landing (the run-out after it is
+  not shown, nor where the ball would rest), and it is unaware of wind and spin, which stage 5 brings; a full drive
+  on a phone has its ring under the coins and the shop at the top of the screen, since 200 back is the most the
+  camera may stand and the landing cannot go lower there; the map is not interactive and does not turn with the
+  camera; the camera can lose the ball behind a tree at a low tilt, which the aim view makes more likely; and the
+  aim view is not saved (nothing of the view is).
 
 - An autopilot that keeps a margin from water that grows with the shot. It
   skirts a pond by 1.3 units, and a 5% slip over a 45-unit shot wanders 2.3,

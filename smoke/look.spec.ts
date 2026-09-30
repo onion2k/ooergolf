@@ -44,6 +44,33 @@ async function aim(page: Page, share: number, across = 0) {
   await page.evaluate(() => window.game!.step(1));
 }
 
+/**
+ * A golf shot aimed as a player aims it from the aim view, where the ball sits low on the page: pressed high up it and
+ * pulled down by `share` of a full drag, held, and the preview of it worked out for the frame.
+ */
+async function pullDown(page: Page, share: number, across = 0, touch = false) {
+  const size = page.viewportSize()!;
+  const short = Math.min(size.width, size.height);
+  const from = { x: size.width / 2, y: size.height * 0.15 };
+  await drag(page, from, { x: from.x + across, y: from.y + share * 0.35 * short }, { hold: true, touch });
+  await page.evaluate(() => window.game!.step(2));
+}
+
+/**
+ * A clip of the page 360 by 240 round the place on the ground at (x, y), a little more of it below: a ring or a knock is a
+ * small part of a frame, too small for a picture of the whole of it to notice if it went.
+ */
+async function around(page: Page, x: number, y: number) {
+  const p = await page.evaluate(([x, y]) => window.game!.project(x, y, window.game!.ball().z), [x, y] as const);
+  const size = page.viewportSize()!;
+  return {
+    x: Math.max(0, Math.min(size.width - 360, Math.round(p.x - 180))),
+    y: Math.max(0, Math.min(size.height - 240, Math.round(p.y - 90))),
+    width: 360,
+    height: 240,
+  };
+}
+
 /** The whole round played by the autopilot's shots, to the card. */
 async function playRound(page: Page) {
   await page.evaluate(() => {
@@ -555,6 +582,68 @@ test.describe('what it looks like', () => {
       });
     }
 
+    // the shot aimed: the camera stands back for the club, the flight is drawn before it is taken, and the pin and the map say where
+    test('a full drive aimed at Long Bend: the arc, the ring and the spread a swing may miss by, the pin and the map', async ({
+      page,
+    }) => {
+      const problems = watch(page);
+      await links(page, 2);
+      await pullDown(page, 1);
+      const shot = await page.evaluate(() => window.game!.motions().shot);
+      expect(shot?.end).toBe('landed');
+      await hideStats(page);
+      await expect(page).toHaveScreenshot('links-aim-driver.png', TOLERANCE);
+      // and the ring and the spread close to, since they are a small part of the frame and the picture of it all would not miss them
+      const clip = await around(page, shot!.ring!.x, shot!.ring!.y);
+      await expect(page).toHaveScreenshot('links-aim-ring.png', { ...TOLERANCE, clip });
+      expect(problems).toEqual([]);
+    });
+
+    test('a five iron aimed at the green of Water Carry: the camera in for the shorter club, the ring by the green', async ({
+      page,
+    }) => {
+      const problems = watch(page);
+      await links(page, 1);
+      await page.locator('#bagClubs button[data-club="5-iron"]').click();
+      await page.evaluate(() => window.game!.step(300));
+      await pullDown(page, 0.93);
+      expect((await page.evaluate(() => window.game!.motions().shot))?.end).toBe('landed');
+      await hideStats(page);
+      await expect(page).toHaveScreenshot('links-aim-iron.png', TOLERANCE);
+      expect(problems).toEqual([]);
+    });
+
+    test('a drive aimed into a tree: the arc meets the canopy and the place it knocks the ball is marked in red', async ({
+      page,
+    }) => {
+      const problems = watch(page);
+      const cols = 41,
+        rows = 130;
+      const map = Array.from({ length: rows }, (_, r) =>
+        Array.from({ length: cols }, (_, c) => {
+          if (r === 0 || r === rows - 1 || c === 0 || c === cols - 1) return '#';
+          if (r === rows - 4) return c === 20 ? 'T' : c === 19 || c === 21 ? 't' : 'f';
+          if (r === rows - 4 - 36 && c === 20) return '^';
+          if (r === 2 && c === 3) return 'C';
+          return 'f';
+        }).join(''),
+      );
+      await start(page, { seed: 11, paused: true });
+      await page.evaluate((m) => {
+        const g = window.game!;
+        g.playCourse([{ name: 'A tree', par: 4, map: m }]);
+        g.step(300);
+      }, map);
+      await pullDown(page, 1);
+      const shot = await page.evaluate(() => window.game!.motions().shot);
+      expect(shot?.knock).not.toBeNull();
+      await hideStats(page);
+      await expect(page).toHaveScreenshot('links-aim-tree.png', TOLERANCE);
+      const clip = await around(page, shot!.knock!.x, shot!.knock!.y);
+      await expect(page).toHaveScreenshot('links-aim-knock.png', { ...TOLERANCE, clip });
+      expect(problems).toEqual([]);
+    });
+
     test('the line of out of bounds, close to: white stakes on the ground’s edge, the dry grass beyond, the rough within', async ({
       page,
     }) => {
@@ -769,6 +858,22 @@ test.describe('what it looks like', () => {
         window.game!.step(75);
       });
       await expect(page).toHaveScreenshot('phone-links.png', TOLERANCE);
+      expect(problems).toEqual([]);
+    });
+
+    test('a full drive aimed on a phone: the flight to its ring, the pin under the strokes and the map at the side', async ({
+      page,
+    }) => {
+      const problems = watch(page);
+      await start(page, { seed: 11, paused: true });
+      await page.evaluate(() => {
+        window.game!.chooseCourse('The Links');
+        window.game!.startHole(2);
+        window.game!.step(300);
+      });
+      await pullDown(page, 1, 0, true);
+      expect((await page.evaluate(() => window.game!.motions().shot))?.end).toBe('landed');
+      await expect(page).toHaveScreenshot('phone-links-aim.png', TOLERANCE);
       expect(problems).toEqual([]);
     });
 

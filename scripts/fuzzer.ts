@@ -17,6 +17,7 @@
  * --seed N` does, and prints what was done before it went wrong.
  */
 import { Camera } from 'artshape-render/gpu/camera';
+import { aimView } from '../src/aimview';
 import { heightAt } from '../src/arena';
 import { Autopilot } from '../src/autopilot';
 import { CameraRig } from '../src/camera';
@@ -24,8 +25,18 @@ import { CLUBS } from '../src/clubs';
 import { COURSES, type HoleDef } from '../src/course';
 import { Game, type GameEvents } from '../src/game';
 import { Input } from '../src/input';
-import { checkInvariants, knockProblems, landingProblems, planProblems, viewProblems } from '../src/invariants';
+import {
+  checkInvariants,
+  knockProblems,
+  landingProblems,
+  planProblems,
+  previewProblems,
+  viewProblems,
+} from '../src/invariants';
+import { Previewer } from '../src/preview';
 import { BAG } from '../src/bag';
+import { carryFrom } from '../src/flight';
+import { lieAt } from '../src/arena';
 import { Progress, memoryStore } from '../src/progress';
 import { seeded } from '../src/random';
 import { groundAt } from '../src/shot';
@@ -83,12 +94,42 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
           if (name === 'started' && playing) count(visited, playing.def.name);
           if (name === 'knocked' && playing) told.push(...knockProblems(playing, ...(args as Knock)));
           if (name === 'landed' && playing) {
-            const [x, y, speed] = args as unknown as Landing;
+            const [x, y, speed, first] = args as unknown as Landing;
             told.push(...landingProblems(playing, speed, x, y));
+            // a shot taken as it was aimed comes down within the spread the preview showed, and never past its ring
+            if (first && aimed) {
+              const a = aimed;
+              const u = (x - a.x) * Math.cos(a.angle) + (y - a.y) * Math.sin(a.angle);
+              const v = -(x - a.x) * Math.sin(a.angle) + (y - a.y) * Math.cos(a.angle);
+              const slack = 2 + 0.03 * a.carry;
+              // inside the box of what a swing can do: no further across than its scatter, and no further along than the
+              // ring and the worst mishit of speed (the two together, in a corner, which the spread's ellipse leaves out)
+              if (Math.abs(u) > a.along + slack || Math.abs(v) > a.across + slack)
+                told.push(
+                  `a shot aimed to come down within ${a.along.toFixed(1)} along and ${a.across.toFixed(1)} across of ${a.x.toFixed(1)},${a.y.toFixed(1)} came down at ${x.toFixed(1)},${y.toFixed(1)}, ${u.toFixed(1)} along and ${v.toFixed(1)} across (${a.what})`,
+                );
+            }
           }
+          if (['landed', 'stopped', 'splash', 'outOfBounds', 'holed', 'started'].includes(name)) aimed = null;
         },
     },
   );
+  // the game's chance, counted, so that what is only looked at can be shown to have drawn none of it
+  let draws = 0;
+  const chance = (s: number) => {
+    const next = seeded(s);
+    return () => (draws++, next());
+  };
+  /** The shot aimed and then taken, where the preview said it comes down, for the landing to be held to when it is told. */
+  let aimed: {
+    angle: number;
+    x: number;
+    y: number;
+    across: number;
+    along: number;
+    carry: number;
+    what: string;
+  } | null = null;
   const log: string[] = [];
   let frame = 0;
   const fail = (problems: string[]): FuzzResult => ({
@@ -103,12 +144,19 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
   try {
     // a new player, or, on odd seeds, one come back with coins and gems enough for the shop
     let store = memoryStore(seed % 2 ? JSON.stringify({ coins: 700, gems: 6 }) : null);
-    let game = new Game(new Progress(store), events, { random: seeded(seed), course });
+    let game = new Game(new Progress(store), events, { random: chance(seed), course });
     playing = game;
     // a player part way round, on a hole of the seed's: every hole is played, where a monkey starting from the first
     // and reloading now and then would seldom get to the last
     game.startAt(seed % game.course.length);
     let busy = 0;
+    /** The previewer of the hole being played, made again when the game or the hole changes. */
+    let previewer: Previewer | null = null;
+    let previewerOf: { game: Game | null; hole: number; course: readonly HoleDef[] | null } = {
+      game: null,
+      hole: -1,
+      course: null,
+    };
     const between = (a: number, b: number) => a + random() * (b - a);
     const did = (what: string) => {
       count(done, what);
@@ -173,6 +221,68 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
         },
       ],
       [
+        2.5,
+        () => {
+          // a player aiming on a golf hole: a club picked, and a drag held at any angle and power, which shows the flight it
+          // would make. Looking costs the game nothing: no chance drawn, no stroke, nothing of the ball or the clock moved
+          if (!game.layout.golf || !game.ready) return;
+          if (random() < 0.85) game.pick(BAG[Math.floor(random() * BAG.length)].id);
+          const club = game.inHand;
+          const { world, ball, layout } = game;
+          const at = { x: world.x[ball], y: world.y[ball] };
+          const toCup = Math.atan2(layout.cup.y - at.y, layout.cup.x - at.x);
+          const angle = random() < 0.5 ? toCup + between(-0.3, 0.3) : between(-Math.PI, Math.PI);
+          const power = random() < 0.2 ? 1 : random() < 0.1 ? between(0.001, 0.05) : random();
+          if (
+            !previewer ||
+            previewerOf.game !== game ||
+            previewerOf.hole !== game.hole ||
+            previewerOf.course !== game.course
+          ) {
+            previewer = new Previewer(game);
+            previewerOf = { game, hole: game.hole, course: game.course };
+          }
+          const digest = () =>
+            JSON.stringify([
+              game.t,
+              game.strokes,
+              game.card,
+              game.phase,
+              game.hole,
+              game.inHand.id,
+              world.x[ball],
+              world.y[ball],
+              world.z[ball],
+            ]);
+          const before = digest(),
+            drawn = draws;
+          const p = previewer.run(at, club, angle, power);
+          const bad = previewProblems(game, at, club, p);
+          if (bad.length) throw new Error(`a preview of the ${club.id} at ${power.toFixed(3)}: ${bad.join('; ')}`);
+          if (digest() !== before) throw new Error('aiming a shot changed the game');
+          if (draws !== drawn) throw new Error(`aiming a shot drew ${draws - drawn} numbers of the game's chance`);
+          did('aim a shot');
+          // taken as aimed, where nothing in the air turns the flight (a swing that is not true may meet a tree or the rail
+          // where the true swing does not, or the other way): it comes down within the spread that was shown
+          if (random() < 0.7 && p.n > 1 && p.end === 'landed' && !p.hit && !layout.trees.length && power > 0.05) {
+            aimed = {
+              angle,
+              x: at.x,
+              y: at.y,
+              across: p.footprint.across,
+              along: p.footprint.along,
+              carry: p.carry,
+              what: `${club.id} at ${power.toFixed(3)} from ${at.x.toFixed(1)},${at.y.toFixed(1)} on lie ${lieAt(layout, at.x, at.y)}, ring ${p.x.toFixed(1)},${p.y.toFixed(1)}, carry ${p.carry.toFixed(1)}, angle ${angle.toFixed(3)}`,
+            };
+            // the ring is the far end of the spread, and the spread's middle is a half length short of it
+            aimed.x = p.x - Math.cos(angle) * p.footprint.along;
+            aimed.y = p.y - Math.sin(angle) * p.footprint.along;
+            if (game.shoot(angle, power)) did('shoot as aimed');
+            busy = Math.floor(between(10, 90));
+          }
+        },
+      ],
+      [
         1,
         () => {
           // the shop, open whenever: any club, whether it can be paid for or not
@@ -227,7 +337,7 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
           game.persist();
           const kept = JSON.stringify(game.progress.save);
           store = memoryStore(store.json);
-          game = new Game(new Progress(store), events, { random: seeded(seed + frame), course });
+          game = new Game(new Progress(store), events, { random: chance(seed + frame), course });
           playing = game;
           const loaded = JSON.stringify(game.progress.save);
           if (loaded !== kept) throw new Error(`the save was ${kept} and loaded as ${loaded}`);
@@ -261,6 +371,14 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
         // screen, and the switch back. Nothing may be struck, and the view keeps to its limits
         const strokes = game.strokes;
         did('look round');
+        // the camera set for the hole as a page sets it, and on a golf hole sometimes sent to look at a shot's landing
+        rig.setGolf(game.layout.golf);
+        if (game.layout.golf && random() < 0.5) {
+          const lie = lieAt(game.layout, game.world.x[game.ball], game.world.y[game.ball]);
+          rig.aimAt(aimView(carryFrom(game.inHand, 1, lie) * 1.045, cam.aspect), random() < 0.3);
+          rig.settle(between(0, 2));
+          for (const problem of viewProblems(rig)) told.push(problem);
+        }
         input.setMode('look');
         const at = () => [between(0, SCREEN.w), between(0, SCREEN.h)] as const;
         for (let k = 0, fingers = 1 + Math.floor(random() * 3); k < fingers; k++) {

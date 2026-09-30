@@ -24,12 +24,25 @@
  * Checked by the fuzzer after everything it does, by the test API on asking,
  * and by the unit tests. Each broken rule is a line saying what and where.
  */
-import { BUMPER, KINDS, KIND_NAME, KNOCK, fromPosts, fromTrees, heightAt, restingAbove, tileAt } from './arena';
+import {
+  BUMPER,
+  KINDS,
+  KIND_NAME,
+  KNOCK,
+  PHYSICS,
+  fromPosts,
+  fromTrees,
+  heightAt,
+  highestTerrain,
+  restingAbove,
+  tileAt,
+} from './arena';
 import { TILT, VIEW, type CameraRig } from './camera';
 import type { Plan } from './autopilot';
-import { BAG } from './bag';
+import { BAG, carrying, type BagClub } from './bag';
 import { CLUBS } from './clubs';
 import { LIMIT_OVER_PAR, fastest, type Game } from './game';
+import type { Preview } from './preview';
 import { LANDING } from './surfaces';
 import { TREE, insideCanopy } from './trees';
 
@@ -38,8 +51,8 @@ const EACH = 3;
 
 /**
  * The rules a camera must always keep, however a player has turned, tilted and zoomed it: its turn and its tilt are
- * numbers, it has turned no more than a turn either way and is tilted within `TILT`, and it is no nearer or further
- * than the zoom allows.
+ * numbers, it has turned no more than a turn either way and is tilted within `TILT`, it is no nearer or further than the
+ * zoom allows (which is further on a golf hole), and it looks ahead of the ball by a number of yards.
  */
 export function viewProblems(rig: CameraRig): string[] {
   const out: string[] = [];
@@ -48,8 +61,10 @@ export function viewProblems(rig: CameraRig): string[] {
   if (!Number.isFinite(rig.tilt)) out.push(`the tilt is not a number: ${rig.tilt}`);
   else if (rig.tilt < TILT.least - 1e-9 || rig.tilt > TILT.most + 1e-9)
     out.push(`the tilt is out of its limits, ${TILT.least} to ${TILT.most}: ${rig.tilt}`);
-  if (!(rig.distance >= VIEW.near - 1e-9 && rig.distance <= VIEW.far + 1e-9))
-    out.push(`the distance is out of the zoom, ${VIEW.near} to ${VIEW.far}: ${rig.distance}`);
+  if (!(rig.distance >= VIEW.near - 1e-9 && rig.distance <= rig.far + 1e-9))
+    out.push(`the distance is out of the zoom, ${VIEW.near} to ${rig.far}: ${rig.distance}`);
+  if (!(rig.lead >= 0 && Number.isFinite(rig.lead)))
+    out.push(`the lead is not a number of yards, nought or more: ${rig.lead}`);
   return out;
 }
 
@@ -232,5 +247,50 @@ export function planProblems(game: Game, plan: Plan): string[] {
   if (!golf && plan.club !== undefined) out.push(`the plan names a club, ${plan.club}, on a hole of minigolf`);
   if (plan.expect && !(Number.isFinite(plan.expect.x) && Number.isFinite(plan.expect.y)))
     out.push(`the plan expects the ball at ${plan.expect.x},${plan.expect.y}`);
+  return out;
+}
+
+/**
+ * What is wrong with a preview, the flight a drag would make worked out before the shot is taken: it is a flight that
+ * begins at the ball and is numbers all through, its lengths grow and its last is the path's own, it ends at the place
+ * it says it came down, it goes no further than a club can send a ball (from the level, and with a fall from the highest
+ * ground besides), and its spread is a spread (across and along nought or more, and never longer than half the flight).
+ * A club with no loft has no preview, and nothing to be wrong.
+ */
+export function previewProblems(game: Game, from: { x: number; y: number }, club: BagClub, p: Preview): string[] {
+  const out: string[] = [];
+  if (club.loft <= 0 || p.n === 0) return out;
+  if (p.n < 2) out.push(`the flight has ${p.n} point`);
+  let along = 0;
+  for (let k = 0; k < p.n; k++) {
+    for (let c = 0; c < 3; c++)
+      if (!Number.isFinite(p.points[k * 3 + c])) {
+        out.push(`a point of the flight is not a number: ${k}`);
+        return out;
+      }
+    if (k) {
+      if (p.length[k] < p.length[k - 1] - 1e-4) out.push(`the flight's length goes backwards at ${k}`);
+      along += Math.hypot(...[0, 1, 2].map((c) => p.points[k * 3 + c] - p.points[(k - 1) * 3 + c]));
+    }
+  }
+  if (Math.abs(p.length[p.n - 1] - along) > 0.01 * (1 + along))
+    out.push(`the flight's length is ${p.length[p.n - 1]}, not ${along}`);
+  if (Math.hypot(p.points[0] - from.x, p.points[1] - from.y) > 0.6)
+    out.push(`the flight does not begin at the ball: ${p.points[0]},${p.points[1]} from ${from.x},${from.y}`);
+  const last = (p.n - 1) * 3;
+  if (Math.hypot(p.points[last] - p.x, p.points[last + 1] - p.y) > 0.6)
+    out.push(
+      `the flight ends at ${p.points[last]},${p.points[last + 1]}, not where it says it came down, ${p.x},${p.y}`,
+    );
+  if (!['landed', 'holed', 'water', 'out'].includes(p.end)) out.push(`the flight ended as ${p.end}`);
+  // no further than the club can send a ball: its own carry at its hardest (a little over, since a ball comes down below
+  // where it left), and what a fall from the highest ground adds to it, and a little for the ball's own size
+  const fall = highestTerrain(game.layout) + 5;
+  const most = carrying(club.hardest, club.loft) * 1.06 + club.hardest * Math.sqrt((2 * fall) / PHYSICS.gravity) + 10;
+  if (!(p.carry >= 0 && p.carry <= most))
+    out.push(`the flight carries ${p.carry}, which the ${club.id} cannot (at most ${most.toFixed(0)})`);
+  const { across, along: length } = p.footprint;
+  if (!(across >= 0 && length >= 0 && length <= p.carry / 2 + 1e-6 && across <= p.carry))
+    out.push(`the spread is ${across} across and ${length} along, for a carry of ${p.carry}`);
   return out;
 }

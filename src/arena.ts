@@ -361,6 +361,12 @@ export function slopeAt(l: Layout, x: number, y: number): [number, number] {
   return [smoothed(l, x, y, true, false) / TILE, smoothed(l, x, y, false, true) / TILE];
 }
 
+/** The same, written into `out`, for what is asked on every frame. */
+export function slopeInto(l: Layout, x: number, y: number, out: [number, number]): void {
+  out[0] = smoothed(l, x, y, true, false) / TILE;
+  out[1] = smoothed(l, x, y, false, true) / TILE;
+}
+
 /** How far a ball's middle stands above the ground under it, resting there: further than its radius on a slope. */
 export function restingAbove(l: Layout, x: number, y: number, radius: number): number {
   const [sx, sy] = slopeAt(l, x, y);

@@ -16,8 +16,12 @@
  */
 import type { Camera } from 'artshape-render/gpu/camera';
 
-/** How it looks: the lens, and how far back it stands at each end of the zoom and at home. */
-export const VIEW = { fov: 40, near: 30, far: 110, home: 62 };
+/**
+ * How it looks: the lens, and how far back it stands at each end of the zoom and at home. A golf hole lets it stand
+ * back further, `golfFar`, since a player who cannot see where a shot would come down cannot play it: a drive goes
+ * 250 yards, and from 110 back the top of the screen is 98 yards off.
+ */
+export const VIEW = { fov: 40, near: 30, far: 110, home: 62, golfFar: 200 };
 /**
  * How far it tilts, as its angle from the vertical: at home, three-quarters from above, the steepest it goes, and the
  * lowest. The lowest is held to 57 degrees because the grass is what a frame costs, and looking toward the horizon
@@ -40,12 +44,21 @@ export function catchUp(speed: number): number {
 }
 /** How much wider than tall a screen must be before it needs no more room: below this, the camera stands back. */
 const WIDE = 1.25;
+/** How much further back a screen of `aspect` stands the camera than its distance says: one for a screen that is wide enough. */
+export function tallOf(aspect: number): number {
+  return Math.sqrt(Math.max(1, WIDE / Math.max(aspect, 0.1)));
+}
 /**
  * How far ahead of the ball, the way the camera faces, it looks, so the ball
  * sits low on the screen with the way ahead above it, and not in the middle of
  * the rough behind the tee.
  */
 export const LEAD = 10;
+
+/** How quickly it eases to an aim view, as a rate: the share of the way it goes in a second, as `EASE` is. */
+const AIM_EASE = 4;
+/** How near an aim view it is called there, in yards of distance and in radians of tilt, which snaps it the rest of the way. */
+const SETTLED = { distance: 0.25, tilt: 0.002, lead: 0.25 };
 
 /** An angle brought within one turn either way of nought. */
 const wrap = (a: number) => a - 2 * Math.PI * Math.round(a / (2 * Math.PI));
@@ -63,6 +76,14 @@ export class CameraRig {
   readonly target: [number, number, number] = [0, 0, 0];
   /** How far back it stands, before a tall screen pushes it further. */
   distance: number = VIEW.home;
+  /** How far ahead of the ball, the way it faces, it looks: `LEAD`, or more on a golf hole where the landing is a long way off. */
+  lead: number = LEAD;
+  /** How far back the zoom goes: `VIEW.far`, and `VIEW.golfFar` on a golf hole. */
+  far: number = VIEW.far;
+  /** The furthest the camera itself stands from what it looks at, tall screen and all: none on a hole of minigolf. */
+  private stand = Infinity;
+  /** The view it is easing to, if it is, on a golf hole: each of the three is left alone where it is not a number. */
+  private goal: { distance: number; tilt: number; lead: number } | null = null;
   /** Which way it faces, turned from up the course: nought at the tee's view, and within a turn either way of it. */
   azimuth = 0;
   /** How far from the vertical it looks down: `TILT.home` at the tee's view, and within `TILT`'s limits. */
@@ -142,9 +163,73 @@ export class CameraRig {
     this.target[2] += (z - this.target[2]) * k;
   }
 
-  /** Nearer for less than zero, further for more, held within the limits. */
+  /**
+   * Whether the hole is golf, which lets the camera stand further back (and no further than `VIEW.golfFar`, however
+   * tall the screen). A view zoomed out past the limits of the hole that is begun is brought within them.
+   */
+  setGolf(on: boolean) {
+    this.far = on ? VIEW.golfFar : VIEW.far;
+    this.stand = on ? VIEW.golfFar : Infinity;
+    this.distance = Math.min(this.far, this.distance);
+    if (!on) this.lead = LEAD;
+    this.goal = null;
+  }
+
+  /** Whether the hole it is set for is golf. */
+  get golf(): boolean {
+    return this.stand !== Infinity;
+  }
+
+  /** Whether it is easing to an aim view. */
+  get aiming(): boolean {
+    return this.goal !== null;
+  }
+
+  /**
+   * Sent to look at a shot from `goal`, the distance and the tilt and the lead that show where it comes down, and eased
+   * there by `settle`; or put there at once if `now`, as the first hole is. Held within the limits. The way it faces is
+   * not touched, and whatever the player does to the view, a zoom or a turn, takes it back from here.
+   */
+  aimAt(goal: { distance: number; tilt: number; lead?: number }, now = false) {
+    const distance = Number.isFinite(goal.distance)
+      ? Math.max(VIEW.near, Math.min(this.far, goal.distance))
+      : this.distance;
+    const tilt = Number.isFinite(goal.tilt) ? Math.max(TILT.least, Math.min(TILT.most, goal.tilt)) : this.tilt;
+    const lead = goal.lead !== undefined && Number.isFinite(goal.lead) ? Math.max(0, goal.lead) : this.lead;
+    if (now) {
+      this.distance = distance;
+      this.tilt = tilt;
+      this.lead = lead;
+      this.goal = null;
+      return;
+    }
+    this.goal = { distance, tilt, lead };
+  }
+
+  /** A step of `dt` seconds nearer the view it is easing to: by the time that has passed, so a slow frame goes as far as the frames it was. */
+  settle(dt: number) {
+    const g = this.goal;
+    if (!g) return;
+    const k = 1 - Math.exp(-AIM_EASE * Math.max(0, dt));
+    this.distance += (g.distance - this.distance) * k;
+    this.tilt += (g.tilt - this.tilt) * k;
+    this.lead += (g.lead - this.lead) * k;
+    if (
+      Math.abs(g.distance - this.distance) < SETTLED.distance &&
+      Math.abs(g.tilt - this.tilt) < SETTLED.tilt &&
+      Math.abs(g.lead - this.lead) < SETTLED.lead
+    ) {
+      this.distance = g.distance;
+      this.tilt = g.tilt;
+      this.lead = g.lead;
+      this.goal = null;
+    }
+  }
+
+  /** Nearer for less than zero, further for more, held within the limits. The player's own, which ends an ease to an aim view. */
   zoom(by: number) {
-    this.distance = Math.max(VIEW.near, Math.min(VIEW.far, this.distance + by));
+    this.goal = null;
+    this.distance = Math.max(VIEW.near, Math.min(this.far, this.distance + by));
   }
 
   /**
@@ -152,6 +237,7 @@ export class CameraRig {
    * lower view, within `TILT`. A number that is not one turns and tilts it nowhere.
    */
   orbit(turn: number, tilt: number) {
+    this.goal = null;
     if (Number.isFinite(turn)) this.azimuth = wrap(this.azimuth + turn);
     if (Number.isFinite(tilt)) this.tilt = Math.max(TILT.least, Math.min(TILT.most, this.tilt + tilt));
   }
@@ -166,13 +252,12 @@ export class CameraRig {
 
   /** The camera put where the rig says at game time `t`, for a screen of the camera's aspect: any glide over, untold. */
   place(camera: Camera, t = Infinity) {
-    const tall = Math.sqrt(Math.max(1, WIDE / Math.max(camera.aspect, 0.1)));
-    const r = this.distance * tall;
+    const r = Math.min(this.distance * tallOf(camera.aspect), this.stand);
     const at = this.looking(t);
     const { azimuth, tilt } = this.view(t, this.seen);
     // the way it faces on the ground, and the point it looks at a lead ahead of the ball that way
     const [fx, fy] = [Math.sin(azimuth), Math.cos(azimuth)];
-    const [x, y, z] = [at[0] + fx * LEAD, at[1] + fy * LEAD, at[2]];
+    const [x, y, z] = [at[0] + fx * this.lead, at[1] + fy * this.lead, at[2]];
     camera.fov = VIEW.fov;
     camera.target = [x, y, z];
     camera.position = [x - fx * Math.sin(tilt) * r, y - fy * Math.sin(tilt) * r, z + Math.cos(tilt) * r];
