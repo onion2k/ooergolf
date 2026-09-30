@@ -24,7 +24,7 @@ import { GRASS, fieldOf, windOf } from './turf';
 import { Scene, boxOf } from './scene';
 import { clearings } from './scenery';
 import { cupBurst, splash, strikePuff } from './bursts';
-import { Gesture } from './gesture';
+import { Input } from './input';
 import { SPARKLE, flash, glint } from './glints';
 import { Squash, squashInto, squashOf } from './squash';
 import { waggle } from './sway';
@@ -240,7 +240,7 @@ async function main() {
 
   // ---- the pointers: one pulled back and let go is a shot, two are a pinch ----
 
-  const gesture = new Gesture({
+  const input = new Input({
     shortSide() {
       const r = canvas.getBoundingClientRect();
       return Math.max(1, Math.min(r.width, r.height));
@@ -251,22 +251,20 @@ async function main() {
       const g = heightAt(played.layout, played.world.x[played.ball], played.world.y[played.ball]);
       return groundAt(cam, ((x - r.left) / r.width) * 2 - 1, 1 - ((y - r.top) / r.height) * 2, g);
     },
-  });
-  const act = (g: ReturnType<Gesture['up']>) => {
+    shoot: (angle, power) => played.shoot(angle, power),
+    zoom: (by) => rig.zoom(by),
     // nothing is struck through the start screen
-    if (choosing) return;
-    if (g.kind === 'shoot') played.shoot(g.shot.angle, g.shot.power);
-    else if (g.kind === 'zoom') rig.zoom(g.by);
-  };
+    blocked: () => choosing,
+  });
   canvas.addEventListener('pointerdown', (e) => {
     // the mouse's other buttons are not a shot
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     canvas.setPointerCapture(e.pointerId);
-    act(gesture.down(e.pointerId, e.clientX, e.clientY));
+    input.down(e.pointerId, e.clientX, e.clientY);
   });
-  canvas.addEventListener('pointermove', (e) => act(gesture.move(e.pointerId, e.clientX, e.clientY)));
-  canvas.addEventListener('pointerup', (e) => act(gesture.up(e.pointerId, e.clientX, e.clientY)));
-  canvas.addEventListener('pointercancel', (e) => gesture.cancel(e.pointerId));
+  canvas.addEventListener('pointermove', (e) => input.move(e.pointerId, e.clientX, e.clientY));
+  canvas.addEventListener('pointerup', (e) => input.up(e.pointerId, e.clientX, e.clientY));
+  canvas.addEventListener('pointercancel', (e) => input.cancel(e.pointerId));
   canvas.addEventListener(
     'wheel',
     (e) => {
@@ -288,7 +286,7 @@ async function main() {
     // the aim shows only while a shot can be taken
     // a finer club's aim reaches further, as far again as its hardest shot rolls
     const reach = rollsFor(played.hardest) / rollsFor(HARDEST_SHOT);
-    const dots = played.ready ? scene.writeAim(world.x[ball], world.y[ball], gesture.aim, reach, played.t) : 0;
+    const dots = played.ready ? scene.writeAim(world.x[ball], world.y[ball], input.aim, reach, played.t) : 0;
     renderer.move(1, scene.aim, dots);
     // the nearest dot's size, as it was placed: nought for none
     drawn.pulse = dots ? scene.aim[0] - 1 : 0;
@@ -485,7 +483,7 @@ async function main() {
       const r = canvas.getBoundingClientRect();
       return { x: r.left + ((nx + 1) / 2) * r.width, y: r.top + ((1 - ny) / 2) * r.height };
     },
-    aiming: () => (played.ready && gesture.aim ? { ...gesture.aim } : null),
+    aiming: () => (played.ready && input.aim ? { ...input.aim } : null),
     view: () => ({
       distance: rig.distance,
       rung: governor.rung,
