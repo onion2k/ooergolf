@@ -179,9 +179,12 @@ test.describe('the start screen', () => {
     const problems = watch(page);
     await start(page, { seed: 1, paused: true, screen: true });
     await expect(page.locator('#start')).toBeVisible();
-    await expect(page.locator('#start .course')).toHaveCount(3);
+    await expect(page.locator('#start .course')).toHaveCount(4);
     await expect(page.locator('#start .course').nth(2)).toContainText('The Downs');
     await expect(page.locator('#start .course').nth(2)).toContainText('9 holes');
+    await expect(page.locator('#start .course').nth(3)).toContainText('The Moors');
+    await expect(page.locator('#start .course').nth(3)).toContainText('9 holes');
+    await expect(page.locator('#start .course').nth(3)).toContainText('par 47');
     await expect(page.locator('#start .course').first()).toContainText('The Meadow');
     await expect(page.locator('#start .course').first()).toContainText('9 holes');
     expect(await page.evaluate(() => window.game!.state())).toMatchObject({ choosing: true, course: 'The Meadow' });
@@ -812,14 +815,14 @@ test.describe('the grass', () => {
     for (const rung of [0, 1, 2, 3]) expect((await drawn(rung)).swaying, `rung ${rung} sways`).toBe(true);
   });
 
-  test('never runs the renderer out of blades, at the home view, the widest and the closest, on any hole of either course', async ({
+  test('never runs the renderer out of blades, at the home view, the widest and the closest, on any hole of any course', async ({
     page,
   }) => {
     test.setTimeout(120_000);
     const problems = watch(page);
     await start(page, { seed: 1, paused: true, screen: true });
     let most = 0;
-    for (const course of ['The Meadow', 'The Hills', 'The Downs']) {
+    for (const course of ['The Meadow', 'The Hills', 'The Downs', 'The Moors']) {
       await page.evaluate((name) => window.game!.chooseCourse(name), course);
       const holes = await page.evaluate(() => window.game!.content().holes.length);
       for (let hole = 0; hole < holes; hole++) {
@@ -837,9 +840,24 @@ test.describe('the grass', () => {
             return drawn.near + drawn.far;
           }, zoom);
           most = Math.max(most, blades);
-          expect(blades, `${course} hole ${hole + 1} at zoom ${zoom}: grass there`).toBeGreaterThan(10_000);
+          // grass in view, where the hole leaves any: on a green a hundred and fifty units across, the middle and the tee
+          // have next to none in view, and it is the corner below that holds it
+          if (course !== 'The Moors')
+            expect(blades, `${course} hole ${hole + 1} at zoom ${zoom}: grass there`).toBeGreaterThan(10_000);
           expect(blades, `${course} hole ${hole + 1} at zoom ${zoom}: room to spare`).toBeLessThan(BLADE_ROOM * 0.85);
         }
+        // the rough from just outside the rail's corner: on every hole there is grass in view there, and not too much
+        const corner = await page.evaluate(async () => {
+          const g = window.game!;
+          const { floor } = g.content();
+          g.look(floor.minX - 12, floor.minY - 12, 62);
+          g.step(2);
+          const drawn = await g.grass();
+          return drawn.near + drawn.far;
+        });
+        most = Math.max(most, corner);
+        expect(corner, `${course} hole ${hole + 1} at the corner: grass there`).toBeGreaterThan(10_000);
+        expect(corner, `${course} hole ${hole + 1} at the corner: room to spare`).toBeLessThan(BLADE_ROOM * 0.85);
       }
     }
     console.log(`grass: the most blades drawn in any scene ${most}, of room for ${BLADE_ROOM}`);

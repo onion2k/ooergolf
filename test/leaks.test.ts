@@ -8,9 +8,27 @@
 import { describe, expect, it } from 'vitest';
 import { WATCH, grew, sizes, trouble } from '../scripts/leaks';
 import { BALL } from '../src/arena';
+import { CLUBS } from '../src/clubs';
+import { COURSES } from '../src/course';
+import { Progress, memoryStore } from '../src/progress';
 import { newGame } from './helpers';
 
 describe('what must stay bounded', () => {
+  it('holds a save with every club and a best on every hole of every course under its ceiling, however many courses there are', () => {
+    // a best is kept for each hole by its name, so the save grows a hole at a time as the courses are played: the most it
+    // could ever be is every club owned and every hole of every course done
+    const progress = new Progress(memoryStore(null));
+    progress.save.owned = CLUBS.map((c) => c.id);
+    progress.save.club = CLUBS[CLUBS.length - 1].id;
+    progress.save.coins = 999_999;
+    progress.save.gems = 999;
+    const holes = COURSES.flatMap((c) => c.holes);
+    for (const hole of holes) progress.save.best[hole.name] = { strokes: 10, club: CLUBS[CLUBS.length - 1].id };
+    expect(holes.length, 'a hole of each').toBeGreaterThanOrEqual(31);
+    const bytes = JSON.stringify(progress.save).length;
+    expect(bytes, `${bytes} bytes for ${holes.length} holes`).toBeLessThan(WATCH['save bytes']!.ceiling);
+  });
+
   it('reads the sizes off a game, and has a ceiling for every one', () => {
     const { game } = newGame();
     const now = sizes(game);

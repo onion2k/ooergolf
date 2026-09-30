@@ -12,7 +12,9 @@
  * is small detail on them. A hole's steepness is how steep the steepest step
  * between neighbouring tiles is, as a share of the physics' limit, so the
  * same figure means the same on any feel. The tee and the cup are left on
- * flat plateaus, so a ball rests on the one and beside the other.
+ * flat plateaus, so a ball rests on the one and beside the other; and a hole
+ * may ask for level discs, a pond's bed at nought and a bunker's at its own
+ * height, made in the same way and before the steepness is set.
  *
  * Arithmetic only: it is handed a layout and a spec, and writes nothing.
  */
@@ -75,12 +77,28 @@ export const FEELS = {
 
 export type Feel = keyof typeof FEELS;
 
-/** A ground: its seed, its feel, and how steep its steepest step is, as a share of the physics' limit, from nought to one. */
+/**
+ * A disc of level ground, in tiles from the west and from the south, its middle at (`x`, `y`) and its radius `r`: a pond
+ * or a bunker's bed. It is level at the height the ground had at its middle, or, with `floor`, at the lowest the ground
+ * goes, which is nought, where water lies.
+ */
+export interface Flat {
+  x: number;
+  y: number;
+  r: number;
+  floor?: boolean;
+}
+
+/** A ground: its seed, its feel, how steep its steepest step is, as a share of the physics' limit, from nought to one, and any level discs in it. */
 export interface GroundSpec {
   seed: number;
   feel: Feel;
   steepness: number;
+  flats?: readonly Flat[];
 }
+
+/** How far past its radius a level disc is quite level, and how far past that the ground comes back to the noise, in tiles. */
+export const FLATS = { inner: 0.5, outer: 2.5 } as const;
 
 /**
  * How far from the tee and from the cup the ground is flat, and how far it
@@ -102,20 +120,28 @@ function smoothstep(a: number, b: number, x: number): number {
  * step between neighbours exactly `steepness` of the physics' limit of half a
  * tile, and flat round the tee and the cup.
  */
-export function noiseGround(layout: Layout, { seed, feel, steepness }: GroundSpec): Float32Array {
+export function noiseGround(layout: Layout, { seed, feel, steepness, flats = [] }: GroundSpec): Float32Array {
   if (!(steepness > 0 && steepness < 1))
     throw new RangeError(`a ground's steepness is between nought and one, not ${steepness}`);
+  for (const { x, y, r } of flats)
+    if (!(r > 0 && x >= 0 && y >= 0 && x <= layout.cols - 1 && y <= layout.rows - 1))
+      throw new RangeError(
+        `a level disc of radius ${r} at ${x},${y} is not on a ground of ${layout.cols} by ${layout.rows} tiles`,
+      );
   const { cols, rows } = layout;
   const { swell, ...rest } = FEELS[feel];
   const detail: Octave | undefined = 'detail' in rest ? rest.detail : undefined;
   const big = gradientNoise(seed),
     small = gradientNoise(seed + 7919);
   const h = new Float64Array(cols * rows);
+  let lowestNoise = Infinity;
   for (let ty = 0; ty < rows; ty++)
-    for (let tx = 0; tx < cols; tx++)
+    for (let tx = 0; tx < cols; tx++) {
       h[ty * cols + tx] =
         swell.weight * big(tx / swell.size, ty / swell.size) +
         (detail ? detail.weight * small(tx / detail.size, ty / detail.size) : 0);
+      lowestNoise = Math.min(lowestNoise, h[ty * cols + tx]);
+    }
   // the tee and the cup, each on a plateau at the height the noise had at its middle, that the noise comes back to over a
   // couple of tiles: a smooth blend, so the plateau has no edge
   for (const at of [layout.tee, layout.cup]) {
@@ -128,6 +154,23 @@ export function noiseGround(layout: Layout, { seed, feel, steepness }: GroundSpe
         h[ty * cols + tx] = level + (h[ty * cols + tx] - level) * w;
       }
   }
+  // the level discs, made as the plateaus are, and before the scale is found, so it holds whatever is levelled: each at
+  // the height the ground has at its middle, or at the lowest the noise reached, which the ground is brought to nought
+  // from, so water lies exactly at the ground's floor. Their levels are fixed first, and every disc's own ground put
+  // back level last, so that a disc's blend into the noise never lifts another's, however near they lie
+  const levels = flats.map(({ x, y, floor }) => (floor ? lowestNoise : h[Math.round(y) * cols + Math.round(x)]));
+  flats.forEach(({ x, y, r }, i) => {
+    for (let ty = 0; ty < rows; ty++)
+      for (let tx = 0; tx < cols; tx++) {
+        const w = smoothstep(r + FLATS.inner, r + FLATS.outer, Math.hypot(tx - x, ty - y));
+        h[ty * cols + tx] = levels[i] + (h[ty * cols + tx] - levels[i]) * w;
+      }
+  });
+  flats.forEach(({ x, y, r }, i) => {
+    for (let ty = 0; ty < rows; ty++)
+      for (let tx = 0; tx < cols; tx++)
+        if (Math.hypot(tx - x, ty - y) <= r + FLATS.inner) h[ty * cols + tx] = levels[i];
+  });
   // scaled so the steepest step between neighbours is the share asked for of the physics' limit, half a tile
   let steepest = 0,
     lowest = Infinity;

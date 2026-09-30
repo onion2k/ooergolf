@@ -11,14 +11,16 @@ made. The house
 rules in `~/.claude/CLAUDE.md` apply too. What is in `src/` is a round of
 a course, chosen on a start screen: holes drawn as maps, each played from
 its tee to its cup with a drag pulled back and let go, scored against par,
-and the card at the end. Three courses are here, on artshape-physics v0.8.0.
+and the card at the end. Four courses are here, on artshape-physics v0.8.0.
 The Meadow is nine holes of grass, rail, sand, water, raised grass, posts,
 sliding barriers, a windmill and a conveyor, with a green that lets a putt
 die, a rail and obstacles that bounce, posts that throw a ball back faster
 than it came, and a cup with a rim. The Hills is four whose ground slopes,
 each cup on the slope with its rim following the ground. The Downs is nine
 holes half as long again, whose ground is a smooth surface of Perlin noise
-and nothing else. The golf goes in
+and nothing else. The Moors is nine open holes six to fourteen times the size,
+made by a generator, with ponds, bunkers and stands of posts on noise ground.
+The golf goes in
 a feature at a time, in the order `DESIGN.md` gives.
 
 ## The factory
@@ -55,6 +57,7 @@ Numbers, held by gates, on this machine at 1280×800:
 | Boot, page start to the frame loop running             | 3000 ms                        | `perf`         |
 | Download, scripts and styles gzipped                   | 400 kB                         | `perf`         |
 | A frame drawn, lower quartile at the standard view     | 5 ms                           | `perf`         |
+| The biggest hole begun, and a frame of it drawn        | 400 ms begin, 5 ms a frame     | `perf`         |
 | The physics, a frame, against the reference arithmetic | baseline ± 20%                 | `bench`        |
 | Anything kept: bodies, slots, save bytes, heap         | ceilings in `scripts/leaks.ts` | `leaks`        |
 | The look: colour, framing, contrast, shade and shape   | floors in `look-metrics.spec`  | `look:metrics` |
@@ -352,7 +355,9 @@ change meant to move it, and the commit says why. Look at every picture.
   away under the start screen, and the help beside it says what a drag does.
 - `src/noise.ts` makes ground from noise: `gradientNoise(seed)` is Perlin's,
   and `noiseGround(layout, { seed, feel, steepness })` a hole's heights from
-  it, the same for a seed every time, never below nought, the steepest step
+  it, the same for a seed every time, never below nought, with optional
+  level discs (`flats`, for a pond at nought and a bunker's bed) made before
+  the steepness is set, the steepest step
   between neighbouring tiles exactly `steepness` of the physics' limit of
   half a tile, and flat round the tee and the cup so a ball rests on the one
   and beside the other. A feel (`FEELS`) is the noise's shape: `gentle`, a
@@ -363,14 +368,29 @@ change meant to move it, and the commit says why. Look at every picture.
   feel is in figures (relief, steepest slope, bumpiness, detail, and how much
   of the ground a ball rests on), which the tests hold each hole to.
 - The courses are content in `course.ts`, `COURSES`, each a name and its
-  holes: The Meadow (`COURSE`), The Hills (`HILLS`) and The Downs (`DOWNS`,
+  holes: The Meadow (`COURSE`), The Hills (`HILLS`), The Downs (`DOWNS`,
   built from `DOWNS_SPECS`: a shape, a feel, a steepness and a seed a hole,
   and nothing on it but the ground, which is the obstacle). The Downs' holes
   are 1.5 times as long, tee to cup, as the thirteen there were, on the mean
   (a test holds it to 1.45 to 1.55 against them), and a seed was chosen for
   each by measuring the figures of forty and looking at the pictures; the
-  last three build in steepness. The cup stands at least two tiles in from
-  the rail. A hole is a map drawn
+  last three build in steepness. The Moors (`moors()`, from `MOORS_SPECS`, made
+  when first asked for and not as the page loads, which cost the boot some
+  thirty milliseconds; each `Course` has a `summary` of its holes and par that
+  the start screen reads without making it) are nine open holes from 8,000 to 19,000 square units, five and a half to
+  fourteen times The Downs' mean, a hundred to a hundred and fifty units from
+  tee to cup, made by `openHole` in `src/open.ts` from a spec (a shape, a feel,
+  a steepness, a seed and a list of `Feature`s: ponds, bunkers and stands of
+  posts) and never by hand. The generator places each feature clear of the
+  tee, the cup and the rail and a tile from the next, and never so that no
+  route three tiles wide is left from the tee to the cup; a pond is centred in
+  the lowest of the ground and levelled at nought, since the game's water is at
+  a fixed height under the ground and a pond on a hill would be a pit, and a
+  bunker is on a level bed, both through `noiseGround`'s level discs. A spec
+  that cannot be made is refused by name. Each Moors seed was chosen by playing
+  forty with the pace gate's player, and a hole's name draws its wind, which
+  must move the grass (`test/turf.test.ts`): two names were changed because
+  they did not. The cup stands at least two tiles in from the rail. A hole is a map drawn
   as seen from the tee (`#` rail, `.` grass, `T` tee, `C` cup, `~` water,
   `s` sand, `o` a post on grass, a digit for grass raised that many steps of
   0.4, space for off the course),
@@ -487,6 +507,17 @@ ball down at a lie.
 Each of these is the first feature's to bring, with every gate green at
 each step, and a gate handed what it needs in the same change:
 
+- An autopilot that keeps a margin from water that grows with the shot. It
+  skirts a pond by 1.3 units, and a 5% slip over a 45-unit shot wanders 2.3,
+  so on a big hole with a pond on its line it can splash four or five times
+  and be picked up at the limit (three seeds of sixteen on an open spec);
+  a margin that grows would move the pace of the courses there are.
+- Holes past what the grass field, the frame and the look allow. A cell of
+  1.5 lifts the field's limit to 489 tiles a side; a frame at 400 by 400
+  tiles is 4.7 ms of the 5, since a bigger hole draws more ground; and some
+  holes of 200 tiles a side and more show rough blades pale and frosty near
+  the camera, which was not the shadow's fit or the cell and is not
+  understood. Nothing of The Moors is near them.
 - An autopilot that reads a slope's break. It aims straight at the cup and
   judges the distance along the level: it stops within 0.6 units of where
   it means on four shots across a hollow in five, and 2.4 long on a 21-unit

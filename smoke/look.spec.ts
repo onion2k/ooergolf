@@ -18,7 +18,9 @@
  */
 import { expect, test, type Page } from '@playwright/test';
 import { layoutOf } from '../src/arena';
-import { COURSE, DOWNS, type HoleDef } from '../src/course';
+import { COURSE, DOWNS, moors, type HoleDef } from '../src/course';
+
+const MOORS = moors();
 import { glint } from '../src/glints';
 import { drag, start, watch } from './game';
 
@@ -179,6 +181,42 @@ test.describe('what it looks like', () => {
       );
       await hideStats(page);
       await expect(page.locator('#view')).toHaveScreenshot(file, TOLERANCE);
+      expect(problems).toEqual([]);
+    });
+  }
+
+  // The Moors, a hole each from the middle of the way from its tee to its cup: each is many times the size of any other,
+  // more than the widest zoom takes in, so no one picture has the whole of one, and the middle is where its hazards are
+  for (const [i, hole] of MOORS.entries()) {
+    test(`${hole.name}, hole ${i + 1} of The Moors, from the middle of the way`, async ({ page }) => {
+      const problems = watch(page);
+      await start(page, { seed: 11, paused: true });
+      await page.evaluate((k) => {
+        window.game!.chooseCourse('The Moors');
+        window.game!.startHole(k);
+        window.game!.step(75);
+        const { tee, cup } = window.game!.content();
+        window.game!.look((tee.x + cup.x) / 2, (tee.y + cup.y) / 2 - 12, 100);
+        window.game!.step(1);
+      }, i);
+      await hideStats(page);
+      await expect(page.locator('#view')).toHaveScreenshot(`moors-${i + 1}.png`, TOLERANCE);
+      expect(problems).toEqual([]);
+    });
+  }
+
+  // and the first and the last from their tees, as a player begins them: how much of a big hole is not in view
+  for (const i of [0, 8]) {
+    test(`${MOORS[i].name}, hole ${i + 1} of The Moors, from its tee`, async ({ page }) => {
+      const problems = watch(page);
+      await start(page, { seed: 11, paused: true });
+      await page.evaluate((k) => {
+        window.game!.chooseCourse('The Moors');
+        window.game!.startHole(k);
+        window.game!.step(75);
+      }, i);
+      await hideStats(page);
+      await expect(page.locator('#view')).toHaveScreenshot(`moors-tee-${i + 1}.png`, TOLERANCE);
       expect(problems).toEqual([]);
     });
   }
@@ -556,6 +594,18 @@ test.describe('what it looks like', () => {
         window.game!.step(1);
       });
       await expect(page).toHaveScreenshot('phone-look.png', TOLERANCE);
+      expect(problems).toEqual([]);
+    });
+
+    test('the biggest hole of The Moors, from its tee, on a phone', async ({ page }) => {
+      const problems = watch(page);
+      await start(page, { seed: 11, paused: true });
+      await page.evaluate(() => {
+        window.game!.chooseCourse('The Moors');
+        window.game!.startHole(8);
+        window.game!.step(75);
+      });
+      await expect(page).toHaveScreenshot('phone-moors.png', TOLERANCE);
       expect(problems).toEqual([]);
     });
 

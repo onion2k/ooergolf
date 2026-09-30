@@ -1,7 +1,9 @@
 /** The monkey itself: it gets about, and a clean seed is clean. `npm run fuzz` is the long form. */
 import { describe, expect, it } from 'vitest';
 import { fuzz } from '../scripts/fuzzer';
-import { DOWNS } from '../src/course';
+import { DOWNS, moors } from '../src/course';
+
+const MOORS = moors();
 
 describe('the fuzzer', () => {
   it('plays a seed through without breaking a rule, and does everything a player can', () => {
@@ -61,6 +63,32 @@ describe('the fuzzer', () => {
     expect(holed, 'holed out').toBeGreaterThan(0);
     expect(finished, 'round the whole course').toBeGreaterThan(0);
     expect(knocked, 'and knocked about, on ground that rises and falls').toBeGreaterThan(0);
+  });
+
+  it('plays The Moors at random from start to finish, every seed clean, holing out and getting round all nine', () => {
+    // holes a hundred units and more from tee to cup, where a monkey striking any way at any power is many strokes from the
+    // cup and the limit takes it up often: a longer run, and seeds that go the whole way round
+    let holed = 0,
+      finished = 0,
+      knocked = 0,
+      pickedUp = 0;
+    const visited = new Set<string>();
+    for (const seed of [25, 26, 17, 40]) {
+      const r = fuzz(seed, 20000, MOORS);
+      expect(r.failure, `seed ${seed}: ${JSON.stringify(r.failure)}`).toBe(null);
+      holed += r.happened.holed || 0;
+      finished += r.happened.finished || 0;
+      knocked += r.happened.knocked || 0;
+      pickedUp += r.happened.pickedUp || 0;
+      for (const name of Object.keys(r.visited)) visited.add(name);
+    }
+    const names = MOORS.map((h) => h.name);
+    expect(visited.size, 'a good many of its holes played').toBeGreaterThanOrEqual(5);
+    for (const name of visited) expect(names, `${name} is not a hole of The Moors`).toContain(name);
+    expect(holed, 'holed out').toBeGreaterThan(0);
+    expect(pickedUp, 'and picked up at the limit, as a long hole often takes a monkey').toBeGreaterThan(0);
+    expect(finished, 'round the whole course').toBeGreaterThan(0);
+    expect(knocked, 'and knocked about').toBeGreaterThan(0);
   });
 
   it('plays the same way twice from a seed', () => {

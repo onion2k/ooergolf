@@ -1,8 +1,10 @@
-/** The courses: The Meadow, the first nine, The Hills, whose holes slope, and The Downs, whose ground is noise, each played as a round of its own. */
+/** The courses: The Meadow, the first nine, The Hills, whose holes slope, The Downs, whose ground is noise, and The Moors, whose holes are open country many times the size, each played as a round of its own. */
 import { describe, expect, it } from 'vitest';
 import { ROLL, TILE, layoutOf, slopeAt } from '../src/arena';
 import { Autopilot, restsOn } from '../src/autopilot';
-import { COURSE, COURSES, CUP, DOWNS, DOWNS_FEELS, HILLS } from '../src/course';
+import { COURSE, COURSES, CUP, DOWNS, DOWNS_FEELS, HILLS, moors } from '../src/course';
+
+const MOORS = moors();
 import { checkInvariants } from '../src/invariants';
 import { PHYSICS, terrainRefusal } from '../src/physics';
 import { groundFigures } from './ground-metrics';
@@ -17,8 +19,9 @@ const length = (h: { map: readonly string[]; terrain?: readonly string[] | Float
 };
 
 describe('the courses', () => {
-  it('are The Meadow, the first nine as they were, The Hills, four holes that slope, and The Downs, nine on noise', () => {
-    expect(COURSES.map((c) => c.name)).toEqual(['The Meadow', 'The Hills', 'The Downs']);
+  it('are The Meadow, the first nine as they were, The Hills, four holes that slope, The Downs, nine on noise, and The Moors', () => {
+    expect(COURSES.map((c) => c.name)).toEqual(['The Meadow', 'The Hills', 'The Downs', 'The Moors']);
+    expect(COURSES[3].holes).toBe(MOORS);
     expect(COURSES[0].holes).toBe(COURSE);
     expect(COURSE.length).toBe(9);
     expect(hills().holes.map((h) => h.name)).toEqual(['The Hollow', 'The Volcano', 'The Bowl', 'Side-hill']);
@@ -152,5 +155,106 @@ describe('the courses', () => {
     expect(game.card.length).toBe(9);
     game.card.forEach((score, h) => expect(score, downs().holes[h].name).toBeLessThanOrEqual(downs().holes[h].par));
     expect(told.filter((t) => t.startsWith('finished')).length).toBe(1);
+  });
+});
+
+/**
+ * The Moors: nine open holes made by the generator, each far bigger than any drawn by hand, with ponds, bunkers and
+ * stands of posts on ground that goes from gentle to rolling and choppy. Held to what it is for.
+ */
+describe('The Moors', () => {
+  /** The playable floor inside the rail, in square units. */
+  const box = (h: { map: readonly string[]; terrain?: readonly string[] | Float32Array }) => {
+    const { bounds } = layoutOf(h.map, h.terrain);
+    return (bounds.maxX - bounds.minX) * (bounds.maxY - bounds.minY);
+  };
+  const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
+  /** How many separate features of a kind a hole has: tiles that touch, even at a corner, being one, and a stand's posts being one. */
+  const featuresOf = (map: readonly string[], ch: string) => {
+    const seen = new Set<string>();
+    let n = 0;
+    for (let r = 0; r < map.length; r++)
+      for (let c = 0; c < map[r].length; c++) {
+        if (map[r][c] !== ch || seen.has(`${c},${r}`)) continue;
+        n++;
+        const todo = [[c, r]];
+        seen.add(`${c},${r}`);
+        while (todo.length) {
+          const [x, y] = todo.pop()!;
+          const reach = ch === 'o' ? 2 : 1;
+          for (let dx = -reach; dx <= reach; dx++)
+            for (let dy = -reach; dy <= reach; dy++)
+              if (map[y + dy]?.[x + dx] === ch && !seen.has(`${x + dx},${y + dy}`)) {
+                seen.add(`${x + dx},${y + dy}`);
+                todo.push([x + dx, y + dy]);
+              }
+        }
+      }
+    return n;
+  };
+
+  it('is nine holes, each named once, with the pars it was drawn to, and a limit of five over each', () => {
+    expect(MOORS.map((h) => h.name)).toEqual([
+      'Wide Open',
+      'Lily Ponds',
+      'Sandy Reach',
+      'The Grove',
+      'Long Roll',
+      'Broken Ground',
+      'Water Meadow',
+      'The Ridge',
+      'The Far Pin',
+    ]);
+    expect(MOORS.map((h) => h.par)).toEqual([4, 5, 5, 5, 5, 5, 6, 6, 6]);
+    expect(COURSES[3].name).toBe('The Moors');
+  });
+
+  it('is many times the size of The Downs: every hole nearly six times its mean or more, the mean ten times, and a long way from tee to cup', () => {
+    const downsMean = mean(DOWNS.map(box));
+    for (const hole of MOORS) {
+      expect(box(hole) / downsMean, `${hole.name}`).toBeGreaterThanOrEqual(5.8);
+      // ninety-five units or more from the tee to the cup, and no farther than a putter and its slips can be expected to reach in a few shots
+      expect(length(hole) * TILE, `${hole.name} tee to cup`).toBeGreaterThanOrEqual(95);
+      expect(length(hole) * TILE, `${hole.name} tee to cup`).toBeLessThanOrEqual(160);
+    }
+    expect(mean(MOORS.map(box)) / downsMean, 'the mean').toBeGreaterThanOrEqual(10);
+    // and they grow, from the first hole to the last
+    expect(box(MOORS[8])).toBeGreaterThan(box(MOORS[0]) * 2);
+  });
+
+  it('is the hazards it was given: nothing on the first, ponds where it has them, bunkers and stands', () => {
+    const count = (name: string, ch: string) => featuresOf(MOORS.find((h) => h.name === name)!.map, ch);
+    expect([count('Wide Open', '~'), count('Wide Open', 's'), count('Wide Open', 'o')]).toEqual([0, 0, 0]);
+    expect(count('Lily Ponds', '~')).toBe(2);
+    expect(count('Sandy Reach', 's')).toBe(3);
+    expect(count('The Grove', 'o')).toBe(2);
+    expect(count('Long Roll', '~')).toBe(1);
+    expect(count('Broken Ground', 's')).toBe(2);
+    expect([count('Water Meadow', '~'), count('Water Meadow', 's')]).toEqual([2, 2]);
+    expect([count('The Ridge', 'o'), count('The Ridge', 's')]).toEqual([2, 1]);
+    expect([count('The Far Pin', '~'), count('The Far Pin', 's'), count('The Far Pin', 'o')]).toEqual([1, 2, 1]);
+  });
+
+  it('goes from gentle to rolling and choppy ground, each steeper than the one before it in its kind, and the physics takes every hole', () => {
+    for (const hole of MOORS) {
+      expect(hole.terrain, `${hole.name} slopes`).toBeInstanceOf(Float32Array);
+      expect(terrainRefusal(layoutOf(hole.map, hole.terrain), CUP), hole.name).toBeNull();
+    }
+    const relief = MOORS.map((h) => groundFigures(layoutOf(h.map, h.terrain)).relief);
+    expect(relief[0], 'gentle is shallow').toBeLessThan(relief[8]);
+  });
+
+  it('is played out from the tee to the cup by the autopilot, on every hole, holing out within the limit, and breaking no rule', () => {
+    for (const hole of MOORS) {
+      const { game } = newGame(1, null, [hole]);
+      const pilot = new Autopilot(game);
+      let frames = 0;
+      for (; frames < 60 * 300 && game.phase === 'play'; frames++) {
+        pilot.step(DT);
+        if (frames % 30 === 0) expect(checkInvariants(game), `${hole.name} frame ${frames}`).toEqual([]);
+      }
+      expect(game.phase, `${hole.name} done`).not.toBe('play');
+      expect(game.strokes, `${hole.name} holed inside its limit`).toBeLessThan(game.limit);
+    }
   });
 });

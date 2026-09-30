@@ -32,6 +32,7 @@
 import { layoutOf } from './arena';
 import { noiseGround, type Feel } from './noise';
 import type { ObstacleDef } from './obstacles';
+import { fairway, openHole, type Feature, type OpenSpec } from './open';
 
 /** A hole: what it is called, its par, its map, and what moves on it. */
 export interface HoleDef {
@@ -414,21 +415,6 @@ export const HILLS: readonly HoleDef[] = [
   },
 ];
 
-/**
- * A green `cols` tiles across and `rows` long inside a rail, the tee and the cup
- * on it at a column and a row from the top of the map, each in from the rail.
- */
-function fairway(cols: number, rows: number, tee: [number, number], cup: [number, number]): string[] {
-  return Array.from({ length: rows }, (_, r) =>
-    Array.from({ length: cols }, (_, c) => {
-      if (r === 0 || r === rows - 1 || c === 0 || c === cols - 1) return '#';
-      if (c === tee[0] && r === tee[1]) return 'T';
-      if (c === cup[0] && r === cup[1]) return 'C';
-      return '.';
-    }).join(''),
-  );
-}
-
 /** How a hole of The Downs is made: its name and par, its shape, and its ground. */
 interface DownsSpec {
   name: string;
@@ -486,15 +472,120 @@ export const DOWNS: readonly HoleDef[] = DOWNS_SPECS.map(
   },
 );
 
+/** What stands on the open holes: a pond, a bunker and a stand of posts, each as big as the tiles it is placed on allow. */
+const POND: Feature = { kind: 'pond', count: 1, size: [2.5, 4] };
+const BUNKERS = (count: number): Feature => ({ kind: 'sand', count, size: [1.8, 3] });
+const STANDS = (count: number): Feature => ({ kind: 'stand', count, size: [3, 5] });
+
+/** A hole of `cols` tiles by `rows`, the tee a quarter of the way across and the cup three quarters, and each two tiles in from the rail. */
+const across = (cols: number, rows: number): OpenSpec['shape'] => [
+  cols,
+  rows,
+  [Math.floor(cols / 4), rows - 3],
+  [Math.floor((cols * 3) / 4), 2],
+];
+
+/**
+ * The Moors: nine open holes, each six to fourteen times the size of The Downs' mean, a hundred to a hundred and
+ * fifty units from the tee to the cup, so a hole is three to five shots of the putter and a round is a long walk. Made
+ * by `openHole` from a spec and a seed: ground, and ponds, bunkers and stands of posts on it, placed so a route wide
+ * enough to putt along is always left. The ground goes from gentle to rolling and choppy, each steeper than the last,
+ * and the hazards from none to all three. Each seed was chosen by playing forty of them, eight rounds each, with the
+ * pace gate's player: none of the chosen took the limit or went into the water, a hazard of each was near the line
+ * from the tee to the cup, and the mean was about a stroke under par, as The Downs' is; then by looking at the pictures.
+ * Par is each hole's intent.
+ */
+const MOORS_SPECS: readonly OpenSpec[] = [
+  { name: 'Wide Open', par: 4, shape: across(30, 34), feel: 'gentle', steepness: 0.25, seed: 1, features: [] },
+  {
+    name: 'Lily Ponds',
+    par: 5,
+    shape: across(33, 39),
+    feel: 'gentle',
+    steepness: 0.3,
+    seed: 14,
+    features: [{ ...POND, count: 2 }],
+  },
+  {
+    name: 'Sandy Reach',
+    par: 5,
+    shape: across(36, 39),
+    feel: 'rolling',
+    steepness: 0.45,
+    seed: 27,
+    features: [BUNKERS(3)],
+  },
+  { name: 'The Grove', par: 5, shape: across(36, 42), feel: 'rolling', steepness: 0.5, seed: 8, features: [STANDS(2)] },
+  { name: 'Long Roll', par: 5, shape: across(39, 45), feel: 'rolling', steepness: 0.55, seed: 1, features: [POND] },
+  {
+    name: 'Broken Ground',
+    par: 5,
+    shape: across(39, 45),
+    feel: 'choppy',
+    steepness: 0.5,
+    seed: 27,
+    features: [BUNKERS(2)],
+  },
+  {
+    name: 'Water Meadow',
+    par: 6,
+    shape: across(42, 48),
+    feel: 'rolling',
+    steepness: 0.55,
+    seed: 8,
+    features: [{ ...POND, count: 2 }, BUNKERS(2)],
+  },
+  {
+    name: 'The Ridge',
+    par: 6,
+    shape: across(45, 48),
+    feel: 'rolling and choppy',
+    steepness: 0.55,
+    seed: 21,
+    features: [STANDS(2), BUNKERS(1)],
+  },
+  {
+    name: 'The Far Pin',
+    par: 6,
+    shape: across(45, 51),
+    feel: 'rolling and choppy',
+    steepness: 0.6,
+    seed: 25,
+    features: [POND, BUNKERS(2), STANDS(1)],
+  },
+];
+
+let moorsMade: readonly HoleDef[] | undefined;
+
+/**
+ * The holes of The Moors, made the first time they are asked for and no oftener: nine holes of open country are some
+ * thirty milliseconds of the page's boot, for a course a player may never choose, so they wait until one does.
+ */
+export function moors(): readonly HoleDef[] {
+  return (moorsMade ??= MOORS_SPECS.map((spec) => openHole(spec)));
+}
+
 /** A course: what it is called, and its holes, played from the first to the last as a round. */
 export interface Course {
   name: string;
-  holes: readonly HoleDef[];
+  /** Its holes: for a course that is made when it is asked for, made then. */
+  readonly holes: readonly HoleDef[];
+  /** How many holes and what par they add to, known without making them: what the start screen says of it. */
+  readonly summary: { holes: number; par: number };
 }
+
+const summaryOf = (holes: readonly HoleDef[]) => ({ holes: holes.length, par: holes.reduce((a, h) => a + h.par, 0) });
 
 /** Every course, the first the one a new player meets first. */
 export const COURSES: readonly Course[] = [
-  { name: 'The Meadow', holes: COURSE },
-  { name: 'The Hills', holes: HILLS },
-  { name: 'The Downs', holes: DOWNS },
+  { name: 'The Meadow', holes: COURSE, summary: summaryOf(COURSE) },
+  { name: 'The Hills', holes: HILLS, summary: summaryOf(HILLS) },
+  { name: 'The Downs', holes: DOWNS, summary: summaryOf(DOWNS) },
+  {
+    name: 'The Moors',
+    get holes() {
+      return moors();
+    },
+    summary: { holes: MOORS_SPECS.length, par: MOORS_SPECS.reduce((a, s) => a + s.par, 0) },
+  },
 ];

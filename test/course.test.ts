@@ -106,7 +106,8 @@ describe('the course', () => {
     for (const hole of COURSES.flatMap((c) => c.holes)) {
       const l = layoutOf(hole.map, hole.terrain);
       expect(hole.par, hole.name).toBeGreaterThanOrEqual(2);
-      expect(hole.par, hole.name).toBeLessThanOrEqual(5);
+      // the biggest holes of The Moors are par six; every other is five at most
+      expect(hole.par, hole.name).toBeLessThanOrEqual(6);
       // the cup sits on level grass, where its lining, collar and flag are drawn; the physics could cut it higher
       const cupTile = Math.floor((l.cup.y - l.originY) / TILE) * l.cols + Math.floor((l.cup.x - l.originX) / TILE);
       expect(l.floor[cupTile], `${hole.name}: the cup on level grass`).toBe(0);

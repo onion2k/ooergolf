@@ -1,7 +1,8 @@
 /**
  * What the game costs a player, held to a budget and to what it cost
  * before: how long it takes to boot, what a frame costs to draw at the
- * standard view, and how much is downloaded. The budget is what a good
+ * standard view, how much is downloaded, and what the biggest hole there is
+ * costs to begin and to draw. The budget is what a good
  * browser game may cost at all; the baseline is what this one cost at the
  * last commit, so a step toward the budget is noticed as much as a step
  * over it.
@@ -27,16 +28,28 @@ const BASELINE = 'smoke/perf-baseline.json';
  * The frame is `LOOK.md`'s: the look may spend up to 5 ms of it at the top
  * rung, and a slower machine steps down the ladder.
  */
-export const BUDGET = { bootMs: 3000, frameMs: 5, bundleKb: 400 };
+export const BUDGET = { bootMs: 3000, frameMs: 5, bundleKb: 400, beginMs: 400, bigFrameMs: 5 };
 /** How far a figure may move from the baseline before it is a change: a share, and a slack for the noisy ones. */
 // the frame, timed ten at a time after the GPU is warmed, wobbles about 5% between runs (0.83 to 0.91 ms over ten):
 // three times that, and a tenth of a millisecond for a frame so small
-const TOLERANCE = { bootMs: [0.35, 250], frameMs: [0.15, 0.1], bundleKb: [0.1, 2] } as const;
+const TOLERANCE = {
+  bootMs: [0.35, 250],
+  frameMs: [0.15, 0.1],
+  bundleKb: [0.1, 2],
+  // begun: 38 to 49 ms over nine runs of the biggest hole, and a frame of it 3.07 to 3.77 ms: the tolerance is wider than
+  // that spread, and narrower than a hole costing twice as much to begin or half as much again to draw
+  beginMs: [0.5, 30],
+  bigFrameMs: [0.25, 0.3],
+} as const;
 
 interface Figures {
   bootMs: number;
   frameMs: number;
   bundleKb: number;
+  /** The biggest hole of the biggest course begun: the middle of nine begins, alternating with the smallest. */
+  beginMs: number;
+  /** A frame of that hole at the worst of three views: from its tee, and from outside its rail's corner at two zooms. */
+  bigFrameMs: number;
 }
 
 /** The built game's download: every script and stylesheet in dist/, gzipped, in kilobytes. */
@@ -67,9 +80,49 @@ test('boots, draws and downloads within budget, and as it did before', async ({ 
     // a GPU idle while the page booted runs slow for a while: warmed first, or the figure is two figures
     return g.measureFrame(300);
   });
-  const now: Figures = { bootMs: Math.round(boot), frameMs: Math.round(frame * 100) / 100, bundleKb: bundle };
+  // the biggest hole of The Moors, which is many times the size of any other: what it costs to begin, and to draw. A hole is
+  // begun and its readback awaited with nothing stepped between, since a frame stepped and not yet drawn is queued, and the
+  // begin after it would wait on that as well; the biggest is begun in turn with the smallest, so each begin is a new hole
+  const big = await page.evaluate(async () => {
+    const g = window.game!;
+    g.chooseCourse('The Moors');
+    g.step(2);
+    await g.grass();
+    const begins: number[] = [];
+    for (let k = 0; k < 11; k++) {
+      const t = performance.now();
+      g.startHole(k % 2 ? 0 : 8);
+      await g.grass();
+      if (k % 2 === 0) begins.push(performance.now() - t);
+    }
+    begins.sort((a, b) => a - b);
+    // a frame of the biggest, at the views that draw the most of it: the tee, and the rough from outside its corner
+    g.startHole(8);
+    g.step(120);
+    const { floor } = g.content();
+    const frames: number[] = [];
+    for (const [x, y, distance] of [
+      [g.ball().x, g.ball().y, 62],
+      [floor.minX - 12, floor.minY - 12, 62],
+      [floor.minX - 12, floor.minY - 12, 110],
+    ]) {
+      g.look(x, y, distance);
+      g.step(2);
+      frames.push(await g.measureFrame(120));
+    }
+    return { begin: begins[Math.floor(begins.length / 2)], frame: Math.max(...frames) };
+  });
+  const now: Figures = {
+    bootMs: Math.round(boot),
+    frameMs: Math.round(frame * 100) / 100,
+    bundleKb: bundle,
+    beginMs: Math.round(big.begin),
+    bigFrameMs: Math.round(big.frame * 100) / 100,
+  };
   info.annotations.push({ type: 'perf', description: JSON.stringify(now) });
-  console.log(`perf: boot ${now.bootMs} ms, frame ${now.frameMs} ms, download ${now.bundleKb} kB`);
+  console.log(
+    `perf: boot ${now.bootMs} ms, frame ${now.frameMs} ms, download ${now.bundleKb} kB, begin the biggest hole ${now.beginMs} ms, its frame ${now.bigFrameMs} ms`,
+  );
 
   if (process.env.PERF_UPDATE) {
     writeFileSync(BASELINE, `${JSON.stringify(now, null, 2)}\n`);
@@ -82,7 +135,7 @@ test('boots, draws and downloads within budget, and as it did before', async ({ 
       throw new Error('no baseline: run npm run perf:update first');
     }
     const moved: string[] = [];
-    for (const key of ['bootMs', 'frameMs', 'bundleKb'] as const) {
+    for (const key of ['bootMs', 'frameMs', 'bundleKb', 'beginMs', 'bigFrameMs'] as const) {
       const was = baseline[key];
       if (was === undefined) {
         moved.push(`${key} ${now[key]} (not in the baseline)`);
@@ -98,5 +151,7 @@ test('boots, draws and downloads within budget, and as it did before', async ({ 
   expect(now.bootMs, 'boot within budget').toBeLessThanOrEqual(BUDGET.bootMs);
   expect(now.frameMs, 'frame within budget').toBeLessThanOrEqual(BUDGET.frameMs);
   expect(now.bundleKb, 'download within budget').toBeLessThanOrEqual(BUDGET.bundleKb);
+  expect(now.beginMs, 'the biggest hole begun within budget').toBeLessThanOrEqual(BUDGET.beginMs);
+  expect(now.bigFrameMs, 'a frame of the biggest hole within budget').toBeLessThanOrEqual(BUDGET.bigFrameMs);
   expect(problems).toEqual([]);
 });

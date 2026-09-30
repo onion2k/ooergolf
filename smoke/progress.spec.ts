@@ -163,6 +163,49 @@ test('a hole played out to the cup by drags, its score shown, and the next hole 
   expect(problems).toEqual([]);
 });
 
+test('a hole of The Moors, a hundred units from tee to cup, played out by drags, the camera following the ball the whole way', async ({
+  page,
+}) => {
+  const problems = watch(page);
+  await start(page, { seed: 1, paused: true });
+  await page.evaluate(() => {
+    window.game!.chooseCourse('The Moors');
+    window.game!.startHole(0);
+    window.game!.step(75);
+  });
+  const { holes } = await page.evaluate(() => window.game!.content());
+  expect(holes.length, 'nine holes').toBe(9);
+  let strokes = 0;
+  for (let stroke = 1; stroke <= 9; stroke++) {
+    await puttAsSuggested(page);
+    strokes = stroke;
+    for (let f = 0; f < 12 * 60; f += 10) {
+      await play(page, 10, `stroke ${stroke}`);
+      const { phase, ready } = await page.evaluate(() => window.game!.state());
+      if (phase !== 'play' || ready) break;
+    }
+    if ((await page.evaluate(() => window.game!.state().phase)) !== 'play') break;
+    // the camera has followed the ball a long way up the hole: it is still well on the screen a moment after it stops
+    await play(page, 40, `after stroke ${stroke}`);
+    const onScreen = await page.evaluate(() => {
+      const b = window.game!.ball();
+      const p = window.game!.project(b.x, b.y, b.z);
+      return p.x > innerWidth * 0.1 && p.x < innerWidth * 0.9 && p.y > innerHeight * 0.1 && p.y < innerHeight * 0.9;
+    });
+    expect(onScreen, `the ball in view after stroke ${stroke}`).toBe(true);
+  }
+  const done = await page.evaluate(() => window.game!.state());
+  expect(done.phase, 'holed').toBe('done');
+  expect(done.course).toBe('The Moors');
+  expect(done.card.length).toBe(1);
+  // a hundred units at the putter's fifty a stroke: three at the least, and a hole of its own par or so
+  expect(strokes, 'not in one or two').toBeGreaterThanOrEqual(3);
+  expect(done.card[0], 'inside its limit').toBeLessThan(done.par + 5);
+  await expect(page.locator('#toast')).toBeVisible();
+  await expect(page.locator('#holeName')).toContainText('Wide Open');
+  expect(problems).toEqual([]);
+});
+
 test('a ball struck by a drag at the rail is knocked back off it: told, squashed that frame, and round again', async ({
   page,
 }) => {
