@@ -14,6 +14,7 @@
  * for less.
  */
 import type { Club } from './clubs';
+import type { Mode } from './gesture';
 import { SCORE_KINDS, againstPar, scoreKind, scoreName } from './score';
 
 /** Each kind of word the callout over the course says, which the stylesheet colours: a score's kind, or the water. */
@@ -27,6 +28,8 @@ export interface HudHandlers {
   courses(): void;
   buy(id: string): void;
   equip(id: string): void;
+  /** The switch pressed: what a drag on the course is from now on, a shot or a turn of the camera. */
+  mode(mode: Mode): void;
 }
 
 /** What the shop needs to know of the save to show each club as for sale, owned, or in hand. */
@@ -36,6 +39,9 @@ export interface Purse {
   owned: readonly string[];
   club: string;
 }
+
+/** What the help says a drag does, in each mode. */
+const HELP = { aim: 'drag back and let go to putt', look: 'drag to look round' } as const;
 
 export interface HoleInfo {
   index: number;
@@ -64,6 +70,9 @@ export class Hud {
   private readonly start = document.getElementById('start')!;
   private readonly courseList = document.getElementById('courses')!;
   private readonly help = document.getElementById('help')!;
+  private readonly modes = document.getElementById('viewMode')!;
+  private readonly aimButton = document.getElementById('modeAim')!;
+  private readonly lookButton = document.getElementById('modeLook')!;
 
   constructor(
     private readonly handlers: HudHandlers,
@@ -79,12 +88,22 @@ export class Hud {
     document.getElementById('shopClose')!.addEventListener('click', () => {
       this.shop.hidden = true;
     });
+    this.aimButton.addEventListener('click', () => handlers.mode('aim'));
+    this.lookButton.addEventListener('click', () => handlers.mode('look'));
+  }
+
+  /** The switch shows which a drag is, and the help says what to do with it. */
+  setMode(mode: Mode) {
+    this.aimButton.setAttribute('aria-pressed', String(mode === 'aim'));
+    this.lookButton.setAttribute('aria-pressed', String(mode === 'look'));
+    this.help.textContent = mode === 'aim' ? HELP.aim : HELP.look;
   }
 
   show() {
     this.panel.hidden = false;
     this.purse.hidden = false;
     this.help.hidden = false;
+    this.modes.hidden = false;
   }
 
   /**
@@ -110,7 +129,8 @@ export class Hud {
         return card;
       }),
     );
-    for (const el of [this.panel, this.purse, this.help, this.card, this.shop, this.toast]) el.hidden = true;
+    for (const el of [this.panel, this.purse, this.help, this.modes, this.card, this.shop, this.toast])
+      el.hidden = true;
     this.start.hidden = false;
   }
 

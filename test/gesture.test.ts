@@ -1,7 +1,7 @@
 /** What the pointers on the course mean: one finger or the mouse drags a shot, two fingers pinch the camera nearer or further. */
 import { describe, expect, it } from 'vitest';
 import { DRAG } from '../src/shot';
-import { Gesture, PINCH_REACH } from '../src/gesture';
+import { Gesture, ORBIT, PINCH_REACH } from '../src/gesture';
 
 const SHORT = 800;
 /** A gesture whose ground is the screen itself, a pixel a unit, with y turned to point up the course. */
@@ -73,5 +73,85 @@ describe('a gesture', () => {
     expect(g.up(1, 400, 500)).toEqual({ kind: 'none' });
     expect(g.move(9, 1, 1)).toEqual({ kind: 'none' });
     expect(g.up(9, 1, 1)).toEqual({ kind: 'none' });
+  });
+});
+
+describe('a gesture in look mode', () => {
+  const look = () => {
+    const g = make();
+    g.setMode('look');
+    return g;
+  };
+
+  it('is in aim mode until it is told, and says which it is in', () => {
+    const g = make();
+    expect(g.mode).toBe('aim');
+    g.setMode('look');
+    expect(g.mode).toBe('look');
+    g.setMode('aim');
+    expect(g.mode).toBe('aim');
+    // and a drag in aim mode never turns the view
+    g.down(1, 400, 300);
+    expect(g.move(1, 700, 500).kind).toBe('none');
+  });
+
+  it('turns one pointer’s drag into an orbit, in proportion to how far it goes and not how far it has gone', () => {
+    const g = look();
+    expect(g.down(1, 400, 300)).toEqual({ kind: 'none' });
+    // across half the screen's shorter side: the world turns with the finger, so the view turns the other way
+    const across = g.move(1, 400 + SHORT / 2, 300);
+    expect(across).toEqual({ kind: 'orbit', turn: -ORBIT.turn / 2, tilt: 0 });
+    // down a quarter of it, no further across: what is new since the last move, and nothing of what came before
+    const down = g.move(1, 400 + SHORT / 2, 300 + SHORT / 4);
+    expect(down.kind).toBe('orbit');
+    if (down.kind === 'orbit') {
+      expect(down.turn).toBeCloseTo(0, 9);
+      // dragging down brings the camera higher, more from above: a smaller polar angle
+      expect(down.tilt).toBeCloseTo(-ORBIT.tilt / 4, 9);
+    }
+    // back the other way it turns and tilts the other
+    const back = g.move(1, 400, 300);
+    expect(back.kind === 'orbit' && back.turn > 0 && back.tilt > 0).toBe(true);
+  });
+
+  it('never strikes the ball, shows no aim, and lets go without a shot however hard the drag was', () => {
+    const g = look();
+    g.down(1, 400, 300);
+    g.move(1, 400, 300 + full);
+    expect(g.aim, 'no aim to show').toBe(null);
+    expect(g.up(1, 400, 300 + full)).toEqual({ kind: 'none' });
+    expect(g.aim).toBe(null);
+  });
+
+  it('still pinches the camera nearer or further with two fingers, and a second finger drops the orbit as it drops a drag', () => {
+    const g = look();
+    g.down(1, 400, 300);
+    expect(g.move(1, 500, 300).kind).toBe('orbit');
+    g.down(2, 600, 300);
+    // the first finger no longer turns the view
+    expect(g.move(1, 550, 300).kind).not.toBe('orbit');
+    const pinch = g.move(2, 700, 300);
+    expect(pinch.kind).toBe('zoom');
+    g.up(2, 700, 300);
+    expect(g.move(1, 500, 350).kind, 'the finger left behind starts nothing').toBe('none');
+    g.up(1, 500, 350);
+    g.down(3, 400, 300);
+    expect(g.move(3, 450, 300).kind, 'and the next touch orbits again').toBe('orbit');
+  });
+
+  it('drops a drag under way when the mode changes, so a drag that began as one thing does not end as the other', () => {
+    const g = make();
+    g.down(1, 400, 300);
+    g.move(1, 400, 300 + full);
+    expect(g.aim).not.toBe(null);
+    g.setMode('look');
+    expect(g.aim, 'the aim is put away').toBe(null);
+    expect(g.up(1, 400, 300 + full), 'and nothing is struck by it').toEqual({ kind: 'none' });
+    // the other way: an orbit under way is dropped, and lets go into nothing
+    g.down(2, 400, 300);
+    expect(g.move(2, 500, 300).kind).toBe('orbit');
+    g.setMode('aim');
+    expect(g.move(2, 600, 300).kind).toBe('none');
+    expect(g.up(2, 600, 300)).toEqual({ kind: 'none' });
   });
 });

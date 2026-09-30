@@ -9,6 +9,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { PNG } from 'pngjs';
 import { BALL, KIND_RADIUS, ROLL, heightAt, layoutOf, powerFor } from '../src/arena';
 import { COURSE, COURSES, CUP, DOWNS } from '../src/course';
+import { ORBIT } from '../src/gesture';
 import { clearings } from '../src/scenery';
 import { BLADE_ROOM } from '../src/turf';
 import { drag, start, touches, watch } from './game';
@@ -425,6 +426,152 @@ test.describe('the water and the sand', () => {
   });
 });
 
+test.describe('looking round', () => {
+  /**
+   * Where the cup is on the page, which the view turning moves: not the tee, which is where the ball lies, and the
+   * camera turns about the ball, so it stays where it was on the screen from every side.
+   */
+  const cupOnPage = (page: Page) =>
+    page.evaluate(() => {
+      const g = window.game!;
+      const { cup } = g.content();
+      return g.project(cup.x, cup.y, 0);
+    });
+
+  test('is Aim until the switch is pressed; Look turns a drag into an orbit that strikes nothing, and Aim strikes again', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 1, paused: true });
+    await page.evaluate(() => window.game!.step(30));
+    const first = await page.evaluate(() => window.game!.view());
+    expect(first).toMatchObject({ mode: 'aim', azimuth: 0 });
+    expect(first.tilt).toBeCloseTo(0.78, 9);
+    await expect(page.locator('#modeAim')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#modeLook')).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.locator('#help')).toContainText('drag back');
+    const cup = await cupOnPage(page);
+
+    await page.locator('#modeLook').click();
+    await expect(page.locator('#modeLook')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#modeAim')).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.locator('#help')).toContainText('look round');
+    expect((await page.evaluate(() => window.game!.view())).mode).toBe('look');
+
+    // across the screen, as far as a fifth of its shorter side is: the world turns with the finger
+    const short = await page.evaluate(() => Math.min(innerWidth, innerHeight));
+    await drag(page, { x: 640, y: 400 }, { x: 640 + short / 4, y: 400 });
+    await page.evaluate(() => window.game!.step(1));
+    const turned = await page.evaluate(() => window.game!.view());
+    expect(turned.azimuth, 'turned by the drag, the other way from it').toBeCloseTo(-ORBIT.turn / 4, 3);
+    expect(turned.tilt, 'not tilted by a drag straight across').toBeCloseTo(0.78, 3);
+    const moved = await cupOnPage(page);
+    expect(Math.hypot(moved.x - cup.x, moved.y - cup.y), 'the cup is somewhere else on the page').toBeGreaterThan(30);
+    expect((await page.evaluate(() => window.game!.state())).strokes, 'nothing was struck').toBe(0);
+    expect(await page.evaluate(() => window.game!.aiming()), 'and no aim was shown').toBe(null);
+
+    // up the screen: the view comes lower, and no lower than it may
+    await drag(page, { x: 640, y: 600 }, { x: 640, y: 200 });
+    await page.evaluate(() => window.game!.step(1));
+    expect((await page.evaluate(() => window.game!.view())).tilt, 'as low as it goes').toBe(1);
+    await drag(page, { x: 640, y: 100 }, { x: 640, y: 700 });
+    await page.evaluate(() => window.game!.step(1));
+    expect((await page.evaluate(() => window.game!.view())).tilt, 'and as high').toBe(0.3);
+
+    // back to Aim, and the same hand strikes the ball
+    await page.locator('#modeAim').click();
+    await expect(page.locator('#modeAim')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#help')).toContainText('drag back');
+    const putted = await putt(page, 0.6);
+    expect(putted.state.strokes, 'a stroke in aim mode').toBe(1);
+    expect(problems).toEqual([]);
+  });
+
+  test('strikes the ball where the drag points on the course, from the far side of it as from the near', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 1, paused: true });
+    // the ball in the middle of the hole, with room to roll either way, and the view turned right round: up the screen is
+    // now down the course, so pulling back down the screen sends the ball toward the tee end of the hole, and not up it
+    // as it does from the tee
+    const at = await page.evaluate(() => {
+      const g = window.game!;
+      g.place(g.bodies('ball')[0].slot, 0, 0);
+      g.orbit(Math.PI, 0);
+      g.step(60);
+      return g.ball();
+    });
+    await putt(page, 0.3);
+    await page.evaluate(() => window.game!.step(90));
+    const after = await page.evaluate(() => window.game!.ball());
+    expect(after.y, 'down the course').toBeLessThan(at.y - 5);
+    expect(Math.abs(after.x - at.x), 'straight').toBeLessThan(2);
+    expect(problems).toEqual([]);
+  });
+
+  test('puts the switch back to Aim at a new hole, and eases the view home over the glide instead of cutting to it', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 1, paused: true });
+    await page.locator('#modeLook').click();
+    await page.evaluate(() => {
+      window.game!.orbit(1.5, 0.2);
+      window.game!.step(1);
+    });
+    expect((await page.evaluate(() => window.game!.view())).azimuth).toBeCloseTo(1.5, 6);
+    await page.evaluate(() => window.game!.startHole(1));
+    await expect(page.locator('#modeAim')).toHaveAttribute('aria-pressed', 'true');
+    expect((await page.evaluate(() => window.game!.view())).mode).toBe('aim');
+    const at = async (frames: number) => {
+      await page.evaluate((f) => window.game!.step(f), frames);
+      return page.evaluate(() => window.game!.view());
+    };
+    const start0 = await at(1);
+    expect(start0.azimuth, 'where it was, as the hole begins').toBeGreaterThan(1.3);
+    const mid = await at(24);
+    expect(mid.azimuth, 'part of the way').toBeGreaterThan(0.05);
+    expect(mid.azimuth).toBeLessThan(start0.azimuth - 0.05);
+    const home = await at(60);
+    expect(home.azimuth, 'home').toBe(0);
+    expect(home.tilt).toBeCloseTo(0.78, 9);
+    expect(problems).toEqual([]);
+  });
+
+  test('is on the course’s screens and put away under the start screen', async ({ page }) => {
+    const problems = watch(page);
+    await start(page, { seed: 1, paused: true, screen: true });
+    await expect(page.locator('#viewMode')).toBeHidden();
+    await page.evaluate(() => window.game!.chooseCourse('The Meadow'));
+    await expect(page.locator('#viewMode')).toBeVisible();
+    // and put away again when the card's Courses button brings the start screen back over the course
+    await toCard(page);
+    await expect(page.locator('#viewMode')).toBeVisible();
+    await page.getByRole('button', { name: 'Courses' }).click();
+    expect((await page.evaluate(() => window.game!.state())).choosing).toBe(true);
+    await expect(page.locator('#viewMode')).toBeHidden();
+    expect(problems).toEqual([]);
+  });
+
+  test('costs a frame inside the budget at the worst view it can be turned and tilted to', async ({ page }) => {
+    test.setTimeout(120_000);
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true });
+    const cost = await page.evaluate(async () => {
+      const g = window.game!;
+      g.step(120);
+      // from behind and as low as it goes, the most grass it can see
+      g.orbit(Math.PI, 10);
+      g.step(2);
+      return g.measureFrame(200);
+    });
+    console.log(`orbit: the worst view, ${cost.toFixed(2)} ms a frame`);
+    expect(cost, 'inside the 5 ms budget').toBeLessThan(5);
+    expect(problems).toEqual([]);
+  });
+});
+
 test.describe('the cup and the rail', () => {
   /** The ball put down `back` short of the cup on the first hole, and struck at it to arrive at its edge at `speed`. */
   const putt = async (page: Page, speed: number, back = 5) => {
@@ -804,6 +951,38 @@ test.describe('on a phone', () => {
     await page.evaluate(() => window.game!.step(1));
     expect(await page.evaluate(() => window.game!.view().distance)).toBeLessThan(before - 10);
     expect((await page.evaluate(() => window.game!.state())).strokes, 'no shot from a pinch').toBe(0);
+    expect(problems).toEqual([]);
+  });
+
+  test('a finger drag in Look turns the view and two fingers still zoom it, and none of it strikes the ball', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 1, paused: true });
+    await page.locator('#modeLook').tap();
+    await expect(page.locator('#modeLook')).toHaveAttribute('aria-pressed', 'true');
+    await drag(page, { x: 100, y: 500 }, { x: 300, y: 500 }, { touch: true });
+    await page.evaluate(() => window.game!.step(1));
+    const turned = await page.evaluate(() => window.game!.view());
+    expect(turned.azimuth, 'turned').toBeLessThan(-0.3);
+    const before = turned.distance;
+    await touches(page, [
+      [{ id: 1, x: 200, y: 500 }],
+      [
+        { id: 1, x: 200, y: 500 },
+        { id: 2, x: 220, y: 500 },
+      ],
+      [
+        { id: 1, x: 100, y: 500 },
+        { id: 2, x: 320, y: 500 },
+      ],
+      [],
+    ]);
+    await page.evaluate(() => window.game!.step(1));
+    const after = await page.evaluate(() => window.game!.view());
+    expect(after.distance, 'nearer').toBeLessThan(before - 10);
+    expect(after.azimuth, 'and not turned by the pinch').toBeCloseTo(turned.azimuth, 6);
+    expect((await page.evaluate(() => window.game!.state())).strokes).toBe(0);
     expect(problems).toEqual([]);
   });
 

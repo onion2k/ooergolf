@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { BALL, BUMPER, FASTEST, HARDEST_SHOT } from '../src/arena';
 import type { HoleDef } from '../src/course';
-import { checkInvariants } from '../src/invariants';
+import { CameraRig, TILT } from '../src/camera';
+import { checkInvariants, viewProblems } from '../src/invariants';
 import { newGame as newOn, onGreen as newGame, settle } from './helpers';
 
 describe('what must always hold', () => {
@@ -168,5 +169,36 @@ describe('what must always hold', () => {
     expect(checkInvariants(game).join('\n')).toMatch(/strokes are 1.5/);
     game.strokes = -1;
     expect(checkInvariants(game).join('\n')).toMatch(/strokes are -1/);
+  });
+});
+
+describe('what must always hold of the camera', () => {
+  it('holds of a camera as it begins, turned and tilted and zoomed as far as a player can', () => {
+    const rig = new CameraRig();
+    expect(viewProblems(rig)).toEqual([]);
+    rig.orbit(37, 100);
+    rig.zoom(-1000);
+    expect(viewProblems(rig)).toEqual([]);
+    rig.orbit(-11, -100);
+    rig.zoom(1000);
+    expect(viewProblems(rig)).toEqual([]);
+  });
+
+  it('reports a tilt out of its limits, a turn or a tilt that is not a number, and a distance out of its own', () => {
+    const rig = new CameraRig();
+    rig.tilt = TILT.most + 0.1;
+    expect(viewProblems(rig).join('\n')).toMatch(/tilt/);
+    rig.tilt = TILT.least - 0.1;
+    expect(viewProblems(rig).join('\n')).toMatch(/tilt/);
+    rig.tilt = Number.NaN;
+    expect(viewProblems(rig).join('\n')).toMatch(/tilt.*not a number/);
+    rig.tilt = TILT.home;
+    rig.azimuth = Number.POSITIVE_INFINITY;
+    expect(viewProblems(rig).join('\n')).toMatch(/turn.*not a number/);
+    rig.azimuth = 9;
+    expect(viewProblems(rig).join('\n'), 'more than a turn').toMatch(/turn/);
+    rig.azimuth = 0;
+    rig.distance = 1;
+    expect(viewProblems(rig).join('\n')).toMatch(/distance/);
   });
 });

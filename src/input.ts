@@ -1,11 +1,11 @@
 /**
- * What the pointers on the course do to the game and the camera. The gesture says what they mean (a shot, a pinch);
- * this is the one place that turns that into the ball struck or the camera moved, handed the ways to do each, so
+ * What the pointers on the course do to the game and the camera. The gesture says what they mean (a shot, a pinch, a
+ * turn of the view); this is the one place that turns that into the ball struck or the camera moved, handed the ways to do each, so
  * the page, the tests and the fuzzer all press on the course alike and nothing about it is worked out twice.
  *
  * Nothing here touches the page or the game: it is given what to call, and tested and fuzzed without either.
  */
-import { Gesture, type Gesturing } from './gesture';
+import { Gesture, type Gesturing, type Mode } from './gesture';
 import type { Shot } from './shot';
 
 /** What the input is given: how big the screen is, where a spot on it is on the ground, and what to do with a gesture. */
@@ -18,6 +18,8 @@ export interface InputPorts {
   shoot(angle: number, power: number): void;
   /** The camera nearer for less than nought, further for more. */
   zoom(by: number): void;
+  /** The camera turned by `turn` radians and tilted by `tilt`: the world turning with a finger. */
+  orbit(turn: number, tilt: number): void;
   /** Whether a screen is up over the course, which the pointers pass through: nothing is struck or moved. */
   blocked(): boolean;
 }
@@ -32,6 +34,15 @@ export class Input {
   /** The shot a drag under way would make if let go now, or null. */
   get aim(): Shot | null {
     return this.gesture.aim;
+  }
+
+  /** Whether a drag is a shot, or turns the camera. */
+  get mode(): Mode {
+    return this.gesture.mode;
+  }
+
+  setMode(mode: Mode) {
+    this.gesture.setMode(mode);
   }
 
   down(id: number, x: number, y: number) {
@@ -56,5 +67,6 @@ export class Input {
     if (this.ports.blocked()) return;
     if (g.kind === 'shoot') this.ports.shoot(g.shot.angle, g.shot.power);
     else if (g.kind === 'zoom') this.ports.zoom(g.by);
+    else if (g.kind === 'orbit') this.ports.orbit(g.turn, g.tilt);
   }
 }

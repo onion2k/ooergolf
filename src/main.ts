@@ -121,6 +121,11 @@ async function main() {
         choosing = true;
         hud.showStart(summaries);
       },
+      // the switch: what a drag on the course is from now on
+      mode(mode) {
+        input.setMode(mode);
+        hud.setMode(mode);
+      },
     },
     CLUBS,
   );
@@ -140,6 +145,8 @@ async function main() {
   let looked = false;
   /** The grass of the hole being grown, which the first frame waits for so it is never drawn bare. */
   let grown: Promise<void> = Promise.resolve();
+  /** What a new hole puts back: a drag a shot again, and the switch showing it. Set once the input exists, which is after the first hole. */
+  let backToAim: (() => void) | null = null;
   /** What the player sees of each event, beside the note of it. */
   const shown: GameEvents = {
     // a hole begun: drawn afresh, the sun's shadow fitted to it, and the camera on its tee
@@ -161,6 +168,8 @@ async function main() {
       if (looked) rig.glide(layout.tee.x, layout.tee.y, teeZ, game.t);
       else rig.jump(layout.tee.x, layout.tee.y, teeZ);
       looked = true;
+      // a hole is begun aiming, and the view eases home to the tee's over the glide
+      backToAim?.();
       squash.clear();
       hud.started({ index, count: game.course.length, name: game.course[index].name, par });
     },
@@ -253,9 +262,14 @@ async function main() {
     },
     shoot: (angle, power) => played.shoot(angle, power),
     zoom: (by) => rig.zoom(by),
+    orbit: (turn, tilt) => rig.orbit(turn, tilt),
     // nothing is struck through the start screen
     blocked: () => choosing,
   });
+  backToAim = () => {
+    input.setMode('aim');
+    hud.setMode('aim');
+  };
   canvas.addEventListener('pointerdown', (e) => {
     // the mouse's other buttons are not a shot
     if (e.pointerType === 'mouse' && e.button !== 0) return;
@@ -490,7 +504,10 @@ async function main() {
       held: governor.held,
       antialias: antialiasFor(renderer.look, renderer.economy),
       swaying: renderer.economy.wind !== false,
+      mode: input.mode,
+      ...rig.view(played.t),
     }),
+    orbit: (turn, tilt) => rig.orbit(turn, tilt),
     measureFrame,
     judge,
     motions: () => ({

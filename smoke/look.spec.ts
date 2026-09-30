@@ -325,6 +325,30 @@ test.describe('what it looks like', () => {
     expect(problems).toEqual([]);
   });
 
+  test('looking round: the first hole from its side, and from behind and low, with the switch on Look', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true });
+    await page.evaluate(() => window.game!.step(60));
+    await page.locator('#modeLook').click();
+    await hideStats(page);
+    // a quarter turn round to the side, a little lower than it begins
+    await page.evaluate(() => {
+      window.game!.orbit(-Math.PI / 2, 0.12);
+      window.game!.step(1);
+    });
+    await expect(page.locator('#view')).toHaveScreenshot('orbit-side.png', TOLERANCE);
+    // right round to look back down the course, and as low as it goes
+    await page.evaluate(() => {
+      window.game!.orbit(-Math.PI / 2, 1);
+      window.game!.step(1);
+    });
+    expect((await page.evaluate(() => window.game!.view())).tilt, 'as low as it goes').toBe(1);
+    await expect(page.locator('#view')).toHaveScreenshot('orbit-behind.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
   test('a cup on a side-hill, close to: its collar and rim lying on the slope, its floor level', async ({ page }) => {
     const problems = watch(page);
     await start(page, { seed: 11, paused: true });
@@ -519,6 +543,19 @@ test.describe('what it looks like', () => {
       await start(page, { rung: 3, seed: 11, paused: true });
       await page.evaluate(() => window.game!.step(60));
       await expect(page).toHaveScreenshot('phone-lowest.png', TOLERANCE);
+      expect(problems).toEqual([]);
+    });
+
+    test('looking round, on a phone: the switch on Look, and the view turned', async ({ page }) => {
+      const problems = watch(page);
+      await start(page, { seed: 11, paused: true });
+      await page.evaluate(() => window.game!.step(60));
+      await page.locator('#modeLook').tap();
+      await page.evaluate(() => {
+        window.game!.orbit(-1.9, 0.15);
+        window.game!.step(1);
+      });
+      await expect(page).toHaveScreenshot('phone-look.png', TOLERANCE);
       expect(problems).toEqual([]);
     });
 

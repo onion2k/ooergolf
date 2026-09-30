@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { DRAG } from '../src/shot';
-import { PINCH_REACH } from '../src/gesture';
+import { ORBIT, PINCH_REACH } from '../src/gesture';
 import { Input } from '../src/input';
 
 const SHORT = 800;
@@ -18,6 +18,7 @@ function make(blocked = () => false) {
     ground: (x, y) => [x, -y],
     shoot: (angle, power) => done.push(`shoot ${angle.toFixed(3)} ${power.toFixed(3)}`),
     zoom: (by) => done.push(`zoom ${by.toFixed(3)}`),
+    orbit: (turn, tilt) => done.push(`orbit ${turn.toFixed(3)} ${tilt.toFixed(3)}`),
     blocked,
   });
   return { input, done };
@@ -70,6 +71,33 @@ describe('the input', () => {
     input.down(2, 400, 300);
     input.move(2, 400, 500);
     input.up(2, 401, 302);
+    expect(done).toEqual([]);
+  });
+
+  it('turns the view in look mode and strikes nothing, and takes up shooting again in aim mode', () => {
+    const { input, done } = make();
+    expect(input.mode).toBe('aim');
+    input.setMode('look');
+    expect(input.mode).toBe('look');
+    input.down(1, 400, 300);
+    input.move(1, 400 + SHORT / 4, 300 + SHORT / 4);
+    input.up(1, 400 + SHORT / 4, 300 + SHORT / 4);
+    expect(done).toEqual([`orbit ${(-ORBIT.turn / 4).toFixed(3)} ${(-ORBIT.tilt / 4).toFixed(3)}`]);
+    expect(input.aim).toBe(null);
+    input.setMode('aim');
+    input.down(2, 400, 300);
+    input.move(2, 400, 300 + full);
+    input.up(2, 400, 300 + full);
+    expect(done.length).toBe(2);
+    expect(done[1].startsWith('shoot')).toBe(true);
+  });
+
+  it('turns nothing under a screen in look mode either', () => {
+    const { input, done } = make(() => true);
+    input.setMode('look');
+    input.down(1, 400, 300);
+    input.move(1, 700, 500);
+    input.up(1, 700, 500);
     expect(done).toEqual([]);
   });
 });

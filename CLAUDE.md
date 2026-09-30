@@ -96,9 +96,10 @@ today, and what the next features must hand it:
 - **Fuzz:** the monkey strikes the ball any way at any power, strikes it
   well at the cup (the autopilot's shot, slipped), tries to strike it while
   it rolls or between holes, waits, reloads, asks for another round when
-  one is over, and chooses a course at the start or at the card. It gets
-  round every course. Each thing a player can do is
-  an action in `scripts/fuzzer.ts`.
+  one is over, chooses a course at the start or at the card, and looks
+  round: the switch to Look, drags and pinches anywhere on the screen, the
+  switch back, and nothing struck. It gets round every course. Each thing a
+  player can do is an action in `scripts/fuzzer.ts`.
 - **Invariants:** bodies are of a kind, are numbers and are out of the rock;
   the world's count is right; the time is a time; the ball is there while a
   hole is played, alone, never inside a post, and never faster along the
@@ -109,6 +110,9 @@ today, and what the next features must hand it:
   each between one and the limit. And every knock the game tells of is of
   the live ball, where it is, at least `KNOCK.least` hard, in a direction
   of unit length (`knockProblems`, which the fuzzer checks each one by).
+  And the camera keeps to its limits: turned within a turn either way,
+  tilted within `TILT`, stood back within the zoom (`viewProblems`, checked
+  after each look round).
 - **Determinism:** the autopilot plays, with a player's slips from its own
   chance, round after round, and the hash takes in the hole and the card.
 - **Pace:** the strokes a round of each course takes; see above. The
@@ -155,11 +159,25 @@ change meant to move it, and the commit says why. Look at every picture.
   game logic here.
 - `src/shot.ts` is the shot as the player makes it: a drag into a direction
   and a power, and the pointer onto the ground. `src/gesture.ts` says what
-  the pointers mean: one pulled back is a shot, two are a pinch, and a
-  second finger mid-drag takes the shot back. `src/camera.ts` says where the
-  camera is. `src/quality.ts` is the ladder the picture steps down on a slow
-  machine, and the governor that chooses the rung from the time between
-  frames and how much of it the drawing takes: frames that come slowly but
+  the pointers mean, by `Mode`: in Aim one pulled back is a shot, and in
+  Look one dragged turns and tilts the camera (`ORBIT`: half a turn across
+  the screen's short side, the world turning with the finger, a drag down
+  bringing the view higher) and never strikes; in both two are a pinch, and
+  a second finger mid-drag takes the drag back. `src/input.ts` turns what
+  the gesture says into the ball struck or the camera moved, through ports
+  it is handed, so the page and the fuzzer press on the course alike.
+  `src/camera.ts` says where the camera is: it follows the ball, and can be
+  orbited right round it (`azimuth`, wrapped to a turn either way) and
+  tilted between `TILT.least` and `TILT.most` (home is 0.78, 45 degrees; the
+  lowest is 57 degrees only because the grass is what a frame costs, and a
+  lower view draws far more of it: `TILT`'s comment has the figures, and the
+  worst view is held under the 5 ms budget by `smoke/game.spec.ts`), and its
+  lead of `LEAD` units turns with the view so the ball stays low on the
+  screen. A new hole puts the switch back to Aim and eases the view home
+  over the glide, by the shortest way; nothing of the view is saved.
+  `src/quality.ts` is the ladder the picture steps down on a slow machine,
+  and the governor that chooses the rung from the time between frames and
+  how much of it the drawing takes: frames that come slowly but
   cost little (a page throttled to thirty a second, a low-power mode) are a
   slow screen and not a slow machine, and the governor once took them for one
   and gave the grass up twelve seconds in. The page measures the drawing by
@@ -306,7 +324,10 @@ change meant to move it, and the commit says why. Look at every picture.
   clean toy of `LOOK.md`: bright panels with a thick coloured edge, chunky
   pill buttons that sink when pressed, the score popped in as a tilted
   sticker, and every panel arriving with a short spring, none under reduced
-  motion; in the system's rounded face, as decided.
+  motion; in the system's rounded face, as decided. The Aim | Look switch
+  (`#viewMode`) is a pill at the bottom right above the ms label, and the
+  bottom slot on a phone; it is shown with the course's other panels and put
+  away under the start screen, and the help beside it says what a drag does.
 - `src/noise.ts` makes ground from noise: `gradientNoise(seed)` is Perlin's,
   and `noiseGround(layout, { seed, feel, steepness })` a hole's heights from
   it, the same for a seed every time, never below nought, the steepest step
@@ -422,7 +443,9 @@ for a save that is not the player's, which chooses The Meadow unless given
 `screen` to leave the start screen up, and `touches(page, steps)` for fingers, several at once.
 Looking: `look(x, y, distance)` parks the camera until `follow`, `view()`
 says how far back it stands and which rung of the quality ladder the
-picture is on and whether the grass sways (`swaying`), and `measureFrame`;
+picture is on and whether the grass sways (`swaying`), what a drag is (`mode`,
+`aim` or `look`) and how the view is turned and tilted (`azimuth`, `tilt`),
+`orbit(turn, tilt)` turns it as a Look drag does, and `measureFrame`;
 `judge(frames, gapMs, workMs)` feeds the quality governor as the frame loop does, and says
 the rung; `grass()` how many blades of the rough the last frame drew near
 and far, and the wind; `bladesAround(x, y, radius)` how many the GPU drew
@@ -460,6 +483,10 @@ each step, and a gate handed what it needs in the same change:
 - Where in the round a player is, in the save: a reload starts the round
   again, which is also why the fuzzer starts each seed part way round.
 - Ball upgrades: the physics has bounce and roll by kind of body.
+- Orbiting by the right mouse button, the keys or a two-finger twist: only
+  the switch and a one-pointer drag turn the view. The view is not saved.
+  The near rail can hide the ball at a low tilt from some headings, and
+  catches a strong pale sheen from some: both are left as they are.
 - A shop that shows how far each putter reaches. It shows each one's
   hardest speed, 40 to 48, and under the green's steady slowing a little
   more speed goes a good deal further: the gold rolls 72 units to the
@@ -537,7 +564,8 @@ each:
 - **the next hole:** carried over, or not, when the hole changes; a hole
   restarted with it mid-motion; the last hole, and the card after it
 - **the camera:** in the way of the top-down view, and hidden behind
-  something taller than the ball
+  something taller than the ball; turned to every heading and tilted to
+  both limits, at the home zoom and the widest, where the grass costs most
 
 ## Verifying in a browser
 

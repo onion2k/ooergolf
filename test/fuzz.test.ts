@@ -6,10 +6,10 @@ import { DOWNS } from '../src/course';
 describe('the fuzzer', () => {
   it('plays a seed through without breaking a rule, and does everything a player can', () => {
     // two seeds, since which of the rarer things a monkey gets round to on one is chance. A reload starts the round
-    // again, the save not yet keeping where in the course a player is, so a round is seldom finished: 17 and 40 do,
+    // again, the save not yet keeping where in the course a player is, so a round is seldom finished: 25 and 33 do,
     // chosen again when a course could be chosen, and each does everything a player can
-    const one = fuzz(17, 12000),
-      two = fuzz(40, 12000);
+    const one = fuzz(25, 12000),
+      two = fuzz(33, 12000);
     const sum = (a: Record<string, number>, b: Record<string, number>) => {
       const out = { ...a };
       for (const [k, n] of Object.entries(b)) out[k] = (out[k] ?? 0) + n;
@@ -24,6 +24,7 @@ describe('the fuzzer', () => {
       'buy, refused',
       'choose a course',
       'equip',
+      'look round',
       'play again',
       'reload',
       'shoot',

@@ -22,11 +22,29 @@
  * and by the unit tests. Each broken rule is a line saying what and where.
  */
 import { BUMPER, KINDS, KIND_NAME, KNOCK, fromPosts, heightAt, restingAbove, tileAt } from './arena';
+import { TILT, VIEW, type CameraRig } from './camera';
 import { CLUBS } from './clubs';
 import { LIMIT_OVER_PAR, fastest, type Game } from './game';
 
 /** How many broken rules of one sort are reported before the rest are only counted. */
 const EACH = 3;
+
+/**
+ * The rules a camera must always keep, however a player has turned, tilted and zoomed it: its turn and its tilt are
+ * numbers, it has turned no more than a turn either way and is tilted within `TILT`, and it is no nearer or further
+ * than the zoom allows.
+ */
+export function viewProblems(rig: CameraRig): string[] {
+  const out: string[] = [];
+  if (!Number.isFinite(rig.azimuth)) out.push(`the turn is not a number: ${rig.azimuth}`);
+  else if (Math.abs(rig.azimuth) > Math.PI + 1e-9) out.push(`the turn is more than a turn: ${rig.azimuth}`);
+  if (!Number.isFinite(rig.tilt)) out.push(`the tilt is not a number: ${rig.tilt}`);
+  else if (rig.tilt < TILT.least - 1e-9 || rig.tilt > TILT.most + 1e-9)
+    out.push(`the tilt is out of its limits, ${TILT.least} to ${TILT.most}: ${rig.tilt}`);
+  if (!(rig.distance >= VIEW.near - 1e-9 && rig.distance <= VIEW.far + 1e-9))
+    out.push(`the distance is out of the zoom, ${VIEW.near} to ${VIEW.far}: ${rig.distance}`);
+  return out;
+}
 
 export function checkInvariants(game: Game): string[] {
   const out: string[] = [];

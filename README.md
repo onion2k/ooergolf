@@ -24,6 +24,8 @@ round. A hole pays coins, more for beating par, and a hole in one pays a
 gem; the shop sells finer putters that strike harder. The coins, the clubs
 and the best score on each hole are kept in the browser. The camera follows
 the ball; the wheel zooms on a desktop, and two fingers pinch on a phone. A
+switch, Aim or Look, chooses whether a drag strikes the ball or turns and
+tilts the camera right round it. A
 machine that cannot keep up has the picture stepped down a rung at a time.
 
 The green is painted smooth in its mown stripes, and the rough round it is
@@ -100,7 +102,8 @@ fixed, and no baseline is moved to make it green.
     src/look.ts        the daylight toon look
     showcase.html      every model, drawn, for looking at
     src/shot.ts        a drag turned into a shot
-    src/gesture.ts     what the pointers mean: a shot, or a pinch
+    src/gesture.ts     what the pointers mean: a shot, a turn of the view, or a pinch
+    src/input.ts       the ball struck or the camera moved for what they mean
     src/quality.ts     the picture stepped down on a slow machine
     src/camera.ts      where the camera is, following the ball
     scripts/           the gates, each with its baseline beside it

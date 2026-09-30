@@ -16,13 +16,18 @@
  * From a seed, so a failure can be played again exactly: `npm run fuzz --
  * --seed N` does, and prints what was done before it went wrong.
  */
+import { Camera } from 'artshape-render/gpu/camera';
+import { heightAt } from '../src/arena';
 import { Autopilot } from '../src/autopilot';
+import { CameraRig } from '../src/camera';
 import { CLUBS } from '../src/clubs';
 import { COURSES, type HoleDef } from '../src/course';
 import { Game, type GameEvents } from '../src/game';
-import { checkInvariants, knockProblems } from '../src/invariants';
+import { Input } from '../src/input';
+import { checkInvariants, knockProblems, viewProblems } from '../src/invariants';
 import { Progress, memoryStore } from '../src/progress';
 import { seeded } from '../src/random';
+import { groundAt } from '../src/shot';
 
 const DT = 1 / 60;
 /** What a knock is told with. */
@@ -205,6 +210,56 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
         },
       ],
     ];
+    // a player's hand on the screen, as the page's is: the same pointers, mode and camera, on a desktop-sized window
+    const SCREEN = { w: 1280, h: 800 };
+    const rig = new CameraRig();
+    const cam = new Camera();
+    cam.aspect = SCREEN.w / SCREEN.h;
+    cam.fov = rig.fov;
+    const input = new Input({
+      shortSide: () => SCREEN.h,
+      ground(x, y) {
+        rig.place(cam);
+        cam.update();
+        const z = heightAt(game.layout, game.world.x[game.ball], game.world.y[game.ball]);
+        return groundAt(cam, (x / SCREEN.w) * 2 - 1, 1 - (y / SCREEN.h) * 2, z);
+      },
+      shoot: (angle, power) => void game.shoot(angle, power),
+      zoom: (by) => rig.zoom(by),
+      orbit: (turn, tilt) => rig.orbit(turn, tilt),
+      blocked: () => false,
+    });
+    actions.push([
+      2,
+      () => {
+        // a player looking round: the switch to Look, then fingers and the mouse dragged and pinched anywhere on the
+        // screen, and the switch back. Nothing may be struck, and the view keeps to its limits
+        const strokes = game.strokes;
+        did('look round');
+        input.setMode('look');
+        const at = () => [between(0, SCREEN.w), between(0, SCREEN.h)] as const;
+        for (let k = 0, fingers = 1 + Math.floor(random() * 3); k < fingers; k++) {
+          const id = k + 1;
+          let [x, y] = at();
+          input.down(id, x, y);
+          // sometimes a second finger lands: a pinch, which turns nothing and may go on after the first has lifted
+          const second = random() < 0.3 ? id + 100 : 0;
+          if (second) input.down(second, ...at());
+          for (let m = Math.floor(between(1, 9)); m > 0; m--) {
+            [x, y] = [
+              Math.max(0, Math.min(SCREEN.w, x + between(-500, 500))),
+              Math.max(0, Math.min(SCREEN.h, y + between(-500, 500))),
+            ];
+            input.move(random() < 0.2 && second ? second : id, x, y);
+          }
+          input.up(id, x, y);
+          if (second) input.up(second, ...at());
+        }
+        input.setMode('aim');
+        if (game.strokes !== strokes) told.push(`looking round took a stroke: ${strokes} to ${game.strokes}`);
+        for (const problem of viewProblems(rig)) told.push(problem);
+      },
+    ]);
     const total = actions.reduce((n, [w]) => n + w, 0);
     const act = () => {
       let pick = random() * total;

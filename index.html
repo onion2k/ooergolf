@@ -171,6 +171,7 @@
     }
   }
   #purse:not([hidden]),
+  #viewMode:not([hidden]),
   #card:not([hidden]),
   #shop:not([hidden]),
   #start:not([hidden]) {
@@ -745,6 +746,45 @@
     transform-origin: bottom right;
   }
 
+  /*
+   * the switch between aiming and looking round, at the bottom right above the frame's cost: two chunky pills in one
+   * panel, the one that is on standing up in the sun's yellow and the other quiet, so it shows the state and both
+   * ways to change it
+   */
+  #viewMode {
+    position: fixed;
+    right: 16px;
+    bottom: calc(16px + 40px + env(safe-area-inset-bottom, 0px));
+    gap: 4px;
+    padding: 4px;
+    border-radius: 999px;
+    transform-origin: bottom right;
+  }
+  #viewMode:not([hidden]) {
+    display: flex;
+  }
+  #viewMode button {
+    min-width: 64px;
+    padding: 0 16px;
+  }
+  #viewMode button[aria-pressed='false'] {
+    background: var(--paper);
+    box-shadow:
+      inset 0 0 0 3px var(--sky),
+      0 4px 0 var(--sky-deep);
+  }
+  #viewMode button[aria-pressed='false']:active {
+    box-shadow:
+      inset 0 0 0 3px var(--sky),
+      0 0 0 var(--sky-deep);
+  }
+  @media (max-width: 600px) {
+    /* the frame's cost is not shown on a phone, so the switch takes its place at the bottom */
+    #viewMode {
+      bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    }
+  }
+
   #boot {
     position: fixed;
     inset: 0;
@@ -835,6 +875,10 @@
   <div id="courses"></div>
 </div>
 <div class="panel" id="stats" hidden></div>
+<div class="panel" id="viewMode" role="group" aria-label="What a drag does" hidden>
+  <button id="modeAim" type="button" aria-pressed="true">Aim</button
+  ><button id="modeLook" type="button" aria-pressed="false">Look</button>
+</div>
 <div class="panel" id="help" hidden>drag back and let go to putt</div>
 <div id="boot">
   <p id="bootMsg">starting WebGPU…</p>

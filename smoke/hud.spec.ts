@@ -155,14 +155,14 @@ const panelsIn = (m: Motion[]) => [...new Set(m.map((x) => x.panel))].sort();
 
 /** The panels each thing done brings or takes away, in the order a round goes, from the start screen and back. */
 const ROUND: [Act, string[]][] = [
-  ['choose', ['help', 'purse', 'start', 'strokes']],
+  ['choose', ['help', 'purse', 'start', 'strokes', 'viewMode']],
   ['shop', ['shop']],
   ['close', ['shop']],
   ['hole', ['toast']],
   ['next', ['toast']],
   ['last', ['toast']],
   ['card', ['card', 'toast']],
-  ['courses', ['card', 'help', 'purse', 'start', 'strokes']],
+  ['courses', ['card', 'help', 'purse', 'start', 'strokes', 'viewMode']],
 ];
 
 test.describe('motion', () => {

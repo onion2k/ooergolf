@@ -143,7 +143,18 @@ export interface GameApi {
    * picture is on and whether it was asked for, how its edges are drawn, and
    * whether the grass bends in the wind.
    */
-  view(): { distance: number; rung: number; held: boolean; antialias: Antialias; swaying: boolean };
+  view(): {
+    distance: number;
+    rung: number;
+    held: boolean;
+    antialias: Antialias;
+    swaying: boolean;
+    mode: 'aim' | 'look';
+    azimuth: number;
+    tilt: number;
+  };
+  /** The camera turned by `turn` radians and tilted by `tilt` (a bigger tilt is a lower view), as a drag in Look does. */
+  orbit(turn: number, tilt: number): void;
   /** The camera parked looking at a point, `distance` back, at once, and not following the ball until `follow`. */
   look(x: number, y: number, distance?: number): void;
   /** The camera following the ball again. */
@@ -219,7 +230,8 @@ export interface DebugHost {
   follow(): void;
   project(x: number, y: number, z: number): { x: number; y: number };
   aiming(): { angle: number; power: number } | null;
-  view(): { distance: number; rung: number; held: boolean; antialias: Antialias; swaying: boolean };
+  view(): ReturnType<GameApi['view']>;
+  orbit(turn: number, tilt: number): void;
   measureFrame(warmup?: number): Promise<number>;
   judge(gap: number, work: number): number;
   motions(): Motions;
@@ -334,6 +346,7 @@ export function createApi(host: DebugHost): GameApi {
     equip: (id) => game.equip(id),
     aiming: () => host.aiming(),
     view: () => host.view(),
+    orbit: (turn, tilt) => host.orbit(turn, tilt),
     save() {
       game.persist();
       return JSON.stringify(progress.save);
