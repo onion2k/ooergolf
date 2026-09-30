@@ -356,7 +356,8 @@ change meant to move it, and the commit says why. Look at every picture.
 - `src/noise.ts` makes ground from noise: `gradientNoise(seed)` is Perlin's,
   and `noiseGround(layout, { seed, feel, steepness })` a hole's heights from
   it, the same for a seed every time, never below nought, with optional
-  level discs (`flats`, for a pond at nought and a bunker's bed) made before
+  level discs (`flats`, for a pond at nought and a bunker's bed, each with an
+  optional `blend`, the tiles it takes to come back to the noise) made before
   the steepness is set, the steepest step
   between neighbouring tiles exactly `steepness` of the physics' limit of
   half a tile, and flat round the tee and the cup so a ball rests on the one
@@ -364,7 +365,14 @@ change meant to move it, and the commit says why. Look at every picture.
   broad swell a ball rests on everywhere; `rolling`, swells the width of the
   hole; `choppy`, small bumps (a height a tile cannot draw one smaller than
   about three tiles, so choppy is no more than about 1.4 times as bumpy as
-  rolling); and `rolling and choppy`. `test/ground-metrics.ts` says what a
+  rolling); `rolling and choppy`; and `hills` and `long hills`, swells thirty
+  and forty-five tiles (ninety and a hundred and thirty-five units) across. A
+  swell's height is about its width times the slope over six, so the small
+  feels, whose swells are eighteen to twenty-four units, are a ripple a ball's
+  width high on a hole of a hundred and fifty units at any steepness, and hills
+  stand four to five times as high at the same one, and are smooth: The Moors
+  are cut from them, and a test holds each to its relief, its smoothness and
+  the share of it a ball rests on. `test/ground-metrics.ts` says what a
   feel is in figures (relief, steepest slope, bumpiness, detail, and how much
   of the ground a ball rests on), which the tests hold each hole to.
 - The courses are content in `course.ts`, `COURSES`, each a name and its

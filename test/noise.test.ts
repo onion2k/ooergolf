@@ -350,3 +350,142 @@ describe('ground with level discs in it', () => {
     expect(() => noiseGround(flat, { ...spec, flats: [{ x: NaN, y: 4, r: 1 }] })).toThrow(RangeError);
   });
 });
+
+/**
+ * Hills, as against bumps. The older feels have swells six to eight tiles across, eighteen to twenty-four units, so at any
+ * steepness they stand a unit or two high: a ball's width, on a hole of a hundred and fifty units, which reads as a ripple.
+ * Height is about the swell's width times the slope over six, so a swell of ninety units or more, at the same slope, is
+ * a good deal higher and a good deal smoother.
+ */
+describe('hills', () => {
+  /** A green `cols` tiles across and `rows` long inside a rail, the tee and the cup on it. */
+  const green = (cols: number, rows: number) =>
+    Array.from({ length: rows }, (_, r) =>
+      Array.from({ length: cols }, (_, c) => {
+        if (r === 0 || r === rows - 1 || c === 0 || c === cols - 1) return '#';
+        if (r === rows - 3 && c === Math.floor(cols / 4)) return 'T';
+        if (r === 2 && c === Math.floor((cols * 3) / 4)) return 'C';
+        return '.';
+      }).join(''),
+    );
+  const MAP = green(45, 51);
+  /** The figures of a feel's ground on a hole forty-five tiles by fifty-one, the mean of sixteen seeds. */
+  const figures = (feel: Feel, steepness: number) => {
+    const l = layoutOf(MAP);
+    const sum = { relief: 0, bumpiness: 0, detail: 0, rests: 0 };
+    for (let seed = 1; seed <= 16; seed++) {
+      const f = groundFigures(layoutOf(MAP, noiseGround(l, { seed, feel, steepness })));
+      for (const k of Object.keys(sum) as (keyof typeof sum)[]) sum[k] += f[k] / 16;
+    }
+    return sum;
+  };
+
+  it('stand several times as high as the small feels at the same steepness, and are a good deal smoother', () => {
+    const rolling = figures('rolling', 0.5),
+      hills = figures('hills', 0.5),
+      long = figures('long hills', 0.5);
+    // measured: rolling 2.3 units, hills 9.4, long hills 7.7
+    expect(hills.relief / rolling.relief, 'hills against rolling').toBeGreaterThanOrEqual(3.5);
+    expect(long.relief / rolling.relief, 'long hills against rolling').toBeGreaterThanOrEqual(3);
+    // smooth: how quickly the slope turns, and how much of the height is small detail on a swell
+    expect(hills.bumpiness / rolling.bumpiness, 'hills turn the slope seldom').toBeLessThanOrEqual(0.4);
+    expect(long.bumpiness / rolling.bumpiness).toBeLessThanOrEqual(0.5);
+    expect(hills.detail, 'hills are the swell and nothing on it').toBeLessThanOrEqual(0.1);
+    expect(long.detail, 'long hills have a little on them').toBeLessThanOrEqual(0.12);
+    expect(long.detail).toBeGreaterThan(hills.detail);
+  });
+
+  it('are bold at a bold steepness, ten units and more of relief on a hole of a hundred and forty, and a ball still rests on nearly all of it', () => {
+    const bold = figures('hills', 0.7);
+    // measured: 13.2 units, and the ball rests on 94% of the ground
+    expect(bold.relief).toBeGreaterThanOrEqual(10);
+    expect(bold.rests).toBeGreaterThanOrEqual(0.9);
+    expect(figures('long hills', 0.7).relief).toBeGreaterThanOrEqual(8);
+  });
+
+  it('are a terrain the physics accepts at the steepest it may be asked for, on twenty seeds', () => {
+    const l = layoutOf(MAP);
+    for (const feel of ['hills', 'long hills'] as const)
+      for (let seed = 1; seed <= 20; seed++)
+        expect(
+          terrainRefusal(layoutOf(MAP, noiseGround(l, { seed, feel, steepness: 0.9 })), CUP),
+          `${feel} ${seed}`,
+        ).toBe(null);
+  });
+});
+
+/**
+ * How far a level disc's ground takes to come back to the noise. A pond's bed is at nought, the lowest the ground goes,
+ * and on hills its bank may be several units higher: over the two tiles a disc used to come back in, that is the
+ * steepest step in the hole, and the ground is scaled so its steepest step is what was asked, so the hills round it
+ * were flattened to a third of their height. A disc can say how wide its blend is.
+ */
+describe('the blend of a level disc', () => {
+  const MAP = Array.from({ length: 51 }, (_, r) =>
+    Array.from({ length: 45 }, (_, c) => {
+      if (r === 0 || r === 50 || c === 0 || c === 44) return '#';
+      if (r === 48 && c === 11) return 'T';
+      if (r === 2 && c === 33) return 'C';
+      return '.';
+    }).join(''),
+  );
+  const layout = layoutOf(MAP);
+  const spec = { seed: 5, feel: 'hills' as Feel, steepness: 0.7 };
+  const relief = (g: Float32Array) => Math.max(...g) - Math.min(...g);
+  /** A tile a good way from the tee and the cup where the ground stands about a quarter as high as it goes: a hollow. */
+  const hollow = () => {
+    const plain = noiseGround(layout, spec);
+    const top = Math.max(...plain);
+    let best: [number, number] = [22, 25];
+    for (let ty = 5; ty < 46; ty++)
+      for (let tx = 5; tx < 40; tx++) {
+        if (Math.hypot(tx - 11, ty - 2) < 9 || Math.hypot(tx - 33, ty - 48) < 9) continue;
+        if (Math.abs(plain[ty * 45 + tx] - 0.25 * top) < Math.abs(plain[best[1] * 45 + best[0]] - 0.25 * top))
+          best = [tx, ty];
+      }
+    return best;
+  };
+
+  it('is two tiles unless it is told, and told two it is the same ground', () => {
+    const [x, y] = hollow();
+    const a = noiseGround(layout, { ...spec, flats: [{ x, y, r: 2, floor: true }] });
+    const b = noiseGround(layout, { ...spec, flats: [{ x, y, r: 2, floor: true, blend: 2 }] });
+    expect(b).toEqual(a);
+  });
+
+  it('keeps the relief of hills when it is wide, which a narrow blend flattens to a fraction of it', () => {
+    const [x, y] = hollow();
+    const plain = relief(noiseGround(layout, spec));
+    const narrow = relief(noiseGround(layout, { ...spec, flats: [{ x, y, r: 2, floor: true }] }));
+    const wide = relief(noiseGround(layout, { ...spec, flats: [{ x, y, r: 2, floor: true, blend: 12 }] }));
+    // measured: a pond bed in a hollow of these hills leaves under half the relief in two tiles, and most of it in twelve
+    expect(narrow, 'a narrow blend flattens the hills').toBeLessThan(0.6 * plain);
+    expect(wide, 'a wide one leaves them').toBeGreaterThanOrEqual(0.8 * plain);
+    expect(wide).toBeGreaterThan(1.6 * narrow);
+  });
+
+  it('is a disc as level as ever, at nought, and the steepest step is still as asked, however wide the blend', () => {
+    const [x, y] = hollow();
+    for (const blend of [2, 6, 12, 20]) {
+      const g = noiseGround(layout, { ...spec, flats: [{ x, y, r: 2, floor: true, blend }] });
+      expect(Math.min(...g), `blend ${blend}`).toBe(0);
+      for (let ty = 0; ty < 51; ty++)
+        for (let tx = 0; tx < 45; tx++)
+          if (Math.hypot(tx - x, ty - y) <= 2 + FLATS.inner) expect(g[ty * 45 + tx]).toBeLessThan(1e-6);
+      let most = 0;
+      for (let ty = 0; ty < 51; ty++)
+        for (let tx = 0; tx < 45; tx++) {
+          if (tx + 1 < 45) most = Math.max(most, Math.abs(g[ty * 45 + tx + 1] - g[ty * 45 + tx]));
+          if (ty + 1 < 51) most = Math.max(most, Math.abs(g[(ty + 1) * 45 + tx] - g[ty * 45 + tx]));
+        }
+      expect(most / (TILE / 2), `blend ${blend}`).toBeCloseTo(0.7, 2);
+    }
+  });
+
+  it('refuses a blend that is not a distance, by name', () => {
+    for (const blend of [0, -3, NaN, Infinity])
+      expect(() => noiseGround(layout, { ...spec, flats: [{ x: 20, y: 20, r: 2, blend }] }), `${blend}`).toThrow(
+        RangeError,
+      );
+  });
+});

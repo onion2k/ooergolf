@@ -73,6 +73,8 @@ export const FEELS = {
   rolling: { swell: { size: 6, weight: 1 } },
   choppy: { swell: { size: 3, weight: 1 }, detail: { size: 2.5, weight: 0.8 } },
   'rolling and choppy': { swell: { size: 7, weight: 1 }, detail: { size: 3, weight: 1 } },
+  hills: { swell: { size: 30, weight: 1 } },
+  'long hills': { swell: { size: 45, weight: 1 }, detail: { size: 12, weight: 0.25 } },
 } as const satisfies Record<string, { swell: Octave; detail?: Octave }>;
 
 export type Feel = keyof typeof FEELS;
@@ -87,6 +89,12 @@ export interface Flat {
   y: number;
   r: number;
   floor?: boolean;
+  /**
+   * How many tiles past its level ground the disc takes to come back to the noise: two unless it is told. A pond's bed at
+   * nought on high hills wants as many tiles as the hills have swell, or the step from bed to bank is the steepest in the
+   * hole and the hills round it are scaled flat to make it what was asked.
+   */
+  blend?: number;
 }
 
 /** A ground: its seed, its feel, how steep its steepest step is, as a share of the physics' limit, from nought to one, and any level discs in it. */
@@ -123,11 +131,14 @@ function smoothstep(a: number, b: number, x: number): number {
 export function noiseGround(layout: Layout, { seed, feel, steepness, flats = [] }: GroundSpec): Float32Array {
   if (!(steepness > 0 && steepness < 1))
     throw new RangeError(`a ground's steepness is between nought and one, not ${steepness}`);
-  for (const { x, y, r } of flats)
+  for (const { x, y, r, blend } of flats) {
     if (!(r > 0 && x >= 0 && y >= 0 && x <= layout.cols - 1 && y <= layout.rows - 1))
       throw new RangeError(
         `a level disc of radius ${r} at ${x},${y} is not on a ground of ${layout.cols} by ${layout.rows} tiles`,
       );
+    if (blend !== undefined && !(blend > 0 && Number.isFinite(blend)))
+      throw new RangeError(`a level disc's blend is a number of tiles above nought, not ${blend}`);
+  }
   const { cols, rows } = layout;
   const { swell, ...rest } = FEELS[feel];
   const detail: Octave | undefined = 'detail' in rest ? rest.detail : undefined;
@@ -159,10 +170,11 @@ export function noiseGround(layout: Layout, { seed, feel, steepness, flats = [] 
   // from, so water lies exactly at the ground's floor. Their levels are fixed first, and every disc's own ground put
   // back level last, so that a disc's blend into the noise never lifts another's, however near they lie
   const levels = flats.map(({ x, y, floor }) => (floor ? lowestNoise : h[Math.round(y) * cols + Math.round(x)]));
-  flats.forEach(({ x, y, r }, i) => {
+  flats.forEach(({ x, y, r, blend }, i) => {
+    const outer = blend === undefined ? r + FLATS.outer : r + FLATS.inner + blend;
     for (let ty = 0; ty < rows; ty++)
       for (let tx = 0; tx < cols; tx++) {
-        const w = smoothstep(r + FLATS.inner, r + FLATS.outer, Math.hypot(tx - x, ty - y));
+        const w = smoothstep(r + FLATS.inner, outer, Math.hypot(tx - x, ty - y));
         h[ty * cols + tx] = levels[i] + (h[ty * cols + tx] - levels[i]) * w;
       }
   });
