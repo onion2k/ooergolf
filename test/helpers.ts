@@ -55,6 +55,50 @@ export function onGreen(seed = 1) {
   return newGame(seed, null, [GREEN]);
 }
 
+/**
+ * A golf hole that is one surface from end to end, for tests of what a ball does on it: `surface` is a golf tile's
+ * character (`f` fairway, `r` rough, `g` green, `s` sand), the tee is at the south end in the middle of the width and
+ * the cup out of the way in the far corner, and the rail is a long way off either side. Flat unless given `terrain`.
+ */
+export function field(surface: 'f' | 'r' | 'g' | 's', rows = 130, cols = 41, terrain?: Float32Array): HoleDef {
+  const middle = Math.floor(cols / 2);
+  const map = [
+    '#'.repeat(cols),
+    ...Array.from({ length: rows - 2 }, (_, r) => {
+      const row: string[] = Array.from({ length: cols }, (_, c) => (c === 0 || c === cols - 1 ? '#' : surface));
+      if (r === 1) row[2] = 'C';
+      // the tee in a box of its own, which is also what makes a field of sand or rough a golf hole
+      if (r === rows - 4) row.splice(middle - 1, 3, 't', 'T', 't');
+      return row.join('');
+    }),
+    '#'.repeat(cols),
+  ];
+  return { name: `Field of ${surface}`, par: 4, map, ...(terrain ? { terrain } : {}) };
+}
+
+/**
+ * A game on a golf hole, with a chance that always says the middle so a club strikes true: what a test of the flight
+ * and the landing measures, without the scatter which is tried on its own. Returns each event as its numbers.
+ */
+export function golfGame(hole: HoleDef, random: () => number = () => 0.5) {
+  const told: string[] = [];
+  /** Every event with all its arguments, the booleans among them, which `told` leaves out. */
+  const calls: [string, unknown[]][] = [];
+  const events: GameEvents = new Proxy(
+    {},
+    {
+      get:
+        (_, name: string) =>
+        (...args: unknown[]) => {
+          calls.push([name, args]);
+          return told.push(`${name} ${args.filter((a) => typeof a === 'number').join(' ')}`.trim());
+        },
+    },
+  );
+  const game = new Game(new Progress(memoryStore(null)), events, { random, course: [hole] });
+  return { game, told, calls };
+}
+
 /** Play `frames` frames. */
 export function settle(game: Game, frames = 120) {
   for (let f = 0; f < frames; f++) game.step(DT);

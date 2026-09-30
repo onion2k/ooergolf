@@ -71,6 +71,60 @@ for (const [where, device] of [
       expect(problems).toEqual([]);
     });
 
+    test('the bag, on a golf hole: all eight clubs across, one lit, clear of the other panels and the edges, and away on minigolf', async ({
+      page,
+    }) => {
+      const problems = watch(page);
+      await start(page, { seed: 11, paused: true, screen: true });
+      // under the start screen, and on a hole of minigolf, there is no bag
+      await expect(page.locator('#bag')).toBeHidden();
+      await page.evaluate(() => {
+        window.game!.chooseCourse('The Meadow');
+        window.game!.step(60);
+      });
+      await expect(page.locator('#bag')).toBeHidden();
+      await expect(page.locator('#help')).toContainText('putt');
+      await page.evaluate(() => {
+        window.game!.chooseCourse('The Range');
+        window.game!.step(60);
+      });
+      await expect(page.locator('#bag')).toBeVisible();
+      await expect(page.locator('#help')).toContainText('swing');
+      const r = await read(page);
+      expect(r.outside, 'nothing past the screen').toEqual([]);
+      expect(r.scrollWidth, 'nothing scrolls sideways').toBeLessThanOrEqual(page.viewportSize()!.width);
+      const clubs = page.locator('#bagClubs button');
+      await expect(clubs).toHaveCount(8);
+      // each a thumb high, and every text against its panel clear
+      for (const b of r.buttons.filter((b) => ['Dr', '3W', '5i', '7i', '9i', 'PW', 'SW', 'Pt'].includes(b.text)))
+        expect(b.height, `the ${b.text} button`).toBeGreaterThanOrEqual(THUMB);
+      expect(r.buttons.filter((b) => ['Dr', '3W', '5i', '7i', '9i', 'PW', 'SW', 'Pt'].includes(b.text)).length).toBe(8);
+      expect(r.texts.filter((t) => t.ratio < CONTRAST).map((t) => `"${t.text}" ${t.ratio}:1`)).toEqual([]);
+      // the bag does not sit on the switch, the help or the frame's cost, or the hole's words
+      const box = async (sel: string) => (await page.locator(sel).boundingBox())!;
+      const bag = await box('#bag');
+      for (const other of ['#viewMode', '#help', '#strokes']) {
+        const o = await box(other);
+        const apart =
+          bag.x + bag.width <= o.x || o.x + o.width <= bag.x || bag.y + bag.height <= o.y || o.y + o.height <= bag.y;
+        expect(apart, `the bag and ${other} do not overlap`).toBe(true);
+      }
+      expect(bag.x).toBeGreaterThanOrEqual(0);
+      expect(bag.x + bag.width).toBeLessThanOrEqual(page.viewportSize()!.width);
+      // a club pressed is in hand: lit, and the others not, and said above them
+      await page.locator('#bagClubs button[data-club="sand-wedge"]').click();
+      await expect(page.locator('#bagClubs button[aria-pressed="true"]')).toHaveCount(1);
+      await expect(page.locator('#bagClubs button[data-club="sand-wedge"]')).toHaveAttribute('aria-pressed', 'true');
+      await expect(page.locator('#bagInfo')).toContainText('Sand wedge');
+      // and away again on a hole of minigolf
+      await page.evaluate(() => {
+        window.game!.chooseCourse('The Meadow');
+        window.game!.step(60);
+      });
+      await expect(page.locator('#bag')).toBeHidden();
+      expect(problems).toEqual([]);
+    });
+
     test("a hole done: its score's name, large, over the course, until the next hole begins", async ({ page }) => {
       const problems = watch(page);
       await start(page, { seed: 11, paused: true });

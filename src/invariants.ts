@@ -13,18 +13,23 @@
  * more than the hole's limit. The card has a score for every hole finished
  * and no other, each between one stroke and the limit. The coins and gems are
  * counts, the clubs owned are clubs the shop sells, the starting putter
- * among them, and the club in hand is one of them. And a knock told is of
+ * among them, and the club in hand is one of them. On a golf hole the club in
+ * hand is one of the bag's, and the ball is never going faster in all, in the
+ * air as on the ground, than the club that struck it could send it, and a
+ * fall from the highest ground could make it. And a knock told is of
  * the ball, where it is, as hard as a knock is, along a direction: a rule of
  * what is told rather than of what is, so `knockProblems` is asked of each
- * knock as it is told.
+ * knock as it is told, and `landingProblems` of each landing.
  *
  * Checked by the fuzzer after everything it does, by the test API on asking,
  * and by the unit tests. Each broken rule is a line saying what and where.
  */
 import { BUMPER, KINDS, KIND_NAME, KNOCK, fromPosts, heightAt, restingAbove, tileAt } from './arena';
 import { TILT, VIEW, type CameraRig } from './camera';
+import { BAG } from './bag';
 import { CLUBS } from './clubs';
 import { LIMIT_OVER_PAR, fastest, type Game } from './game';
+import { LANDING } from './surfaces';
 
 /** How many broken rules of one sort are reported before the rest are only counted. */
 const EACH = 3;
@@ -91,6 +96,12 @@ export function checkInvariants(game: Game): string[] {
     // hand since; and a ball rolled down a slope is faster by what the drop gives it
     if (speed > fastest(game, world.x[ball], world.y[ball]) * 1.001)
       out.push(`the ball is going ${speed.toFixed(2)} along the ground, faster than a post and a slope may make it`);
+    // a lofted ball's speed in all: no club sends it faster than it has, and a fall only adds what the height gives
+    if (layout.golf) {
+      const all = Math.hypot(world.vx[ball], world.vy[ball], world.vz[ball]);
+      if (all > fastest(game, world.x[ball], world.y[ball]) * 1.001)
+        out.push(`the ball is going ${all.toFixed(2)} in all, faster than any club could send it, and a fall make it`);
+    }
     // into a post by more than the physics lets a ball sink into anything, below the post's top
     const into = -fromPosts(layout, world.x[ball], world.y[ball]) + world.r[ball];
     const postTop = heightAt(layout, world.x[ball], world.y[ball]) + BUMPER.height;
@@ -142,6 +153,23 @@ export function checkInvariants(game: Game): string[] {
   for (const id of save.owned) if (!sold.has(id)) out.push(`a club no one sells is owned: ${id}`);
   if (!save.owned.includes(CLUBS[0].id)) out.push('the starting putter is not owned');
   if (!save.owned.includes(save.club)) out.push(`the club in hand, ${save.club}, is not owned`);
+  if (layout.golf && !BAG.includes(game.inHand))
+    out.push(`the club in hand on a golf hole, ${game.inHand.id}, is not in the bag`);
+  return out;
+}
+
+/**
+ * What is wrong with a landing told, checked as it is told: a landing is of the ball on the course, where it is, and
+ * as hard as a landing is. The page marks where the ball first came down, so one of no ball, of nowhere or of a
+ * speed that is not one would be drawn as nonsense.
+ */
+export function landingProblems(game: Game, speed: number, x: number, y: number): string[] {
+  const out: string[] = [];
+  const { world, ball } = game;
+  if (!world.alive[ball]) out.push('a landing told of no ball');
+  else if (!(Math.abs(world.x[ball] - x) < 1e-9 && Math.abs(world.y[ball] - y) < 1e-9))
+    out.push(`a landing told at ${x},${y}, not where the ball is`);
+  if (!(speed >= LANDING.least) || !Number.isFinite(speed)) out.push(`a landing at ${speed}, softer than a landing is`);
   return out;
 }
 

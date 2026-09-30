@@ -26,6 +26,14 @@ export const shown = (r: number, g: number, b: number): Colour => [linear(r), li
  */
 const GREEN = [0.105, 0.41, 0.024] as const,
   STRIPE = 0.11;
+/**
+ * A golf hole's other grounds, already linear: the rough a player plays from, darker and a hair yellower than the
+ * fairway that is the game's own green; the putting green, finer and lighter, in the same two stripes; and the tee's
+ * box, paler still, mown flat.
+ */
+const PLAY_ROUGH = [0.056, 0.235, 0.024] as const,
+  PUTTING = [0.15, 0.5, 0.034] as const,
+  TEE_BOX = [0.19, 0.5, 0.09] as const;
 /** The rail's paint, already linear: a warm timber. */
 const RAIL_PAINT = [0.52, 0.25, 0.09] as const;
 
@@ -38,6 +46,10 @@ export const PALETTE = {
   grass: rgb(GREEN.map((c) => c * (1 - STRIPE))),
   grassMown: rgb(GREEN.map((c) => c * (1 + STRIPE))),
   rough: [0.0455882, 0.1823529, 0.0694118] as Colour,
+  playRough: rgb(PLAY_ROUGH),
+  puttingGreen: rgb(PUTTING.map((c) => c * (1 - STRIPE))),
+  puttingGreenMown: rgb(PUTTING.map((c) => c * (1 + STRIPE))),
+  teeBox: rgb(TEE_BOX),
   /**
    * The rail's timber sides, and the cap painted along its top, rounded over
    * its edges: one paint, the sides two thirds as bright, so a side in shade

@@ -371,6 +371,8 @@ test('the round finished to the card, and begun again from its button', async ({
     sparklesAt: [],
     splash: 0,
     puff: null,
+    // no ball has come down on a hole of minigolf, which has no landing to mark
+    landing: null,
   });
   expect(card.glints).toBeLessThanOrEqual(1);
   await page.locator('#again').click();
@@ -415,5 +417,159 @@ test('a ball putted into the water costs a stroke, is splashed, and comes back t
     'the next stroke taken',
   ).toBe(true);
   await expect(page.locator('#toast'), "the water's word gone with it").toBeHidden();
+  expect(problems).toEqual([]);
+});
+
+/** A club chosen by its button in the bag, as the suggested shot names it, and then struck by a drag as `puttAsSuggested` does. */
+async function swingAsSuggested(page: Page) {
+  const club = await page.evaluate(() => window.game!.suggest()!.club);
+  if (club) await page.locator(`#bagClubs button[data-club="${club}"]`).click();
+  await puttAsSuggested(page);
+}
+
+test('a hole of golf played with the bag: a club chosen by its button, struck into the air by a drag, the landing marked, and played out', async ({
+  page,
+}, info) => {
+  const problems = watch(page);
+  await start(page, { seed: 1, paused: true, screen: true });
+  // the course chosen as a player chooses it, from its card, and the bag is there with the driver in hand
+  await expect(page.locator('#bag')).toBeHidden();
+  await page.locator('#start .course', { hasText: 'The Range' }).click();
+  await expect(page.locator('#start')).toBeHidden();
+  await page.evaluate(() => window.game!.step(75));
+  await expect(page.locator('#bag')).toBeVisible();
+  await expect(page.locator('#bagClubs button')).toHaveCount(8);
+  await expect(page.locator('#bagClubs button[aria-pressed="true"]')).toHaveAttribute('data-club', 'driver');
+  await expect(page.locator('#bagInfo')).toContainText('Driver');
+  await expect(page.locator('#help')).toContainText('swing');
+  const first = await page.evaluate(() => window.game!.state());
+  expect(first).toMatchObject({ course: 'The Range', golf: true, inHand: 'driver', strokes: 0, ready: true });
+
+  // a club chosen by pressing its button: in hand, lit, and said with how far it carries
+  await page.locator('#bagClubs button[data-club="pitching-wedge"]').click();
+  expect((await page.evaluate(() => window.game!.state())).inHand).toBe('pitching-wedge');
+  await expect(page.locator('#bagClubs button[data-club="pitching-wedge"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#bagClubs button[data-club="driver"]')).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('#bagInfo')).toContainText('Pitching wedge');
+  await expect(page.locator('#bagInfo')).toContainText('carries 101');
+
+  // the aim reaches as far as the club carries, not as far as a putt rolls
+  const at = await page.evaluate(() => {
+    const b = window.game!.ball();
+    return window.game!.project(b.x, b.y, b.z);
+  });
+  const short = await page.evaluate(() => Math.min(innerWidth, innerHeight));
+  await drag(page, at, { x: at.x, y: at.y + 0.35 * short }, { hold: true });
+  await page.evaluate(() => window.game!.step(1));
+  expect(await page.evaluate(() => window.game!.aiming()), 'a full pull is a full power shot').toMatchObject({
+    power: 1,
+  });
+  await page.mouse.up();
+  const shot = await page.evaluate(() => window.game!.state());
+  expect(shot.strokes, 'let go, the stroke is taken').toBe(1);
+
+  // in the air: well above the ground, drawn above it, not yet come down, and nothing marked yet
+  await play(page, 30, 'in the air');
+  const air = await page.evaluate(() => {
+    const g = window.game!;
+    const b = g.ball();
+    return {
+      z: b.z,
+      ready: g.state().ready,
+      up: g.project(b.x, b.y, b.z),
+      ground: g.project(b.x, b.y, 0),
+      landing: g.motions().landing,
+    };
+  });
+  expect(air.z, 'flying').toBeGreaterThan(8);
+  expect(air.ready, 'not ready to be struck again in the air').toBe(false);
+  expect(air.up.y, 'drawn above its own shadow on the ground').toBeLessThan(air.ground.y - 10);
+  expect(air.landing).toBeNull();
+  // and the camera keeps it in view, at every height of its flight, with the whole of the drive still to come
+  for (let f = 0; f < 5; f++) {
+    const seen = await page.evaluate(() => {
+      const b = window.game!.ball();
+      const p = window.game!.project(b.x, b.y, b.z);
+      return { z: b.z, x: p.x / innerWidth, y: p.y / innerHeight };
+    });
+    expect(seen.x, `the ball across the screen at height ${seen.z.toFixed(0)}`).toBeGreaterThan(0.1);
+    expect(seen.x).toBeLessThan(0.9);
+    expect(seen.y, `the ball down the screen at height ${seen.z.toFixed(0)}`).toBeGreaterThan(0.1);
+    expect(seen.y).toBeLessThan(0.9);
+    await play(page, 4, 'in the air');
+  }
+  await info.attach('in the air', { body: await page.screenshot(), contentType: 'image/png' });
+
+  // it comes down: told once as the first landing, and the ring opens where it landed
+  let landed: string | undefined;
+  for (let f = 0; f < 6 * 60 && !landed; f += 5) {
+    await play(page, 5, 'coming down');
+    landed = (await page.evaluate(() => window.game!.events())).find((e) => e.startsWith('landed'));
+  }
+  expect(landed, 'told of a landing').toBeDefined();
+  const [lx, ly] = landed!.split(' ')[1].split(',').map(Number);
+  const mark = await page.evaluate(() => window.game!.motions().landing);
+  expect(mark, 'the mark is up').not.toBeNull();
+  expect(mark!.radius).toBeGreaterThan(0.4);
+  expect(Math.hypot(mark!.x - lx, mark!.y - ly), 'where it landed').toBeLessThan(0.15);
+  await info.attach('landed', { body: await page.screenshot(), contentType: 'image/png' });
+  await untilReady(page, 'after coming down');
+  // and it has closed away by the time it has been looked at a while
+  await play(page, 7 * 60, 'the mark closing');
+  expect((await page.evaluate(() => window.game!.motions())).landing, 'the mark closed').toBeNull();
+
+  // the hole played out with the clubs the autopilot would choose, each pressed as a player presses it
+  const purse = (await page.evaluate(() => window.game!.state())).coins;
+  for (let stroke = 2; stroke <= 9; stroke++) {
+    if ((await page.evaluate(() => window.game!.state().phase)) !== 'play') break;
+    await swingAsSuggested(page);
+    for (let f = 0; f < 15 * 60; f += 10) {
+      await play(page, 10, `stroke ${stroke}`);
+      const { phase, ready } = await page.evaluate(() => window.game!.state());
+      if (phase !== 'play' || ready) break;
+    }
+  }
+  const done = await page.evaluate(() => window.game!.state());
+  expect(done.phase, 'holed or picked up').toBe('done');
+  expect(done.card.length).toBe(1);
+  expect(done.card[0]).toBeLessThanOrEqual(done.par + 5);
+  // a round of golf pays nothing into the shop's coins
+  expect(done.coins).toBe(purse);
+  await expect(page.locator('#coins')).toHaveText(String(purse));
+  await expect(page.locator('#toast')).toBeVisible();
+  expect(problems).toEqual([]);
+});
+
+test('a full drive is followed the whole way: the ball is in the middle of the screen at every frame from the tee to rest', async ({
+  page,
+}) => {
+  const problems = watch(page);
+  await start(page, { seed: 11, paused: true });
+  const seen = await page.evaluate(() => {
+    const g = window.game!;
+    g.chooseCourse('The Range');
+    g.startHole(2);
+    g.step(75);
+    g.shoot(Math.PI / 2, 1, 'driver');
+    const out: { f: number; z: number; x: number; y: number }[] = [];
+    for (let f = 0; f < 600 && !(f > 5 && g.state().ready); f++) {
+      g.step(1);
+      const b = g.ball();
+      const p = g.project(b.x, b.y, b.z);
+      out.push({ f, z: b.z, x: p.x / innerWidth, y: p.y / innerHeight });
+    }
+    return { out, invariants: g.invariants(), ready: g.state().ready };
+  });
+  expect(seen.ready, 'it came to rest').toBe(true);
+  expect(seen.out.length, 'a drive takes a good while').toBeGreaterThan(120);
+  // an eighth in from every edge, at every frame of it: the drive at its fastest is 216 a second, and the camera must
+  // not be left behind it, above the top of the screen or the words over it
+  for (const s of seen.out) {
+    expect(s.x, `across at frame ${s.f}, ${s.z.toFixed(0)} up`).toBeGreaterThan(0.125);
+    expect(s.x, `across at frame ${s.f}`).toBeLessThan(0.875);
+    expect(s.y, `down at frame ${s.f}, ${s.z.toFixed(0)} up`).toBeGreaterThan(0.125);
+    expect(s.y, `down at frame ${s.f}`).toBeLessThan(0.875);
+  }
+  expect(seen.invariants).toEqual([]);
   expect(problems).toEqual([]);
 });

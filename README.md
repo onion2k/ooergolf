@@ -25,7 +25,11 @@ gem; the shop sells finer putters that strike harder. The coins, the clubs
 and the best score on each hole are kept in the browser. The camera follows
 the ball; the wheel zooms on a desktop, and two fingers pinch on a phone. A
 switch, Aim or Look, chooses whether a drag strikes the ball or turns and
-tilts the camera right round it. A
+tilts the camera right round it. On The Range, the first of golf, a bag of
+eight clubs sits over the course: choose one, and the same drag swings it, the
+ball flying at the club's loft, coming down in a ring that marks where, hopping
+and running on by what it landed on, with a scatter that grows the harder it is
+struck. A
 machine that cannot keep up has the picture stepped down a rung at a time.
 
 The green is painted smooth in its mown stripes, and the rough round it is
@@ -90,6 +94,11 @@ fixed, and no baseline is moved to make it green.
     src/noise.ts       ground made from Perlin noise: smooth, seeded, and legal to the physics
     src/obstacles.ts   where a barrier, a windmill's gate and a belt are at any moment
     src/arena.ts       a hole's map read into a layout; the kinds of body, the hardest shot
+    src/surfaces.ts    what each kind of ground does: roll, landing, hop, a club's cost from it
+    src/bag.ts         the eight clubs of golf: loft, speed, carry
+    src/flight.ts      a club, a power, an aim and a lie turned into a launch, with its scatter
+    src/range.ts       the range: flat golf holes of tee, fairway, rough and green
+    src/marker.ts      the ring where a lofted ball first came down
     src/autopilot.ts   the game played by itself, for the gates and for par
     src/clubs.ts       the clubs, what they cost, and what a hole pays
     src/hud.ts         the words over the course, the card and the shop

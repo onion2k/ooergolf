@@ -19,6 +19,7 @@
 import { BODY_CAPACITY } from '../src/arena';
 import { Autopilot } from '../src/autopilot';
 import { COURSE } from '../src/course';
+import { RANGE } from '../src/range';
 import { Game } from '../src/game';
 import { Progress, memoryStore } from '../src/progress';
 import { seeded } from '../src/random';
@@ -90,11 +91,15 @@ export interface LeakOptions {
   seed: number;
   /** Game minutes to play. */
   minutes: number;
+  /** Play The Range, which is golf, instead of The Meadow. */
+  range?: boolean;
 }
 
 export interface LeakRun {
   seed: number;
   minutes: number;
+  /** Whether it was played on The Range. */
+  range: boolean;
   /** Every size, sampled once a game minute. */
   samples: Record<string, number[]>;
   problems: string[];
@@ -103,22 +108,30 @@ export interface LeakRun {
 }
 
 /** Play a long game, sampling the sizes once a game minute, and say what would not stay bounded. */
-export function leakRun({ seed, minutes }: LeakOptions): LeakRun {
+export function leakRun({ seed, minutes, range }: LeakOptions): LeakRun {
   const started = performance.now();
   const samples: Record<string, number[]> = {};
   try {
-    const game = new Game(new Progress(memoryStore()), {}, { random: seeded(seed) });
+    const game = new Game(new Progress(memoryStore()), {}, { random: seeded(seed), course: range ? RANGE : undefined });
     // round after round, as a player who never stops would
     const pilot = new Autopilot(game, { skill: PLAYER, random: seeded(seed * 17 + 3), replay: true });
     for (let minute = 0; minute < minutes; minute++) {
       for (let f = 0; f < 3600; f++) pilot.step(DT);
       for (const [key, n] of Object.entries(sizes(game))) (samples[key] ??= []).push(n);
     }
-    return { seed, minutes, samples, problems: trouble(samples), seconds: (performance.now() - started) / 1000 };
+    return {
+      seed,
+      minutes,
+      range: !!range,
+      samples,
+      problems: trouble(samples),
+      seconds: (performance.now() - started) / 1000,
+    };
   } catch (err) {
     return {
       seed,
       minutes,
+      range: !!range,
       samples,
       problems: [`seed ${seed}: threw ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`],
       seconds: (performance.now() - started) / 1000,

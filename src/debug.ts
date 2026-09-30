@@ -14,7 +14,8 @@
  */
 import type { Antialias } from 'artshape-render/game/renderer';
 import { KIND_NAME, TILE, type Layout } from './arena';
-import { Autopilot } from './autopilot';
+import { Autopilot, type Plan } from './autopilot';
+import { BAG, carryOf } from './bag';
 import { CUP, type HoleDef } from './course';
 import type { Game } from './game';
 import { checkInvariants } from './invariants';
@@ -54,6 +55,9 @@ export interface GameState {
   /** The course being played, and whether the start screen is up to choose one. */
   course: string;
   choosing: boolean;
+  /** Whether the hole is golf, played with the bag: and the club of it in hand. */
+  golf: boolean;
+  inHand: string;
 }
 
 /** The ball, where it is and how fast it is going. */
@@ -117,12 +121,19 @@ export interface GameApi {
 
   /** A body moved to a point, still, and woken. */
   place(slot: number, x: number, y: number, z?: number): void;
-  /** The ball struck as a let-go drag strikes it: toward `angle`, at `power` of the hardest shot. Whether it was taken. */
-  shoot(angle: number, power: number): boolean;
+  /**
+   * The ball struck as a let-go drag strikes it: toward `angle`, at `power` of the club's hardest, and on a golf hole
+   * with `club` of the bag put in hand first, if one is named. Whether it was taken.
+   */
+  shoot(angle: number, power: number, club?: string): boolean;
+  /** A club of the bag put in hand, as a press on its button does, on a golf hole; whether it was. */
+  club(id: string): boolean;
+  /** The clubs of the bag: each one's id, name, loft, hardest launch speed and how far it carries at full power. */
+  bag(): { id: string; name: string; loft: number; hardest: number; carry: number }[];
   /** The shot the drag under way would make if let go now, or null for none. */
   aiming(): { angle: number; power: number } | null;
-  /** The shot the autopilot would take from where the ball lies, or null when none can be taken. */
-  suggest(): { angle: number; power: number } | null;
+  /** The shot the autopilot would take from where the ball lies, and on a golf hole with which club, or null when none can be taken. */
+  suggest(): Plan | null;
   /** Hole `index` begun, from its tee, with the card as if the holes before it had not been played. */
   startHole(index: number): void;
   /** A round of holes of the test's own, not the course's: for a hole that is not on it. */
@@ -206,6 +217,8 @@ export interface Motions {
   splash: number;
   /** What the last stroke threw up from under the ball, sand or grass, or null before any stroke. */
   puff: 'sand' | 'grass' | null;
+  /** The ring marking where a lofted ball first came down: where, and how wide in world units; null when there is none to see. */
+  landing: { x: number; y: number; radius: number } | null;
 }
 
 /** The grass a frame drew, and the wind it bent in. */
@@ -285,6 +298,8 @@ export function createApi(host: DebugHost): GameApi {
         hardest: game.hardest,
         course: host.course(),
         choosing: host.choosing(),
+        golf: game.layout.golf,
+        inHand: game.inHand.id,
       };
     },
     ball() {
@@ -336,7 +351,12 @@ export function createApi(host: DebugHost): GameApi {
       game.world.vx[slot] = game.world.vy[slot] = game.world.vz[slot] = 0;
       game.world.wake(slot);
     },
-    shoot: (angle, power) => game.shoot(angle, power),
+    shoot(angle, power, club) {
+      if (club !== undefined && !game.pick(club)) return false;
+      return game.shoot(angle, power);
+    },
+    club: (id) => game.pick(id),
+    bag: () => BAG.map((c) => ({ id: c.id, name: c.name, loft: c.loft, hardest: c.hardest, carry: carryOf(c, 1) })),
     suggest: () => (game.ready ? new Autopilot(game).plan() : null),
     startHole: (index) => game.startAt(index),
     playCourse: (holes) => game.playCourse(holes),

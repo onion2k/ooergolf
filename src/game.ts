@@ -19,20 +19,27 @@ import {
   KIND_RADIUS,
   KNOCK,
   fromPosts,
+  heightAt,
   highestTerrain,
   layoutOf,
+  lieAt,
   onFloor,
+  restingAbove,
+  slopeAt,
   stepAt,
   strikeSpeed,
   terrainAt,
   type Layout,
 } from './arena';
+import { BAG, PUTTER, bagClub, type BagClub } from './bag';
 import { clubById, paid } from './clubs';
 import { COURSE, CUP, type HoleDef } from './course';
+import { strike } from './flight';
 import { Obstacles } from './obstacles';
 import { PHYSICS, THE_CUP, makeWorld, type World } from './physics';
 import { Progress } from './progress';
 import type { Random } from './random';
+import { LANDING, SURFACES } from './surfaces';
 
 /** What happens, for whoever shows it. Every one may be left out. */
 export interface GameEvents {
@@ -42,6 +49,11 @@ export interface GameEvents {
   struck?(power: number, x: number, y: number): void;
   /** The ball come to rest at (x, y), ready to be struck again. */
   stopped?(x: number, y: number): void;
+  /**
+   * A lofted ball come down at (x, y), going `speed` into the ground, on a golf hole: the first since it was struck if
+   * `first`, which is where it carried to. What follows a landing (a hop, and a run out) is told of no more.
+   */
+  landed?(x: number, y: number, speed: number, first: boolean): void;
   /**
    * The ball knocked at (x, y): its velocity turned by `hard` units a second
    * in a step, by the rail, a post, a box, the cup or the ground it dropped
@@ -92,6 +104,8 @@ export const KEPT_MOVING = 10;
  * nothing draws a ball in from further off.
  */
 export const CLEAR_OF_CUP = CUP.radius + KIND_RADIUS[BALL] + 0.5;
+/** The clubs of the bag by their ids. */
+const BAG_IDS = new Map(BAG.map((c) => [c.id, c]));
 /** The most a ball is left to settle before it is played, in physics frames: far more than it takes. */
 const SETTLE_FRAMES = 600;
 
@@ -119,6 +133,10 @@ export class Game {
   random: Random;
   /** The hardest the club that struck the ball last strikes: another put in hand while it rolls does not slow it. */
   struckWith = 0;
+  /** The club of the bag in hand, on a golf hole: chosen a shot at a time, and the driver again at each tee. */
+  inHand: BagClub = PUTTER;
+  /** Whether the ball's next landing is the first since it was struck. */
+  private firstLanding = false;
   /** Whether the ball was moving at the end of the last step: its coming to rest is told once, when it does. */
   private moving = false;
   /** When the ball was last struck, in game time: a ball kept moving long enough after it may be struck again. */
@@ -154,9 +172,9 @@ export class Game {
     return this.def.par + LIMIT_OVER_PAR;
   }
 
-  /** The hardest the club in hand strikes. */
+  /** The hardest the club in hand strikes: the bag's on a golf hole, and the shop's putter's on any other. */
   get hardest(): number {
-    return clubById(this.progress.save.club).hardest;
+    return this.layout.golf ? this.inHand.hardest : clubById(this.progress.save.club).hardest;
   }
 
   /**
@@ -195,6 +213,9 @@ export class Game {
     this.strokes = 0;
     this.moving = false;
     this.phase = 'play';
+    // a golf hole is begun with the driver, which is what a tee is for, and a minigolf hole with the putter
+    this.inHand = this.layout.golf ? bagClub('driver') : PUTTER;
+    this.firstLanding = false;
     // a knock on the hole before holds back none on this one
     this.knockAt = -Infinity;
     this.firstStep = false;
@@ -230,23 +251,42 @@ export class Game {
   }
 
   /**
-   * The ball struck along the ground toward `angle`, at `power` of the
-   * hardest shot, held to between none and all of it: the power is how far
-   * it rolls, a half power half as far as the hardest. Refused, and not
-   * counted, while the ball is moving, between holes, or for a shot of no
-   * power at all.
+   * A club of the bag put in hand for the next shot, on a golf hole: whether it was, which it is not for a club that
+   * is not in the bag or on a hole of minigolf. It may be chosen while the ball rolls: what is struck is struck.
+   */
+  pick(id: string): boolean {
+    const club = BAG_IDS.get(id);
+    if (!club || !this.layout.golf) return false;
+    this.inHand = club;
+    return true;
+  }
+
+  /**
+   * The ball struck toward `angle`, at `power` of the club's hardest, held to
+   * between none and all of it: the power is how far it goes, a half power
+   * half as far as the hardest. On a hole of minigolf it goes along the
+   * ground and rolls that far; on a golf hole the club in hand launches it at
+   * its loft, from the ground it lies on, with the scatter of a swing. Refused,
+   * and not counted, while the ball is moving, between holes, or for a shot of
+   * no power at all.
    */
   shoot(angle: number, power: number): boolean {
     if (!this.ready || !(power > 0)) return false;
     const p = Math.min(1, power);
     const { world, ball } = this;
-    const speed = strikeSpeed(p, this.hardest);
     this.struckWith = this.hardest;
     this.lie.x = world.x[ball];
     this.lie.y = world.y[ball];
     // a ball ready is at rest, and asleep or held by a belt: what it has of the belt's speed is not the shot's
     world.vx[ball] = world.vy[ball] = world.vz[ball] = 0;
-    world.hit(ball, Math.cos(angle) * speed, Math.sin(angle) * speed, 0);
+    if (this.layout.golf) {
+      const launch = strike(this.inHand, p, angle, lieAt(this.layout, this.lie.x, this.lie.y), this.random);
+      world.hit(ball, launch.vx, launch.vy, launch.vz);
+      this.firstLanding = true;
+    } else {
+      const speed = strikeSpeed(p, this.hardest);
+      world.hit(ball, Math.cos(angle) * speed, Math.sin(angle) * speed, 0);
+    }
     this.strokes++;
     this.moving = true;
     this.struckAt = this.t;
@@ -283,6 +323,7 @@ export class Game {
         vy = world.vy[ball],
         vz = world.vz[ball];
       world.step(PHYSICS.step, collect);
+      this.landing(vx, vy, vz);
       this.heldToFastest();
       this.knock(vx, vy, vz);
       if (fell.holed || fell.wet) break;
@@ -310,6 +351,49 @@ export class Game {
     this.ball = this.world.spawn(BALL, this.lie.x, this.lie.y, this.restingZ(this.lie.x, this.lie.y));
     this.settle();
     if (this.strokes >= this.limit) this.done('pickedUp');
+  }
+
+  /**
+   * A lofted ball that came down in the step just taken (from (vx, vy, vz), going into the ground on a golf hole) has
+   * its landing made what the surface says it is: the physics gives every floor the one bounce, and none of the
+   * scrub of a real ball's impact, so what it did is undone and done again. The speed along the ground is cut to
+   * the surface's `keep`, less the steeper it came down, and the ball comes back up with the surface's `bounce` of its
+   * speed into the ground, both along the ground's own slope. A ball rolling, however fast, is going into the ground by nothing near
+   * `LANDING.least`, so never lands; and one that met a post's top or a box rather than the ground is left as
+   * the physics has it.
+   */
+  private landing(vx: number, vy: number, vz: number) {
+    const { world, ball, layout } = this;
+    if (!layout.golf || !world.alive[ball]) return;
+    const x = world.x[ball],
+      y = world.y[ball];
+    const [sx, sy] = slopeAt(layout, x, y);
+    const lean = Math.sqrt(1 + sx * sx + sy * sy);
+    const nx = -sx / lean,
+      ny = -sy / lean,
+      nz = 1 / lean;
+    const into = -(vx * nx + vy * ny + vz * nz);
+    if (into < LANDING.least) return;
+    const out = world.vx[ball] * nx + world.vy[ball] * ny + world.vz[ball] * nz;
+    // met the ground this step if it turned back by more than gravity turns it in a step
+    if (out + into <= 2 * PHYSICS.gravity * PHYSICS.step) return;
+    const r = world.r[ball];
+    if (Math.abs(world.z[ball] - heightAt(layout, x, y) - restingAbove(layout, x, y, r)) > 0.3) return;
+    const surface = SURFACES[lieAt(layout, x, y)];
+    // along the ground, scrubbed, and more the steeper it came down; away from it, the surface's own hop
+    const ax = world.vx[ball] - nx * out,
+      ay = world.vy[ball] - ny * out,
+      az = world.vz[ball] - nz * out;
+    const keep = surface.keep * Math.exp((-LANDING.steep * into) / Math.max(1e-6, Math.hypot(ax, ay, az)));
+    const tx = ax * keep,
+      ty = ay * keep,
+      tz = az * keep;
+    const back = into * surface.bounce;
+    world.vx[ball] = tx + nx * back;
+    world.vy[ball] = ty + ny * back;
+    world.vz[ball] = tz + nz * back;
+    this.events.landed?.(x, y, into, this.firstLanding);
+    this.firstLanding = false;
   }
 
   /**
@@ -372,7 +456,8 @@ export class Game {
     this.moving = false;
     this.events[how]?.(score, this.def.par);
     const save = this.progress.save;
-    const pay = paid(score, this.def.par, how === 'pickedUp');
+    // nothing in a round of golf is bought, so a round of it pays nothing into the shop's coins
+    const pay = this.layout.golf ? { coins: 0, gems: 0 } : paid(score, this.def.par, how === 'pickedUp');
     save.coins += pay.coins;
     save.gems += pay.gems;
     // a hole not yet holed has no best

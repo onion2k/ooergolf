@@ -57,7 +57,10 @@ describe('the turf of a hole', () => {
         if (course) expect(f.mask[i], `${hole.name}: a blade on the course at ${x},${y}`).toBe(0);
         else if (f.mask[i] === ROUGH + 1) rough++;
       }
-      expect(rough, `${hole.name}: the rough round it`).toBeGreaterThan(f.mask.length / 2);
+      // a hole that fills its rail's box, a golf hole a hundred yards wide and three hundred long, is half course and
+      // half the rough that frames it: what matters is that all of the margin is rough, which the test of a field's
+      // edge below holds cell by cell, and that it is a good deal of the field
+      expect(rough, `${hole.name}: the rough round it`).toBeGreaterThan(f.mask.length * 0.4);
     }
   });
 

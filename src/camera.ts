@@ -27,6 +27,17 @@ export const VIEW = { fov: 40, near: 30, far: 110, home: 62 };
 export const TILT = { least: 0.3, home: 0.78, most: 1 } as const;
 /** How quickly it catches up with the ball: the share of the way it goes in a second, as a rate. */
 const EASE = 4;
+/**
+ * How much quicker it catches up with a ball in flight, by how fast it goes: a drive at 216 a second would leave it
+ * fifty units behind at the pace a putt is followed at, and out of the top of the screen. The pace is `EASE` and one
+ * more for each `FLIGHT.per` of the ball's speed.
+ */
+export const FLIGHT = { per: 15 } as const;
+
+/** The pace, as a rate, at which to catch up with a ball going `speed`: `EASE` for one at rest. */
+export function catchUp(speed: number): number {
+  return EASE + Math.max(0, speed) / FLIGHT.per;
+}
 /** How much wider than tall a screen must be before it needs no more room: below this, the camera stands back. */
 const WIDE = 1.25;
 /**
@@ -120,9 +131,12 @@ export class CameraRig {
     return this.at;
   }
 
-  /** A step of `dt` seconds nearer looking at (x, y) on ground `z` high: up and down a slope as along it. */
-  follow(x: number, y: number, dt: number, z = 0) {
-    const k = 1 - Math.exp(-EASE * dt);
+  /**
+   * A step of `dt` seconds nearer looking at (x, y) on ground `z` high: up and down a slope as along it. At the pace
+   * of `ease`, a rate, which is `EASE` unless it is told: a ball in flight is followed at `catchUp`'s.
+   */
+  follow(x: number, y: number, dt: number, z = 0, ease = EASE) {
+    const k = 1 - Math.exp(-ease * dt);
     this.target[0] += (x - this.target[0]) * k;
     this.target[1] += (y - this.target[1]) * k;
     this.target[2] += (z - this.target[2]) * k;

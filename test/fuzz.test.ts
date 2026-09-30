@@ -2,16 +2,19 @@
 import { describe, expect, it } from 'vitest';
 import { fuzz } from '../scripts/fuzzer';
 import { DOWNS, moors } from '../src/course';
+import { RANGE } from '../src/range';
 
 const MOORS = moors();
 
 describe('the fuzzer', () => {
   it('plays a seed through without breaking a rule, and does everything a player can', () => {
     // two seeds, since which of the rarer things a monkey gets round to on one is chance. A reload starts the round
-    // again, the save not yet keeping where in the course a player is, so a round is seldom finished: 25 and 33 do,
+    // again, the save not yet keeping where in the course a player is, so a round is seldom finished: 26 and 17 do (they were 25 and 33 until The Range was chosen from among the courses, which moved what a monkey picks),
     // chosen again when a course could be chosen, and each does everything a player can
-    const one = fuzz(25, 12000),
-      two = fuzz(33, 12000);
+    // and a run of the range, which is golf: the club chosen from the bag is an action of its own, done only there
+    const one = fuzz(26, 12000),
+      two = fuzz(17, 12000),
+      golf = fuzz(4, 8000, RANGE);
     const sum = (a: Record<string, number>, b: Record<string, number>) => {
       const out = { ...a };
       for (const [k, n] of Object.entries(b)) out[k] = (out[k] ?? 0) + n;
@@ -19,11 +22,17 @@ describe('the fuzzer', () => {
     };
     expect(one.failure, JSON.stringify(one.failure)).toBe(null);
     expect(two.failure, JSON.stringify(two.failure)).toBe(null);
-    const r = { done: sum(one.done, two.done), happened: sum(one.happened, two.happened), failure: null };
+    expect(golf.failure, JSON.stringify(golf.failure)).toBe(null);
+    const r = {
+      done: sum(sum(one.done, two.done), golf.done),
+      happened: sum(sum(one.happened, two.happened), golf.happened),
+      failure: null,
+    };
     expect(r.failure, JSON.stringify(r.failure)).toBe(null);
     const actions = [
       'buy',
       'buy, refused',
+      'choose a club',
       'choose a course',
       'equip',
       'look round',
@@ -41,6 +50,28 @@ describe('the fuzzer', () => {
     expect(r.happened.holed, 'holed out').toBeGreaterThan(0);
     expect(r.happened.finished, 'round the whole course').toBeGreaterThan(0);
     expect(r.happened.knocked, 'knocked off the rail and the rest, each knock told as a knock is').toBeGreaterThan(0);
+  });
+
+  it('plays The Range at random from start to finish, every seed clean, every club struck, every landing told as one is', () => {
+    let holed = 0,
+      finished = 0,
+      landed = 0,
+      clubs = 0;
+    const visited = new Set<string>();
+    for (const seed of [4, 9, 21, 30]) {
+      const r = fuzz(seed, 12000, RANGE);
+      expect(r.failure, `seed ${seed}: ${JSON.stringify(r.failure)}`).toBe(null);
+      holed += r.happened.holed || 0;
+      finished += r.happened.finished || 0;
+      landed += r.happened.landed || 0;
+      clubs += r.done['choose a club'] || 0;
+      for (const name of Object.keys(r.visited)) visited.add(name);
+    }
+    expect([...visited].sort()).toEqual(RANGE.map((h) => h.name).sort());
+    expect(landed, 'balls come down, each landing told and checked as it is').toBeGreaterThan(50);
+    expect(clubs, 'and clubs chosen from the bag').toBeGreaterThan(10);
+    expect(holed, 'holed out').toBeGreaterThan(0);
+    expect(finished, 'round the whole course').toBeGreaterThan(0);
   });
 
   it('plays The Downs at random from start to finish, every seed clean, holing out and getting round all nine', () => {

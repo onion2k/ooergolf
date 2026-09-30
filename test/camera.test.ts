@@ -2,7 +2,7 @@
 import { Camera } from 'artshape-render/gpu/camera';
 import { describe, expect, it } from 'vitest';
 import { layoutOf } from '../src/arena';
-import { CameraRig, GLIDE, LEAD, TILT } from '../src/camera';
+import { CameraRig, GLIDE, LEAD, TILT, catchUp } from '../src/camera';
 import { groundAt } from '../src/shot';
 import { GREEN } from './helpers';
 
@@ -76,6 +76,26 @@ describe('the camera', () => {
     expect(rig.target[0]).toBeLessThan(10);
     for (let f = 0; f < 300; f++) rig.follow(20, 20, 1 / 60);
     expect(rig.target[0]).toBeCloseTo(20, 1);
+  });
+
+  it('catches up with a ball in flight faster the faster it goes, and at its own pace for one at rest', () => {
+    const rig = new CameraRig();
+    const slow = new CameraRig(),
+      fast = new CameraRig();
+    rig.jump(0, 0);
+    slow.jump(0, 0);
+    fast.jump(0, 0);
+    // at rest it is the pace it always was: an unasked follow and one at the pace for no speed are the same
+    rig.follow(20, 20, 1 / 60);
+    slow.follow(20, 20, 1 / 60, 0, catchUp(0));
+    expect(slow.target).toEqual(rig.target);
+    // a drive's speed takes it further in the same time, and never past the ball
+    fast.follow(20, 20, 1 / 60, 0, catchUp(216));
+    expect(fast.target[0]).toBeGreaterThan(slow.target[0] * 2);
+    expect(fast.target[0]).toBeLessThan(20);
+    expect(catchUp(100)).toBeGreaterThan(catchUp(50));
+    // it keeps a ball at the driver's speed within a fifth of the screen's depth of where it looks, a dozen or so units
+    expect(216 / catchUp(216)).toBeLessThan(16);
   });
 
   it('rises and falls with the ground under the ball, easing as it does across the course, and stands as far above it', () => {

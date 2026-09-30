@@ -454,6 +454,69 @@ test.describe('what it looks like', () => {
     expect(problems).toEqual([]);
   });
 
+  // golf, on the range: the ground told apart by its colour, the bag over it, and a ball in the air with its landing marked
+  test.describe('golf, on the range', () => {
+    /** The range's hole `k` begun from its tee, the ball still and the stats hidden. */
+    async function range(page: Page, hole: number) {
+      await start(page, { seed: 11, paused: true });
+      await page.evaluate((k) => {
+        window.game!.chooseCourse('The Range');
+        window.game!.startHole(k);
+        window.game!.step(75);
+      }, hole);
+      await hideStats(page);
+    }
+
+    test('The Long Way from its tee: the box, the fairway between the rough, the bag, and the aim reaching as far as the driver carries', async ({
+      page,
+    }) => {
+      const problems = watch(page);
+      await range(page, 2);
+      await aim(page, 0.9);
+      await expect(page).toHaveScreenshot('range-tee.png', TOLERANCE);
+      expect(problems).toEqual([]);
+    });
+
+    test('a drive in the air, a second after it was struck: the ball high above the fairway', async ({ page }) => {
+      const problems = watch(page);
+      await range(page, 2);
+      await page.evaluate(() => {
+        window.game!.shoot(Math.PI / 2, 1, 'driver');
+        window.game!.step(60);
+      });
+      await expect(page).toHaveScreenshot('range-flight.png', TOLERANCE);
+      expect(problems).toEqual([]);
+    });
+
+    test('a drive come down: the ring opened where it landed, and the ball on its first hop', async ({ page }) => {
+      const problems = watch(page);
+      await range(page, 2);
+      await page.evaluate(() => {
+        const g = window.game!;
+        g.shoot(Math.PI / 2, 1, 'driver');
+        // to the frame it came down in, and a few after, while the ring is opening
+        for (let f = 0; f < 400 && !g.motions().landing; f++) g.step(1);
+        g.step(14);
+      });
+      await expect(page).toHaveScreenshot('range-landed.png', TOLERANCE);
+      expect(problems).toEqual([]);
+    });
+
+    test('the green of Iron Alley, close to: the putting green in its stripes, the bunker beside it, the cup and its flag', async ({
+      page,
+    }) => {
+      const problems = watch(page);
+      await range(page, 1);
+      await page.evaluate(() => {
+        const { cup } = window.game!.content();
+        window.game!.look(cup.x - 2, cup.y - 14, 60);
+        window.game!.step(1);
+      });
+      await expect(page.locator('#view')).toHaveScreenshot('range-green.png', TOLERANCE);
+      expect(problems).toEqual([]);
+    });
+  });
+
   test.describe('what answers what happens, at a fixed frame of each', () => {
     test('the ball squashed against the rail the frame it is knocked, close to', async ({ page }) => {
       const problems = watch(page);
@@ -594,6 +657,18 @@ test.describe('what it looks like', () => {
         window.game!.step(1);
       });
       await expect(page).toHaveScreenshot('phone-look.png', TOLERANCE);
+      expect(problems).toEqual([]);
+    });
+
+    test('the range, on a phone: the bag over the switch, the driver in hand', async ({ page }) => {
+      const problems = watch(page);
+      await start(page, { seed: 11, paused: true });
+      await page.evaluate(() => {
+        window.game!.chooseCourse('The Range');
+        window.game!.startHole(1);
+        window.game!.step(75);
+      });
+      await expect(page).toHaveScreenshot('phone-range.png', TOLERANCE);
       expect(problems).toEqual([]);
     });
 

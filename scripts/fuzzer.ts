@@ -24,14 +24,16 @@ import { CLUBS } from '../src/clubs';
 import { COURSES, type HoleDef } from '../src/course';
 import { Game, type GameEvents } from '../src/game';
 import { Input } from '../src/input';
-import { checkInvariants, knockProblems, viewProblems } from '../src/invariants';
+import { checkInvariants, knockProblems, landingProblems, viewProblems } from '../src/invariants';
+import { BAG } from '../src/bag';
 import { Progress, memoryStore } from '../src/progress';
 import { seeded } from '../src/random';
 import { groundAt } from '../src/shot';
 
 const DT = 1 / 60;
-/** What a knock is told with. */
+/** What a knock is told with, and a landing. */
 type Knock = Parameters<NonNullable<GameEvents['knocked']>>;
+type Landing = Parameters<NonNullable<GameEvents['landed']>>;
 /** How many frames between checks, when nothing has just been done. */
 const CHECK_EVERY = 10;
 /** How many of the last things done a failure reports. */
@@ -80,6 +82,10 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
           count(happened, name);
           if (name === 'started' && playing) count(visited, playing.def.name);
           if (name === 'knocked' && playing) told.push(...knockProblems(playing, ...(args as Knock)));
+          if (name === 'landed' && playing) {
+            const [x, y, speed] = args as unknown as Landing;
+            told.push(...landingProblems(playing, speed, x, y));
+          }
         },
     },
   );
@@ -113,7 +119,9 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
       [
         6,
         () => {
-          // any way at all, at any power, as a drag can: the least shots too, and the hardest
+          // any way at all, at any power, as a drag can: the least shots too, and the hardest; and on a golf hole any club
+          // of the bag, which a player picks before the drag
+          if (game.layout.golf && random() < 0.8) game.pick(BAG[Math.floor(random() * BAG.length)].id);
           const power = random() < 0.15 ? 1 : random();
           if (game.shoot(between(-Math.PI, Math.PI), power)) did('shoot');
           busy = Math.floor(between(10, 90));
@@ -125,6 +133,7 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
           // a player who can play: the autopilot's shot at the cup, slipped a little
           const shot = new Autopilot(game).plan();
           if (!shot) return;
+          if (shot.club) game.pick(shot.club);
           if (game.shoot(shot.angle + between(-0.08, 0.08), shot.power * between(0.85, 1.15))) did('shoot well');
           busy = Math.floor(between(10, 90));
         },
@@ -145,6 +154,19 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
           if (game.strokes !== strokes || world.vx[ball] !== vx || world.vy[ball] !== vy)
             throw new Error('a refused shot changed the ball or the strokes');
           did('shoot while rolling');
+        },
+      ],
+      [
+        2,
+        () => {
+          // a club chosen from the bag, on a golf hole, at any time: it is in hand, whatever the ball is doing; a club that is
+          // not in the bag is refused and changes nothing
+          if (!game.layout.golf) return;
+          const club = BAG[Math.floor(random() * BAG.length)];
+          if (!game.pick(club.id) || game.inHand !== club) throw new Error(`the ${club.id} was not put in hand`);
+          const before = game.inHand;
+          if (game.pick('mashie') || game.inHand !== before) throw new Error('a club that is not in the bag was taken');
+          did('choose a club');
         },
       ],
       [

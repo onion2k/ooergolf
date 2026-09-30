@@ -8,8 +8,9 @@
 import { createContext } from 'artshape-render/gpu/context';
 import { LightPool } from 'artshape-render/game/lights';
 import { GameRenderer, antialiasFor } from 'artshape-render/game/renderer';
-import { BALL, HARDEST_SHOT, KIND_RADIUS, heightAt, onSand, rollsFor } from './arena';
-import { CameraRig } from './camera';
+import { BALL, HARDEST_SHOT, KIND_RADIUS, heightAt, lieAt, onSand, rollsFor } from './arena';
+import { BAG, carryOf } from './bag';
+import { CameraRig, catchUp } from './camera';
 import { CLUBS } from './clubs';
 import { createApi } from './debug';
 import { frameCost } from './frame-cost';
@@ -21,7 +22,8 @@ import { Progress } from './progress';
 import { seeded } from './random';
 import { roll } from './roll';
 import { GRASS, fieldOf, windOf } from './turf';
-import { Scene, boxOf } from './scene';
+import { AIM_REACH, Scene, boxOf } from './scene';
+import { carryFrom } from './flight';
 import { clearings } from './scenery';
 import { cupBurst, splash, strikePuff } from './bursts';
 import { Input } from './input';
@@ -123,6 +125,10 @@ async function main() {
         input.setMode(mode);
         hud.setMode(mode);
       },
+      // a club of the bag chosen on a golf hole
+      club(id) {
+        if (game?.pick(id)) hud.setClub(id);
+      },
     },
     CLUBS,
   );
@@ -169,6 +175,11 @@ async function main() {
       backToAim?.();
       squash.clear();
       hud.started({ index, count: game.course.length, name: game.course[index].name, par });
+      // the bag on a golf hole, with the driver in hand, and none on a hole of minigolf
+      hud.setBag(
+        layout.golf ? BAG.map((c) => ({ id: c.id, name: c.name, label: c.label, carry: carryOf(c, 1) })) : null,
+        game.inHand.id,
+      );
     },
     struck(power, x, y) {
       hud.setStrokes(game?.strokes ?? 0);
@@ -176,6 +187,13 @@ async function main() {
       const ground = game && onSand(game.layout, x, y) ? 'sand' : 'grass';
       drawn.puff = ground;
       for (const e of strikePuff(x, y, power, ground)) renderer.emit(e);
+    },
+    // a lofted ball come down: the first landing is marked, and throws up the ground it came down on
+    landed(x, y, speed, first) {
+      if (!game || !first) return;
+      scene.landedAt(x, y, game.t);
+      const ground = onSand(game.layout, x, y) ? 'sand' : 'grass';
+      for (const e of strikePuff(x, y, Math.min(1, speed / 60), ground)) renderer.emit(e);
     },
     // knocked off the rail, a post or the ground it dropped onto: squashed along it, and sprung back
     knocked(hard, _x, _y, dx, dy, dz) {
@@ -295,8 +313,10 @@ async function main() {
     renderer.move(0, scene.ball, world.alive[ball] ? 1 : 0);
     drawn.squash = world.alive[ball] ? squashOf(scene.ball, 0, n[0], n[1], n[2]) : 0;
     // the aim shows only while a shot can be taken
-    // a finer club's aim reaches further, as far again as its hardest shot rolls
-    const reach = rollsFor(played.hardest) / rollsFor(HARDEST_SHOT);
+    // a finer club's aim reaches further, as far again as its hardest shot rolls; and a golf club's as far as it carries
+    const reach = played.layout.golf
+      ? carryFrom(played.inHand, 1, lieAt(played.layout, world.x[ball], world.y[ball])) / AIM_REACH
+      : rollsFor(played.hardest) / rollsFor(HARDEST_SHOT);
     const dots = played.ready ? scene.writeAim(world.x[ball], world.y[ball], input.aim, reach, played.t) : 0;
     renderer.move(1, scene.aim, dots);
     // the nearest dot's size, as it was placed: nought for none
@@ -421,7 +441,16 @@ async function main() {
     // the ball seen to roll, as far as it went this frame
     roll(scene.ballTurn, world.vx[ball], world.vy[ball], KIND_RADIUS[BALL], dt);
     // the camera keeps game time, so a test stepping the game sees it follow the same way every run
-    if (!parked) rig.follow(world.x[ball], world.y[ball], dt, heightAt(played.layout, world.x[ball], world.y[ball]));
+    if (!parked) {
+      const ground = heightAt(played.layout, world.x[ball], world.y[ball]);
+      // a lofted ball is followed up into the air as well as along, or it leaves the top of the screen at the top of its
+      // flight; on the ground, and on every hole of minigolf, it is the ground that is looked at, as it always was
+      const golf = played.layout.golf;
+      const up = golf ? Math.max(0, world.z[ball] - ground - KIND_RADIUS[BALL]) : 0;
+      // and quicker the faster it goes, or a drive outruns it
+      const ease = golf ? catchUp(Math.hypot(world.vx[ball], world.vy[ball], world.vz[ball])) : undefined;
+      rig.follow(world.x[ball], world.y[ball], dt, ground + up, ease);
+    }
   }
   /** The frame drawn, and when it was begun, for the governor to measure the drawing against. */
   function draw(dt: number): number {
@@ -523,6 +552,7 @@ async function main() {
       }),
       splash: scene.splashReach(played.t),
       puff: drawn.puff,
+      landing: scene.landingMark(),
     }),
     course: () => courseName,
     choosing: () => choosing,

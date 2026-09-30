@@ -17,6 +17,7 @@
 import { STILL, type Wind } from 'artshape-render/game/grass';
 import type { GameGroup } from 'artshape-render/game/renderer';
 import { MATERIAL_STRIDE, PATTERN_STRIDE } from 'artshape-render/game/renderer';
+import type { Mesh } from 'artshape-render/mesh/types';
 import { BALL, BUMPER, KIND_RADIUS, TILE, WATER_LEVEL, heightAt, tileAt, type Layout } from './arena';
 import { CUP } from './course';
 import { place } from './matrix';
@@ -53,9 +54,11 @@ import { ROCK_SIZE, dress, scatter, type Piece, type SceneryKind } from './scene
 import { GROUND, cupGround, groundOf, railsOf } from './ground';
 import { RIPPLES, SPLASH_RING, flagTurn, lean, ringPlace, ripples, splashRing, waggle } from './sway';
 import { SPARKLE, sparkle, sparkles as sparkleShares } from './glints';
+import { MARK, markSize } from './marker';
 import { pulse } from './pulse';
 import type { Shot } from './shot';
 import { PALETTE as COLOURS } from './models/palette';
+import { annulus, at, built } from './models/shapes';
 
 /** How tall the rail stands above the grass: a little over the ball, so it reads as the thing the ball banks off. */
 const RAIL_HEIGHT = 1.6;
@@ -87,12 +90,19 @@ export const PALETTE = {
   grass: [...COLOURS.grass, 0.85],
   grassMown: [...COLOURS.grassMown, 0.85],
   rough: [...COLOURS.rough, 0.95],
+  /** A golf hole's other grounds: the rough it is played from, the putting green in its two stripes, and the tee's box. */
+  playRough: [...COLOURS.playRough, 0.95],
+  puttingGreen: [...COLOURS.puttingGreen, 0.8],
+  puttingGreenMown: [...COLOURS.puttingGreenMown, 0.8],
+  teeBox: [...COLOURS.teeBox, 0.85],
   /** The rail's timber sides, and the cap painted along its top, rounded over its edges. */
   rail: [...COLOURS.rail, 0.6],
   railCap: [...COLOURS.railCap, 0.45],
   /** The sides of grass raised on a step: the earth under the turf. */
   bank: [0.2, 0.3, 0.08, 0.9],
   ball: [0.98, 0.98, 0.96, 0.25],
+  /** The ring where a lofted ball first came down. */
+  marker: [1.0, 0.86, 0.18, 0.4],
   /** The band round the ball's middle, so it is seen to roll. */
   ballBand: [0.9, 0.16, 0.12],
   /** The aim's dots, from a gentle putt to the hardest shot. */
@@ -102,7 +112,7 @@ export const PALETTE = {
 
 /** How many dots the aim has at most, and how far along the course it reaches at the hardest shot. */
 export const AIM_DOTS = 14;
-const AIM_REACH = 18;
+export const AIM_REACH = 18;
 const AIM_RADIUS = 0.36;
 
 /** The scenery's models, one of each kind, built once: the flowers in each of their colours. */
@@ -118,6 +128,9 @@ const POST = bumper(BUMPER.radius, { height: BUMPER.height });
 const TREES = new Set<SceneryKind>(['round tree', 'pine']);
 /** The flowers of a bed at the foot of the rail: fuller than a clump in the rough, and few enough to read as flowers. */
 const BED_MODELS = FLOWER_COLOURS.slice(0, 3).map((c, k) => flowers(c, { seed: k + 11, count: 5 }));
+/** The landing mark's ring, a flat one of unit outer radius, made when a golf hole first wants it. */
+let markRing: Mesh | undefined;
+const markMesh = () => (markRing ??= built((b) => annulus(b, at(0, 0, 0), 32, 0.72, 1, 0)));
 /** The rough, as one great square out past the fog. */
 const ROUGH_SIZE = 600;
 const FLOWER_MODELS = FLOWER_COLOURS.slice(0, 3).map((c, k) => flowers(c, { seed: k + 1 }));
@@ -206,6 +219,10 @@ export class Scene {
   ponds: { x: number; y: number; w: number; h: number; free: Pond['free']; reach: number; seed: number }[] = [];
   /** Where and when a ball last went into the water on this hole: the ring that spreads from it. */
   private splashed: { x: number; y: number; at: number } | null = null;
+  /** Where and when a lofted ball last came down, first, since it was struck: the ring that marks it. */
+  private landed: { x: number; y: number; at: number } | null = null;
+  /** The ring as the last frame placed it, and whether it is drawn: what the page reads back, and never the state it came from. */
+  private mark: { matrices: Float32Array; count: number } | null = null;
   /** How many sparkles each pond has, worked out once for a hole; and what each frame writes into and reads, made once. */
   private shares: number[] = [];
   private readonly scratch = {
@@ -229,8 +246,16 @@ export class Scene {
     const underTower = new Set<number>();
     for (const w of obstacles?.windmills ?? [])
       for (const side of [-1, 1]) underTower.add(tileAt(layout, w.x + side * TILE, w.y));
+    // the cup's collar is the colour of the ground it is cut in: a green's on a golf hole
+    const odd = (t: number) => Math.floor(Math.floor(t / cols) / STRIPE_ROWS) % 2 === 1;
     const stripe = (t: number) =>
-      Math.floor(Math.floor(t / cols) / STRIPE_ROWS) % 2 ? PALETTE.grassMown : PALETTE.grass;
+      layout.golf
+        ? odd(t)
+          ? PALETTE.puttingGreenMown
+          : PALETTE.puttingGreen
+        : odd(t)
+          ? PALETTE.grassMown
+          : PALETTE.grass;
     // the grass as one mesh over the hole, following its slopes, and the earth down its steps
     const ground = groundOf(layout);
     const still = new Float32Array(16);
@@ -257,9 +282,23 @@ export class Scene {
       albedo: [c[0], c[1], c[2]] as [number, number, number],
       roughness: c[3],
     });
+    // the ground in its colours: the grass in its two stripes, and on a golf hole the rest of its grounds, of which a hole
+    // may have none of a kind, and an empty mesh is not drawn
+    const laid: [Mesh, readonly number[], number][] = [
+      [ground.green, PALETTE.grass, 0.2],
+      [ground.mown, PALETTE.grassMown, 0.7],
+    ];
+    if (ground.golf)
+      laid.push(
+        [ground.golf.rough, PALETTE.playRough, 0.4],
+        [ground.golf.putting, PALETTE.puttingGreen, 0.3],
+        [ground.golf.puttingMown, PALETTE.puttingGreenMown, 0.8],
+        [ground.golf.tee, PALETTE.teeBox, 0.5],
+      );
     const out: GameGroup[] = [
-      { mesh: ground.green, matrices: still, ...look(PALETTE.grass), patterns: grain(PALETTE.grass, 0.2) },
-      { mesh: ground.mown, matrices: still, ...look(PALETTE.grassMown), patterns: grain(PALETTE.grassMown, 0.7) },
+      ...laid
+        .filter(([mesh]) => !ground.golf || mesh.indices.length)
+        .map(([mesh, c, seed]) => ({ mesh, matrices: still, ...look(c), patterns: grain(c, seed) })),
       { ...group({ ...collarPart, material: stripe(cupTile) }, atCup) },
       { mesh: rails.sides, matrices: still, ...look(PALETTE.rail) },
       { mesh: rails.cap, matrices: still, ...look(PALETTE.railCap) },
@@ -464,6 +503,8 @@ export class Scene {
     this.moving = [];
     this.holedAt = -Infinity;
     this.splashed = null;
+    this.landed = null;
+    this.mark = null;
     const pool = (model: { parts: Model['parts'] }, write: (out: Float32Array, t: number) => void, count = 1) => {
       const matrices = new Float32Array(16 * count);
       for (const part of model.parts) {
@@ -513,6 +554,28 @@ export class Scene {
         place(m, 0, c.x + Math.cos(c.angle) * along, c.y + Math.sin(c.angle) * along, 0, yaw);
       });
     }
+    // where a lofted ball came down: the last of what moves, and only on a golf hole, so a hole of minigolf has the
+    // groups it always had
+    if (layout?.golf) {
+      const matrices = new Float32Array(16);
+      const entry = {
+        matrices,
+        count: 0,
+        write: (m: Float32Array, t: number) => {
+          const l = this.landed;
+          const size = l ? markSize(t - l.at) : 0;
+          entry.count = size > 0 ? 1 : 0;
+          if (!l || !entry.count) return;
+          const r = size * MARK.radius;
+          // a hair above the ground, so it does not fight it
+          place(m, 0, l.x, l.y, heightAt(layout, l.x, l.y) + 0.06, 0, r, r, 1);
+        },
+      };
+      this.moving.push(entry);
+      this.mark = entry;
+      const [mr, mg, mb, mrough] = PALETTE.marker;
+      out.push({ mesh: markMesh(), matrices, count: 0, albedo: [mr, mg, mb], roughness: mrough });
+    }
     return out;
   }
 
@@ -525,6 +588,21 @@ export class Scene {
   /** A ball went into the water at (x, y) at game time `t`: a ring spreads from there until it fades. */
   splashedAt(x: number, y: number, t: number) {
     this.splashed = { x, y, at: t };
+  }
+
+  /** A lofted ball came down first at (x, y) at game time `t`: the ring that marks it opens there. */
+  landedAt(x: number, y: number, t: number) {
+    this.landed = { x, y, at: t };
+  }
+
+  /**
+   * The landing mark as the last frame placed it: where it is and how wide, in world units, read back from what was
+   * placed for drawing; or null when none was drawn.
+   */
+  landingMark(): { x: number; y: number; radius: number } | null {
+    const m = this.mark;
+    if (!m || m.count === 0) return null;
+    return { x: m.matrices[12], y: m.matrices[13], radius: m.matrices[0] };
   }
 
   /** How wide the ring where a ball went in is at game time `t`, in world units: nought when there is none. */

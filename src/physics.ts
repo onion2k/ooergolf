@@ -10,6 +10,7 @@ import { heightAt as terrainHeightAt, slopeAt as terrainSlopeAt, terrainProblem 
 import { World, type WorldOptions } from 'artshape-physics/world';
 import { BODY_CAPACITY, BOTTOM, BOUNCE, BUMPER, KIND_RADIUS, ROLL, SAND, TILE, heightAt, type Layout } from './arena';
 import type { Random } from './random';
+import { LIE, SURFACES } from './surfaces';
 
 export { World, type Belt, type Pusher } from 'artshape-physics/world';
 
@@ -48,9 +49,12 @@ export interface Cup {
   pull: number;
 }
 
-/** The surfaces by index: the green, a belt, and sand. */
+/** The surfaces by index: the green, a belt, and sand; and on a golf hole, after them, its tee, fairway, rough and green. */
 const BELT = 1,
   SAND_SURFACE = 2;
+/** Which of the world's surfaces each golf `LIE` is rolled on, from the green's index for none: sand is the sand's. */
+const GOLF_SURFACE: readonly number[] = [0, 3, 4, 5, 6, SAND_SURFACE];
+const GOLF_LIES = [LIE.tee, LIE.fairway, LIE.rough, LIE.green] as const;
 
 /** The cup's index among the world's holes: the only one, so what goes down a hole and not out of the bottom is holed. */
 export const THE_CUP = 0;
@@ -73,7 +77,11 @@ export function makeWorld(layout: Layout, cup: Cup, random: Random, belted: Read
   const { cols, rows, solid } = layout;
   // a belt carries what lies on it at its own speed, and the green's steady slowing would hold it back to a third of it
   const surface = new Uint8Array(cols * rows);
-  for (let t = 0; t < cols * rows; t++) if (layout.sand[t]) surface[t] = SAND_SURFACE;
+  for (let t = 0; t < cols * rows; t++) {
+    if (layout.sand[t]) surface[t] = SAND_SURFACE;
+    // a golf hole's ground rolls a ball as its kind does, and a minigolf hole is given none of it
+    else if (layout.golf) surface[t] = GOLF_SURFACE[layout.lie[t]];
+  }
   for (const t of belted) surface[t] = BELT;
   const options: WorldOptions = {
     capacity: BODY_CAPACITY,
@@ -92,6 +100,7 @@ export function makeWorld(layout: Layout, cup: Cup, random: Random, belted: Read
       { drag: 0, roll: ROLL.roll },
       { drag: 0, roll: 0 },
       { drag: 0, roll: SAND.roll },
+      ...(layout.golf ? GOLF_LIES.map((k) => ({ drag: 0, roll: SURFACES[k].roll })) : []),
     ],
     random,
     // a step is met as a change of floor and not as a ledge with an edge: with v0.8.0's edges a ball climbs a riser only

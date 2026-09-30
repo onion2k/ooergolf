@@ -46,6 +46,8 @@
     --grape: #b58cff;
     --grape-deep: #7a52e6;
     --grape-ink: #4a2da6;
+    --rose: #ff7a9a;
+    --rose-deep: #d63f68;
     --water: #2bb8ea;
     --water-deep: #1487b8;
     --water-ink: #0a5a86;
@@ -172,6 +174,7 @@
   }
   #purse:not([hidden]),
   #viewMode:not([hidden]),
+  #bag:not([hidden]),
   #card:not([hidden]),
   #shop:not([hidden]),
   #start:not([hidden]) {
@@ -649,17 +652,21 @@
       0 6px 0 var(--deep),
       0 12px 20px var(--shade);
   }
-  #courses .course:nth-child(4n + 2) {
+  #courses .course:nth-child(5n + 2) {
     --face: var(--orange);
     --deep: var(--orange-deep);
   }
-  #courses .course:nth-child(4n + 3) {
+  #courses .course:nth-child(5n + 3) {
     --face: var(--sky-face);
     --deep: var(--sky-deep);
   }
-  #courses .course:nth-child(4n + 4) {
+  #courses .course:nth-child(5n + 4) {
     --face: var(--grape);
     --deep: var(--grape-deep);
+  }
+  #courses .course:nth-child(5n + 5) {
+    --face: var(--rose);
+    --deep: var(--rose-deep);
   }
   @media (hover: hover) {
     #courses .course:hover {
@@ -718,6 +725,20 @@
     border-style: solid;
     border-width: 9px 0 9px 15px;
     border-color: transparent transparent transparent var(--deep);
+  }
+
+  @media (max-width: 600px) {
+    /* five cards fit a tall phone's screen at this height, and a short one scrolls */
+    #courses {
+      gap: 14px 16px;
+    }
+    #courses .course {
+      min-height: 104px;
+      padding: 12px 16px 14px;
+    }
+    .course b {
+      font-size: 24px;
+    }
   }
 
   /* ---- the corners at the bottom: how to putt, and the frame's cost ---- */
@@ -782,6 +803,64 @@
     /* the frame's cost is not shown on a phone, so the switch takes its place at the bottom */
     #viewMode {
       bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    }
+  }
+
+  /*
+   * the bag, on a golf hole: the clubs in a row at the bottom middle, the one in hand standing up in the sun's
+   * yellow as the switch's is, and above them what it is and how far it carries. On a phone it sits above the switch,
+   * and the buttons are as narrow as their two letters allow, so all eight fit across
+   */
+  #bag {
+    position: fixed;
+    left: 50%;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    translate: -50% 0;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    max-width: calc(100vw - 32px);
+    padding: 4px 6px 6px;
+    border-radius: 24px;
+    transform-origin: bottom center;
+  }
+  #bag:not([hidden]) {
+    display: flex;
+  }
+  #bagInfo {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ink-soft);
+    font-variant-numeric: tabular-nums;
+  }
+  #bagClubs {
+    display: flex;
+    gap: 3px;
+  }
+  #bag button {
+    min-width: 44px;
+    padding: 0 8px;
+    font-size: 15px;
+  }
+  #bag button[aria-pressed='false'] {
+    background: var(--paper);
+    box-shadow:
+      inset 0 0 0 3px var(--sky),
+      0 4px 0 var(--sky-deep);
+  }
+  #bag button[aria-pressed='false']:active {
+    box-shadow:
+      inset 0 0 0 3px var(--sky),
+      0 0 0 var(--sky-deep);
+  }
+  @media (max-width: 600px) {
+    #bag {
+      bottom: calc(16px + 60px + 8px + env(safe-area-inset-bottom, 0px));
+    }
+    #bag button {
+      min-width: 36px;
+      padding: 0 5px;
+      font-size: 14px;
     }
   }
 
@@ -875,6 +954,10 @@
   <div id="courses"></div>
 </div>
 <div class="panel" id="stats" hidden></div>
+<div class="panel" id="bag" role="group" aria-label="Club" hidden>
+  <small id="bagInfo"></small>
+  <div id="bagClubs"></div>
+</div>
 <div class="panel" id="viewMode" role="group" aria-label="What a drag does" hidden>
   <button id="modeAim" type="button" aria-pressed="true">Aim</button
   ><button id="modeLook" type="button" aria-pressed="false">Look</button>

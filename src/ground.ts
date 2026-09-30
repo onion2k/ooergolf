@@ -13,6 +13,7 @@
 import { MeshBuilder, type Mesh } from 'artshape-render/mesh/types';
 import { TILE, WATER_LEVEL, slopeAt, stepAt, terrainAt, tileAt, type Layout } from './arena';
 import { face, tri } from './meshes';
+import { LIE } from './surfaces';
 
 type V3 = [number, number, number];
 
@@ -23,11 +24,16 @@ export const GROUND = { pieces: 3 } as const;
 const STRIPE_ROWS = 2;
 
 export interface Ground {
-  /** The grass in its lighter stripe, and in its darker. */
+  /** The grass in its lighter stripe, and in its darker: on a golf hole, the fairway's. */
   green: Mesh;
   mown: Mesh;
   /** The earth down the side of a step or a pond, to the ground or the water's surface below it. */
   banks: Mesh;
+  /**
+   * What a golf hole's ground is besides its fairway, each in a mesh of its own so that each is its own colour: the
+   * rough, the putting green in its two stripes, and the tee. None on a hole of minigolf, which is all one grass.
+   */
+  golf?: { rough: Mesh; putting: Mesh; puttingMown: Mesh; tee: Mesh };
 }
 
 /** Whether a tile is sand the ball rolls on: not rock, and not water. */
@@ -46,6 +52,11 @@ export function groundOf(l: Layout): Ground {
   const green = new MeshBuilder(),
     mown = new MeshBuilder(),
     banks = new MeshBuilder();
+  // a golf hole's other grounds, each a mesh of its own
+  const rough = new MeshBuilder(),
+    putting = new MeshBuilder(),
+    puttingMown = new MeshBuilder(),
+    tee = new MeshBuilder();
   const n = GROUND.pieces;
   // the height of the ground of tile `t` at a point: its own step, whichever tile the point's edge also bounds
   const at = (t: number, x: number, y: number) => l.floor[t] + terrainAt(l, x, y);
@@ -59,7 +70,14 @@ export function groundOf(l: Layout): Ground {
     const x0 = l.originX + tx * TILE,
       y0 = l.originY + ty * TILE;
     if (grass) {
-      const b = Math.floor(ty / STRIPE_ROWS) % 2 ? mown : green;
+      const odd = Math.floor(ty / STRIPE_ROWS) % 2 === 1;
+      let b = odd ? mown : green;
+      if (l.golf) {
+        const lie = l.lie[t];
+        if (lie === LIE.rough) b = rough;
+        else if (lie === LIE.tee) b = tee;
+        else if (lie === LIE.green) b = odd ? puttingMown : putting;
+      }
       const base = b.vertexCount;
       for (let j = 0; j <= n; j++)
         for (let i = 0; i <= n; i++) {
@@ -116,7 +134,10 @@ export function groundOf(l: Layout): Ground {
       }
     }
   }
-  return { green: green.build(), mown: mown.build(), banks: banks.build() };
+  const out: Ground = { green: green.build(), mown: mown.build(), banks: banks.build() };
+  if (l.golf)
+    out.golf = { rough: rough.build(), putting: putting.build(), puttingMown: puttingMown.build(), tee: tee.build() };
+  return out;
 }
 
 /**

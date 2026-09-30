@@ -30,6 +30,16 @@ export interface HudHandlers {
   equip(id: string): void;
   /** The switch pressed: what a drag on the course is from now on, a shot or a turn of the camera. */
   mode(mode: Mode): void;
+  /** A club of the bag chosen on a golf hole, by its id. */
+  club(id: string): void;
+}
+
+/** A club of the bag as the picker shows it: what to press, what to call it, and how far it carries at full power. */
+export interface BagInfo {
+  id: string;
+  name: string;
+  label: string;
+  carry: number;
 }
 
 /** What the shop needs to know of the save to show each club as for sale, owned, or in hand. */
@@ -40,8 +50,12 @@ export interface Purse {
   club: string;
 }
 
-/** What the help says a drag does, in each mode. */
-const HELP = { aim: 'drag back and let go to putt', look: 'drag to look round' } as const;
+/** What the help says a drag does, in each mode: a golf hole's is a swing, and a minigolf hole's a putt. */
+const HELP = {
+  aim: 'drag back and let go to putt',
+  swing: 'drag back and let go to swing',
+  look: 'drag to look round',
+} as const;
 
 export interface HoleInfo {
   index: number;
@@ -73,6 +87,12 @@ export class Hud {
   private readonly modes = document.getElementById('viewMode')!;
   private readonly aimButton = document.getElementById('modeAim')!;
   private readonly lookButton = document.getElementById('modeLook')!;
+  private readonly bag = document.getElementById('bag')!;
+  private readonly bagInfo = document.getElementById('bagInfo')!;
+  private readonly bagClubs = document.getElementById('bagClubs')!;
+  /** The clubs the picker has, none on a hole of minigolf; and what a drag does, which the help says. */
+  private bagList: readonly BagInfo[] = [];
+  private mode: Mode = 'aim';
 
   constructor(
     private readonly handlers: HudHandlers,
@@ -92,11 +112,47 @@ export class Hud {
     this.lookButton.addEventListener('click', () => handlers.mode('look'));
   }
 
-  /** The switch shows which a drag is, and the help says what to do with it. */
+  /** The switch shows which a drag is, and the help says what to do with it: swing, on a golf hole, and not putt. */
   setMode(mode: Mode) {
+    this.mode = mode;
     this.aimButton.setAttribute('aria-pressed', String(mode === 'aim'));
     this.lookButton.setAttribute('aria-pressed', String(mode === 'look'));
-    this.help.textContent = mode === 'aim' ? HELP.aim : HELP.look;
+    this.help.textContent = mode === 'look' ? HELP.look : this.bagList.length ? HELP.swing : HELP.aim;
+  }
+
+  /**
+   * The picker of a golf hole's clubs, with `active` in hand, or put away for a hole of minigolf: one pill a club,
+   * pressed through `club`, and above them the club in hand and how far it carries. Shown with the course's other
+   * panels, and away under the start screen.
+   */
+  setBag(clubs: readonly BagInfo[] | null, active = '') {
+    this.bagList = clubs ?? [];
+    this.setMode(this.mode);
+    if (!clubs) {
+      this.bag.hidden = true;
+      return;
+    }
+    this.bagClubs.replaceChildren(
+      ...clubs.map((c) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = c.label;
+        b.dataset.club = c.id;
+        b.setAttribute('aria-label', c.name);
+        b.addEventListener('click', () => this.handlers.club(c.id));
+        return b;
+      }),
+    );
+    this.setClub(active);
+    this.bag.hidden = !this.start.hidden;
+  }
+
+  /** The club in hand: its pill stands up, and what it is and how far it carries is said above them. */
+  setClub(active: string) {
+    for (const b of Array.from(this.bagClubs.querySelectorAll('button')))
+      b.setAttribute('aria-pressed', String(b.dataset.club === active));
+    const c = this.bagList.find((x) => x.id === active);
+    this.bagInfo.textContent = c ? (c.carry > 0 ? `${c.name} \u00b7 carries ${Math.round(c.carry)}` : c.name) : '';
   }
 
   show() {
@@ -104,6 +160,7 @@ export class Hud {
     this.purse.hidden = false;
     this.help.hidden = false;
     this.modes.hidden = false;
+    this.bag.hidden = !this.bagList.length;
   }
 
   /**
@@ -129,7 +186,7 @@ export class Hud {
         return card;
       }),
     );
-    for (const el of [this.panel, this.purse, this.help, this.modes, this.card, this.shop, this.toast])
+    for (const el of [this.panel, this.purse, this.help, this.modes, this.bag, this.card, this.shop, this.toast])
       el.hidden = true;
     this.start.hidden = false;
   }

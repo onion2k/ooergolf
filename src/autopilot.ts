@@ -25,6 +25,7 @@ import {
   SAND,
   TILE,
   fromPosts,
+  lieAt,
   slopeAt,
   stepAt,
   terrainAt,
@@ -35,11 +36,14 @@ import {
   tileAt,
   type Layout,
 } from './arena';
+import { BAG, PUTTER } from './bag';
+import { carryFrom } from './flight';
 import type { Game } from './game';
 import { Obstacles } from './obstacles';
 import { PHYSICS } from './physics';
 import type { Random } from './random';
 import type { Shot } from './shot';
+import { LIE } from './surfaces';
 
 /** How fast a ball it means for the cup is going when it gets there: inside what the cup catches off its middle, 7. */
 const ARRIVE = 4;
@@ -140,9 +144,23 @@ export function timeTo(distance: number, speed: number): number {
   return left < 0 ? Infinity : (speed - Math.sqrt(left)) / ROLL.roll;
 }
 
-/** A shot it would take, and, when it plays to a point on the way rather than the cup, the point it means to stop at. */
+/**
+ * A shot it would take, and, when it plays to a point on the way rather than the cup, the point it means to stop at;
+ * and, on a golf hole, the club of the bag it means to strike it with.
+ */
 export interface Plan extends Shot {
   to?: { x: number; y: number };
+  club?: string;
+}
+
+/**
+ * How far a lofted ball runs on after it lands, as a share of its carry, by the club's loft in degrees: a driver runs
+ * on about an eighth of it, a wedge a thirtieth. A rough estimate from what golfers know of a ball coming down steeply
+ * and not from the game's own tables, which are what it is measuring: it lands short of the cup by a stroke's worth of
+ * roll, and a putt finishes the hole.
+ */
+function runOn(loft: number): number {
+  return Math.max(0.01, 0.15 - 0.0025 * loft);
 }
 
 export interface Skill {
@@ -185,6 +203,8 @@ export class Autopilot {
       }
       this.waitingSince = -1;
       if (shot) {
+        // a golf hole's club, put in hand before the shot is taken
+        if (shot.club) game.pick(shot.club);
         const { skill, random } = this.options;
         let { angle, power } = shot;
         if (skill && random) {
@@ -204,6 +224,7 @@ export class Autopilot {
     const { layout, world, ball } = game;
     const x = world.x[ball],
       y = world.y[ball];
+    if (layout.golf) return this.golfPlan(x, y);
     const path = pathToCup(layout, x, y);
     // the farthest point of the way it can see, the cup itself if it can, and if it can strike hard enough to get there:
     // straight through sand may take more than the club has
@@ -236,6 +257,33 @@ export class Autopilot {
       power: Math.min(1, powerFor(speed, game.hardest)),
       ...(toCup ? {} : { to: { x: tx, y: ty } }),
     };
+  }
+
+  /**
+   * The shot on a golf hole, straight at the cup: a putt from the green, at the speed that arrives at the cup gently
+   * enough to drop; and from anywhere else the shortest club that reaches, from the ground it lies on, at the power
+   * that lands it short of the cup by what it will run on. Nothing is in its way on the range, so nothing is looked
+   * for: water, trees and out of bounds are the holes' that have them, and a planner's.
+   */
+  private golfPlan(x: number, y: number): Plan {
+    const { game } = this;
+    const { layout } = game;
+    const dx = layout.cup.x - x,
+      dy = layout.cup.y - y;
+    const distance = Math.hypot(dx, dy);
+    const angle = Math.atan2(dy, dx);
+    const lie = lieAt(layout, x, y);
+    if (lie === LIE.green) {
+      const speed = speedAcross(layout, x, y, layout.cup.x, layout.cup.y, ARRIVE);
+      return { angle, power: Math.min(1, powerFor(speed, PUTTER.hardest)), club: PUTTER.id };
+    }
+    // from the shortest club to the longest, the first that reaches; and the longest, flat out, for a distance none does
+    const clubs = BAG.filter((c) => c !== PUTTER).reverse();
+    for (const club of clubs) {
+      const reach = carryFrom(club, 1, lie) * (1 + runOn(club.loft));
+      if (reach >= distance) return { angle, power: distance / reach, club: club.id };
+    }
+    return { angle, power: 1, club: BAG[0].id };
   }
 
   /**

@@ -5,6 +5,8 @@
  * logic: the game reads it and the page draws it, and the lower modules go
  * on knowing nothing of any hole.
  */
+import { LIE, type Lie } from './surfaces';
+
 export const TILE = 3;
 /** The most bodies the world can hold. */
 export const BODY_CAPACITY = 64;
@@ -85,6 +87,9 @@ export const KNOCK = { least: 6, apart: 0.1 } as const;
  */
 export const TERRAIN = { step: 0.5 } as const;
 
+/** The characters of a golf hole's map that name a kind of ground. */
+const GOLF_TILES: Record<string, Lie> = { f: LIE.fairway, r: LIE.rough, g: LIE.green, t: LIE.tee };
+
 /** How far a ball struck at `speed` rolls on the green before it stops. */
 export function rollsFor(speed: number): number {
   return (speed * speed) / (2 * ROLL.roll);
@@ -141,6 +146,14 @@ export interface Layout extends Ground {
   rail: Uint8Array;
   /** One byte a tile: 1 where there is sand, level ground a ball rolls on and is slowed hard by. */
   sand: Uint8Array;
+  /**
+   * One byte a tile, of a golf hole: what its ground is, by `LIE` (the tee, the fairway, the rough, the green), which
+   * the physics rolls a ball on and a landing is scrubbed by. Sand is its own array, and `lieAt` says the whole. All
+   * nought on a hole of minigolf, which has no surfaces but its green, its sand and its belts.
+   */
+  lie: Uint8Array;
+  /** Whether this is a golf hole, drawn with golf's tiles: a ball on it is struck with a club from the bag, and lands. */
+  golf: boolean;
   /** Where each post stands: in the middle of its tile, on grass. */
   bumpers: { x: number; y: number }[];
   /** How high the floor stands on each tile: nought for level grass, a step a digit, and far below for water. */
@@ -157,7 +170,9 @@ export interface Layout extends Ground {
  * A hole's layout from its map, drawn as seen from the tee with the far end
  * first, one character a tile: `#` rail, `.` grass, `T` the tee and `C` the
  * cup on level grass, a digit for grass raised that many steps, `~` water,
- * `s` sand, `o` a post standing on grass, and a space for off the course.
+ * `s` sand, `o` a post standing on grass, and a space for off the course. A golf hole is drawn in `f` fairway, `r` rough,
+ * `g` green and `t` the tee's box instead of `.` and the digits, with the same `T`, `C`, `s`, `~` and `o`: the tee is
+ * a tee and the cup a green whatever they are drawn on, and a post stands in the rough.
  * `terrain`, if given, is how high the ground slopes on each tile: a grid the
  * shape of the map with a digit a tile, or real heights, one a tile, row by
  * row from the south as a layout has them, which is how ground made from
@@ -174,10 +189,18 @@ export function layoutOf(map: readonly string[], terrain?: readonly string[] | F
     rail = new Uint8Array(cols * rows),
     water = new Uint8Array(cols * rows),
     sand = new Uint8Array(cols * rows),
+    lie = new Uint8Array(cols * rows),
     floor = new Float32Array(cols * rows);
   const bumpers: { x: number; y: number }[] = [];
   const tees: [number, number][] = [],
     cups: [number, number][] = [];
+  // the tiles that are not of a kind of ground by their letter, which a golf hole gives their own, and whether either
+  // sort of grass has been drawn: a hole is one or the other
+  const teeTiles: number[] = [],
+    cupTiles: number[] = [],
+    postTiles: number[] = [];
+  let golf = false,
+    minigolf = false;
   const bounds = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
   for (let r = 0; r < rows; r++) {
     const ty = rows - 1 - r;
@@ -194,15 +217,27 @@ export function layoutOf(map: readonly string[], terrain?: readonly string[] | F
         solid[t] = 1;
         continue;
       }
-      if (c === 'T') tees.push([x, y]);
-      else if (c === 'C') cups.push([x, y]);
-      else if (c === '~') {
+      if (c === 'T') {
+        tees.push([x, y]);
+        teeTiles.push(t);
+      } else if (c === 'C') {
+        cups.push([x, y]);
+        cupTiles.push(t);
+      } else if (c === '~') {
         water[t] = 1;
         floor[t] = WATER_FLOOR;
       } else if (c === 's') sand[t] = 1;
-      else if (c === 'o') bumpers.push({ x, y });
-      else if (c >= '1' && c <= '9') floor[t] = (c.charCodeAt(0) - 48) * STEP;
-      else if (c !== '.') throw new Error(`a hole's map has "${c}" in it, which is not a tile`);
+      else if (c === 'o') {
+        bumpers.push({ x, y });
+        postTiles.push(t);
+      } else if (c in GOLF_TILES) {
+        golf = true;
+        lie[t] = GOLF_TILES[c];
+      } else if (c >= '1' && c <= '9') {
+        minigolf = true;
+        floor[t] = (c.charCodeAt(0) - 48) * STEP;
+      } else if (c === '.') minigolf = true;
+      else throw new Error(`a hole's map has "${c}" in it, which is not a tile`);
       if (tx === 0 || ty === 0 || tx === cols - 1 || ty === rows - 1)
         throw new Error(`a hole's map has grass on its edge, at column ${tx} of row ${r}`);
       bounds.minX = Math.min(bounds.minX, x - TILE / 2);
@@ -215,6 +250,14 @@ export function layoutOf(map: readonly string[], terrain?: readonly string[] | F
   if (cups.length !== 1) throw new Error(`a hole's map has ${cups.length} cups, not one`);
   const [[teeX, teeY]] = tees,
     [[cupX, cupY]] = cups;
+  if (golf && minigolf)
+    throw new Error("a hole's map mixes the minigolf's grass, or its raised steps, with golf's fairway and rough");
+  if (golf) {
+    // whatever they were drawn on, a ball is teed up on a tee, the cup is cut in a green, and a post stands in the rough
+    for (const t of teeTiles) lie[t] = LIE.tee;
+    for (const t of cupTiles) lie[t] = LIE.green;
+    for (const t of postTiles) lie[t] = LIE.rough;
+  }
   const heights = terrainOf(terrain, cols, rows);
   return {
     cols,
@@ -225,6 +268,8 @@ export function layoutOf(map: readonly string[], terrain?: readonly string[] | F
     rail,
     water,
     sand,
+    lie,
+    golf,
     bumpers,
     floor,
     terrain: heights,
@@ -358,6 +403,16 @@ function terrainOf(grid: readonly string[] | Float32Array | undefined, cols: num
 export function onSand(l: Layout, x: number, y: number): boolean {
   const t = tileAt(l, x, y);
   return t >= 0 && l.sand[t] === 1;
+}
+
+/**
+ * What the ground is at a point, by `LIE`: sand wherever there is sand, else the tile's own kind on a golf hole, and
+ * none anywhere else, off the grid too. The one place a surface is read, so the physics, a landing and a strike agree.
+ */
+export function lieAt(l: Layout, x: number, y: number): Lie {
+  const t = tileAt(l, x, y);
+  if (t < 0) return LIE.none;
+  return l.sand[t] ? LIE.sand : (l.lie[t] as Lie);
 }
 
 /** Whether a point is on the ground the ball rolls on, grass or sand: on the grid, not solid, and not water. */

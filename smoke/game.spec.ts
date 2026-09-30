@@ -179,12 +179,15 @@ test.describe('the start screen', () => {
     const problems = watch(page);
     await start(page, { seed: 1, paused: true, screen: true });
     await expect(page.locator('#start')).toBeVisible();
-    await expect(page.locator('#start .course')).toHaveCount(4);
+    await expect(page.locator('#start .course')).toHaveCount(5);
     await expect(page.locator('#start .course').nth(2)).toContainText('The Downs');
     await expect(page.locator('#start .course').nth(2)).toContainText('9 holes');
     await expect(page.locator('#start .course').nth(3)).toContainText('The Moors');
     await expect(page.locator('#start .course').nth(3)).toContainText('9 holes');
     await expect(page.locator('#start .course').nth(3)).toContainText('par 47');
+    await expect(page.locator('#start .course').nth(4)).toContainText('The Range');
+    await expect(page.locator('#start .course').nth(4)).toContainText('3 holes');
+    await expect(page.locator('#start .course').nth(4)).toContainText('par 10');
     await expect(page.locator('#start .course').first()).toContainText('The Meadow');
     await expect(page.locator('#start .course').first()).toContainText('9 holes');
     expect(await page.evaluate(() => window.game!.state())).toMatchObject({ choosing: true, course: 'The Meadow' });
@@ -580,6 +583,38 @@ test.describe('looking round', () => {
     });
     console.log(`orbit: the worst view, ${cost.toFixed(2)} ms a frame`);
     expect(cost, 'inside the 5 ms budget').toBeLessThan(5);
+    expect(problems).toEqual([]);
+  });
+});
+
+test.describe('golf', () => {
+  test('costs a frame inside the budget on the longest hole of the range: from its tee, in the air, and at the worst view', async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true });
+    const cost = await page.evaluate(async () => {
+      const g = window.game!;
+      g.chooseCourse('The Range');
+      g.startHole(2);
+      g.step(120);
+      const tee = await g.measureFrame(60);
+      // a drive in the air, the camera on it
+      g.shoot(Math.PI / 2, 1, 'driver');
+      g.step(40);
+      const air = await g.measureFrame(60);
+      // from behind and as low as it goes, the most ground it can see: over the whole hole, ground and rail and rough
+      for (let f = 0; f < 600 && !g.state().ready; f++) g.step(1);
+      g.orbit(Math.PI, 10);
+      g.step(2);
+      const worst = await g.measureFrame(60);
+      return { tee, air, worst };
+    });
+    console.log(
+      `the range: tee ${cost.tee.toFixed(2)} ms, in the air ${cost.air.toFixed(2)} ms, the worst view ${cost.worst.toFixed(2)} ms a frame`,
+    );
+    for (const [where, ms] of Object.entries(cost)) expect(ms, `${where}: inside the 5 ms budget`).toBeLessThan(5);
     expect(problems).toEqual([]);
   });
 });

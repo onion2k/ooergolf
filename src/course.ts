@@ -25,6 +25,9 @@
  *   o   a post standing on grass, which throws the ball off it faster than it came
  *   1-9 grass raised that many steps: a step the ball rolls up, three a wall
  *
+ * A golf hole is drawn in `f` fairway, `r` rough, `g` green and `t` the tee's box in place of `.` and the digits,
+ * beside the same `T`, `C`, `s`, `~`, `o` and `#`: see `layoutOf`, and `range.ts` for the first of them.
+ *
  * What moves on a hole is in its `obstacles`, by the tile of the map it is
  * at, counted as the map is drawn: its column, and its row from the top.
  */
@@ -33,6 +36,7 @@ import { layoutOf } from './arena';
 import { noiseGround, type Feel } from './noise';
 import type { ObstacleDef } from './obstacles';
 import { fairway, openHole, type Feature, type OpenSpec } from './open';
+import { RANGE } from './range';
 
 /** A hole: what it is called, its par, its map, and what moves on it. */
 export interface HoleDef {
@@ -575,6 +579,8 @@ export interface Course {
   readonly holes: readonly HoleDef[];
   /** How many holes and what par they add to, known without making them: what the start screen says of it. */
   readonly summary: { holes: number; par: number };
+  /** Whether its holes are golf, played with a bag of clubs and not the putter alone: see `layoutOf`. */
+  readonly golf?: boolean;
 }
 
 const summaryOf = (holes: readonly HoleDef[]) => ({ holes: holes.length, par: holes.reduce((a, h) => a + h.par, 0) });
@@ -591,4 +597,5 @@ export const COURSES: readonly Course[] = [
     },
     summary: { holes: MOORS_SPECS.length, par: MOORS_SPECS.reduce((a, s) => a + s.par, 0) },
   },
+  { name: 'The Range', holes: RANGE, summary: summaryOf(RANGE), golf: true },
 ];
