@@ -314,7 +314,7 @@ function clear(l: Layout, x0: number, y0: number, x1: number, y1: number): boole
  * back from the cup says how far each tile is, and the way goes downhill of
  * it.
  */
-function pathToCup(l: Layout, x: number, y: number): [number, number][] {
+export function pathToCup(l: Layout, x: number, y: number): [number, number][] {
   const n = l.cols * l.rows;
   const tile = (px: number, py: number) =>
     Math.floor((py - l.originY) / TILE) * l.cols + Math.floor((px - l.originX) / TILE);
@@ -326,19 +326,66 @@ function pathToCup(l: Layout, x: number, y: number): [number, number][] {
   const far = new Float64Array(n).fill(Infinity);
   const done = new Uint8Array(n);
   const cup = tile(l.cup.x, l.cup.y);
+  const from = tile(x, y);
+  if (from < 0 || from >= n) return [];
   far[cup] = 0;
-  // the nearest tile not yet settled, each time: the grids are a few hundred tiles, and this is done once a shot
-  for (;;) {
-    let t = -1;
-    for (let u = 0; u < n; u++) if (!done[u] && far[u] < Infinity && (t < 0 || far[u] < far[t])) t = u;
-    if (t < 0) break;
+  // the nearest tile not yet settled comes off a binary heap, an entry pushed each time a tile's distance falls and the
+  // stale ones skipped as they come off: n log n. Looking at every tile for it, each time, was n squared, and took
+  // twelve seconds a shot on a hole of a hundred thousand tiles, where the grids were a few hundred when it was written
+  const keys = new Float64Array(4 * n + 1),
+    items = new Int32Array(4 * n + 1);
+  let size = 0;
+  const push = (key: number, item: number) => {
+    let i = size++;
+    while (i > 0) {
+      const parent = (i - 1) >> 1;
+      if (keys[parent] <= key) break;
+      keys[i] = keys[parent];
+      items[i] = items[parent];
+      i = parent;
+    }
+    keys[i] = key;
+    items[i] = item;
+  };
+  const pop = (): number => {
+    const item = items[0];
+    size--;
+    if (size > 0) {
+      const key = keys[size],
+        last = items[size];
+      let i = 0;
+      for (;;) {
+        let c = 2 * i + 1;
+        if (c >= size) break;
+        if (c + 1 < size && keys[c + 1] < keys[c]) c++;
+        if (keys[c] >= key) break;
+        keys[i] = keys[c];
+        items[i] = items[c];
+        i = c;
+      }
+      keys[i] = key;
+      items[i] = last;
+    }
+    return item;
+  };
+  push(0, cup);
+  while (size > 0) {
+    // a tile pushed again when its distance fell comes off again, later, already settled
+    const t = pop();
+    if (done[t]) continue;
     done[t] = 1;
+    // the way is walked from the ball down, so every tile nearer the cup than it is has been settled by now
+    if (t === from) break;
     const tx = t % l.cols;
     for (const u of [tx > 0 ? t - 1 : -1, tx < l.cols - 1 ? t + 1 : -1, t - l.cols, t + l.cols]) {
       if (u < 0 || u >= n || l.solid[u] || l.water[u] || posted.has(u) || done[u]) continue;
       // back from t to u: the ball goes from u to t, which it can if t is not too far above it
       if (height(t) - height(u) >= CLIMB) continue;
-      far[u] = Math.min(far[u], far[t] + cost(u));
+      const d = far[t] + cost(u);
+      if (d < far[u]) {
+        far[u] = d;
+        push(d, u);
+      }
     }
   }
   const out: [number, number][] = [];

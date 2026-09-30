@@ -183,3 +183,35 @@ describe('the ground made from it', () => {
     );
   });
 });
+
+describe('the ground of a big hole', () => {
+  /** An open green `cols` tiles across and `rows` long inside a rail, the tee at the south end and the cup at the north. */
+  const open = (cols: number, rows: number) =>
+    Array.from({ length: rows }, (_, r) =>
+      Array.from({ length: cols }, (_, c) => {
+        if (r === 0 || r === rows - 1 || c === 0 || c === cols - 1) return '#';
+        if (r === rows - 3 && c === Math.floor(cols / 4)) return 'T';
+        if (r === 2 && c === Math.floor((cols * 3) / 4)) return 'C';
+        return '.';
+      }).join(''),
+    );
+
+  it('is made however many tiles it has, the lowest exactly nought and the steepest step as steep as was asked', () => {
+    // four hundred tiles a side, twelve hundred units: past what a spread of the heights into one call will take
+    const layout = layoutOf(open(400, 400));
+    const ground = noiseGround(layout, { seed: 8, feel: 'rolling', steepness: 0.4 });
+    expect(ground.length).toBe(400 * 400);
+    let lowest = Infinity,
+      steepest = 0;
+    for (let ty = 0; ty < 400; ty++)
+      for (let tx = 0; tx < 400; tx++) {
+        const h = ground[ty * 400 + tx];
+        expect(Number.isFinite(h)).toBe(true);
+        lowest = Math.min(lowest, h);
+        if (tx + 1 < 400) steepest = Math.max(steepest, Math.abs(ground[ty * 400 + tx + 1] - h));
+        if (ty + 1 < 400) steepest = Math.max(steepest, Math.abs(ground[(ty + 1) * 400 + tx] - h));
+      }
+    expect(lowest).toBe(0);
+    expect(steepest).toBeCloseTo(0.4 * (TILE / 2), 4);
+  });
+});

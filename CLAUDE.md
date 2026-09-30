@@ -314,7 +314,11 @@ change meant to move it, and the commit says why. Look at every picture.
   (`grassGround`), so the thinned rungs hold the field's colour.
 - `src/debug.ts` is `window.game`, the test API. `src/invariants.ts` lists
   the rules that must always hold. `src/autopilot.ts` plays the game by
-  itself, for the gates and for par.
+  itself, for the gates and for par; its route over the tiles (`pathToCup`)
+  is a search with a heap, n log n, and a test holds it to the plain way of
+  finding it, on every hole and on random maps, because looking at every tile
+  for the nearest each time was n squared and took twelve seconds a shot on a
+  hole of a hundred thousand tiles.
 - `src/hud.ts` is the words over the course: the hole and strokes, the
   score's name when a hole is done, the card, the coins and gems, the
   shop, and the start screen, a card for each course with its holes and

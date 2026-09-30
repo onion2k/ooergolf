@@ -10,11 +10,13 @@ import {
   onFloor,
   powerFor,
   rollsFor,
+  stepAt,
   strikeSpeed,
   tileAt,
+  type Layout,
 } from '../src/arena';
-import { Autopilot, speedAcross, speedFor, timeTo } from '../src/autopilot';
-import { COURSE, type HoleDef } from '../src/course';
+import { Autopilot, pathToCup, speedAcross, speedFor, timeTo } from '../src/autopilot';
+import { COURSE, COURSES, type HoleDef } from '../src/course';
 import { checkInvariants } from '../src/invariants';
 import { seeded } from '../src/random';
 import { DT, newGame, onGreen } from './helpers';
@@ -268,5 +270,127 @@ describe('the autopilot', () => {
     const map = ['#########', '#......C#', '#.#######', '#.#      ', '#.#      ', '#T#      ', '###      '];
     const l = layoutOf(map);
     expect(onFloor(l, l.cup.x, l.cup.y)).toBe(true);
+  });
+});
+
+/**
+ * The route the autopilot takes over the tiles, held against the plain way of finding it: the nearest tile not yet
+ * settled found by looking at every tile, which is slow and simple and was the autopilot's own until a hole could be
+ * a hundred tiles across. The two must give the same route from anywhere on any hole, or the pace of every course
+ * moves with it.
+ */
+describe('the autopilot’s route over the tiles', () => {
+  const CLIMB = KIND_RADIUS[BALL] * 0.95;
+
+  /** The way from (x, y) to the cup as it was first written: a scan of every tile for the nearest, once for each. */
+  function oracle(l: Layout, x: number, y: number): [number, number][] {
+    const n = l.cols * l.rows;
+    const tile = (px: number, py: number) =>
+      Math.floor((py - l.originY) / TILE) * l.cols + Math.floor((px - l.originX) / TILE);
+    const posted = new Set(l.bumpers.map((p) => tile(p.x, p.y)));
+    const height = (t: number) =>
+      stepAt(l, l.originX + ((t % l.cols) + 0.5) * TILE, l.originY + (Math.floor(t / l.cols) + 0.5) * TILE);
+    const cost = (t: number) => (l.sand[t] ? 3 : 1);
+    const far = new Float64Array(n).fill(Infinity);
+    const done = new Uint8Array(n);
+    far[tile(l.cup.x, l.cup.y)] = 0;
+    for (;;) {
+      let t = -1;
+      for (let u = 0; u < n; u++) if (!done[u] && far[u] < Infinity && (t < 0 || far[u] < far[t])) t = u;
+      if (t < 0) break;
+      done[t] = 1;
+      const tx = t % l.cols;
+      for (const u of [tx > 0 ? t - 1 : -1, tx < l.cols - 1 ? t + 1 : -1, t - l.cols, t + l.cols]) {
+        if (u < 0 || u >= n || l.solid[u] || l.water[u] || posted.has(u) || done[u]) continue;
+        if (height(t) - height(u) >= CLIMB) continue;
+        far[u] = Math.min(far[u], far[t] + cost(u));
+      }
+    }
+    const out: [number, number][] = [];
+    let t = tile(x, y);
+    if (t < 0 || t >= n || far[t] === Infinity) return out;
+    while (far[t] > 0) {
+      const tx = t % l.cols;
+      let next = t;
+      for (const u of [tx > 0 ? t - 1 : -1, tx < l.cols - 1 ? t + 1 : -1, t - l.cols, t + l.cols])
+        if (u >= 0 && u < n && far[u] < far[next] && height(u) - height(t) < CLIMB) next = u;
+      if (next === t) break;
+      t = next;
+      out.push([l.originX + ((t % l.cols) + 0.5) * TILE, l.originY + (Math.floor(t / l.cols) + 0.5) * TILE]);
+    }
+    return out;
+  }
+
+  /** Where the ball might lie: the middle of a tile that is ground, at any of `count` places chosen by `random`. */
+  function lies(l: Layout, random: () => number, count: number): [number, number][] {
+    const ground: number[] = [];
+    for (let t = 0; t < l.cols * l.rows; t++) if (!l.solid[t]) ground.push(t);
+    return Array.from({ length: count }, () => {
+      const t = ground[Math.floor(random() * ground.length)];
+      return [l.originX + ((t % l.cols) + 0.5) * TILE, l.originY + (Math.floor(t / l.cols) + 0.5) * TILE];
+    });
+  }
+
+  it('is the route the plain way finds, from forty lies on every hole of every course', () => {
+    let routes = 0;
+    for (const course of COURSES)
+      for (const hole of course.holes) {
+        const l = layoutOf(hole.map, hole.terrain);
+        for (const [x, y] of lies(l, seeded(hole.name.length * 31 + 7), 40)) {
+          expect(pathToCup(l, x, y), `${hole.name} from ${x},${y}`).toEqual(oracle(l, x, y));
+          routes++;
+        }
+      }
+    expect(routes, 'every lie was tried').toBe(COURSES.reduce((n, c) => n + c.holes.length, 0) * 40);
+  });
+
+  it('is the route the plain way finds on sixty maps of sand, water, posts and steps, and the same none where the cup is walled in', () => {
+    const random = seeded(2024);
+    let walled = 0,
+      through = 0;
+    for (let m = 0; m < 60; m++) {
+      const cols = 8 + Math.floor(random() * 14),
+        rows = 8 + Math.floor(random() * 14);
+      const map = Array.from({ length: rows }, (_, r) =>
+        Array.from({ length: cols }, (_, c) => {
+          if (r === 0 || r === rows - 1 || c === 0 || c === cols - 1) return '#';
+          if (r === rows - 2 && c === 1) return 'T';
+          if (r === 1 && c === cols - 2) return 'C';
+          const d = random();
+          return d < 0.1 ? 's' : d < 0.2 ? '~' : d < 0.26 ? 'o' : d < 0.3 ? '#' : d < 0.34 ? '1' : d < 0.37 ? '3' : '.';
+        }).join(''),
+      );
+      const l = layoutOf(map);
+      for (const [x, y] of lies(l, random, 12)) {
+        const route = pathToCup(l, x, y);
+        expect(route, `map ${m} from ${x},${y}`).toEqual(oracle(l, x, y));
+        if (route.length) through++;
+        else walled++;
+      }
+    }
+    // both kinds of answer were given: a route, and none
+    expect(through).toBeGreaterThan(100);
+    expect(walled).toBeGreaterThan(20);
+  });
+
+  it('is found on a hole of forty thousand tiles in a share of a second, and the shot from it is the cup’s way', () => {
+    const map = Array.from({ length: 200 }, (_, r) =>
+      Array.from({ length: 200 }, (_, c) => {
+        if (r === 0 || r === 199 || c === 0 || c === 199) return '#';
+        if (r === 197 && c === 50) return 'T';
+        if (r === 2 && c === 150) return 'C';
+        return '.';
+      }).join(''),
+    );
+    const { game } = newGame(1, null, [{ name: 'test open', par: 8, map }]);
+    const began = performance.now();
+    const shot = new Autopilot(game).plan();
+    const took = performance.now() - began;
+    expect(shot, 'a shot to take').not.toBe(null);
+    expect(shot!.power, 'nearly as hard as the club goes, the cup being so far').toBeGreaterThan(0.8);
+    // the cup is north and east of the tee, and the route goes along the tiles: east, or north, or between
+    expect(shot!.angle).toBeGreaterThanOrEqual(0);
+    expect(shot!.angle).toBeLessThanOrEqual(Math.PI / 2);
+    expect(took, `took ${took.toFixed(0)} ms`).toBeLessThan(500);
   });
 });

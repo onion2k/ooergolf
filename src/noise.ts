@@ -129,14 +129,16 @@ export function noiseGround(layout: Layout, { seed, feel, steepness }: GroundSpe
       }
   }
   // scaled so the steepest step between neighbours is the share asked for of the physics' limit, half a tile
-  let steepest = 0;
+  let steepest = 0,
+    lowest = Infinity;
   for (let ty = 0; ty < rows; ty++)
     for (let tx = 0; tx < cols; tx++) {
+      // the lowest by a loop, since a hole of a hundred thousand tiles is more than a call can be given
+      lowest = Math.min(lowest, h[ty * cols + tx]);
       if (tx + 1 < cols) steepest = Math.max(steepest, Math.abs(h[ty * cols + tx + 1] - h[ty * cols + tx]));
       if (ty + 1 < rows) steepest = Math.max(steepest, Math.abs(h[(ty + 1) * cols + tx] - h[ty * cols + tx]));
     }
   const k = steepest > 0 ? (steepness * (TILE / 2)) / steepest : 0;
-  const lowest = Math.min(...h);
   // the lowest exactly nought, though the arithmetic may leave it a rounding off
   return Float32Array.from(h, (v) => Math.max(0, (v - lowest) * k));
 }
