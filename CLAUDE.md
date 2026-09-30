@@ -181,7 +181,7 @@ change meant to move it, and the commit says why. Look at every picture.
   a ball can roll on was drawn as bright as the flat, and the Hills had no
   shape), the toy finish the renderer gives every toon look (a highlight on
   what is smooth, the sky in a clear coat, one smooth ramp of light, shade
-  toward the shade colour in a crease), the renderer's screen-space
+  toward the shade colour in a crease) and its soft tone, the renderer's screen-space
   occlusion where things meet, no film grain, and a haze so thin it only
   pales the far rough. The colours are named in `src/models/palette.ts`,
   the green, rough and rail among them, so the scene and the showcase are

@@ -87,8 +87,9 @@ export async function daylight(renderer: GameRenderer, ctx: Gpu): Promise<void> 
     steps: 16,
     cones: 0,
   };
-  // a bright day: no darkened corners, which against a pale sky read as a grey haze
-  renderer.post = { ...renderer.post, vignette: 0, grain: 0, tone: 'clamp' };
+  // a bright day: no darkened corners, which against a pale sky read as a grey haze; and the colours shown straight
+  // with a shoulder, so a lit plastic keeps its hue and its roundness where the clamp held a channel flat at one
+  renderer.post = { ...renderer.post, vignette: 0, grain: 0, tone: 'soft' };
   const env = bakeEnvironment(ctx, 'daylight', { size: 128, mips: 6 });
   renderer.setEnvironment(env.specular, env.brdf, env.mips);
   await renderer.prepare();

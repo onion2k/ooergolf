@@ -324,7 +324,10 @@ what is smooth (the ball, the rail, the bumpers), and none on the grass; the
 sky in a clear coat where a surface turns from the eye; one smooth ramp of
 light where the bands stepped, flat ground lit exactly as before and a
 slope turned from the sun exactly as the form light lit it; and shade in a
-crease toward the cool shade colour, not grey. The look metrics read saturation 0.699, framing 2.42, contrast
+crease toward the cool shade colour, not grey. The tone is the renderer's
+soft one, a shoulder that keeps a bright colour's hue: the clamp held the
+ball's red channel at one over most of its lit side, and a lit orange went
+yellow. The look metrics read saturation 0.699, framing 2.42, contrast
 3.14, cool shade 0.037 and shape 1.485, each over its floor; the shape read
 1.350 under v0.22.0, whose ramp lit the Volcano's shaded flank too
 brightly, and the renderer's fix is v0.22.1. The finish's code first cost
