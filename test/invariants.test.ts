@@ -1,12 +1,24 @@
 import { describe, expect, it } from 'vitest';
-import { BALL, BUMPER, FASTEST, HARDEST_SHOT } from '../src/arena';
+import { BALL, BUMPER, FASTEST, HARDEST_SHOT, TILE, heightAt, restingAbove } from '../src/arena';
+import { links as linksHoles } from '../src/links';
+import { GREEN as GREEN_RULES_REAL, greenArrows } from '../src/green';
+import { GREENS, LIE } from '../src/surfaces';
 import type { HoleDef } from '../src/course';
 import { CameraRig, TILT, VIEW } from '../src/camera';
-import { checkInvariants, planProblems, previewProblems, viewProblems } from '../src/invariants';
+import {
+  GREEN_RULES,
+  arrowProblems,
+  breakProblems,
+  checkInvariants,
+  groundProblems,
+  planProblems,
+  previewProblems,
+  viewProblems,
+} from '../src/invariants';
 import { Previewer } from '../src/preview';
 import { bagClub, carrying } from '../src/bag';
 import { Autopilot } from '../src/autopilot';
-import { fastest } from '../src/game';
+import { fastest, type Game } from '../src/game';
 import { WIND, windPush, windReach } from '../src/shaping';
 import { GREEN, field, golfGame, newGame as newOn, onGreen as newGame, settle } from './helpers';
 
@@ -417,5 +429,146 @@ describe('what must always hold of shape, spin and wind', () => {
     expect(previewProblems(game, at, club, p).join('\n')).toMatch(/heading is Infinity/);
     p.heading = 1;
     expect(previewProblems(game, at, club, p)).toEqual([]);
+  });
+});
+
+describe('what must always hold of the greens, the first cut and the break', () => {
+  const links = (k: number) => golfGame(linksHoles()[k]);
+  /** A tile of the hole's map where `pick` is true of its lie, for a test to break. */
+  const tileWhere = (game: Game, pick: (t: number) => boolean) => {
+    for (let t = 0; t < game.layout.cols * game.layout.rows; t++) if (pick(t)) return t;
+    throw new Error('no such tile on the hole');
+  };
+  const middle = (game: Game, t: number): [number, number] => [
+    game.layout.originX + ((t % game.layout.cols) + 0.5) * TILE,
+    game.layout.originY + (Math.floor(t / game.layout.cols) + 0.5) * TILE,
+  ];
+
+  it('holds of every hole of The Links, contour and cut and all, and of the holes of The Range', () => {
+    for (let k = 0; k < linksHoles().length; k++) {
+      const { game } = links(k);
+      expect(checkInvariants(game), `hole ${k + 1}`).toEqual([]);
+      expect(groundProblems(game.layout), `hole ${k + 1}'s ground`).toEqual([]);
+    }
+    const range = golfGame(field('f'));
+    expect(checkInvariants(range.game)).toEqual([]);
+  });
+
+  it('reports a speed of green that is not a number from the fastest to the slowest', () => {
+    for (const bad of [GREENS.fast - 1, GREENS.slow + 1, NaN, Infinity]) {
+      const { game } = golfGame({ ...field('f', 200, 81), greens: bad });
+      expect(checkInvariants(game).join('\n'), `${bad}`).toMatch(/greens run at/);
+    }
+    for (const ok of [GREENS.fast, GREENS.normal, GREENS.slow, undefined]) {
+      const { game } = golfGame({ ...field('f', 200, 81), greens: ok });
+      expect(checkInvariants(game), `${ok}`).toEqual([]);
+    }
+    // a hole of minigolf has none, and a speed given it is not one it has
+    const mini = newOn(1, null, [{ ...GREEN, greens: 3 }]);
+    expect(checkInvariants(mini.game).join('\n')).toMatch(/greens run at 3 on a hole of minigolf/);
+  });
+
+  it('reports a putting green steeper than the steepest a green may be, and lets one at the steepest be', () => {
+    const { game } = links(8);
+    const g = tileWhere(game, (t) => game.layout.lie[t] === LIE.green && !game.layout.solid[t]);
+    const was = game.layout.terrain[g];
+    expect(groundProblems(game.layout)).toEqual([]);
+    // one tile lifted by two tiles' worth of ground is a slope of over a third
+    game.layout.terrain[g] = was + TILE * 2;
+    const found = groundProblems(game.layout).join('\n');
+    expect(found).toMatch(/the putting green slopes/);
+    expect(checkInvariants(game).join('\n')).toMatch(/the putting green slopes/);
+    game.layout.terrain[g] = was;
+    expect(groundProblems(game.layout)).toEqual([]);
+    expect(GREEN_RULES.steepest).toBeCloseTo(GREEN_RULES_REAL.steepest * 1.1, 12);
+  });
+
+  it('holds a green to the steepest only on a hole that says how fast its greens run: a test’s own hill is not one', () => {
+    // the cup of a field stands on a green: a hill under it leans far more than a green may
+    const hill = (greens: number | undefined) => {
+      const rows = 60,
+        cols = 41;
+      const heights = new Float32Array(rows * cols);
+      for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) heights[r * cols + c] = r;
+      return golfGame({ ...field('f', rows, cols, heights), greens }).game;
+    };
+    expect(groundProblems(hill(undefined).layout).join('\n'), 'the rule itself').toMatch(/the putting green slopes/);
+    expect(checkInvariants(hill(undefined)), 'no speed of greens: no such green').toEqual([]);
+    expect(checkInvariants(hill(GREENS.normal)).join('\n'), 'a hole that has greens').toMatch(
+      /the putting green slopes/,
+    );
+  });
+
+  it('reports first cut where no ball is played from: on sand, water, out of bounds, rock or the rail', () => {
+    const cases: [string, (game: Game, t: number) => void][] = [
+      ['sand', (game, t) => (game.layout.sand[t] = 1)],
+      ['water', (game, t) => (game.layout.water[t] = 1)],
+      ['out of bounds', (game, t) => (game.layout.oob[t] = 1)],
+      ['the rail', (game, t) => (game.layout.rail[t] = 1)],
+      ['rock', (game, t) => (game.layout.solid[t] = 1)],
+    ];
+    for (const [what, put] of cases) {
+      const { game } = links(0);
+      const t = tileWhere(game, (u) => game.layout.lie[u] === LIE.cut && !game.layout.solid[u]);
+      expect(groundProblems(game.layout), what).toEqual([]);
+      put(game, t);
+      expect(groundProblems(game.layout).join('\n'), what).toMatch(new RegExp(`first cut on ${what}`));
+    }
+    // and on a hole of minigolf there is none at all
+    const mini = newOn(1, null, [GREEN]);
+    mini.game.layout.lie[tileWhere(mini.game, (t) => !mini.game.layout.solid[t])] = LIE.cut;
+    expect(groundProblems(mini.game.layout).join('\n')).toMatch(/first cut on a hole of minigolf/);
+  });
+
+  it('reports a ball at rest on a slope its lie could not hold it on, the cut among them', () => {
+    const { game } = links(0);
+    const { world, ball, layout } = game;
+    const c = tileWhere(game, (t) => layout.lie[t] === LIE.cut && !layout.solid[t] && !layout.sand[t]);
+    const [x, y] = middle(game, c);
+    world.x[ball] = x;
+    world.y[ball] = y;
+    world.z[ball] = heightAt(layout, x, y) + restingAbove(layout, x, y, world.r[ball]);
+    world.vx[ball] = world.vy[ball] = world.vz[ball] = 0;
+    world.asleep[ball] = 1;
+    expect(checkInvariants(game).join('\n')).not.toMatch(/slope/);
+    // the ground under it raised on one side until it is steeper than the cut holds a ball on
+    const was = layout.terrain.slice();
+    for (const dx of [1, 2]) layout.terrain[c + dx] += TILE * 3 * dx;
+    for (const dx of [1, 2]) layout.terrain[c - dx] -= TILE * 3 * dx;
+    world.z[ball] = heightAt(layout, x, y) + restingAbove(layout, x, y, world.r[ball]);
+    expect(checkInvariants(game).join('\n')).toMatch(/at rest on a slope of .*, which the first cut holds no ball on/);
+    layout.terrain.set(was);
+  });
+
+  it('reports a break that is not a number, or that is across further than the cup is', () => {
+    const { game } = links(5);
+    expect(breakProblems(game)).toEqual([]);
+    const here = { x: game.world.x[game.ball], y: game.world.y[game.ball] };
+    const far = Math.hypot(game.layout.cup.x - here.x, game.layout.cup.y - here.y);
+    expect(breakProblems(game, { across: 0.5, rise: 1 })).toEqual([]);
+    expect(breakProblems(game, { across: far * 1.5, rise: 0 }).join('\n')).toMatch(/across, further than the cup/);
+    expect(breakProblems(game, { across: NaN, rise: 0 }).join('\n')).toMatch(/across is NaN/);
+    expect(breakProblems(game, { across: 0, rise: Infinity }).join('\n')).toMatch(/rise is Infinity/);
+    // and the break the game works out for itself is held to the same
+    const { game: ball } = links(2);
+    ball.world.x[ball.ball] = ball.layout.cup.x + 6;
+    ball.world.y[ball.ball] = ball.layout.cup.y;
+    expect(breakProblems(ball)).toEqual([]);
+  });
+
+  it('reports arrows that are not numbers, are off the putting green, or are more than its tiles', () => {
+    const { game } = links(8);
+    const arrows = greenArrows(game.layout);
+    expect(arrows.length, 'a contoured green has arrows').toBeGreaterThan(5);
+    expect(arrowProblems(game.layout, arrows)).toEqual([]);
+    expect(arrowProblems(game.layout, [{ ...arrows[0], slopeX: NaN }]).join('\n')).toMatch(/arrow .* not a number/);
+    expect(
+      arrowProblems(game.layout, [{ ...arrows[0], x: game.layout.tee.x, y: game.layout.tee.y }]).join('\n'),
+    ).toMatch(/arrow .* not on the putting green/);
+    const tiles = game.layout.lie.reduce((n, l) => n + (l === LIE.green ? 1 : 0), 0);
+    const many = Array.from({ length: tiles + 1 }, () => arrows[0]);
+    expect(arrowProblems(game.layout, many).join('\n')).toMatch(/more arrows than the green has tiles/);
+    // none on a level hole, or minigolf
+    expect(arrowProblems(golfGame(field('f')).game.layout, [])).toEqual([]);
   });
 });

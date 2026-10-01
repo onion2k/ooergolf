@@ -9,6 +9,7 @@ import { TILE, heightAt, layoutOf, tileAt } from '../src/arena';
 import { COURSE } from '../src/course';
 import { GROUND, groundOf, stakesOf } from '../src/ground';
 import { PALETTE } from '../src/scene';
+import { LIE } from '../src/surfaces';
 
 /** How many triangles a mesh has. */
 const triangles = (m: Mesh) => m.indices.length / 3;
@@ -16,6 +17,19 @@ const triangles = (m: Mesh) => m.indices.length / 3;
 const PER_TILE = 2 * GROUND.pieces * GROUND.pieces;
 
 const MAP = ['#########', '#rrrrrrr#', '#rggCggr#', '#rggggfr#', '#rffffsr#', '#ffffffr#', '#rrtTtrr#', '#########'];
+/** The same hole with a first cut a tile wide round its green and down the fairway's west edge. */
+const CUT_MAP = [
+  '#########',
+  '#rrrrrrr#',
+  '#rcccccr#',
+  '#rcgCgcr#',
+  '#rcgggcr#',
+  '#rcccccr#',
+  '#rcfffcr#',
+  '#rcfffcr#',
+  '#rrtTtrr#',
+  '#########',
+];
 
 /** How many tiles of each kind the map draws, by its letters, and how many of the two mown stripes each is on. */
 function tilesOf(kinds: string) {
@@ -54,6 +68,7 @@ describe('the ground of a golf hole', () => {
       triangles(golf.rough) +
       triangles(golf.putting) +
       triangles(golf.puttingMown) +
+      triangles(golf.cut) +
       triangles(golf.tee);
     let grass = 0;
     for (let t = 0; t < l.cols * l.rows; t++) if (!l.solid[t] && !l.water[t] && !l.sand[t]) grass++;
@@ -70,6 +85,54 @@ describe('the ground of a golf hole', () => {
     expect(lum(PALETTE.teeBox)).toBeGreaterThan(lum(PALETTE.grass));
     // the two stripes of the green are told apart, as the fairway’s are
     expect(lum(PALETTE.puttingGreenMown)).toBeGreaterThan(lum(PALETTE.puttingGreen));
+  });
+});
+
+describe('the first cut of a golf hole as it is drawn', () => {
+  const l = layoutOf(CUT_MAP);
+  const g = groundOf(l);
+
+  it('is a mesh of its own with a tile of ground for each tile of cut, and none on a hole with no cut', () => {
+    let cut = 0;
+    for (let t = 0; t < l.cols * l.rows; t++) if (l.lie[t] === LIE.cut && !l.solid[t]) cut++;
+    expect(cut).toBeGreaterThan(8);
+    expect(triangles(g.golf!.cut)).toBe(cut * PER_TILE);
+    expect(triangles(groundOf(layoutOf(MAP)).golf!.cut)).toBe(0);
+  });
+
+  it('is told apart from the fairway and the green by its colour, between the two: no seam to read as a stripe', () => {
+    const lum = (c: readonly number[]) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+    const fairway = (lum(PALETTE.grass) + lum(PALETTE.grassMown)) / 2;
+    const green = (lum(PALETTE.puttingGreen) + lum(PALETTE.puttingGreenMown)) / 2;
+    expect(lum(PALETTE.firstCut)).toBeGreaterThan(fairway);
+    expect(lum(PALETTE.firstCut)).toBeLessThan(green);
+  });
+
+  it('follows the ground it is on, every corner where the ground is, so it meets the green and the fairway without a gap', () => {
+    // a hole that rises to the north, a tile of cut between a green and a fairway
+    const terrain = Float32Array.from({ length: l.cols * l.rows }, (_, k) => 0.3 * Math.floor(k / l.cols));
+    const hill = layoutOf(CUT_MAP, terrain);
+    const mesh = groundOf(hill).golf!.cut;
+    expect(mesh.positions.length).toBeGreaterThan(0);
+    for (let i = 0; i < mesh.positions.length; i += 3) {
+      const [x, y, z] = [mesh.positions[i], mesh.positions[i + 1], mesh.positions[i + 2]];
+      // a corner on a tile's edge is at the height of the ground there, whichever tile it is drawn for
+      expect(z, `vertex ${i / 3}`).toBeCloseTo(heightAt(hill, x, y), 4);
+    }
+  });
+
+  it('has the edge of each tile where the next tile of green has its own, so the pieces share their corners', () => {
+    const terrain = Float32Array.from({ length: l.cols * l.rows }, (_, k) => 0.3 * Math.floor(k / l.cols));
+    const hill = layoutOf(CUT_MAP, terrain);
+    const gr = groundOf(hill).golf!;
+    const key = (m: Mesh, i: number) =>
+      `${m.positions[i].toFixed(3)},${m.positions[i + 1].toFixed(3)},${m.positions[i + 2].toFixed(3)}`;
+    const cutCorners = new Set<string>();
+    for (let i = 0; i < gr.cut.positions.length; i += 3) cutCorners.add(key(gr.cut, i));
+    let shared = 0;
+    for (const m of [gr.putting, gr.puttingMown])
+      for (let i = 0; i < m.positions.length; i += 3) if (cutCorners.has(key(m, i))) shared++;
+    expect(shared, 'the green and the cut meet along an edge, at the same corners').toBeGreaterThan(5);
   });
 });
 

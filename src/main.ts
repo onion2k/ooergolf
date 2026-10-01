@@ -19,8 +19,10 @@ import { COURSES, CUP } from './course';
 import { Game, type GameEvents } from './game';
 import { Hud } from './hud';
 import { mapInto, mapSize, paintMap, type MapSize } from './holemap';
-import { Previewer } from './preview';
-import { landingText, pinReadout, pinText, windArrow } from './readout';
+import { Previewer, type Preview } from './preview';
+import { breakOf } from './green';
+import { greensText, landingText, pinReadout, pinText, puttText, windArrow } from './readout';
+import { LIE } from './surfaces';
 import { windReach } from './shaping';
 import { daylight } from './look';
 import { Progress } from './progress';
@@ -196,6 +198,10 @@ async function main() {
   let mapped: { size: MapSize; small: boolean } | null = null;
   /** Where the ball was when the pin was last read, so it is read again only when it has moved. */
   const pinned = { x: NaN, y: NaN };
+  /** The preview the scene was last handed, a flight or a putt's roll, which the test API reads back with what was drawn of it. */
+  let shownPreview: Preview | null = null;
+  /** Where the ball was when the putt's break was last read, so a loop of a hundred and more steps is run once for a ball at rest and never in a frame. */
+  const putted = { x: NaN, y: NaN };
   /** The camera's four corners on the ground, made once, and the ground a point of the map is worked out from. */
   const corners: [number, number][] = [
     [0, 0],
@@ -273,6 +279,7 @@ async function main() {
       previewer = layout.golf ? new Previewer(game) : null;
       previewed.club = '';
       previewShown = false;
+      shownPreview = null;
       scene.setShot(null);
       hud.setLanding(null);
       paintHoleMap();
@@ -281,6 +288,11 @@ async function main() {
       if (!layout.golf) hud.setPin(null);
       // the wind is told on a golf hole, as a number or as calm, and is not there on a hole of minigolf
       hud.setWind(layout.golf ? windNow.speed : null);
+      // the greens' speed is told on a hole that has set one (The Links), and the putt's break when the ball rests on its green
+      hud.setGreens(layout.golf ? greensText(game.def.greens) : null);
+      hud.setPutt(null);
+      putted.x = NaN;
+      scene.setArrows(false);
       hud.setShaping(game.shape, game.spin);
       // a hole is begun aiming, and the view eases home to the tee's over the glide
       backToAim?.();
@@ -432,7 +444,10 @@ async function main() {
    * lofted shot is being aimed, worked out again only when the aim, the club or the ball has changed; the pin read off
    * the ball when it lies at rest; and the map redrawn with the ball, the aim and what the camera shows over it.
    */
-  function aimOnGolf(flying: { angle: number; power: number } | null) {
+  function aimOnGolf(
+    flying: { angle: number; power: number } | null,
+    rolling: { angle: number; power: number } | null,
+  ) {
     const { world, ball, layout, inHand, shape, spin } = played;
     const x = world.x[ball],
       y = world.y[ball];
@@ -444,26 +459,33 @@ async function main() {
     renderer.time = played.t;
     drawn.took = flat ? renderer.press(flat.x, flat.y, flat.radius, windNow.x, windNow.y) : false;
     drawn.press = flat;
-    if (flying && previewer) {
+    // a lofted shot is drawn as its flight and a putt, on a hole whose greens are set, as its roll: the same marks, the one
+    // worked out in the air and the other along the ground
+    const aimed = flying ?? rolling;
+    if (aimed && previewer) {
       if (
         previewed.x !== x ||
         previewed.y !== y ||
-        previewed.angle !== flying.angle ||
-        previewed.power !== flying.power ||
+        previewed.angle !== aimed.angle ||
+        previewed.power !== aimed.power ||
         previewed.club !== inHand.id ||
         previewed.shape !== shape ||
         previewed.spin !== spin
       ) {
-        Object.assign(previewed, { x, y, angle: flying.angle, power: flying.power, club: inHand.id, shape, spin });
-        const p = previewer.run({ x, y }, inHand, flying.angle, flying.power, shape, spin);
-        hud.setLanding(
-          p.n ? landingText({ carry: p.carry, end: p.end, lie: p.lie, hit: p.hit !== null, shape, spin }) : null,
-        );
+        Object.assign(previewed, { x, y, angle: aimed.angle, power: aimed.power, club: inHand.id, shape, spin });
+        if (flying) {
+          const p = previewer.run({ x, y }, inHand, flying.angle, flying.power, shape, spin);
+          hud.setLanding(
+            p.n ? landingText({ carry: p.carry, end: p.end, lie: p.lie, hit: p.hit !== null, shape, spin }) : null,
+          );
+        } else previewer.roll({ x, y }, inHand, aimed.angle, aimed.power);
       }
       const r = Math.min(rig.distance * tallOf(aspect), VIEW.golfFar);
-      scene.setShot(previewer.result, markScale(r));
+      shownPreview = flying ? previewer.result : previewer.rolled;
+      scene.setShot(shownPreview, markScale(r));
       previewShown = true;
     } else if (previewShown) {
+      shownPreview = null;
       scene.setShot(null);
       hud.setLanding(null);
       previewed.club = '';
@@ -474,6 +496,21 @@ async function main() {
       pinned.x = x;
       pinned.y = y;
       hud.setPin(pinText(pinReadout(layout, x, y)));
+    }
+    // the green's arrows are shown, and the putt's break said, while the ball rests on the putting green or the first cut of a
+    // hole being played; the break is worked out when the ball comes to rest and never again for it
+    const lie = lieAt(layout, x, y);
+    const resting = played.ready && played.phase === 'play' && (lie === LIE.green || lie === LIE.cut);
+    scene.setArrows(resting);
+    if (resting && played.def.greens !== undefined) {
+      if (putted.x !== x || putted.y !== y) {
+        putted.x = x;
+        putted.y = y;
+        hud.setPutt(puttText(breakOf(layout, x, y, played.def.greens)));
+      }
+    } else if (!Number.isNaN(putted.x)) {
+      putted.x = NaN;
+      hud.setPutt(null);
     }
     if (!mapped) return;
     const o = hud.overlay;
@@ -532,9 +569,14 @@ async function main() {
     const reach = golf
       ? carryFrom(played.inHand, 1, lieAt(played.layout, world.x[ball], world.y[ball])) / AIM_REACH
       : rollsFor(played.hardest) / rollsFor(HARDEST_SHOT);
+    // and a putt on a hole whose greens are set is drawn as its roll as well, so the break is seen as a curve across the green
+    const rolling =
+      golf && previewer !== null && played.ready && played.inHand.loft === 0 && played.def.greens !== undefined
+        ? input.aim
+        : null;
     const dots = played.ready && !flying ? scene.writeAim(world.x[ball], world.y[ball], input.aim, reach, played.t) : 0;
     if (golf) {
-      aimOnGolf(flying);
+      aimOnGolf(flying, rolling);
       // the shape and the spin the game holds, shown on their buttons whoever chose them; and the wind's arrow turned by
       // the camera as it is this frame, which includes the glide to a new tee
       hud.setShaping(played.shape, played.spin);
@@ -780,6 +822,8 @@ async function main() {
       swaying: renderer.economy.wind !== false,
       mode: input.mode,
       ...rig.view(played.t),
+      putt: hud.puttDrawn().putt,
+      greens: hud.puttDrawn().greens,
     }),
     orbit: (turn, tilt) => rig.orbit(turn, tilt),
     measureFrame,
@@ -806,13 +850,14 @@ async function main() {
       // the preview of the shot in hand as the last frame placed it, and what it comes to
       shot: (() => {
         const m = scene.shotMarks();
-        if (!m.ring || !previewer) return null;
-        const p = previewer.result;
+        if (!m.ring || !shownPreview) return null;
+        const p = shownPreview;
         return { ...m, end: p.end, carry: p.carry, lie: p.lie, heading: p.heading };
       })(),
       // the wind's arrow as it was last turned, and the words beside it; and the shape and spin buttons as they are drawn
       wind: hud.windDrawn(),
       controls: hud.controls(),
+      arrows: scene.arrowsDrawn(),
     }),
     course: () => courseName,
     choosing: () => choosing,

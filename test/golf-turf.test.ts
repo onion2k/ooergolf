@@ -27,8 +27,11 @@ function hole() {
       if (c <= 5 || c >= COLS - 6) return 'x';
       if (r === 3 && c === 15) return 'C';
       if (r < 8 && c >= 11 && c <= 19) return 'g';
+      if (r === 8 && c >= 11 && c <= 19) return 'c';
       if (r === ROWS - 4) return c === 15 ? 'T' : c === 14 || c === 16 ? 't' : 'f';
       if (c >= 12 && c <= 18) return 'f';
+      // the first cut, a tile wide along the fairway's two edges and across the green's foot
+      if (r >= 8 && (c === 11 || c === 19)) return 'c';
       if (r === 20 && c === 8) return 's';
       if (r === 22 && c === 9) return '~';
       if (r === 24 && c === 22) return '^';
@@ -175,6 +178,35 @@ describe('the grass of a golf hole', () => {
   });
 });
 
+describe('the first cut of a golf hole', () => {
+  it('grows no blade: the rough is the only ground that does, and a cut tile is as bare as the fairway', () => {
+    for (const [r, c] of [
+      [30, 11],
+      [30, 19],
+      [8, 14],
+      [8, 11],
+    ]) {
+      const p = tile(r, c);
+      expect(layout.lie[tileAt(layout, p.x, p.y)]).toBe(LIE.cut);
+      expect(grown(field, p.x, p.y).kind, `row ${r} column ${c}`).toBe(0);
+    }
+    // while the rough beside it still does
+    const rough = tile(30, 10);
+    expect(grown(field, rough.x, rough.y).kind).toBeGreaterThan(0);
+  });
+
+  it('leaves exactly as many cells of grass as the tiles of rough say, so none of the cut is counted among them', () => {
+    let cells = 0;
+    for (const k of field.mask) if (k) cells++;
+    let rough = 0;
+    for (let t = 0; t < layout.cols * layout.rows; t++)
+      if (layout.lie[t] === LIE.rough && !layout.oob[t] && !layout.sand[t] && !layout.water[t] && !layout.solid[t])
+        rough++;
+    const per = (TILE / field.cell) ** 2;
+    expect(cells).toBe(rough * per);
+  });
+});
+
 describe('what is scattered round a golf hole', () => {
   it('is nothing: no tree, rock, hedge or flower stands past the stakes, where the course ends, and the bunting round it is as it was', () => {
     expect(scatter(layout, H.name)).toEqual([]);
@@ -246,6 +278,18 @@ describe('pressing the grass flat round a ball in the rough, so it is seen', () 
       [20, 3],
     ]) {
       const p = lie(r, c);
+      expect(flattenFor(layout, p.x, p.y, true), `row ${r} column ${c}`).toBeNull();
+    }
+  });
+
+  it('is none on the first cut, which is mown and has no blades to lose a ball in', () => {
+    for (const [r, c] of [
+      [30, 11],
+      [30, 19],
+      [8, 15],
+    ]) {
+      const p = lie(r, c);
+      expect(layout.lie[tileAt(layout, p.x, p.y)], `row ${r} column ${c} is cut`).toBe(LIE.cut);
       expect(flattenFor(layout, p.x, p.y, true), `row ${r} column ${c}`).toBeNull();
     }
   });

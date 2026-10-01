@@ -24,9 +24,10 @@ The Range is the first of golf proper: three flat holes at a yard a unit, each
 a tee, a fairway, rough and a green, played with a bag of eight clubs that
 loft the ball into the air. The Links is nine holes of it, a par three to a par
 five, made by a generator on hills, with bunkers, water, trees and out of
-bounds, from the plan in `~/.claude/plans/ooergolf-proper-golf.md` (stage 5
-of six is built: a player sees where a shot lands, and shapes it, spins it and plays it
-in the wind). The golf goes in
+bounds, from the plan in `~/.claude/plans/ooergolf-proper-golf.md` (stage 6
+of six is built: a player sees where a shot lands, shapes it, spins it and plays it
+in the wind, and putts on greens with a first cut round them, a tilt and swells in them, a speed of their
+own, and arrows and words that show the break). The golf goes in
 a feature at a time, in the order `DESIGN.md` gives.
 
 ## The factory
@@ -115,9 +116,14 @@ today, and what the next features must hand it:
   clock as they were) and takes some as aimed, which must come down within the
   spread that was shown (where nothing in the air turns the flight), and sends
   the camera to an aim view in its look round; it chooses a shape and a spin before a stroke or an aim, and the game must
-  have put them back to nought after the stroke. `npm run fuzz` plays every seed four times, as a player who
-  chooses among the courses, on The Range and The Links alone, and on the windy Range (`WINDY`: its three holes
-  with winds of 12, 18 and 6), since a monkey
+  have put them back to nought after the stroke. it also reads the break (`breakOf` at the ball and at
+  three places on the hole, and the arrows: finite and where they should be, the game, its chance and its clock left as
+  they were) and, before an autopilot putt from a green, holds the putt to it (aimed the way the break says: `off`, counter-clockwise, and
+  `across`, positive to the right, cancel, and on the same side only when the break is more than the cup's radius).
+  `npm run fuzz` plays every seed five times, as a player who
+  chooses among the courses, on The Range and The Links alone, on the windy Range (`WINDY`: its three holes
+  with winds of 12, 18 and 6), and on the contoured Links (`--on contoured`: its nine holes at contour 1 with greens at
+  12, 22, 12.96 and 14.4 by hole), since a monkey
   choosing among six is on golf too seldom to hold it to anything; each landing
   the game tells of is checked as it is told (`landingProblems`).
 - **Invariants:** bodies are of a kind, are numbers and are out of the rock;
@@ -143,13 +149,22 @@ today, and what the next features must hand it:
   (`previewProblems`, which allow the longest tailwind's carry and need a heading); and the camera's distance is within the
   zoom of its hole, further on golf, and its lead is a number of yards. Shape and spin are numbers within -1 and 1, the wind
   a speed from nought to `WIND.most` along a unit direction and calm on a hole of minigolf, and a ball's speed is held to the
-  club that struck it, a fall, and what the wind adds over eight seconds of flight.
+  club that struck it, a fall, and what the wind adds over eight seconds of flight. The greens (`groundProblems`,
+  `arrowProblems`, `breakProblems`, all inside `checkInvariants`): a hole's greens run at a speed from `GREENS.fast` to
+  `GREENS.slow`, and only a golf hole has one; on a hole that says its greens' speed no tile of putting green leans more
+  than `GREEN.steepest` and a tenth over (`GREEN_RULES`; a test's own hill with a cup on it is not such a hole); the first cut
+  is on no sand, water, out of bounds, rock or rail, and there is none on minigolf; a ball at rest on a golf hole lies on
+  a slope its lie holds, by the lie's own roll (the cut and the green's speed counted) over gravity and a quarter more;
+  `breakOf` is a number and its `across` no further than the cup is; and the arrows are numbers, each on a tile of putting
+  green and no more than the green has.
 - **Determinism:** the autopilot plays, with a player's slips from its own
   chance, round after round, and the hash takes in the hole and the card.
 - **Pace:** the strokes a round of each course takes; see above. The
-  autopilot does not read a slope's break, so on The Hills it is a player
-  who aims straight and is carried by the ground. The golf courses are a player one under par on every hole: The Range 6.94 for
-  pars of 3, 3 and 4, and The Links 30.25 for 36, each hole a stroke or so better than its par, since the
+  autopilot does not read a slope's break on minigolf, so on The Hills it is a player
+  who aims straight and is carried by the ground; on a golf green it does, by rehearsal. The golf courses are a player one under par on every hole: The Range 6.94 for
+  pars of 3, 3 and 4, and The Links 30.25 for 36 (30.19 over 48 seeds with its greens contoured, against 30.27 over the same seeds
+  before it: the first sixteen read 30.81, inside the 29.56 to 30.81 of the three sets of sixteen),
+  each hole a stroke or so better than its par, since the
   autopilot plays like a good golfer and par is each hole's intent. The planner did not move The Range's
   figure (6.88 to 6.94): a player's slips, a tenth of the power and a few degrees, and the swing's own scatter,
   are far bigger than the unit or two it gains on the level; its worth is in `test/planner.test.ts`, on slopes
@@ -409,7 +424,7 @@ change meant to move it, and the commit says why. Look at every picture.
   for the nearest each time was n squared and took twelve seconds a shot on a
   hole of a hundred thousand tiles.
 - Golf is a layout that is `golf`, which `layoutOf` says of a map drawn in `f`
-  fairway, `r` rough, `g` green and `t` tee's box (refused by name if mixed
+  fairway, `r` rough, `g` green, `c` first cut and `t` tee's box (refused by name if mixed
   with `.` or the digits), beside the same `T`, `C`, `s`, `~`, `o` and `#`.
   `lieAt(layout, x, y)` is the one place the ground's kind is read, by `LIE`,
   and `src/surfaces.ts` is the leaf table of what each kind does: its `roll`
@@ -499,6 +514,44 @@ change meant to move it, and the commit says why. Look at every picture.
   a spec that cannot be made, by name. `src/links.ts` is The Links: nine specs, made when first asked for, each seed
   chosen by playing forty with the pace gate's player and looking. A hole of 560 yards is 24,000 tiles of map and
   8,500 of ground: 82 ms to begin in the page, 3.9 ms a frame at its worst view, held by `perf`.
+- **Putting** (stage 6). A golf map's `c` is the **first cut** (`LIE.cut`): mown, but longer than the green, one tile
+  (3 yards) wide round every putting green (eight ways, so no gap at a corner) and one tile of rough along each side of a
+  fairway, laid by `mown` in `golf.ts` after everything else is placed, spending no chance, and only on a tile that is
+  exactly `r` or `f`. It rolls slower than the fairway (26), is a little worse to play from (`power` 0.97, `wild` 1.1),
+  grows no blades and is drawn in an olive of its own. A hole's greens run at `HoleDef.greens`, in yards a second a second,
+  less the faster (`GREENS` in `surfaces.ts`: 12 fast, 16 normal, 22 slow; a hole without it has 16, as The Range does):
+  `rollOf(lie, greens)` is the one place that says it, for the physics' world (`makeWorld`'s fifth argument),
+  `Game.rollAt`, the autopilot and the rule that a hole's tee, fairway and green rest a ball, and the cut runs as much
+  slower than the green as it always did. The green's **contour** (`GolfSpec.contour`, from 0 to 1 of `GREEN.steepest`,
+  0.10: a tenth) is in the ground's own `terrain`, so a putt is the minigolf's model on a slope: `greenContour` in
+  `noise.ts` is a plane through the cup, tilted along a direction from the hole's seed (`tiltAngle`; 0.8 of the
+  slope) with two sizes of swells on it (0.2), scaled so the steepest slope on the green's tiles is exactly the contour
+  times `GREEN.steepest`; `golfHole` lays it on a level plate round the cup (`PLATE`), which eases back into the hills over
+  as few tiles as keep every step no steeper than the hills' own, so the hills away from the green are what they were
+  (a test holds every Links hole to it) and a green that would go below nought is lifted. A uniform tilt is what makes a
+  break: swells alone are zero-mean, their pull on a ball changes sign along a putt and cancels (median break 0.07
+  yards on The Links, with the cup 1.45 yards in radius). The Links' contours run from 0.3 (the opener) to 1 (the last) and
+  its greens from 13 to 19; The Straight Mile asks for its hills as they were (`steepness: 0.6975`, the 0.75 the
+  generator used to gentle once because its green was not level). **The break** is in `green.ts`: `puttFrom` works a putt
+  out backward from the cup, a point mass over the game's own ground with each lie's roll (about 0.03 ms, held by a count
+  of slope reads), `breakOf` is its `across` (how far to aim off the cup, positive to the _right_, so a fall to the right is
+  aimed to the left: the putt that arrives and would die half a yard past on a level green) and `rise`, held to the game's
+  own rehearsed putts to 0.4 yards at the 90th percentile at every speed of green, and `greenArrows` is an arrow for each
+  tile of green leaning more than 0.002. Across the Links' greens, putts of 5 to 25 yards break by a median 0.72 yards,
+  at the 90th percentile 1.86, and 19% by more than the cup's radius (Home Stretch: 1.55, 3.36, 52%). A putt is struck along the
+  ground's slope in `Game.shoot`, since sent flat into a rising face a hard one is going into the ground by its speed times the
+  slope, which a tenth of a slope at the putter's hardest makes a landing, and the surface scrubs a landing. On the page the
+  arrows (a merged group of flat arrows, blue-violet, pointing the way the ground carries a ball and 0.9 to 2.2 yards long
+  by the slope, built once for a hole, none on a level green) show while the ball rests on the putting green or the first cut,
+  the panel under the pin says "Fast greens" (`speedName`) and "Putt: aim 3.5 yd left, downhill 0.8 yd" (`puttText`: worked
+  out when the ball comes to rest, never in a frame, and only on a hole that sets its greens' speed, so The Range reads
+  as it did), and a putt being aimed on such a hole is drawn as its own roll along the ground to a ring where it comes to rest
+  (`Previewer.roll`, a second `Preview` made once with the hole, its dots over the straight ones, so the gap is the break).
+  The autopilot putts by it: on a green that leans anywhere on the line the putt is tried in the rehearsal and corrected by
+  `refine` (`PUTT` in `autopilot.ts`: tolerance 0.2, up to 8 trials), and on a level one it is the arithmetic, shot for shot
+  what it was (a trace of twelve rounds on The Range and the minigolf courses is held identical); the cut is dearer to route over
+  than the fairway and cheaper than the rough, and a ball in it is played with the putter within 45 yards or with
+  the club that reaches.
 - The autopilot's golf shot is tried before it is taken. `Game.rehearsal()` is a game of the same hole that no one
   plays, chance held in the middle so a trial is the shot struck true, and only it may `trial(x, y)`; `refine`
   (`src/planner.ts`) corrects a candidate's power in proportion and its aim by the angle it was out by until the
@@ -695,10 +748,11 @@ threw up, sand or grass, and where the ring is that marks a lofted ball's
 first landing and how wide, and `shot`: the preview of the shot being aimed, its dots of arc, its ring with its
 colour and size, the spread's half axes, where a tree knocks it and what it comes to, null when none is drawn), read back
 from what the last frame placed; and `map()`, the hole's map over the course: its size and where the ball, the cup and the
-landing of the shot being aimed are on it. `state()` has the shape and the spin chosen and the hole's `wind` (x, y, speed);
+landing of the shot being aimed are on it. `state()` has the shape and the spin chosen, the hole's `wind` (x, y, speed), its `greens` speed and its name (`greenSpeed`: `fast`,
+`medium`, `slow` or null) and `arrows`, how many stand over its green;
 `motions()` has `wind` (the arrow's turn in degrees and its text, read back from the page), `controls` (the two buttons as drawn),
-`shot.heading` and `press` (the grass pressed flat round a ball at rest in the rough this frame: where, how wide, and whether
-the renderer took it; null otherwise). `?rung=N` on the page puts the picture
+`arrows` ({ shown, count }: what the last frame wrote), `shot.heading` and `press` (the grass pressed flat round a ball at rest in the rough this frame: where, how wide, and whether
+the renderer took it; null otherwise). `view()` also has `putt` and `greens`, the two lines under the pin as drawn (null when none). `?rung=N` on the page puts the picture
 on a rung and holds it; paused, the governor never moves it, so pictures are
 always taken at the top rung unless a test asks. In unit tests, `game.place(x, y)` puts the
 ball down at a lie.
@@ -708,11 +762,10 @@ ball down at a lie.
 Each of these is the first feature's to bring, with every gate green at
 each step, and a gate handed what it needs in the same change:
 
-- The rest of golf, from `~/.claude/plans/ooergolf-proper-golf.md`: stage 6, putting greens with contour, a fringe and
-  the break shown, which the planner leaves to the arithmetic putt. What stage 3 leaves as it found it: a golf hole's
-  its green is round and stepped by the tile, so are its bunkers, there is no first cut, an invisible wall
+- The limits of the golf there is, from `~/.claude/plans/ooergolf-proper-golf.md` (all six stages are built). What stage 3
+  leaves as it found it: a golf hole's green is round and stepped by the tile, so are its bunkers, an invisible wall
   stands beyond out of bounds, a ball landing on a post's top or a box is left as the physics has it, the club in hand is
-  not saved, and the planner knows nothing of a green's contour (there is none) or a lay-up chosen for the next shot's
+  not saved, and the planner knows nothing of a lay-up chosen for the next shot's
   sake. What stage 4 leaves: the preview is the true swing to the first landing (the run-out after it is not shown, nor
   where the ball would rest, so a spin is not seen until the ball has landed); a full drive on a phone has its ring under
   the coins and the shop at the top of the screen, since 200 back is the most the camera may stand; the map is not
@@ -722,7 +775,17 @@ each step, and a gate handed what it needs in the same change:
   about an eighth as far in yards as a full one; the autopilot plays straight and flat, copes with the wind through its
   rehearsal (12 to 22 trials a shot in 15 mph, against 12 to 17 calm) and does not choose a shape or a spin; the shape
   and spin are chosen in three steps, not continuously; and the shape and spin buttons are not in the golf pictures the
-  look gate holds, which were not rewritten for them (see the commit).
+  look gate holds, which were not rewritten for them (see the commit). What stage 6 leaves: a green is one tilted plane
+  with swells on it, no tiers, humps or ridges, one speed to a hole and the same on all of it, and no first cut wider than a
+  tile; the cup takes a ball within about 1.4 yards of its line, so a break shows in play only past that (a median putt on
+  The Links aims 0.7 yards off, and one in five more than the cup's radius), and a smaller cup or a steeper green is a feel
+  to be chosen, not a bug; `breakOf` is the aim of the putt that would die half a yard past the cup on the level, which
+  on a slope this steep is not where it rests, and past the putter's reach (a putt over 50 yards on a green of 16) it says
+  so by `speed` over `HARDEST_SHOT` and gives no best-effort figure; the autopilot's putt count in `strokesToGo` and its
+  lay-ups know no contour or speed, so it will not leave a ball below the hole; a putt played toward the camera (the ball
+  past the cup) has the cup under the bag; the arrows are not switched off, and show whenever the ball rests on the green or
+  the cut; the speed of the greens is not in the shop; and the cut's colour, the arrows' and the roll's look were chosen
+  once, by looking, and are a taste.
 
 - An autopilot that keeps a margin from water that grows with the shot. It
   skirts a pond by 1.3 units, and a 5% slip over a 45-unit shot wanders 2.3,
@@ -735,7 +798,7 @@ each step, and a gate handed what it needs in the same change:
   holes of 200 tiles a side and more show rough blades pale and frosty near
   the camera, which was not the shadow's fit or the cell and is not
   understood. Nothing of The Moors is near them.
-- An autopilot that reads a slope's break. It aims straight at the cup and
+- An autopilot that reads a slope's break on minigolf (on a golf green it does, by rehearsal). It aims straight at the cup and
   judges the distance along the level: it stops within 0.6 units of where
   it means on four shots across a hollow in five, and 2.4 long on a 21-unit
   climb, since the physics slows a ball along the slope. So The Hills' pars

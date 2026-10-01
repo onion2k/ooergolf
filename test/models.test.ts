@@ -24,6 +24,7 @@ import {
   WINDMILL,
   barrier,
   bounds,
+  breakArrow,
   bumper,
   bunker,
   bunting,
@@ -88,6 +89,8 @@ function catalogue(): [string, Model][] {
     ['pine', tree('pine', { height: 10, seed: 3 })],
     ['golf tree', golfTree(TREE, { seed: 2 })],
     ['stake', stake()],
+    ['break arrow', breakArrow()],
+    ['long headed break arrow', breakArrow({ headShare: 0.5 })],
     ['hedge', hedge(6, 1.5, 1.8)],
     ['flowers', flowers(FLOWER_COLOURS[0])],
     ['rock', rock(1.5)],
@@ -227,6 +230,7 @@ const OPEN = new Set([
   'belt',
   'frame',
   'chevrons',
+  'arrow',
 ]);
 
 /** The signed volume a mesh encloses about the origin: positive when every face is wound to face out. */
@@ -1133,6 +1137,56 @@ describe('the golf tree and the stake', () => {
   });
 });
 
+describe('the arrow that shows which way a green leans', () => {
+  it('lies flat on the green, a unit long and pointing along +x, so the scene turns and scales it to the slope', () => {
+    const m = breakArrow();
+    const b = bounds(m.parts);
+    expect(b.min[0]).toBeCloseTo(-0.5, 5);
+    expect(b.max[0]).toBeCloseTo(0.5, 5);
+    // symmetric about its line, and flat: no thickness to stand up off the grass
+    expect(b.min[1]).toBeCloseTo(-b.max[1], 5);
+    expect(b.min[2]).toBeCloseTo(0, 5);
+    expect(b.max[2]).toBeCloseTo(0, 5);
+    // every face looks straight up, so the toon light falls on it as it falls on the green
+    const n = partNamed(m, 'arrow').mesh.normals;
+    for (let i = 0; i < n.length; i += 3) near([n[i], n[i + 1], n[i + 2]], [0, 0, 1], 5);
+  });
+
+  it('is thin, with a head wider than its shaft and a point at the front: an arrow, and not a sign', () => {
+    const m = breakArrow();
+    const pts = points(partNamed(m, 'arrow').mesh);
+    const widthAt = (x: number) =>
+      Math.max(0, ...pts.filter((p) => Math.abs(p[0] - x) < 1e-6).map((p) => Math.abs(p[1])));
+    // the shaft's half width at its middle, the head's at its base, and nothing at the tip
+    const shaft = widthAt(-0.5),
+      tip = widthAt(0.5);
+    const head = Math.max(...pts.map((p) => Math.abs(p[1])));
+    expect(tip).toBeLessThan(1e-6);
+    expect(head).toBeGreaterThan(shaft * 2);
+    // a full arrow, a yard and a half long, is under a ball's width across the shaft, and under a yard across the head
+    expect(2 * shaft * 1.5).toBeLessThan(2 * KIND_RADIUS[BALL] * 0.5);
+    expect(2 * head * 1.5).toBeLessThan(1);
+  });
+
+  it('is one part in one colour that is neither the green’s nor the ball’s, and a head share changes the head', () => {
+    const m = breakArrow();
+    expect(m.parts.length).toBe(1);
+    expect(m.moving.length).toBe(0);
+    const [r, g, bl] = partNamed(m, 'arrow').material;
+    // not the cream of the ball and the aim's dots, which the eye would take it for
+    expect(r + g + bl).toBeLessThan(PALETTE.cream[0] + PALETTE.cream[1] + PALETTE.cream[2]);
+    // the head's base is a `headShare` of the length back from the tip
+    const base = (share: number) => {
+      const pts = points(partNamed(breakArrow({ headShare: share }), 'arrow').mesh);
+      const wideY = Math.max(...pts.map((p) => Math.abs(p[1])));
+      return Math.min(...pts.filter((p) => Math.abs(Math.abs(p[1]) - wideY) < 1e-6).map((p) => p[0]));
+    };
+    expect(base(0.5)).toBeCloseTo(0, 5);
+    expect(base(0.2)).toBeCloseTo(0.3, 5);
+    expect(triangles(m)).toBeGreaterThan(0);
+  });
+});
+
 describe('every model keeps to its triangle budget', () => {
   it('a tree is under 860, whatever its kind, size and seed', () => {
     expect(BUDGET.tree).toBeLessThanOrEqual(860);
@@ -1162,8 +1216,13 @@ describe('every model keeps to its triangle budget', () => {
       ['fence', fence(12)],
       ['golfTree', golfTree(TREE, { seed: 9 })],
       ['stake', stake({ height: 2.4, radius: 0.3 })],
+      ['breakArrow', breakArrow()],
     ];
     for (const [name, m] of at) expect(triangles(m), name).toBeLessThanOrEqual(BUDGET[name]);
+  });
+
+  it('a green’s arrows, a hundred and fifty of them, are a few hundred triangles', () => {
+    expect(triangles(breakArrow()) * 150).toBeLessThan(BUDGET.golfHole / 50);
   });
 
   it('a golf hole, a hundred trees and two hundred stakes and all, is under 60,000', () => {

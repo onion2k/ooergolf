@@ -1,9 +1,7 @@
 /** The map of a hole: its ground seen from above, tee at the bottom, small enough to sit over the course. */
 import { describe, expect, it } from 'vitest';
 import { layoutOf } from '../src/arena';
-import { golfHole } from '../src/golf';
 import { paintMap, mapPoint, mapSize } from '../src/holemap';
-import { LINKS_SPECS } from '../src/links';
 import { LIE } from '../src/surfaces';
 import { field } from './helpers';
 
@@ -85,8 +83,48 @@ describe('the hole map', () => {
     expect(LIE.green).toBeGreaterThan(0);
   });
 
+  it('paints the first cut in a colour of its own, between the fairway and the green, as the course draws it', () => {
+    const l = layoutOf(['#######', '#rcccgr#', '#rcfCgr#', '#rccccr#', '#rrtTtr#', '#######']);
+    const s = mapSize(l, 210, 150);
+    const img = new Uint8ClampedArray(s.width * s.height * 4);
+    paintMap(l, s, img);
+    const at = (col: number, row: number) => {
+      const [x, y] = [l.originX + (col + 0.5) * 3, l.originY + (l.rows - row - 0.5) * 3];
+      const [px, py] = mapPoint(l, s, x, y);
+      return pixel(img, s.width, px, py);
+    };
+    const cut = at(2, 1),
+      fairway = at(3, 2),
+      green = at(5, 2),
+      rough = at(1, 1);
+    expect(cut[3]).toBe(255);
+    expect(new Set([cut, fairway, green, rough].map((c) => c.join(','))).size, 'four colours').toBe(4);
+    const lum = (c: number[]) => c[0] * 0.2126 + c[1] * 0.7152 + c[2] * 0.0722;
+    expect(lum(cut)).toBeGreaterThan(lum(fairway));
+    expect(lum(cut)).toBeLessThan(lum(green));
+  });
+
   it('is the same picture every time, from the same hole', () => {
-    const l = layoutOf(golfHole(LINKS_SPECS[1]).map, golfHole(LINKS_SPECS[1]).terrain);
+    // a hole drawn here and not made by the generator, so that a change to what the map shows is a change to the map, and the
+    // hash does not move whenever a hole of The Links is made differently
+    const l = layoutOf([
+      '#################',
+      '#xxxxxxxxxxxxxxx#',
+      '#xrrrrrrrrrrrrrx#',
+      '#xrrcccccccrrrrx#',
+      '#xrrcgggggcrr^rx#',
+      '#xrrcgggCggcrrrx#',
+      '#xrscgggggccrrrx#',
+      '#xrssccccccfrrrx#',
+      '#xrrrcfffffcr~~x#',
+      '#xrrrcfffffc~~~x#',
+      '#xrrrcfffffcrrrx#',
+      '#xrr^cfffffcrrrx#',
+      '#xrrrrcfffcrrrrx#',
+      '#xrrrrrttTtrrrrx#',
+      '#xxxxxxxxxxxxxxx#',
+      '#################',
+    ]);
     const s = mapSize(l, 100, 230);
     const a = new Uint8ClampedArray(s.width * s.height * 4),
       b = new Uint8ClampedArray(a.length);
@@ -100,5 +138,5 @@ describe('the hole map', () => {
   });
 });
 
-/** The hash of Water Carry's map at 100 by 230, written down when the map was first drawn and looked at (30 September 2026). */
-const PICTURE = 951276343;
+/** The hash of that hole's map at 100 by 230, written down when the first cut was added to the map (1 October 2026). */
+const PICTURE = 4280028507;

@@ -22,7 +22,12 @@
  * every hole that is not golf. And a knock told is of
  * the ball, where it is, as hard as a knock is, along a direction: a rule of
  * what is told rather than of what is, so `knockProblems` is asked of each
- * knock as it is told, and `landingProblems` of each landing.
+ * knock as it is told, and `landingProblems` of each landing. And of the golf's greens: a hole's speed of green is a
+ * number from the fastest to the slowest and only on golf; every tile of putting green leans no more than a green may
+ * (`GREEN`, and a tenth over for the smoothing the physics rolls a ball on); the first cut is only on ground a ball is
+ * played from, never sand, water, out of bounds, rock or the rail; a ball at rest on a golf hole is on a slope its
+ * lie holds a ball on; the break a putt is shown is a number across no further than the cup is; and the arrows laid over
+ * a green are numbers, each on a tile of putting green, and no more than its tiles.
  *
  * Checked by the fuzzer after everything it does, by the test API on asking,
  * and by the unit tests. Each broken rule is a line saying what and where.
@@ -35,10 +40,15 @@ import {
   PHYSICS,
   fromPosts,
   fromTrees,
+  TILE,
   heightAt,
   highestTerrain,
+  slopeAt,
+  slopeInto,
+  lieAt,
   restingAbove,
   tileAt,
+  type Layout,
 } from './arena';
 import { TILT, VIEW, type CameraRig } from './camera';
 import type { Plan } from './autopilot';
@@ -46,7 +56,8 @@ import { BAG, carrying, type BagClub } from './bag';
 import { CLUBS } from './clubs';
 import { LIMIT_OVER_PAR, fastest, type Game } from './game';
 import type { Preview } from './preview';
-import { LANDING } from './surfaces';
+import { GREEN, breakOf, greenArrows, type Arrow, type Break } from './green';
+import { GREENS, LANDING, LIE, SURFACES } from './surfaces';
 import { WIND, windPush, windReach } from './shaping';
 import { TREE, insideCanopy } from './trees';
 
@@ -75,6 +86,109 @@ export function viewProblems(rig: CameraRig): string[] {
     out.push(`the distance is out of the zoom, ${VIEW.near} to ${rig.far}: ${rig.distance}`);
   if (!(rig.lead >= 0 && Number.isFinite(rig.lead)))
     out.push(`the lead is not a number of yards, nought or more: ${rig.lead}`);
+  return out;
+}
+
+/** What a green may lean, as `GREEN` says, and a tenth over: the physics rolls a ball on the ground smoothed between the tiles, and the figure is the contour's own, read the same way. */
+export const GREEN_RULES = { steepest: GREEN.steepest * 1.1 } as const;
+
+/** How much steeper than its lie holds a ball on a slope may be for a ball at rest on it, before the rule calls it a ball that should have rolled: a quarter, and a hair for the very flat. */
+const HOLDS = { share: 1.25, hair: 0.01 } as const;
+
+/** The middle of a tile, as the rules say where one is. */
+const place = (layout: Layout, t: number) =>
+  `${(layout.originX + ((t % layout.cols) + 0.5) * TILE).toFixed(1)},${(layout.originY + (Math.floor(t / layout.cols) + 0.5) * TILE).toFixed(1)}`;
+
+/**
+ * What is wrong with a hole's ground, which does not change while the hole is played: no tile of putting green leans more
+ * than `GREEN_RULES` allows (unless `slope` is false: only a hole that says how fast its greens run is made with a green
+ * of that kind, and a test's own hill with a cup on it is not), and the first cut, which a ball is played from, is on no
+ * sand, water, out of bounds, rock or rail (and there is none on a hole of minigolf).
+ */
+export function groundProblems(layout: Layout, { slope: leans = true }: { slope?: boolean } = {}): string[] {
+  const out: string[] = [];
+  const tiles = layout.cols * layout.rows;
+  for (let t = 0; t < tiles; t++) {
+    if (layout.lie[t] === LIE.cut) {
+      const on = !layout.golf
+        ? 'a hole of minigolf'
+        : layout.sand[t]
+          ? 'sand'
+          : layout.water[t]
+            ? 'water'
+            : layout.oob[t]
+              ? 'out of bounds'
+              : layout.rail[t]
+                ? 'the rail'
+                : layout.solid[t]
+                  ? 'rock'
+                  : '';
+      if (on) out.push(`first cut on ${on} at ${place(layout, t)}`);
+    }
+  }
+  if (!layout.golf || !leans) return out;
+  const slope: [number, number] = [0, 0];
+  for (let t = 0; t < tiles; t++) {
+    if (layout.solid[t]) continue;
+    const x = layout.originX + ((t % layout.cols) + 0.5) * TILE,
+      y = layout.originY + (Math.floor(t / layout.cols) + 0.5) * TILE;
+    if (lieAt(layout, x, y) !== LIE.green) continue;
+    slopeInto(layout, x, y, slope);
+    const lean = Math.hypot(slope[0], slope[1]);
+    if (!(lean <= GREEN_RULES.steepest))
+      out.push(
+        `the putting green slopes ${lean.toFixed(4)} at ${x.toFixed(1)},${y.toFixed(1)}, over the ${GREEN_RULES.steepest.toFixed(4)} a green may`,
+      );
+  }
+  return out;
+}
+
+/**
+ * What is wrong with the arrows laid over a green (the hole's own, as `greenArrows` says them, unless given): each is
+ * numbers, stands on a tile of putting green, and there are no more of them than the green has tiles.
+ */
+export function arrowProblems(layout: Layout, arrows: readonly Arrow[] = greenArrows(layout)): string[] {
+  const out: string[] = [];
+  let tiles = 0;
+  for (let t = 0; t < layout.cols * layout.rows; t++)
+    if (
+      !layout.solid[t] &&
+      lieAt(
+        layout,
+        layout.originX + ((t % layout.cols) + 0.5) * TILE,
+        layout.originY + (Math.floor(t / layout.cols) + 0.5) * TILE,
+      ) === LIE.green
+    )
+      tiles++;
+  for (const a of arrows) {
+    if (![a.x, a.y, a.slopeX, a.slopeY].every(Number.isFinite)) {
+      out.push(`an arrow at ${a.x},${a.y} is not a number`);
+      continue;
+    }
+    const t = tileAt(layout, a.x, a.y);
+    if (t < 0 || layout.solid[t] || lieAt(layout, a.x, a.y) !== LIE.green)
+      out.push(`an arrow at ${a.x.toFixed(1)},${a.y.toFixed(1)} is not on the putting green`);
+  }
+  if (arrows.length > tiles) out.push(`${arrows.length} arrows, more arrows than the green has tiles, ${tiles}`);
+  return out;
+}
+
+/**
+ * What is wrong with the break a player is shown for the putt from where the ball lies (or the one given): it is numbers,
+ * and it asks for an aim off the cup by no more than the cup is from the ball, which is no putt's break at all.
+ */
+export function breakProblems(game: Game, given?: Break): string[] {
+  const out: string[] = [];
+  const { world, ball, layout } = game;
+  if (!layout.golf || !world.alive[ball]) return out;
+  const x = world.x[ball],
+    y = world.y[ball];
+  const b = given ?? breakOf(layout, x, y, game.def.greens);
+  if (!Number.isFinite(b.across)) out.push(`the break's across is ${b.across}`);
+  if (!Number.isFinite(b.rise)) out.push(`the break's rise is ${b.rise}`);
+  const far = Math.hypot(layout.cup.x - x, layout.cup.y - y);
+  if (Number.isFinite(b.across) && Math.abs(b.across) > far + 1e-6)
+    out.push(`the break is ${b.across.toFixed(2)} across, further than the cup is, ${far.toFixed(2)}`);
   return out;
 }
 
@@ -125,6 +239,18 @@ export function checkInvariants(game: Game): string[] {
     out.push(`the wind blows along ${wind.x},${wind.y}, no direction`);
   if (!layout.golf && wind.speed !== 0) out.push(`the wind is ${wind.speed} on a hole of minigolf, where it is calm`);
 
+  // the speed of the greens is the hole's own, from the fastest to the slowest, and only golf has one
+  const greens = game.def.greens;
+  if (greens !== undefined) {
+    if (!layout.golf) out.push(`the greens run at ${greens} on a hole of minigolf, which has none`);
+    else if (!(Number.isFinite(greens) && greens >= GREENS.fast && greens <= GREENS.slow))
+      out.push(`the greens run at ${greens}, not a number from ${GREENS.fast} to ${GREENS.slow}`);
+  }
+  if (layout.golf) {
+    report('the ground', [...groundProblems(layout, { slope: greens !== undefined }), ...arrowProblems(layout)]);
+    report('the break', breakProblems(game));
+  } else report('the ground', groundProblems(layout));
+
   const { ball, strokes, phase, hole, course, card } = game;
   if (!Number.isInteger(hole) || hole < 0 || hole >= course.length) out.push(`the hole is ${hole}`);
   if (phase === 'play' && !world.alive[ball]) out.push('the ball is gone, with the hole still in play');
@@ -162,6 +288,15 @@ export function checkInvariants(game: Game): string[] {
     if (layout.golf && world.asleep[ball]) {
       const t = tileAt(layout, world.x[ball], world.y[ball]);
       if (t >= 0 && layout.oob[t]) out.push(`the ball is at rest out of bounds: ${at(ball)}`);
+    }
+    // at rest on ground its lie holds it on: a ball that stopped on a slope steeper than the roll can hold would have rolled
+    if (layout.golf && world.asleep[ball]) {
+      const slope = Math.hypot(...slopeAt(layout, world.x[ball], world.y[ball]));
+      const holds = Math.tan(Math.asin(Math.min(1, game.rollAt(world.x[ball], world.y[ball]) / PHYSICS.gravity)));
+      if (!(slope <= holds * HOLDS.share + HOLDS.hair))
+        out.push(
+          `at rest on a slope of ${slope.toFixed(3)}, which the ${SURFACES[lieAt(layout, world.x[ball], world.y[ball])].name} holds no ball on past ${holds.toFixed(3)}: ${at(ball)}`,
+        );
     }
     // at rest with nothing under it: asleep where a bounce left it, which a player could never strike from
     if (world.asleep[ball]) {

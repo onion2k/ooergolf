@@ -9,10 +9,11 @@
 import { describe, expect, it } from 'vitest';
 import { Autopilot, golfGuess } from '../src/autopilot';
 import * as invariants from '../src/invariants';
-import { TILE } from '../src/arena';
+import { TILE, layoutOf } from '../src/arena';
 import { BAG, PUTTER, bagClub, carryOf } from '../src/bag';
 import { carryFrom } from '../src/flight';
-import { MOST_TRIALS, Rehearsal, TOLERANCE, refine, type Trial } from '../src/planner';
+import { MOST_TRIALS, Rehearsal, TOLERANCE, refine, strokesToGo, type Trial } from '../src/planner';
+import { Route } from '../src/route';
 import { seeded } from '../src/random';
 import { RANGE } from '../src/range';
 import { LIE } from '../src/surfaces';
@@ -443,5 +444,56 @@ describe('the planner', () => {
     for (let k = 1; k < picks.length; k++) expect(picks[k], `${k}`).toBeLessThanOrEqual(picks[k - 1]);
     expect(picks[0]).toBeGreaterThan(picks[picks.length - 1]);
     expect(carryOf(bagClub('driver'), 1)).toBeGreaterThan(200);
+  });
+});
+
+describe('what the first cut is worth', () => {
+  it('is a ball a little worse placed than on the fairway, and better than in the rough, at the same distance by the same way', () => {
+    const base = field('f');
+    const layoutAs = (ch: string) =>
+      layoutOf(
+        base.map.map((line, r) =>
+          r > 0 && r < base.map.length - 1 ? line.slice(0, 5) + ch.repeat(3) + line.slice(8) : line,
+        ),
+      );
+    // one route for all three, so that only the lie's own price is in the figure and not the dearer way over it
+    const route = new Route(layoutAs('f'));
+    const lieAs = (ch: string) => {
+      const l = layoutAs(ch);
+      return strokesToGo({ layout: l, route }, l.cup.x + 12, l.cup.y - 60);
+    };
+    expect(lieAs('c')).toBeGreaterThan(lieAs('f'));
+    expect(lieAs('c')).toBeLessThan(lieAs('r'));
+  });
+
+  it('is a putt’s worth on the green and more on the fringe beside it, which is a stroke short of it', () => {
+    const l = layoutOf(
+      field('g').map.map((line, r) => (r > 0 && r < 129 ? line.slice(0, 8) + 'c' + line.slice(9) : line)),
+    );
+    const ground = { layout: l, route: new Route(l) };
+    const fringe = strokesToGo(ground, l.cup.x + 18, l.cup.y),
+      green = strokesToGo(ground, l.cup.x + 15, l.cup.y);
+    expect(fringe).toBeGreaterThan(green);
+    expect(fringe).toBeLessThan(green + 1.5);
+  });
+});
+
+describe('how closely a putt is corrected', () => {
+  it('is held to the tolerance and the trials it is given, and the defaults are as they were', () => {
+    const { game } = golfGame(field('g'));
+    const { cup } = game.layout;
+    const from = { x: cup.x + 15, y: cup.y };
+    // a guess that is too soft: it rests well short of the cup, which is further than the tolerance
+    const guess = { angle: Math.PI, power: 0.2 };
+    const rehearsal = new Rehearsal(game.rehearsal());
+    const loose = refine(rehearsal, from, cup, PUTTER, guess, { tolerance: 100, trials: 8 });
+    expect(rehearsal.trials, 'a tolerance wider than any miss stops at the first trial').toBe(1);
+    expect(loose.miss).toBeGreaterThan(0.6);
+    const before = rehearsal.trials;
+    refine(rehearsal, from, cup, PUTTER, guess, { tolerance: 1e-9, trials: 3 });
+    expect(rehearsal.trials - before, 'no more trials than it is given').toBeLessThanOrEqual(3);
+    const again = refine(rehearsal, from, cup, PUTTER, guess);
+    const same = refine(rehearsal, from, cup, PUTTER, guess, { tolerance: TOLERANCE, trials: MOST_TRIALS });
+    expect(same).toEqual(again);
   });
 });

@@ -95,7 +95,7 @@ export const KNOCK = { least: 6, apart: 0.1 } as const;
 export const TERRAIN = { step: 0.5 } as const;
 
 /** The characters of a golf hole's map that name a kind of ground. */
-const GOLF_TILES: Record<string, Lie> = { f: LIE.fairway, r: LIE.rough, g: LIE.green, t: LIE.tee };
+const GOLF_TILES: Record<string, Lie> = { f: LIE.fairway, r: LIE.rough, g: LIE.green, t: LIE.tee, c: LIE.cut };
 
 /** How far a ball struck at `speed` rolls on the green before it stops. */
 export function rollsFor(speed: number): number {
@@ -154,7 +154,7 @@ export interface Layout extends Ground {
   /** One byte a tile: 1 where there is sand, level ground a ball rolls on and is slowed hard by. */
   sand: Uint8Array;
   /**
-   * One byte a tile, of a golf hole: what its ground is, by `LIE` (the tee, the fairway, the rough, the green), which
+   * One byte a tile, of a golf hole: what its ground is, by `LIE` (the tee, the fairway, the rough, the first cut, the green), which
    * the physics rolls a ball on and a landing is scrubbed by. Sand is its own array, and `lieAt` says the whole. All
    * nought on a hole of minigolf, which has no surfaces but its green, its sand and its belts.
    */

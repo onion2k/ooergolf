@@ -1,6 +1,10 @@
 /** The monkey itself: it gets about, and a clean seed is clean. `npm run fuzz` is the long form. */
 import { describe, expect, it } from 'vitest';
-import { WINDY, fuzz } from '../scripts/fuzzer';
+import { layoutOf } from '../src/arena';
+import { WINDY, contoured, fuzz } from '../scripts/fuzzer';
+import { GREEN, greenArrows } from '../src/green';
+import { GREENS } from '../src/surfaces';
+import { LINKS_SPECS } from '../src/links';
 import { DOWNS, moors } from '../src/course';
 import { COURSES } from '../src/course';
 import { RANGE } from '../src/range';
@@ -13,7 +17,7 @@ describe('the fuzzer', () => {
     // two seeds, since which of the rarer things a monkey gets round to on one is chance. A reload starts the round
     // again, the save not yet keeping where in the course a player is, so a round is seldom finished: 26 and 17 do (they were 25 and 33 until The Range was chosen from among the courses, which moved what a monkey picks),
     // chosen again when a course could be chosen, and each does everything a player can
-    // and a run of the range, which is golf: the club chosen from the bag is an action of its own, done only there, and so is the
+    // and a run of the range, which is golf: the green is read, and a putt held to the break, there as on any golf hole; the club chosen from the bag is an action of its own, done only there, and so is the
     // aiming of a shot, whose preview is held to the game, and the shot then taken as it was aimed
     const one = fuzz(26, 12000),
       two = fuzz(17, 12000),
@@ -41,6 +45,8 @@ describe('the fuzzer', () => {
       'equip',
       'look round',
       'play again',
+      'putt by the break',
+      'read the break',
       'reload',
       'shoot',
       'shoot as aimed',
@@ -127,6 +133,46 @@ describe('the fuzzer', () => {
     expect(aimed, 'shots aimed in the wind, each preview held to the game').toBeGreaterThan(20);
     expect(struck, 'and shots struck').toBeGreaterThan(20);
     expect(landed, 'balls come down in it, each landing told').toBeGreaterThan(50);
+    expect(holed, 'and holed out').toBeGreaterThan(0);
+  });
+
+  it('has the nine holes of The Links as contoured copies, on greens that run at every speed from the fastest to the slowest', () => {
+    const holes = contoured();
+    expect(contoured(), 'made once').toBe(holes);
+    expect(holes.map((h) => h.name)).toEqual(LINKS_SPECS.map((s) => `${s.name} contoured`));
+    const speeds = holes.map((h) => h.greens!);
+    expect(Math.min(...speeds)).toBe(GREENS.fast);
+    expect(Math.max(...speeds)).toBe(GREENS.slow);
+    expect(new Set(speeds).size, 'four speeds').toBe(4);
+    for (const speed of speeds) expect(speed).toBeGreaterThanOrEqual(GREENS.fast);
+    // the steepest contour a green may have: arrows over every green, and its slope at the most a green may be
+    for (const hole of holes)
+      expect(
+        hole.map.some((row) => row.includes('c')),
+        `${hole.name} has a first cut`,
+      ).toBe(true);
+    const arrows = holes.map((h) => greenArrows(layoutOf(h.map, h.terrain)).length);
+    for (const n of arrows) expect(n, 'a contoured green has arrows').toBeGreaterThan(8);
+    expect(GREEN.steepest).toBeGreaterThan(0);
+  });
+
+  it('plays golf on contoured greens at every speed at random from start to finish, every seed clean, reading the break and putting by it', () => {
+    let read = 0,
+      putted = 0,
+      holed = 0;
+    const visited = new Set<string>();
+    for (const seed of [4, 9, 21, 30]) {
+      const r = fuzz(seed, 12000, contoured());
+      expect(r.failure, `seed ${seed}: ${JSON.stringify(r.failure)}`).toBe(null);
+      read += r.done['read the break'] || 0;
+      putted += r.done['putt by the break'] || 0;
+      holed += r.happened.holed || 0;
+      for (const name of Object.keys(r.visited)) visited.add(name);
+    }
+    for (const name of visited) expect(name).toMatch(/ contoured$/);
+    expect(visited.size, 'a good many of its holes played').toBeGreaterThanOrEqual(5);
+    expect(read, 'breaks read, each held to the rules and the game left as it was').toBeGreaterThan(20);
+    expect(putted, 'putts the autopilot took, each held to the break').toBeGreaterThan(5);
     expect(holed, 'and holed out').toBeGreaterThan(0);
   });
 

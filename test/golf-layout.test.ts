@@ -1,5 +1,5 @@
 /**
- * A golf hole's map: the tiles that say what the ground is (`f` fairway, `r` rough, `g` green, `t` the tee's box)
+ * A golf hole's map: the tiles that say what the ground is (`f` fairway, `r` rough, `c` first cut, `g` green, `t` the tee's box)
  * beside sand and water, read into a layout which knows the surface under any point. Minigolf's maps are read as they
  * were: no golf tile in them, no surface named.
  */
@@ -29,6 +29,18 @@ describe('a golf hole’s map', () => {
     expect(lie(2, 5)).toBe(LIE.tee);
     // the sand is the sand of any hole, and reads as a surface here
     expect(lie(5, 3)).toBe(LIE.sand);
+  });
+
+  it('reads `c` as the first cut: golf’s, so a hole drawn with it is golf, and mixed with minigolf’s grass it is refused', () => {
+    const cut = layoutOf(['#######', '#ggCgg#', '#cccgg#', '#ffffs#', '#rrrrr#', '#rttTr#', '#rrrrr#', '#######']);
+    expect(cut.golf).toBe(true);
+    const p = at(cut, 1, 2);
+    expect(lieAt(cut, p.x, p.y)).toBe(LIE.cut);
+    expect(cut.lie.filter((v) => v === LIE.cut).length).toBe(3);
+    // and it is not sand, not water and not out of bounds, but ground to roll on
+    const t = tileAt(cut, p.x, p.y);
+    expect(cut.sand[t] + cut.water[t] + cut.oob[t] + cut.solid[t]).toBe(0);
+    expect(() => layoutOf(['#####', '#.c.#', '#.C.#', '#.T.#', '#####'])).toThrow(/mixes/);
   });
 
   it('puts the tee on a tee and the cup on a green, however they are drawn', () => {

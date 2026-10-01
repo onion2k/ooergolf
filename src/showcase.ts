@@ -27,6 +27,7 @@ import {
   bounds,
   bumper,
   bunker,
+  breakArrow,
   bunting,
   collar,
   conveyor,
@@ -91,6 +92,8 @@ interface Item {
   y: number;
   z?: number;
   yaw?: number;
+  /** How big, as a multiple of the model's own size. */
+  scale?: number;
   /** A collar's grass is tinted to the stripe it lies in. */
   grass?: boolean;
 }
@@ -155,6 +158,16 @@ function exhibits(seed: number): Exhibit[] {
         { model: collar(9, 3), x: 13.5, y: -22.5, grass: true },
         { model: cup(3), x: 13.5, y: -22.5 },
         { model: flag(FLAG_COLOURS.red), x: 13.5, y: -22.5, yaw: 0.4 },
+      ],
+    },
+    {
+      name: 'break-arrow',
+      label: 'green arrows',
+      row: 'course',
+      items: [
+        { model: breakArrow(), x: -26, y: -17.5, z: 0.05, yaw: 0.5, scale: 0.9 },
+        { model: breakArrow(), x: -26, y: -21, z: 0.05, yaw: 0, scale: 1.5 },
+        { model: breakArrow(), x: -26, y: -24.5, z: 0.05, yaw: -0.5, scale: 2.2 },
       ],
     },
     { name: 'tee', label: 'tee markers', row: 'course', items: [{ model: teeMarkers(4), x: -14, y: -21 }] },
@@ -329,7 +342,7 @@ async function main() {
     for (const it of e.items) {
       const m = it.model;
       const at = new Float32Array(16);
-      place(at, 0, it.x, it.y, it.z ?? 0, it.yaw ?? 0);
+      place(at, 0, it.x, it.y, it.z ?? 0, it.yaw ?? 0, it.scale ?? 1);
       for (const part of m.parts) {
         const g = group(part, at);
         if (it.grass) g.albedo = [...stripeAt(it.y)];

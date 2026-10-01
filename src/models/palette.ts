@@ -35,6 +35,13 @@ const PLAY_ROUGH = [0.056, 0.235, 0.024] as const,
   OUT_OF_BOUNDS = [0.16, 0.27, 0.045] as const,
   PUTTING = [0.15, 0.5, 0.034] as const,
   TEE_BOX = [0.19, 0.5, 0.09] as const;
+/**
+ * The first cut, already linear: the fringe round a putting green and the strip along a fairway's edges. Mown, but longer
+ * than either, so it is between the fairway's grass and the green's finer one in light, and one colour and not two stripes:
+ * it is a tile wide, and a stripe across a fringe would read as a seam. It is also yellower than both, for the two mown
+ * stripes of each are an eighth either side of their middle, and a cut of the same hue is one of them.
+ */
+const FIRST_CUT = [0.17, 0.43, 0.03] as const;
 /** The rail's paint, already linear: a warm timber. */
 const RAIL_PAINT = [0.52, 0.25, 0.09] as const;
 
@@ -52,6 +59,9 @@ export const PALETTE = {
   puttingGreen: rgb(PUTTING.map((c) => c * (1 - STRIPE))),
   puttingGreenMown: rgb(PUTTING.map((c) => c * (1 + STRIPE))),
   teeBox: rgb(TEE_BOX),
+  firstCut: rgb(FIRST_CUT),
+  /** The arrows over a green: a deep blue-violet, the look's shade colour, which reads on both its stripes and is nothing like the ball or the aim's dots. */
+  breakArrow: shown(0.16, 0.22, 0.56),
   /**
    * The rail's timber sides, and the cap painted along its top, rounded over
    * its edges: one paint, the sides two thirds as bright, so a side in shade

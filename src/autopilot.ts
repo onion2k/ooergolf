@@ -42,12 +42,12 @@ import { carryFrom } from './flight';
 import type { Game } from './game';
 import { Obstacles } from './obstacles';
 import { PHYSICS } from './physics';
-import { choose, Rehearsal, type Candidate } from './planner';
+import { choose, refine, Rehearsal, type Candidate } from './planner';
 import { Route } from './route';
 import type { Random } from './random';
 import type { Shot } from './shot';
 import { windReach } from './shaping';
-import { LIE, type Lie } from './surfaces';
+import { LIE, rollOf, type Lie } from './surfaces';
 
 /** How fast a ball it means for the cup is going when it gets there: inside what the cup catches off its middle, 7. */
 const ARRIVE = 4;
@@ -75,10 +75,18 @@ export function speedFor(distance: number, arrive: number): number {
   return Math.sqrt(arrive * arrive + 2 * ROLL.roll * distance);
 }
 
-/** How steadily the ground slows a rolling ball at a point: sand's slowing on sand, the green's elsewhere. */
-function slowingAt(l: Layout, x: number, y: number): number {
+/**
+ * How steadily the ground slows a rolling ball at a point: sand's slowing on sand, and the green's elsewhere. On a golf hole
+ * the putting green runs at the hole's speed (`greens`) and the first cut round it a share slower, which is the hole's own
+ * and not the minigolf's; every other golf ground is still taken for the green, as it always was, since a shot rolled
+ * across it is corrected by trial and a fairway's arithmetic is not worth a change to every shot of The Range.
+ */
+function slowingAt(l: Layout, x: number, y: number, greens?: number): number {
   const t = tileAt(l, x, y);
-  return t >= 0 && l.sand[t] ? SAND.roll : ROLL.roll;
+  if (t >= 0 && l.sand[t]) return SAND.roll;
+  if (!l.golf) return ROLL.roll;
+  const lie = lieAt(l, x, y);
+  return lie === LIE.green || lie === LIE.cut ? rollOf(lie, greens) : ROLL.roll;
 }
 
 /**
@@ -90,12 +98,20 @@ function slowingAt(l: Layout, x: number, y: number): number {
  * step down is a fall, which gives it speed downward and not along, so only
  * the slope counts.
  */
-export function speedAcross(l: Layout, x0: number, y0: number, x1: number, y1: number, arrive: number): number {
+export function speedAcross(
+  l: Layout,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  arrive: number,
+  greens?: number,
+): number {
   const d = Math.hypot(x1 - x0, y1 - y0);
   const n = Math.max(1, Math.ceil(d / 0.25));
   let lost = 2 * PHYSICS.gravity * (terrainAt(l, x1, y1) - terrainAt(l, x0, y0));
   for (let k = 0; k < n; k++)
-    lost += 2 * slowingAt(l, x0 + ((x1 - x0) * (k + 0.5)) / n, y0 + ((y1 - y0) * (k + 0.5)) / n) * (d / n);
+    lost += 2 * slowingAt(l, x0 + ((x1 - x0) * (k + 0.5)) / n, y0 + ((y1 - y0) * (k + 0.5)) / n, greens) * (d / n);
   return Math.sqrt(Math.max(0, arrive * arrive + lost));
 }
 
@@ -105,7 +121,15 @@ export function speedAcross(l: Layout, x0: number, y0: number, x1: number, y1: n
  * slowing of the ground's and the slope's, so on the flat green it is
  * exactly `timeTo`.
  */
-export function timeAlong(l: Layout, x0: number, y0: number, x1: number, y1: number, speed: number): number {
+export function timeAlong(
+  l: Layout,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  speed: number,
+  greens?: number,
+): number {
   const d = Math.hypot(x1 - x0, y1 - y0);
   const n = Math.max(1, Math.ceil(d / 0.25));
   const ds = d / n;
@@ -119,7 +143,8 @@ export function timeAlong(l: Layout, x0: number, y0: number, x1: number, y1: num
     h += rise;
     // this piece's slowing: the ground's, and gravity's share along the slope
     const a =
-      slowingAt(l, x0 + ((x1 - x0) * (k + 0.5)) / n, y0 + ((y1 - y0) * (k + 0.5)) / n) + (PHYSICS.gravity * rise) / ds;
+      slowingAt(l, x0 + ((x1 - x0) * (k + 0.5)) / n, y0 + ((y1 - y0) * (k + 0.5)) / n, greens) +
+      (PHYSICS.gravity * rise) / ds;
     const left = v * v - 2 * a * ds;
     if (left < 0) return Infinity;
     const next = Math.sqrt(left);
@@ -136,10 +161,10 @@ export function timeAlong(l: Layout, x0: number, y0: number, x1: number, y1: num
  * slope. The physics counts a surface's drag as well, three quarters of it;
  * none of the game's surfaces has any, so only the steady slowing is here.
  */
-export function restsOn(l: Layout, x: number, y: number): boolean {
+export function restsOn(l: Layout, x: number, y: number, greens?: number): boolean {
   const [sx, sy] = slopeAt(l, x, y);
   const s = Math.hypot(sx, sy);
-  return s / Math.sqrt(1 + s * s) <= slowingAt(l, x, y) / PHYSICS.gravity;
+  return s / Math.sqrt(1 + s * s) <= slowingAt(l, x, y, greens) / PHYSICS.gravity;
 }
 
 /** How long a ball struck at `speed` takes to roll `distance`, or Infinity if it stops short of it. */
@@ -164,6 +189,10 @@ export interface Plan extends Shot {
 
 /** The farthest the putter is tried from the fairway or the tee, in units: a chip and run, which it rolls out as far as. */
 const CHIP_AND_RUN = 45;
+/** How closely a putt is corrected to the cup, in units, and how many trials it is given: a putt is a short trial, and the cup is small. */
+const PUTT = { tolerance: 0.2, trials: 8 };
+/** The slope, rise over run, that a putt's line must have somewhere on it to be read in the rehearsal and not by arithmetic: a hair, a fifth of a per cent. */
+const LEANS = 0.002;
 /** A lay-up is at a share of a club's full reach along the route, for the clubs that fall short of the cup by less than this share of the way, and how many are tried. */
 const LAY_UP = { share: 0.94, within: 0.98, most: 4 };
 
@@ -203,8 +232,9 @@ export function golfCandidates(game: Game, x: number, y: number): Plan[] {
   const distance = Math.hypot(dx, dy);
   const angle = Math.atan2(dy, dx);
   const lie = lieAt(layout, x, y);
+  const { greens } = game.def;
   const putt = (): Plan => {
-    const speed = speedAcross(layout, x, y, layout.cup.x, layout.cup.y, ARRIVE);
+    const speed = speedAcross(layout, x, y, layout.cup.x, layout.cup.y, ARRIVE, greens);
     return { angle, power: Math.min(1, powerFor(speed, PUTTER.hardest)), club: PUTTER.id };
   };
   if (lie === LIE.green) return [putt()];
@@ -215,9 +245,10 @@ export function golfCandidates(game: Game, x: number, y: number): Plan[] {
     if (reach >= distance) reaching.push({ angle, power: distance / reach, club: club.id });
   }
   const out = reaching.length ? reaching.slice(0, 2) : [{ angle, power: 1, club: BAG[0].id }];
-  if ((lie === LIE.tee || lie === LIE.fairway) && distance <= CHIP_AND_RUN) {
+  // the cut is rolled over as the fairway is, and a ball on the fringe is putted when the cup is near enough to roll to
+  if ((lie === LIE.tee || lie === LIE.fairway || lie === LIE.cut) && distance <= CHIP_AND_RUN) {
     const roll = putt();
-    if (speedAcross(layout, x, y, layout.cup.x, layout.cup.y, ARRIVE) <= PUTTER.hardest) out.push(roll);
+    if (speedAcross(layout, x, y, layout.cup.x, layout.cup.y, ARRIVE, greens) <= PUTTER.hardest) out.push(roll);
   }
   return out;
 }
@@ -260,6 +291,17 @@ export interface Skill {
   aim: number;
   /** How far off its power, as a spread in shares of the power meant. */
   power: number;
+}
+
+/** Whether the ground between (x, y) and the cup leans anywhere, by more than a hair: a putt over it breaks or runs, and is read. */
+function leans(l: Layout, x: number, y: number): boolean {
+  const d = Math.hypot(l.cup.x - x, l.cup.y - y);
+  const n = Math.max(1, Math.ceil(d));
+  for (let k = 0; k <= n; k++) {
+    const [sx, sy] = slopeAt(l, x + ((l.cup.x - x) * k) / n, y + ((l.cup.y - y) * k) / n);
+    if (Math.hypot(sx, sy) > LEANS) return true;
+  }
+  return false;
 }
 
 export interface AutopilotOptions {
@@ -368,7 +410,7 @@ export class Autopilot {
     const { layout } = game;
     const lie = lieAt(layout, x, y);
     const guesses = golfCandidates(game, x, y);
-    if (lie === LIE.green) return guesses[0];
+    if (lie === LIE.green) return this.puttPlan(x, y, guesses[0]);
     const route = this.routeOf();
     const from = { x, y };
     // the shots at the cup, by the arithmetic, and the shots that lay up on the way to it
@@ -387,6 +429,28 @@ export class Autopilot {
       power: chosen.power,
       club: candidates[chosen.index].club.id,
       expect: { x: chosen.trial.x, y: chosen.trial.y, holed: chosen.trial.holed },
+    };
+  }
+
+  /**
+   * The putt from the green: the arithmetic's where the ground between the ball and the cup is level, which is every
+   * green of The Range and every putt that is straight, since there it is exact to the digit; and where the ground
+   * leans, tried in the rehearsal and corrected (`refine`) until the ball drops or comes to rest on the cup, so a break
+   * is read as a golfer reads it, aimed up the slope of it, and a downhill putt is struck for the roll it will have.
+   * The plan says where the true putt rests.
+   */
+  private puttPlan(x: number, y: number, guess: Plan): Plan {
+    const { layout } = this.game;
+    if (!leans(layout, x, y)) return guess;
+    const from = { x, y };
+    const r = refine(this.rehearse(), from, layout.cup, PUTTER, guess, PUTT);
+    // every trial lost, which a putt on a green cannot be: the arithmetic's
+    if (r.miss === Infinity) return guess;
+    return {
+      angle: r.angle,
+      power: r.power,
+      club: PUTTER.id,
+      expect: { x: r.trial.x, y: r.trial.y, holed: r.trial.holed },
     };
   }
 

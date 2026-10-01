@@ -12,8 +12,11 @@
  * real ball's impact takes most of it), with a moderate roll after, which a ball rolls down a steep slope past.
  */
 
-/** The kinds of ground, the byte a tile of a golf hole names; nought is none, the minigolf's own grass. */
-export const LIE = { none: 0, tee: 1, fairway: 2, rough: 3, green: 4, sand: 5 } as const;
+/**
+ * The kinds of ground, the byte a tile of a golf hole names; nought is none, the minigolf's own grass. `cut` is the short
+ * rough round a green (its fringe) and along a fairway (the first cut): mown, but longer than either, so a little slower.
+ */
+export const LIE = { none: 0, tee: 1, fairway: 2, rough: 3, green: 4, sand: 5, cut: 6 } as const;
 export type Lie = (typeof LIE)[keyof typeof LIE];
 
 export interface Surface {
@@ -46,7 +49,22 @@ export const SURFACES: readonly Surface[] = [
   { name: 'rough', roll: 60, keep: 0.12, bounce: 0.08, power: 0.76, loft: 0, wild: 1.5 },
   { name: 'putting green', roll: 16, keep: 0.45, bounce: 0.3, power: 1, loft: 0, wild: 1 },
   { name: 'sand', roll: 60, keep: 0.03, bounce: 0.03, power: 0.66, loft: 6, wild: 1.25 },
+  { name: 'first cut', roll: 26, keep: 0.28, bounce: 0.2, power: 0.97, loft: 0, wild: 1.1 },
 ];
+
+/**
+ * How fast the putting greens run, as the steady slowing of a ball rolling on one, in yards a second a second: less is
+ * faster, the way a real green's speed is the distance a ball runs. `normal` is the table's own; a hole may ask for any
+ * from `fast` to `slow` (`HoleDef.greens`), and the first cut round a green runs as much slower than it as it always did.
+ */
+export const GREENS = { fast: 12, normal: 16, slow: 22 } as const;
+
+/** How steadily `lie` slows a rolling ball, in yards a second a second, on a hole whose greens run at `greens`: the table's own on all but the green and its first cut. */
+export function rollOf(lie: Lie, greens: number = GREENS.normal): number {
+  if (lie === LIE.green) return greens;
+  if (lie === LIE.cut) return SURFACES[LIE.cut].roll * (greens / GREENS.normal);
+  return SURFACES[lie].roll;
+}
 
 /**
  * A landing: the slowest ball into the ground, in units a second, that is one at all (a slower is a ball rolling on),

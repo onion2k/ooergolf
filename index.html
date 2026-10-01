@@ -364,6 +364,32 @@
     display: none;
   }
   /*
+   * how fast the greens run, and the break of the putt the ball lies for, under the wind on a hole that has a contour: the
+   * putt's line is allowed to wrap and adds nothing to the panel's width (zero wide, filling what the panel is), so it never
+   * widens the panel past the purse on a phone
+   */
+  #greens,
+  #putt {
+    grid-column: 1 / -1;
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1.25;
+    color: var(--ink-soft);
+  }
+  #greens {
+    grid-row: 7;
+    margin-top: 2px;
+    white-space: nowrap;
+  }
+  #putt {
+    grid-row: 8;
+    width: 0;
+    min-width: 100%;
+    margin-top: 2px;
+    white-space: normal;
+    font-variant-numeric: tabular-nums;
+  }
+  /*
    * the map of a golf hole, at the left edge halfway down where neither the words at the top nor the bag and switch
    * at the bottom are: a picture over the course, which a finger passes through to aim
    */
@@ -1022,6 +1048,8 @@
       ><svg id="windArrow" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1 14 8H10.2V15H5.8V8H2Z" /></svg
       ><span id="windText"></span
     ></small>
+    <small id="greens" hidden></small>
+    <small id="putt" hidden></small>
   </div>
   <div class="panel" id="purse" hidden>
     <span class="coin"><b id="coins">0</b><em> coins</em></span

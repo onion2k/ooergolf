@@ -28,6 +28,8 @@ import { COURSES, type HoleDef } from '../src/course';
 import { Game, type GameEvents } from '../src/game';
 import { Input } from '../src/input';
 import {
+  arrowProblems,
+  breakProblems,
   checkInvariants,
   knockProblems,
   landingProblems,
@@ -35,6 +37,9 @@ import {
   previewProblems,
   viewProblems,
 } from '../src/invariants';
+import { breakOf, greenArrows } from '../src/green';
+import { golfHole } from '../src/golf';
+import { LINKS_SPECS } from '../src/links';
 import { Previewer } from '../src/preview';
 import { RANGE } from '../src/range';
 import { BAG } from '../src/bag';
@@ -43,6 +48,7 @@ import { lieAt } from '../src/arena';
 import { Progress, memoryStore } from '../src/progress';
 import { seeded } from '../src/random';
 import { groundAt } from '../src/shot';
+import { GREENS, LIE } from '../src/surfaces';
 
 const DT = 1 / 60;
 
@@ -55,6 +61,32 @@ export const WINDY: readonly HoleDef[] = RANGE.map((hole, k) => ({
   name: `${hole.name} windy`,
   wind: [12, 18, 6][k],
 }));
+
+/**
+ * How fast the greens of each of the contoured holes run, in turn: the fastest, the slowest, and a fifth and an eighth of the
+ * way from the fastest toward the slowest, so a monkey putts on every speed a hole may have, and on the two ends of it.
+ */
+const CONTOURED_GREENS = [
+  GREENS.fast,
+  GREENS.slow,
+  GREENS.fast + 0.08 * (GREENS.slow - GREENS.fast),
+  GREENS.fast + 0.2 * (GREENS.slow - GREENS.fast),
+];
+
+let contouredHoles: readonly HoleDef[] | undefined;
+
+/**
+ * The nine holes of The Links made again with the steepest contour a green may have, at greens that run at each of
+ * `CONTOURED_GREENS` in turn, under names of their own: where the monkey putts on ground that breaks and on every speed of
+ * green. Made the first time they are asked for and no oftener, as The Links are: some hundreds of milliseconds, which a run
+ * on other holes should not pay.
+ */
+export function contoured(): readonly HoleDef[] {
+  return (contouredHoles ??= LINKS_SPECS.map((spec, k) => ({
+    ...golfHole({ ...spec, contour: 1, greens: CONTOURED_GREENS[k % CONTOURED_GREENS.length] }),
+    name: `${spec.name} contoured`,
+  })));
+}
 
 /** What a player's buttons give a shape and a spin: straight or flat, and one way or the other, straight the likeliest for a shape. */
 const SHAPES = [0, 0, -1, 1];
@@ -175,6 +207,9 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
       course: null,
     };
     const between = (a: number, b: number) => a + random() * (b - a);
+    /** The chance of reading a green, apart from the monkey's own. */
+    const looking = seeded(seed * 13 + 5);
+    const glance = (a: number, b: number) => a + looking() * (b - a);
     /** A shape and a spin chosen for the next shot, on a golf hole, as a player's buttons do; the game keeps them within -1 to 1. */
     const choose = () => {
       if (!game.layout.golf) return;
@@ -189,6 +224,44 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
     const did = (what: string) => {
       count(done, what);
       log.push(`frame ${frame}: ${what}`);
+    };
+    /**
+     * A player reading a green: done on a chance of its own, so that it adds to a run and takes nothing from the monkey's own
+     * stream, and every run of every other course plays as it did.
+     */
+    const read = () => {
+      // a player reading a green before a putt: the break from where the ball lies and the arrows over the green, which
+      // are looked at and change nothing, draw none of the game's chance and are finite whatever the ball's lie
+      if (!game.layout.golf || !game.ready) return;
+      const { world, ball, layout } = game;
+      const digest = JSON.stringify([
+        game.t,
+        game.strokes,
+        world.x[ball],
+        world.y[ball],
+        world.z[ball],
+        game.shape,
+        game.spin,
+      ]);
+      const drawn = draws;
+      const arrows = greenArrows(layout);
+      const bad = [...breakProblems(game), ...arrowProblems(layout, arrows)];
+      // and the break from anywhere on the hole a player could drop a ball, not only where it lies
+      for (let k = 0; k < 3; k++) {
+        const x = glance(layout.bounds.minX, layout.bounds.maxX),
+          y = glance(layout.bounds.minY, layout.bounds.maxY);
+        const there = breakOf(layout, x, y, game.def.greens);
+        if (!Number.isFinite(there.across) || !Number.isFinite(there.rise))
+          bad.push(`the break from ${x.toFixed(1)},${y.toFixed(1)} is ${there.across} across and ${there.rise} up`);
+      }
+      if (bad.length) throw new Error(`reading the green: ${bad.join('; ')}`);
+      if (
+        digest !==
+        JSON.stringify([game.t, game.strokes, world.x[ball], world.y[ball], world.z[ball], game.shape, game.spin])
+      )
+        throw new Error('reading the green changed the game');
+      if (draws !== drawn) throw new Error(`reading the green drew ${draws - drawn} numbers of the game's chance`);
+      did('read the break');
     };
     /** Everything a player can make happen, each as often as it is weighted. */
     const actions: [number, () => void][] = [
@@ -216,6 +289,28 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
           // what it plans is a shot, from wherever the ball lies
           const bad = planProblems(game, shot);
           if (bad.length) throw new Error(`the autopilot planned no shot: ${bad.join('; ')}`);
+          // a putt on a green is held to the break the player is shown: aimed the way it says, never wildly off it. `off` is
+          // counter-clockwise from the line to the cup, which is to the left, and `across` is positive to the right, so a
+          // putt aimed as the break says has them cancel
+          if (game.layout.golf && shot.club === 'putter') {
+            const { world, ball, layout } = game;
+            const from = { x: world.x[ball], y: world.y[ball] };
+            if (lieAt(layout, from.x, from.y) === LIE.green) {
+              const far = Math.hypot(layout.cup.x - from.x, layout.cup.y - from.y);
+              const off =
+                Math.atan2(
+                  Math.sin(shot.angle - Math.atan2(layout.cup.y - from.y, layout.cup.x - from.x)),
+                  Math.cos(shot.angle - Math.atan2(layout.cup.y - from.y, layout.cup.x - from.x)),
+                ) * far;
+              const { across } = breakOf(layout, from.x, from.y, game.def.greens);
+              told.push(...breakProblems(game));
+              if (Math.abs(off + across) > 1 + 0.1 * far || (Math.abs(across) > 1.45 && off * across >= 0))
+                told.push(
+                  `a putt of ${far.toFixed(1)} was aimed ${off.toFixed(2)} off the cup, where the break says ${across.toFixed(2)}, on greens that run at ${game.def.greens ?? GREENS.normal}`,
+                );
+              did('putt by the break');
+            }
+          }
           if (shot.club) game.pick(shot.club);
           // mostly as planned, which is straight and flat, and now and then with whatever else a player may choose
           if (!game.layout.golf) {
@@ -474,7 +569,10 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
 
     for (frame = 1; frame <= frames; frame++) {
       if (busy > 0) busy--;
-      else act();
+      else {
+        if (game.layout.golf && looking() < 0.04) read();
+        act();
+      }
       game.step(DT);
       // a knock told wrongly is told once, and waits for no check
       if (told.length) return fail(told.splice(0));

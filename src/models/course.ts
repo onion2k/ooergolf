@@ -16,7 +16,7 @@ import { MeshBuilder, type Mesh } from 'artshape-render/mesh/types';
 import { PALETTE, ROUGH } from './palette';
 import { PATTERN, matte, type Colour, type Model, type V3 } from './part';
 import { at, ballProfile, built, lathe, lifted, type Turned } from './shapes';
-import { tri } from '../meshes';
+import { face, tri } from '../meshes';
 
 /**
  * The cup's figures: how deep it is drawn; how wide its gold rim is, a bead
@@ -354,4 +354,21 @@ export function golfBall(
 /** A mesh as built on level ground, or laid on the ground's `height` round the cup's middle where the ground slopes. */
 function onGround(mesh: Mesh, height?: (x: number, y: number) => number): Mesh {
   return height ? lifted(mesh, height) : mesh;
+}
+
+/**
+ * The arrow that shows which way a putting green leans: one flat arrow a unit long, lying on the grass with its tip at
+ * +x and its tail at -x, a thin shaft and a head that is `headShare` of its length. The scene turns it to point downhill,
+ * the way a ball is carried, and sizes it to how steep the ground is there; it is laid on the ground's own slope and so
+ * has no thickness of its own to stand up off it. Without it a player sees a green's contour only from the way a putt
+ * goes wrong. Flat-shaded, a face at a time, and nothing like a toy sign: a pencil's line, not a board.
+ */
+export function breakArrow({ headShare = 0.3, shaft = 0.06, head = 0.2, colour = PALETTE.breakArrow } = {}): Model {
+  const neck = 0.5 - headShare;
+  const mesh = built((b) => {
+    // up, so the faces are wound counter-clockwise seen from above
+    face(b, [-0.5, -shaft, 0], [neck, -shaft, 0], [neck, shaft, 0], [-0.5, shaft, 0]);
+    tri(b, [neck, -head, 0], [0.5, 0, 0], [neck, head, 0]);
+  });
+  return { name: 'break arrow', parts: [{ name: 'arrow', mesh, material: matte(colour, ROUGH.paint) }], moving: [] };
 }

@@ -15,7 +15,7 @@ import { LIE } from './surfaces';
 import { TREE } from './trees';
 
 /** How much harder a ball is played over each kind of ground, as a multiple of the same distance of fairway. */
-const COST: Record<number, number> = { [LIE.sand]: 2, [LIE.rough]: 1.25 };
+const COST: Record<number, number> = { [LIE.sand]: 2, [LIE.rough]: 1.25, [LIE.cut]: 1.1 };
 /** How near a trunk a tile's middle may be for the tile to be under a canopy, as a share of the canopy's width. */
 const UNDER = 0.9;
 

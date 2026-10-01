@@ -277,6 +277,23 @@ describe('every hole made is a hole that can be played', () => {
   });
 });
 
+describe('a hole’s greens and contour, which are the spec’s and are copied to it', () => {
+  it('has the speed of its greens as HoleDef.greens when the spec says, and none when it does not, as a wind is', () => {
+    expect(hole({ greens: 13 }).greens).toBe(13);
+    expect(hole({ greens: 22 }).greens).toBe(22);
+    expect('greens' in hole()).toBe(false);
+    expect('wind' in hole()).toBe(false);
+    expect(hole({ wind: 8, greens: 14 }).wind).toBe(8);
+  });
+
+  it('is the same hole, the map and the hills, however fast its greens run, when it has no contour and they are the normal speed', () => {
+    expect(hole({ greens: 16 }).map).toEqual(hole().map);
+    expect(Array.from(hole({ greens: 16 }).terrain as Float32Array)).toEqual(
+      Array.from(hole().terrain as Float32Array),
+    );
+  });
+});
+
 describe('a spec that is not a hole', () => {
   const refused = (over: Partial<GolfSpec>, what: RegExp) => expect(() => hole(over)).toThrow(what);
 
@@ -295,6 +312,8 @@ describe('a spec that is not a hole', () => {
     refused({ ponds: [{ at: 1.4, side: 1, size: [3, 4] }] }, /pond/);
     refused({ ponds: [{ at: 0.5, side: 1, size: [4, 3] }] }, /pond/);
     refused({ steepness: 1.4 }, /steepness/);
+    refused({ contour: 1.5 }, /contour/);
+    refused({ greens: 3 }, /greens/);
   });
 
   it('is refused, and not made into a hole that cannot be played, when its trees will not fit', () => {

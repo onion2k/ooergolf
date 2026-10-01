@@ -5,7 +5,10 @@
  * rough, each placed where it suits and never where it would spoil the hole: off the tee and the cup, a tile from its
  * neighbours, and never so that no way three tiles wide is left from the tee to the cup. The ground is hills, as The Moors'
  * is, with the tee, the green and every bunker's bed levelled and every pond lying at nought, since the game's water is
- * at a fixed height under the ground.
+ * at a fixed height under the ground. A green may be given a contour, swells and swales in its ground that a putt breaks
+ * across (made with the terrain the physics already has, so putting is the minigolf's own model), and a speed; and the hole
+ * is mown last, a first cut one tile wide round the green and along both edges of the fairway, from the grass alone and
+ * with no chance spent, so that every hazard and tree is where it would be without it.
  *
  * Pure and seeded: the same spec is the same hole, and nothing here reaches for chance of its own. A spec that cannot be
  * made is refused, by name, and never returned as a hole that cannot be played. It is content's tool: handed a spec and
@@ -13,11 +16,12 @@
  */
 import { PHYSICS, TILE, layoutOf, slopeAt } from './arena';
 import type { HoleDef } from './course';
-import { FEELS, gradientNoise, noiseGround, type Feel, type Flat } from './noise';
+import { GREEN as GREEN_RULES } from './green';
+import { FEELS, gradientNoise, greenContour, noiseGround, smoothstep, type Feel, type Flat } from './noise';
 
 import { seeded, type Random } from './random';
 import { WIND } from './shaping';
-import { LIE, SURFACES } from './surfaces';
+import { GREENS, LIE, rollOf } from './surfaces';
 
 /** A pond: how far along the way of play it lies, which side of it (nought is across it, on the line) and how big, in tiles of radius. */
 export interface PondSpec {
@@ -46,6 +50,13 @@ export interface GolfSpec {
   trees: number;
   /** How hard the wind blows on the hole, in miles an hour: calm unless told. See `HoleDef.wind`. */
   wind?: number;
+  /**
+   * How much the green is contoured, from nought (level, as it was) to one (the most a green may be, which is 5 per
+   * cent slope): it has swells and swales in it, which a putt breaks across. See `green.ts`.
+   */
+  contour?: number;
+  /** How fast the greens are: `HoleDef.greens`. */
+  greens?: number;
 }
 
 /** How wide the rough is either side of the fairway, and how wide out of bounds is beyond it, in tiles, and the rock beyond that. */
@@ -66,17 +77,28 @@ const WANDER = { fairway: 0.22, rough: 0.3 };
 const WOBBLE = { two: 0.25, three: 0.15 };
 /** How far a pond's ground and a bunker's take to come back to the noise, as a share of the feel's swell: as `open.ts` has it. */
 const BLEND = { pond: 0.3, sand: 0.12 };
-/** The play a ball rolls on, which a way three tiles wide must run over: fairway, rough, green, the tee and its box, the cup and sand. */
-const PLAY = 'frgtTCs';
+/** The play a ball rolls on, which a way three tiles wide must run over: fairway, rough, the first cut, green, the tee and its box, the cup and sand. */
+const PLAY = 'frcgtTCs';
 const SAMPLES = 16;
 /** How much gentler the ground is made each time the fairway is found too steep to rest a ball, and how many times it is tried. */
 const GENTLER = { by: 0.93, tries: 8 };
 /** How high a pond's ground may stand before it is levelled, as a share of the ground's height: a hollow, or its bank is a pit's wall and the hills round it are scaled flat. */
 const HOLLOW = 0.6;
+/**
+ * The plate a contoured green stands on, in tiles past the green's edge: the ground is exactly the green's own (the cup's
+ * level, the tilt through it and its swells on that) as far as the physics' smoothing reaches (two tiles) from the last tile
+ * of green, so what the game reads as a green's slope is the contour's and not the hills'; and it comes back to the hills
+ * over `blend` more tiles, or as many more up to `most` as it takes for no step between tiles to be steeper than the hills'
+ * own and for the fairway under it to rest a ball: the plate is a plane, and the hills round it are not, so a short blend is
+ * a cliff where they stand high or low. The tilt is carried on through the blend, which is what tapers it, so the field
+ * is made to reach as far as the blend can.
+ */
+const PLATE = { full: 2, blend: 3, most: 24 };
 
 /** A spec that is not a hole is refused here, by what is wrong with it. */
 function refuse(spec: GolfSpec) {
-  const { name, par, seed, length, bend, width, steepness, bunkers, ponds, trees, corner, wind } = spec;
+  const { name, par, seed, length, bend, width, steepness, bunkers, ponds, trees, corner, wind, contour, greens } =
+    spec;
   const fault = (what: string) => new RangeError(`${name || 'a golf hole'}: ${what}`);
   if (!name) throw new RangeError('a golf hole has to have a name');
   if (!Number.isInteger(par) || par < 1) throw fault(`its par is a whole number from one, not ${par}`);
@@ -89,6 +111,10 @@ function refuse(spec: GolfSpec) {
   if (wind !== undefined && !(wind >= 0 && wind <= WIND.most))
     throw fault(`its wind is from nought to ${WIND.most} miles an hour, not ${wind}`);
   if (!(steepness > 0 && steepness < 1)) throw fault(`its steepness is between nought and one, not ${steepness}`);
+  if (contour !== undefined && !(contour >= 0 && contour <= 1))
+    throw fault(`its contour is from nought to one, not ${contour}`);
+  if (greens !== undefined && !(greens >= GREENS.fast && greens <= GREENS.slow))
+    throw fault(`its greens run from ${GREENS.fast} (fast) to ${GREENS.slow} (slow), not ${greens}`);
   for (const [what, n] of [
     ['fairway bunkers', bunkers.fairway],
     ['greenside bunkers', bunkers.green],
@@ -159,8 +185,11 @@ function at(points: Pt[], s: number): { p: Pt; dir: Pt } {
   throw new Error('unreachable');
 }
 
-/** Whether the tee, the fairway and the green of a hole are ground a ball rests on: no steeper than their roll holds it against gravity. */
-function rests(l: ReturnType<typeof layoutOf>): boolean {
+/**
+ * Whether the tee, the fairway and the green of a hole are ground a ball rests on: no steeper than their roll holds it
+ * against gravity, which is the green's own speed on a green, since a fast green holds a ball on less of a slope.
+ */
+function rests(l: ReturnType<typeof layoutOf>, greens: number | undefined): boolean {
   for (let t = 0; t < l.cols * l.rows; t++) {
     const lie = l.lie[t];
     if (l.solid[t] || l.oob[t] || (lie !== LIE.fairway && lie !== LIE.green && lie !== LIE.tee)) continue;
@@ -168,7 +197,7 @@ function rests(l: ReturnType<typeof layoutOf>): boolean {
       y = l.originY + (Math.floor(t / l.cols) + 0.5) * TILE;
     const [sx, sy] = slopeAt(l, x, y);
     const s = Math.hypot(sx, sy);
-    if (s / Math.sqrt(1 + s * s) > (0.97 * SURFACES[lie].roll) / PHYSICS.gravity) return false;
+    if (s / Math.sqrt(1 + s * s) > (0.97 * rollOf(lie, greens)) / PHYSICS.gravity) return false;
   }
   return true;
 }
@@ -176,9 +205,38 @@ function rests(l: ReturnType<typeof layoutOf>): boolean {
 /** A tile of the map: its column, and its row from the south. */
 type Tile = [number, number];
 
+/**
+ * The first cut, laid on a finished hole: the rough and the fairway that lie within a tile (eight ways, so a fringe has no
+ * gap at a corner) of the putting green become `c`, a fringe three yards wide all the way round it, and so does the rough
+ * within a tile of the fairway, a first cut along both its edges. Only a tile that is exactly `r` or `f` is ever turned, so
+ * sand, water, out of bounds, rock, a tree, the tee and its box and the cup are as they were; and it is done last, from the
+ * grass alone, so nothing placed before it (a hazard, a tree, the way of play) is anywhere else for it, and it spends no
+ * chance. Judged against the grid as it was, so the cut does not spread tile by tile.
+ */
+function mown(grid: readonly (readonly string[])[]): string[][] {
+  const rows = grid.length,
+    cols = grid[0].length;
+  const out = grid.map((row) => row.slice());
+  const near = (c: number, r: number, kinds: string) => {
+    for (let dr = -1; dr <= 1; dr++)
+      for (let dc = -1; dc <= 1; dc++) {
+        const cc = c + dc,
+          rr = r + dr;
+        if ((dc || dr) && cc >= 0 && rr >= 0 && cc < cols && rr < rows && kinds.includes(grid[rr][cc])) return true;
+      }
+    return false;
+  };
+  for (let r = 0; r < rows; r++)
+    for (let c = 0; c < cols; c++) {
+      const here = grid[r][c];
+      if (here === 'f' ? near(c, r, 'gC') : here === 'r' && (near(c, r, 'gC') || near(c, r, 'f'))) out[r][c] = 'c';
+    }
+  return out;
+}
+
 export function golfHole(spec: GolfSpec): HoleDef {
   refuse(spec);
-  const { name, par, seed, feel, steepness, width, bunkers, ponds, trees, wind } = spec;
+  const { name, par, seed, feel, steepness, width, bunkers, ponds, trees, wind, greens, contour = 0 } = spec;
   const random = seeded(seed);
   const { points, total } = way(spec);
   const shape = gradientNoise(seed * 3 + 1);
@@ -420,16 +478,88 @@ export function golfHole(spec: GolfSpec): HoleDef {
     if (!placed) throw fail('a tree', n, trees);
   }
 
-  const map = grid
-    .slice()
-    .reverse()
-    .map((row) => row.join(''));
-  const flat = layoutOf(map);
+  const rowsOf = (g: readonly (readonly string[])[]) =>
+    g
+      .slice()
+      .reverse()
+      .map((row) => row.join(''));
+  // the ground is made against the hole as it was drawn, and the first cut laid on it after, so that the cut changes
+  // what a ball rolls on and not the hills it rolls over
+  const drawn = rowsOf(grid);
+  const map = rowsOf(mown(grid));
+  const flat = layoutOf(drawn);
+  // the green's swells and swales, if it is to have any: made once, for the tiles of green the hole is drawn with
+  const greenTiles: number[] = [];
+  for (let t = 0; t < flat.cols * flat.rows; t++) if (flat.lie[t] === LIE.green) greenTiles.push(t);
+  const field =
+    contour > 0
+      ? greenContour(flat, {
+          seed,
+          x: cup[0],
+          y: cup[1],
+          radius: GREEN,
+          reach: GREEN + PLATE.full + PLATE.most + 2,
+          slope: contour * GREEN_RULES.steepest,
+          tiles: greenTiles,
+        })
+      : undefined;
+  /** The steepest step between neighbouring tiles of `h`, within the box of tiles from (c0, r0) to (c1, r1). */
+  const steepestStep = (h: Float32Array, c0: number, r0: number, c1: number, r1: number) => {
+    let most = 0;
+    for (let r = Math.max(0, r0); r <= Math.min(rows - 1, r1); r++)
+      for (let c = Math.max(0, c0); c <= Math.min(cols - 1, c1); c++) {
+        if (c < cols - 1 && c < c1) most = Math.max(most, Math.abs(h[r * cols + c + 1] - h[r * cols + c]));
+        if (r < rows - 1 && r < r1) most = Math.max(most, Math.abs(h[(r + 1) * cols + c] - h[r * cols + c]));
+      }
+    return most;
+  };
+  /**
+   * The ground with the contour laid on it: the green made a plane through the height the cup has, tilted, the swells on
+   * that, and the plate eased back into the hills, over as short a blend as keeps every step as gentle as the hills' own
+   * and the fairway under it resting a ball. A green whose
+   * swales would go under nought stands as much higher as they would, so the ground is never below nought, and the lifted
+   * green is eased into the hills as the rest of the plate is.
+   */
+  const contoured = (ground: Float32Array, swells: Float32Array): Float32Array => {
+    const level = ground[cup[1] * cols + cup[0]];
+    // the lift is for the green and its plate's level part: past it the plate is blended into ground that is not below nought
+    let lowest = 0;
+    for (let r = 0; r < rows; r++)
+      for (let c = 0; c < cols; c++)
+        if (Math.hypot(c - cup[0], r - cup[1]) <= GREEN + PLATE.full) lowest = Math.min(lowest, swells[r * cols + c]);
+    const top = level + Math.max(0, -(level + lowest));
+    const hills = steepestStep(ground, 0, 0, cols - 1, rows - 1);
+    // a plate that is tilted stands high or low of the hills where it ends, so a short blend is a slope steeper than a ball
+    // rests on, on the fairway that is under it: it is lengthened for that too, unless the hills alone are already too steep
+    // to rest one (the hole is then made gentler, and that is tried again)
+    const playable = rests(layoutOf(drawn, ground), greens);
+    let out = ground;
+    for (let blend = PLATE.blend; blend <= PLATE.most; blend++) {
+      const edge = GREEN + PLATE.full,
+        reach = Math.ceil(edge + blend) + 1;
+      out = Float32Array.from(ground);
+      for (let r = Math.max(0, cup[1] - reach); r <= Math.min(rows - 1, cup[1] + reach); r++)
+        for (let c = Math.max(0, cup[0] - reach); c <= Math.min(cols - 1, cup[0] + reach); c++) {
+          const t = r * cols + c;
+          const w = 1 - smoothstep(edge, edge + blend, Math.hypot(c - cup[0], r - cup[1]));
+          out[t] = Math.max(0, ground[t] + (top + swells[t] - ground[t]) * w);
+        }
+      if (
+        steepestStep(out, cup[0] - reach - 1, cup[1] - reach - 1, cup[0] + reach + 1, cup[1] + reach + 1) <= hills &&
+        (!playable || rests(layoutOf(drawn, out), greens))
+      )
+        break;
+    }
+    return out;
+  };
   // the ground, as steep as asked, and gentler by a little each time until the tee, the fairway and the green all rest a
-  // ball: a hole that cannot be played is never returned
+  // ball: a hole that cannot be played is never returned. It is tried against the hole as it was drawn, before the cut,
+  // so that the cut changes what a ball rolls on and not how steep a hole may be
   for (let k = 0, steep = steepness; k < GENTLER.tries; k++, steep *= GENTLER.by) {
-    const terrain = noiseGround(flat, { seed, feel, steepness: steep, flats });
-    if (rests(layoutOf(map, terrain))) return { name, par, map, terrain, ...(wind ? { wind } : {}) };
+    const ground = noiseGround(flat, { seed, feel, steepness: steep, flats });
+    const terrain = field ? contoured(ground, field) : ground;
+    if (rests(layoutOf(drawn, terrain), greens))
+      return { name, par, map, terrain, ...(wind ? { wind } : {}), ...(greens !== undefined ? { greens } : {}) };
   }
   throw new Error(`${name}: its fairway will not rest a ball, however gentle its hills`);
 }

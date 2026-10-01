@@ -40,7 +40,11 @@ much higher or lower, and a map of the hole sits at the side. A shot can be shap
 draw or a fade that curves in the air, and spun, backspin to check it and topspin to run
 it on, each chosen by a button in the bag; and the holes of The Links have a wind, shown
 under the strokes as an arrow and a speed, that pushes a ball for as long as it is in the
-air, and which the drawn flight already allows for. A
+air, and which the drawn flight already allows for. The greens of The Links have a first cut
+round them and a tilt and swells in them, and run fast or slow by the hole: while the ball
+rests on one, arrows over it show which way the ground carries a ball, the panel says how
+fast the greens are and how far to aim off the cup, and a putt being aimed is drawn as its own
+roll, curving across the slope to where it will stop. A
 machine that cannot keep up has the picture stepped down a rung at a time.
 
 The green is painted smooth in its mown stripes, and the rough round it is
@@ -106,6 +110,7 @@ fixed, and no baseline is moved to make it green.
     src/obstacles.ts   where a barrier, a windmill's gate and a belt are at any moment
     src/arena.ts       a hole's map read into a layout; the kinds of body, the hardest shot
     src/surfaces.ts    what each kind of ground does: roll, landing, hop, a club's cost from it
+    src/green.ts       a putting green's break and its arrows: which way the ground carries a putt
     src/bag.ts         the eight clubs of golf: loft, speed, carry
     src/flight.ts      a club, a power, an aim and a lie turned into a launch, with its scatter
     src/range.ts       the range: flat golf holes of tee, fairway, rough and green

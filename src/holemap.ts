@@ -48,6 +48,7 @@ const COLOUR = {
   fairway: screen(PALETTE.grassMown),
   rough: screen(PALETTE.playRough),
   green: screen(PALETTE.puttingGreenMown),
+  cut: screen(PALETTE.firstCut),
   sand: screen(PALETTE.sand),
   water: screen(PALETTE.waterMid),
   out: screen(PALETTE.oobGround),
@@ -99,6 +100,8 @@ function kindOf(layout: Layout, t: number): Rgb | null {
       return COLOUR.fairway;
     case LIE.green:
       return COLOUR.green;
+    case LIE.cut:
+      return COLOUR.cut;
     case LIE.rough:
       return COLOUR.rough;
     default:

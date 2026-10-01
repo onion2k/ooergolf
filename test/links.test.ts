@@ -5,15 +5,17 @@
  * called, that no two are alike, and that the round is finished on every seed.
  */
 import { describe, expect, it } from 'vitest';
-import { TILE, layoutOf } from '../src/arena';
+import { TILE, layoutOf, slopeAt } from '../src/arena';
 import { Autopilot } from '../src/autopilot';
 import { COURSES, CUP } from '../src/course';
 import { Game } from '../src/game';
+import { GREEN } from '../src/green';
 import { LINKS_SPECS, links } from '../src/links';
 import { checkInvariants } from '../src/invariants';
 import { terrainRefusal } from '../src/physics';
 import { Progress, memoryStore } from '../src/progress';
 import { seeded } from '../src/random';
+import { GREENS, LIE } from '../src/surfaces';
 import { Route } from '../src/route';
 import { DT } from './helpers';
 
@@ -30,6 +32,51 @@ describe('The Links', () => {
     expect(Math.max(...holes.map((h) => h.par))).toBe(5);
     expect(holes.reduce((a, h) => a + h.par, 0)).toBe(36);
     expect(new Set(holes.map((h) => h.name)).size).toBe(9);
+  });
+
+  it('has greens each of its own: a contour and a speed on every hole, the opener gentle and normal, the last the fastest and the most contoured', () => {
+    for (const spec of LINKS_SPECS) {
+      expect(spec.contour, spec.name).toBeGreaterThan(0);
+      expect(spec.contour, spec.name).toBeLessThanOrEqual(1);
+      expect(spec.greens, spec.name).toBeGreaterThanOrEqual(GREENS.fast);
+      expect(spec.greens, spec.name).toBeLessThanOrEqual(GREENS.slow);
+    }
+    const [first, ...rest] = LINKS_SPECS;
+    const last = LINKS_SPECS[LINKS_SPECS.length - 1];
+    expect(first.greens).toBe(GREENS.normal);
+    expect(first.contour).toBeLessThanOrEqual(0.3);
+    for (const spec of rest.slice(0, -1)) {
+      expect(spec.contour!, spec.name).toBeGreaterThanOrEqual(first.contour! + 0.2);
+      expect(spec.contour!, spec.name).toBeLessThanOrEqual(0.9);
+      expect(spec.greens!, spec.name).toBeGreaterThanOrEqual(13);
+      expect(spec.greens!, spec.name).toBeLessThanOrEqual(19);
+      expect(last.greens!, spec.name).toBeLessThan(spec.greens!);
+      expect(last.contour!, spec.name).toBeGreaterThan(spec.contour!);
+    }
+    // the holes carry the speed, and are not all alike: three or more distinct figures of each
+    expect(holes.map((h) => h.greens)).toEqual(LINKS_SPECS.map((s) => s.greens));
+    expect(new Set(LINKS_SPECS.map((s) => s.greens)).size).toBeGreaterThan(4);
+    expect(new Set(LINKS_SPECS.map((s) => s.contour)).size).toBeGreaterThan(4);
+  });
+
+  it('has a green whose steepest slope is the contour its spec asks for, on every hole, and a first cut round it', () => {
+    holes.forEach((h, i) => {
+      const l = layoutOf(h.map, h.terrain);
+      let steepest = 0;
+      for (let t = 0; t < l.cols * l.rows; t++) {
+        if (l.solid[t] || l.sand[t] || l.lie[t] !== LIE.green) continue;
+        const [sx, sy] = slopeAt(
+          l,
+          l.originX + ((t % l.cols) + 0.5) * TILE,
+          l.originY + (Math.floor(t / l.cols) + 0.5) * TILE,
+        );
+        steepest = Math.max(steepest, Math.hypot(sx, sy));
+      }
+      const want = LINKS_SPECS[i].contour! * GREEN.steepest;
+      expect(steepest / want, h.name).toBeGreaterThan(0.9);
+      expect(steepest / want, h.name).toBeLessThan(1.1);
+      expect(h.map.join('').includes('c'), `${h.name} has a first cut`).toBe(true);
+    });
   });
 
   it('is a hole of each of the lengths a golfer calls by a par: a three is 150 to 220 yards, a four 350 to 450, a five 500 to 600', () => {
@@ -109,6 +156,33 @@ describe('The Links', () => {
       expect(crow, h.name).toBeLessThanOrEqual(LINKS_SPECS[i].length + TILE);
       expect(crow, h.name).toBeGreaterThan(LINKS_SPECS[i].length * 0.75);
     });
+  });
+
+  it('has the hills it had before it had contoured greens, from thirty-four tiles of the cup outward, to the digit', () => {
+    // each hole's terrain beyond the plate the green stands on, hashed as it was on 1 October 2026 before the green was given a
+    // contour: a contour is the green's, and what was chosen by playing forty seeds and looking is the hills round it
+    const WAS: Record<string, number> = {
+      'The Opener': 4003916115,
+      'Water Carry': 3983871294,
+      'Long Bend': 1190595892,
+      'Tight Left': 3378659102,
+      'Island Green': 206486223,
+      'Rushing Brook': 2319811042,
+      'The Big Dogleg': 3741846546,
+      'The Straight Mile': 3631621028,
+      'Home Stretch': 334171249,
+    };
+    for (const h of holes) {
+      const l = layoutOf(h.map, h.terrain);
+      const cx = Math.floor((l.cup.x - l.originX) / TILE),
+        cy = Math.floor((l.cup.y - l.originY) / TILE);
+      let hash = 2166136261;
+      for (let i = 0; i < l.terrain.length; i++) {
+        if (Math.hypot((i % l.cols) - cx, Math.floor(i / l.cols) - cy) <= 34) continue;
+        hash = Math.imul(hash ^ Math.round(l.terrain[i] * 10000), 16777619) >>> 0;
+      }
+      expect(hash, h.name).toBe(WAS[h.name]);
+    }
   });
 
   it('has a wind on every hole, a mix from a breath to a fresh breeze and none above fifteen, as each spec says, with a hole or two of ten or more', () => {

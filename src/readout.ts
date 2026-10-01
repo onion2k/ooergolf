@@ -5,6 +5,7 @@
  * tested without a page; the page shows the words and never works the numbers out.
  */
 import { heightAt, type Layout } from './arena';
+import { speedName, type Break } from './green';
 import { SURFACES, type Lie } from './surfaces';
 
 export interface Pin {
@@ -86,4 +87,28 @@ export function windArrow(x: number, y: number, azimuth: number): number {
   const sx = x * Math.cos(azimuth) - y * Math.sin(azimuth),
     sy = x * Math.sin(azimuth) + y * Math.cos(azimuth);
   return (Math.atan2(sx, sy) * 180) / Math.PI;
+}
+
+/** The least break or climb, in yards, a putt's words say anything of: under it the putt is straight, or level, for a golfer's purpose. */
+const NOTICE = 0.1;
+
+/**
+ * A putt's break as words, from where the ball lies to the cup: how far to aim off the cup and to which side, and how much
+ * it climbs or falls, each to a tenth of a yard and each only when it is that much; "straight" when neither is. The
+ * numbers are `breakOf`'s, which the page works out when the ball comes to rest and never in a frame.
+ */
+export function puttText(b: Break): string {
+  const parts: string[] = [];
+  if (Number.isFinite(b.across) && Math.abs(b.across) >= NOTICE)
+    parts.push(`aim ${Math.abs(b.across).toFixed(1)} yd ${b.across > 0 ? 'right' : 'left'}`);
+  if (Number.isFinite(b.rise) && Math.abs(b.rise) >= NOTICE)
+    parts.push(`${b.rise > 0 ? 'uphill' : 'downhill'} ${Math.abs(b.rise).toFixed(1)} yd`);
+  return `Putt: ${parts.length ? parts.join(', ') : 'straight'}`;
+}
+
+/** How fast a hole's greens run, as a word, from its own speed; none for a hole that has not set one, so it reads as it always did. */
+export function greensText(greens: number | undefined): string | null {
+  if (greens === undefined) return null;
+  const name = speedName(greens);
+  return `${name === 'medium' ? 'Medium' : name === 'fast' ? 'Fast' : 'Slow'} greens`;
 }

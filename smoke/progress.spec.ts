@@ -13,8 +13,13 @@
  * stage the game's invariants are checked.
  */
 import { expect, test, type Page } from '@playwright/test';
+import { TILE, layoutOf } from '../src/arena';
+import { breakOf } from '../src/green';
+import { puttText } from '../src/readout';
 import { scoreName } from '../src/score';
-import { drag, start, watch } from './game';
+import { LIE } from '../src/surfaces';
+import { drag, puttingHole, start, watch } from './game';
+import { CONTRAST, THUMB, read } from './panels';
 
 /** Play `frames` frames, and check nothing that must hold has broken. */
 async function play(page: Page, frames: number, stage: string) {
@@ -378,6 +383,7 @@ test('the round finished to the card, and begun again from its button', async ({
     press: null,
     wind: null,
     controls: { shown: false, shape: 0, shapeText: 'Shape: Straight', spin: 0, spinText: 'Spin: Flat' },
+    arrows: { shown: false, count: 0 },
   });
   expect(card.glints).toBeLessThanOrEqual(1);
   await page.locator('#again').click();
@@ -972,15 +978,35 @@ test.describe('aiming a golf shot', () => {
     expect(problems).toEqual([]);
   });
 
-  test('the putter is aimed by its dots as it always was: no arc, no ring, and the words are the club and its carry', async ({
+  test('the putter is aimed by its dots as it always was, and on a hole with greens that run at a speed its roll is drawn too: along the ground to where it rests', async ({
     page,
   }) => {
     const problems = watch(page);
-    await longBend(page);
+    // a hole with no speed to its greens, The Range's: the dots and nothing else, no arc, no ring
+    await start(page, { seed: 11, paused: true });
+    await page.evaluate(() => {
+      window.game!.chooseCourse('The Range');
+      window.game!.startHole(1);
+      window.game!.step(300);
+    });
     await page.locator('#bagClubs button[data-club="putter"]').click();
     await page.evaluate(() => window.game!.step(300));
     await pull(page, 0.5);
     expect(await page.evaluate(() => window.game!.motions().shot)).toBeNull();
+    expect(await page.evaluate(() => window.game!.aiming())).not.toBeNull();
+    expect(await page.evaluate(() => window.game!.motions().pulse), 'the dots').toBeGreaterThan(0);
+    await page.mouse.up();
+
+    // The Links', whose greens have a speed: the same dots, and the roll as a line along the ground to a ring
+    await longBend(page);
+    await page.locator('#bagClubs button[data-club="putter"]').click();
+    await page.evaluate(() => window.game!.step(300));
+    await pull(page, 0.5);
+    const rolled = await page.evaluate(() => window.game!.motions().shot);
+    expect(rolled, 'the roll').not.toBeNull();
+    expect(rolled!.arc, 'dots along the ground').toBeGreaterThan(5);
+    expect(rolled!.ring, 'where it rests').not.toBeNull();
+    expect(rolled!.spread, 'a putt has no spread').toBeNull();
     expect(await page.evaluate(() => window.game!.aiming())).not.toBeNull();
     expect(await page.evaluate(() => window.game!.motions().pulse), 'the dots').toBeGreaterThan(0);
     await page.mouse.up();
@@ -1407,4 +1433,223 @@ test.describe('the grass of a golf hole', () => {
     expect(rough, 'the rough round a hole of minigolf').toBeGreaterThan(500);
     expect(problems).toEqual([]);
   });
+});
+
+/** The hole the putting tests play, its layout as the game builds it, and the middle of a tile of each kind of ground on it. */
+const PUTTING = puttingHole(12);
+const PUTTING_LAYOUT = layoutOf(PUTTING.map, Float32Array.from(PUTTING.terrain));
+function middleOf(lie: number, nth: number | 'far' = 0) {
+  const l = PUTTING_LAYOUT;
+  const found: { x: number; y: number }[] = [];
+  for (let t = 0; t < l.cols * l.rows; t++)
+    if (l.lie[t] === lie && !l.solid[t] && !l.oob[t])
+      found.push({ x: l.originX + ((t % l.cols) + 0.5) * TILE, y: l.originY + (Math.floor(t / l.cols) + 0.5) * TILE });
+  // the one nearest the cup, then the ones after it: a tile the ball is sure to rest on, and not the cup's own
+  found.sort((a, b) => Math.hypot(a.x - l.cup.x, a.y - l.cup.y) - Math.hypot(b.x - l.cup.x, b.y - l.cup.y));
+  return nth === 'far' ? found.filter((p) => p.y < l.cup.y).at(-1)! : found[nth];
+}
+
+/** The putting hole played in the page, its ball put down at (x, y) and let come to rest, the putter in hand. */
+async function puttingAt(page: Page, at: { x: number; y: number } | null, hole: object = PUTTING) {
+  await page.evaluate(
+    ([h, p]) => {
+      const g = window.game!;
+      const def = h as { terrain: number[] };
+      g.playCourse([{ ...def, terrain: Float32Array.from(def.terrain) } as never]);
+      g.step(30);
+      if (p) g.lay((p as { x: number; y: number }).x, (p as { x: number; y: number }).y);
+      for (let f = 0; f < 300 && !g.state().ready; f++) g.step(1);
+      g.step(2);
+      g.club('putter');
+      // the camera eases to the putter's view, a few frames
+      g.step(90);
+    },
+    [hole, at],
+  );
+}
+
+test.describe('putting on a golf hole whose greens have a speed and a contour', () => {
+  test('says how fast the greens run, shows the arrows and the break while the ball rests on the green or the first cut, and nothing off them', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 5, paused: true });
+    // on the tee: the speed is told, and nothing of a putt, since the ball is not on a green
+    await puttingAt(page, null);
+    const at = await page.evaluate(() => {
+      const g = window.game!;
+      return { state: g.state(), view: g.view(), arrows: g.content().arrows, motions: g.motions().arrows };
+    });
+    expect(at.state.greens, 'the hole’s own speed').toBe(12);
+    expect(at.state.greenSpeed).toBe('fast');
+    expect(at.view.greens).toBe('Fast greens');
+    expect(at.view.putt, 'no putt from the tee').toBeNull();
+    expect(at.arrows, 'the contour has arrows to show').toBeGreaterThan(20);
+    expect(at.motions, 'and none shown from the tee').toEqual({ shown: false, count: 0 });
+
+    // on the green, and on the first cut round it: the arrows are up, and the break is said as the layout says it
+    for (const [kind, lie, nth] of [
+      ['green', LIE.green, 3],
+      ['cut', LIE.cut, 2],
+      ['green again', LIE.green, 8],
+    ] as const) {
+      const spot = middleOf(lie, nth);
+      await puttingAt(page, spot);
+      const now = await page.evaluate(() => {
+        const g = window.game!;
+        return { ball: g.ball(), view: g.view(), arrows: g.motions().arrows, count: g.content().arrows };
+      });
+      expect(now.ball.ready, `${kind}: at rest`).toBe(true);
+      expect(now.arrows, `${kind}: the arrows are shown`).toEqual({ shown: true, count: now.count });
+      const want = puttText(breakOf(PUTTING_LAYOUT, now.ball.x, now.ball.y, 12));
+      expect(now.view.putt, `${kind}: the break is said`).toBe(want);
+      await expect(page.locator('#putt')).toHaveText(want);
+      await expect(page.locator('#greens')).toHaveText('Fast greens');
+    }
+
+    // struck, the ball rolls and both are put away; at rest again, both are up and the break is the new place's
+    await page.evaluate(() => {
+      const g = window.game!;
+      g.shoot(Math.PI / 2, 0.3);
+      g.step(1);
+    });
+    const rolling = await page.evaluate(() => ({ view: window.game!.view(), arrows: window.game!.motions().arrows }));
+    expect(rolling.arrows, 'put away while it rolls').toEqual({ shown: false, count: 0 });
+    expect(rolling.view.putt, 'and the break with them').toBeNull();
+    await untilReady(page, 'after the putt');
+    const after = await page.evaluate(() => ({
+      ball: window.game!.ball(),
+      view: window.game!.view(),
+      arrows: window.game!.motions().arrows,
+    }));
+    expect(after.arrows.shown).toBe(true);
+    expect(after.view.putt).toBe(puttText(breakOf(PUTTING_LAYOUT, after.ball.x, after.ball.y, 12)));
+
+    // on the rough or the fairway: neither
+    for (const lie of [LIE.rough, LIE.fairway]) {
+      const l = PUTTING_LAYOUT;
+      let spot: { x: number; y: number } | undefined;
+      for (let t = 0; t < l.cols * l.rows && !spot; t++)
+        if (
+          l.lie[t] === lie &&
+          !l.oob[t] &&
+          Math.hypot(l.originX + ((t % l.cols) + 0.5) * TILE - l.cup.x, 0) > 40 &&
+          t % 7 === 0
+        )
+          spot = { x: l.originX + ((t % l.cols) + 0.5) * TILE, y: l.originY + (Math.floor(t / l.cols) + 0.5) * TILE };
+      await puttingAt(page, spot!);
+      const off = await page.evaluate(() => ({ view: window.game!.view(), arrows: window.game!.motions().arrows }));
+      expect(off.arrows, `lie ${lie}`).toEqual({ shown: false, count: 0 });
+      expect(off.view.putt, `lie ${lie}`).toBeNull();
+    }
+    expect(await page.evaluate(() => window.game!.invariants())).toEqual([]);
+    expect(problems).toEqual([]);
+  });
+
+  test('a golf hole with no greens speed reads as it did: no speed, no break, and no arrows on its level green', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 5, paused: true });
+    const flat = { ...puttingHole(null), terrain: puttingHole(null).terrain.map(() => 0) };
+    await puttingAt(page, middleOf(LIE.green, 3), flat);
+    const seen = await page.evaluate(() => {
+      const g = window.game!;
+      return { state: g.state(), view: g.view(), arrows: g.motions().arrows, count: g.content().arrows };
+    });
+    expect(seen.state.greens).toBeNull();
+    expect(seen.state.greenSpeed).toBeNull();
+    expect(seen.view.greens).toBeNull();
+    expect(seen.view.putt, 'no break line on a hole that has not set its greens').toBeNull();
+    expect(seen.count).toBe(0);
+    expect(seen.arrows).toEqual({ shown: false, count: 0 });
+    await expect(page.locator('#greens')).toBeHidden();
+    await expect(page.locator('#putt')).toBeHidden();
+    expect(problems).toEqual([]);
+  });
+
+  test('the putt’s roll is drawn before it is struck, and the ball comes to rest where it says, after breaking across the slope', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 5, paused: true });
+    // a long putt across the lean, the ground rising to the east
+    const spot = middleOf(LIE.green, 'far');
+    await puttingAt(page, spot);
+    const from = await page.evaluate(() => {
+      const b = window.game!.ball();
+      return { ball: b, at: window.game!.project(b.x, b.y, b.z) };
+    });
+    // pulled back down the page and across, as a player aims, and held
+    await drag(page, from.at, { x: from.at.x - 20, y: from.at.y + 200 }, { hold: true });
+    await page.evaluate(() => window.game!.step(2));
+    const aimed = await page.evaluate(() => ({ aim: window.game!.aiming(), shot: window.game!.motions().shot }));
+    expect(aimed.aim, 'a putt is being aimed').not.toBeNull();
+    expect(aimed.shot, 'and its roll is drawn').not.toBeNull();
+    expect(aimed.shot!.arc, 'in dots along the ground').toBeGreaterThan(8);
+    expect(aimed.shot!.ring, 'to the ring where it rests').not.toBeNull();
+    expect(aimed.shot!.spread, 'a putt has no spread').toBeNull();
+    // the roll leaves the line it was aimed along: the green’s lean is in the picture
+    const dir = { x: Math.cos(aimed.aim!.angle), y: Math.sin(aimed.aim!.angle) };
+    const ring = aimed.shot!.ring!;
+    const across = Math.abs((ring.x - from.ball.x) * -dir.y + (ring.y - from.ball.y) * dir.x);
+    expect(across, 'the ring is off the aimed line by the break').toBeGreaterThan(0.3);
+    // the frame with the roll, the arrows and the cut drawn is inside the budget: they cost a few hundred triangles
+    const ms = await page.evaluate(() => window.game!.measureFrame());
+    console.log(`putting: a frame with the roll aimed and the arrows up, ${ms.toFixed(2)} ms`);
+    expect(ms, 'a frame of the putting green').toBeLessThan(5);
+    // let go: the ball comes to rest at the ring
+    await page.mouse.up();
+    await untilReady(page, 'after the aimed putt');
+    const rest = await page.evaluate(() => window.game!.ball());
+    expect(Math.hypot(rest.x - ring.x, rest.y - ring.y), 'the ball rests where the roll said').toBeLessThan(0.8);
+    expect(problems).toEqual([]);
+  });
+
+  for (const [label, viewport, touch] of [
+    ['a desk', { width: 1280, height: 800 }, false],
+    ['a phone', { width: 400, height: 860 }, true],
+  ] as const) {
+    test.describe(`on ${label}`, () => {
+      test.use({ viewport, hasTouch: touch, isMobile: touch });
+
+      test('the speed and break lines fit the panel and the screen, clear of the other panels, and are readable', async ({
+        page,
+      }) => {
+        const problems = watch(page);
+        await start(page, { seed: 5, paused: true });
+        await puttingAt(page, middleOf(LIE.green, 8));
+        const r = await read(page);
+        expect(r.outside, 'nothing past the screen').toEqual([]);
+        expect(r.scrollWidth).toBeLessThanOrEqual(viewport.width);
+        expect(r.texts.filter((t) => t.ratio < CONTRAST).map((t) => `"${t.text}" ${t.ratio}:1`)).toEqual([]);
+        expect(
+          r.texts.some((t) => t.text.startsWith('Putt:')),
+          'the break line is read',
+        ).toBe(true);
+        expect(r.texts.some((t) => t.text === 'Fast greens')).toBe(true);
+        for (const b of r.buttons) expect(b.height, b.text).toBeGreaterThanOrEqual(Math.min(THUMB, 30));
+        const box = async (sel: string) => (await page.locator(sel).boundingBox())!;
+        const apart = (a: { x: number; y: number; width: number; height: number }, b: typeof a) =>
+          a.x + a.width <= b.x || b.x + b.width <= a.x || a.y + a.height <= b.y || b.y + b.height <= a.y;
+        const strokes = await box('#strokes');
+        for (const sel of ['#greens', '#putt']) {
+          const b = await box(sel);
+          expect(b.x, `${sel} in the panel: left`).toBeGreaterThanOrEqual(strokes.x - 1);
+          expect(b.x + b.width, `${sel} in the panel: right`).toBeLessThanOrEqual(strokes.x + strokes.width + 1);
+          expect(b.y + b.height, `${sel} in the panel: bottom`).toBeLessThanOrEqual(strokes.y + strokes.height + 1);
+        }
+        const wind = await box('#wind').catch(() => null);
+        const pin = await box('#pin');
+        expect((await box('#greens')).y, 'under the pin').toBeGreaterThanOrEqual(pin.y + pin.height - 1);
+        expect((await box('#putt')).y, 'under the speed').toBeGreaterThanOrEqual(
+          (await box('#greens')).y + (await box('#greens')).height - 1,
+        );
+        void wind;
+        for (const other of ['#purse', '#holePanel', '#bag', '#viewMode', '#help'])
+          expect(apart(strokes, await box(other)), `the strokes panel and ${other} do not overlap`).toBe(true);
+        expect(problems).toEqual([]);
+      });
+    });
+  }
 });

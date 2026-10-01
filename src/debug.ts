@@ -17,6 +17,7 @@ import { KIND_NAME, TILE, type Layout } from './arena';
 import { Autopilot, type Plan } from './autopilot';
 import { BAG, carryOf } from './bag';
 import { CUP, type HoleDef } from './course';
+import { greenArrows, speedName } from './green';
 import type { Game } from './game';
 import { checkInvariants } from './invariants';
 import { seeded } from './random';
@@ -63,6 +64,9 @@ export interface GameState {
   spin: number;
   /** The hole's wind: the way it blows across the ground as a unit vector, and how hard in miles an hour (nought for calm). */
   wind: { x: number; y: number; speed: number };
+  /** How fast the hole's greens run, the steady slowing of a rolling ball in yards a second a second (less is faster), and its name; null for a hole that has not set it. */
+  greens: number | null;
+  greenSpeed: 'fast' | 'medium' | 'slow' | null;
 }
 
 /** The ball, where it is and how fast it is going. */
@@ -101,6 +105,8 @@ export interface Content {
   posts: { x: number; y: number }[];
   /** Where each tree of a golf hole stands: its trunk, with its canopy over it. */
   trees: { x: number; y: number }[];
+  /** How many arrows stand over the hole's putting green to show which way it leans: none on a green that is level. */
+  arrows: number;
 }
 
 export interface GameApi {
@@ -191,6 +197,10 @@ export interface GameApi {
     mode: 'aim' | 'look';
     azimuth: number;
     tilt: number;
+    /** The words of the putt's break under the pin, as drawn (`Putt: aim 1.6 yd right, uphill 0.4 yd`); null when none is up. */
+    putt: string | null;
+    /** The words for how fast the greens run, as drawn (`Fast greens`); null on a hole that has not set it. */
+    greens: string | null;
   };
   /** The camera turned by `turn` radians and tilted by `tilt` (a bigger tilt is a lower view), as a drag in Look does. */
   orbit(turn: number, tilt: number): void;
@@ -277,6 +287,11 @@ export interface Motions {
    * (0 straight or flat, minus one a draw or backspin, one a fade or topspin) and the words on it.
    */
   controls: { shown: boolean; shape: number; spin: number; shapeText: string; spinText: string };
+  /**
+   * The arrows over the putting green as the last frame wrote them: whether they are shown (the ball at rest on the green
+   * or the first cut) and how many are drawn; nought on a hole whose green is level.
+   */
+  arrows: { shown: boolean; count: number };
 }
 
 /** The grass a frame drew, and the wind it bent in. */
@@ -372,6 +387,8 @@ export function createApi(host: DebugHost): GameApi {
         shape: game.shape,
         spin: game.spin,
         wind: game.wind,
+        greens: game.def.greens ?? null,
+        greenSpeed: game.def.greens === undefined ? null : speedName(game.def.greens),
       };
     },
     ball() {
@@ -410,6 +427,7 @@ export function createApi(host: DebugHost): GameApi {
       sand: sandTiles(game.layout),
       posts: game.layout.bumpers.map((p) => ({ ...p })),
       trees: game.layout.trees.map((t) => ({ ...t })),
+      arrows: greenArrows(game.layout).length,
     }),
     events() {
       return host.events.splice(0);

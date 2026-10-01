@@ -45,7 +45,7 @@ describe('the route to the cup', () => {
       const w = route.waypoint(layout.tee.x, layout.tee.y, d);
       total++;
       const lie = lieAt(layout, w.x, w.y);
-      if (lie === LIE.fairway || lie === LIE.green || lie === LIE.tee) onWay++;
+      if (lie === LIE.fairway || lie === LIE.green || lie === LIE.tee || lie === LIE.cut) onWay++;
     }
     expect(onWay / total, 'most of the way is fairway').toBeGreaterThan(0.75);
   });
@@ -136,5 +136,25 @@ describe('the route to the cup', () => {
     const w = r.waypoint(from.x, from.y, 60);
     const t = Math.floor((w.y - f.originY) / TILE) * f.cols + Math.floor((w.x - f.originX) / TILE);
     expect(f.water[t]).toBe(0);
+  });
+});
+
+describe('the first cut on the route', () => {
+  /** A 40-tile fairway whose middle ten rows are of one ground, the rest fairway: the way from the north end to the cup at the south. */
+  const wayOver = (ground: 'f' | 'c' | 'r') => {
+    const base = field('f', 60, 41);
+    const map = base.map.map((line, r) =>
+      r >= 20 && r < 40 ? line.slice(0, 1) + ground.repeat(39) + line.slice(40) : line,
+    );
+    const l = layoutOf(map);
+    return new Route(l).distance(l.cup.x + 6, l.cup.y - 150);
+  };
+
+  it('is dearer to play over than the fairway and cheaper than the rough, along the same distance', () => {
+    const fairway = wayOver('f'),
+      cut = wayOver('c'),
+      rough = wayOver('r');
+    expect(cut).toBeGreaterThan(fairway);
+    expect(cut).toBeLessThan(rough);
   });
 });

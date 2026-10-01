@@ -19,11 +19,13 @@
 import { expect, test, type Page } from '@playwright/test';
 import { layoutOf } from '../src/arena';
 import { COURSE, DOWNS, moors, type HoleDef } from '../src/course';
-import { LINKS_SPECS } from '../src/links';
+import { LINKS_SPECS, links as linksHoles } from '../src/links';
+import { breakOf } from '../src/green';
 
 const MOORS = moors();
 import { glint } from '../src/glints';
-import { drag, start, watch } from './game';
+import { LIE } from '../src/surfaces';
+import { drag, puttingHole, start, watch } from './game';
 
 /** How far the pictures may differ before it is a change and not the GPU: a fiftieth of the pixels, each well off. */
 const TOLERANCE = { maxDiffPixelRatio: 0.002, threshold: 0.02 };
@@ -933,6 +935,156 @@ test.describe('what it looks like', () => {
       await start(page, { seed: 11, paused: true });
       await playRound(page);
       await expect(page).toHaveScreenshot('phone-card.png', TOLERANCE);
+      expect(problems).toEqual([]);
+    });
+  });
+});
+
+/**
+ * Putting, on a golf hole of the test's own that has a contoured green and a first cut (see `puttingHole`): the arrows over
+ * the green, the cut where it meets the green and the fairway, and a putt's roll drawn across the slope before it is struck.
+ * New pictures, written for these scenes alone: The Links' own are held to the ones taken before it had a cut.
+ */
+test.describe('putting', () => {
+  const HOLE = puttingHole(12);
+  const LAYOUT = layoutOf(HOLE.map, Float32Array.from(HOLE.terrain));
+  /** The middle of the nth tile of a lie, nearest the cup first, or the last one south of it. */
+  function middleOf(lie: number, nth: number | 'far') {
+    const found: { x: number; y: number }[] = [];
+    for (let t = 0; t < LAYOUT.cols * LAYOUT.rows; t++)
+      if (LAYOUT.lie[t] === lie && !LAYOUT.solid[t] && !LAYOUT.oob[t])
+        found.push({
+          x: LAYOUT.originX + ((t % LAYOUT.cols) + 0.5) * 3,
+          y: LAYOUT.originY + (Math.floor(t / LAYOUT.cols) + 0.5) * 3,
+        });
+    found.sort(
+      (a, b) => Math.hypot(a.x - LAYOUT.cup.x, a.y - LAYOUT.cup.y) - Math.hypot(b.x - LAYOUT.cup.x, b.y - LAYOUT.cup.y),
+    );
+    return nth === 'far' ? found.filter((p) => p.y < LAYOUT.cup.y).at(-1)! : found[nth];
+  }
+  async function onTheGreen(page: Page, at: { x: number; y: number }) {
+    await page.evaluate(
+      ([h, p]) => {
+        const g = window.game!;
+        const def = h as { terrain: number[] };
+        g.playCourse([{ ...def, terrain: Float32Array.from(def.terrain) } as never]);
+        g.step(30);
+        g.lay((p as { x: number; y: number }).x, (p as { x: number; y: number }).y);
+        for (let f = 0; f < 300 && !g.state().ready; f++) g.step(1);
+        g.club('putter');
+        g.step(120);
+      },
+      [HOLE, at],
+    );
+  }
+
+  test('the green with its arrows and its first cut, the ball at rest on it, from above and behind', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true });
+    await onTheGreen(page, middleOf(LIE.green, 'far'));
+    expect((await page.evaluate(() => window.game!.motions().arrows)).shown).toBe(true);
+    await hideStats(page);
+    await expect(page.locator('#view')).toHaveScreenshot('putting-green.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
+  test('the first cut close to, where it meets the green on one side and the fairway on the other', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true });
+    await onTheGreen(page, middleOf(LIE.cut, 0));
+    await page.evaluate(
+      ([x, y]) => {
+        window.game!.look(x, y - 10, 30);
+        window.game!.step(1);
+      },
+      [LAYOUT.cup.x, LAYOUT.cup.y - 18],
+    );
+    await hideStats(page);
+    await expect(page.locator('#view')).toHaveScreenshot('putting-cut.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
+  test('a putt aimed across the green: its roll drawn along the ground, to the ring where it will rest', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true });
+    await onTheGreen(page, middleOf(LIE.green, 'far'));
+    await aim(page, 0.6, -10);
+    const shot = await page.evaluate(() => window.game!.motions().shot);
+    expect(shot?.arc, 'the roll is drawn').toBeGreaterThan(8);
+    await hideStats(page);
+    await expect(page.locator('#view')).toHaveScreenshot('putting-aim.png', TOLERANCE);
+    await page.mouse.up();
+    expect(problems).toEqual([]);
+  });
+
+  test('a green of The Links’ own, the most contoured and the fastest: the arrows over its tilt, the break in the panel, and a putt aimed straight at the cup, its roll bending away from the line', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    const hole = linksHoles().at(-1)!;
+    const layout = layoutOf(hole.map, hole.terrain);
+    // the putt of about fourteen yards that breaks the most, which is the one to look at
+    let from = { x: 0, y: 0, across: 0 };
+    for (let t = 0; t < layout.cols * layout.rows; t++) {
+      const x = layout.originX + ((t % layout.cols) + 0.5) * 3,
+        y = layout.originY + (Math.floor(t / layout.cols) + 0.5) * 3;
+      const far = Math.hypot(x - layout.cup.x, y - layout.cup.y);
+      // south of the cup, the way a hole is played toward it, so the camera has the cup ahead of the ball
+      if (layout.lie[t] !== LIE.green || far < 12 || far > 16 || y > layout.cup.y - 6) continue;
+      const { across } = breakOf(layout, x, y, hole.greens);
+      if (Math.abs(across) > Math.abs(from.across)) from = { x, y, across };
+    }
+    expect(Math.abs(from.across), 'a putt that breaks').toBeGreaterThan(1.5);
+    await start(page, { seed: 11, paused: true });
+    await page.evaluate(
+      ([x, y]) => {
+        const g = window.game!;
+        g.chooseCourse('The Links');
+        g.startHole(g.content().holes.length - 1);
+        g.step(60);
+        g.lay(x, y);
+        for (let f = 0; f < 300 && !g.state().ready; f++) g.step(1);
+        g.club('putter');
+        g.step(120);
+      },
+      [from.x, from.y],
+    );
+    // pulled back from the ball along the line from the cup through it: the putt goes straight at the cup
+    const far = Math.hypot(from.x - layout.cup.x, from.y - layout.cup.y);
+    const back = [from.x + ((from.x - layout.cup.x) / far) * 10, from.y + ((from.y - layout.cup.y) / far) * 10];
+    const [at, to] = await page.evaluate(
+      ([x, y, bx, by]) => {
+        const g = window.game!;
+        const z = g.ball().z;
+        return [g.project(x, y, z), g.project(bx, by, z)];
+      },
+      [from.x, from.y, back[0], back[1]],
+    );
+    await drag(page, at, to, { hold: true });
+    await page.evaluate(() => window.game!.step(1));
+    const shot = await page.evaluate(() => window.game!.motions().shot);
+    expect(shot?.arc, 'the roll is drawn').toBeGreaterThan(8);
+    await hideStats(page);
+    await expect(page).toHaveScreenshot('putting-links.png', TOLERANCE);
+    await page.mouse.up();
+    expect(problems).toEqual([]);
+  });
+
+  test.describe('on a phone', () => {
+    test.use({ viewport: { width: 400, height: 860 }, hasTouch: true, isMobile: true });
+
+    test('the green with its arrows, and the speed and the break in the panel', async ({ page }) => {
+      const problems = watch(page);
+      await start(page, { seed: 11, paused: true });
+      await onTheGreen(page, middleOf(LIE.green, 'far'));
+      await hideStats(page);
+      await expect(page).toHaveScreenshot('phone-putting.png', TOLERANCE);
       expect(problems).toEqual([]);
     });
   });

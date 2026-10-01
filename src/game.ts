@@ -18,6 +18,7 @@ import {
   FASTEST,
   KIND_RADIUS,
   KNOCK,
+  ROLL,
   fromPosts,
   fromTrees,
   heightAt,
@@ -42,7 +43,7 @@ import { PHYSICS, THE_CUP, makeWorld, type World } from './physics';
 import { Progress, memoryStore } from './progress';
 import type { Random } from './random';
 import { curveRate, spunKeep, windDirection, windPush } from './shaping';
-import { LANDING, SURFACES } from './surfaces';
+import { LANDING, SURFACES, rollOf } from './surfaces';
 import { hitCanopy, treeCone, turned, type Cone } from './trees';
 
 /** What happens, for whoever shows it. Every one may be left out. */
@@ -250,6 +251,15 @@ export class Game {
     return this.blowing;
   }
 
+  /**
+   * How steadily the ground at (x, y) slows a rolling ball, in yards a second a second: the surface's own on a golf hole,
+   * with the putting green's speed and its first cut's being the hole's `greens`, and the minigolf green's everywhere else.
+   * What a putt reaches is worked out from it.
+   */
+  rollAt(x: number, y: number): number {
+    return this.layout.golf ? rollOf(lieAt(this.layout, x, y), this.def.greens) : ROLL.roll;
+  }
+
   /** The hole being played. */
   get def(): HoleDef {
     return this.course[this.hole];
@@ -284,7 +294,7 @@ export class Game {
     this.layout = layoutOf(this.def.map, this.def.terrain);
     this.obstacles = new Obstacles(this.def.obstacles ?? [], this.layout);
     this.cones = this.layout.trees.map((t) => treeCone(t.x, t.y, heightAt(this.layout, t.x, t.y)));
-    this.world = makeWorld(this.layout, CUP, () => this.random(), this.obstacles.belted);
+    this.world = makeWorld(this.layout, CUP, () => this.random(), this.obstacles.belted, this.def.greens);
     this.world.pushers = this.obstacles.pushers;
     this.world.belts = this.obstacles.belts;
     this.obstacles.update(this.t, 0);
@@ -379,10 +389,14 @@ export class Game {
     world.vx[ball] = world.vy[ball] = world.vz[ball] = 0;
     if (this.layout.golf) {
       const launch = strike(this.inHand, p, angle, lieAt(this.layout, this.lie.x, this.lie.y), this.random);
-      world.hit(ball, launch.vx, launch.vy, launch.vz);
+      const lofted = this.inHand.loft > 0;
+      // a putt is struck along the ground, which climbs or falls: sent flat into a face that leans toward it, a hard one is
+      // going into the ground by its speed times the slope, which a tenth of a slope at the putter's hardest makes a landing
+      // that scrubs most of what it has. On the level there is no slope, and the putt is struck as it always was
+      const [sx, sy] = lofted ? [0, 0] : slopeAt(this.layout, this.lie.x, this.lie.y);
+      world.hit(ball, launch.vx, launch.vy, launch.vz + launch.vx * sx + launch.vy * sy);
       this.firstLanding = true;
       // a putt goes along the ground, where neither a shape nor a spin has anything to work on
-      const lofted = this.inHand.loft > 0;
       this.flightRate = lofted ? curveRate(this.shape, this.inHand.loft) : 0;
       this.flightSpin = lofted ? this.spin : 0;
     } else {

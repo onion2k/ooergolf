@@ -1,7 +1,17 @@
 /** What a golfer is told of the pin: how far it is and how much higher or lower than the ball, in yards. */
 import { describe, expect, it } from 'vitest';
 import { heightAt, layoutOf } from '../src/arena';
-import { landingText, pinReadout, pinText, shapingWords, windArrow, windText } from '../src/readout';
+import { GREENS } from '../src/surfaces';
+import {
+  greensText,
+  landingText,
+  pinReadout,
+  pinText,
+  puttText,
+  shapingWords,
+  windArrow,
+  windText,
+} from '../src/readout';
 import { LIE } from '../src/surfaces';
 import { field } from './helpers';
 
@@ -131,5 +141,36 @@ describe('the wind on the page', () => {
         expect(wrapped, `wind ${wind}, camera ${a}`).toBeCloseTo(0, 6);
       }
     }
+  });
+});
+
+describe('the readout of a putt’s break', () => {
+  it('says how far to aim off the cup and to which side, in yards to a tenth, and how much it climbs', () => {
+    expect(puttText({ across: 1.6, rise: 0.4 })).toBe('Putt: aim 1.6 yd right, uphill 0.4 yd');
+    expect(puttText({ across: -2.26, rise: -1.04 })).toBe('Putt: aim 2.3 yd left, downhill 1.0 yd');
+  });
+
+  it('says nothing of the aim under a tenth of a yard, and nothing of the rise under it either', () => {
+    expect(puttText({ across: 0.09, rise: 0.4 })).toBe('Putt: uphill 0.4 yd');
+    expect(puttText({ across: -0.04, rise: -0.5 })).toBe('Putt: downhill 0.5 yd');
+    expect(puttText({ across: 1.2, rise: 0.09 })).toBe('Putt: aim 1.2 yd right');
+    expect(puttText({ across: -1.2, rise: -0.09 })).toBe('Putt: aim 1.2 yd left');
+    // exactly a tenth is a tenth
+    expect(puttText({ across: 0.1, rise: 0.1 })).toBe('Putt: aim 0.1 yd right, uphill 0.1 yd');
+  });
+
+  it('is a straight, level putt when there is neither, and never a number that is not one', () => {
+    expect(puttText({ across: 0, rise: 0 })).toBe('Putt: straight');
+    expect(puttText({ across: NaN, rise: Infinity })).toBe('Putt: straight');
+  });
+
+  it('names the greens’ speed from the hole’s own, for a golf hole that has one, and nothing for one that has none', () => {
+    expect(greensText(GREENS.fast)).toBe('Fast greens');
+    expect(greensText(GREENS.normal)).toBe('Medium greens');
+    expect(greensText(GREENS.slow)).toBe('Slow greens');
+    expect(greensText(undefined)).toBeNull();
+    // between the three, as `speedName` says
+    expect(greensText(14)).toBe('Fast greens');
+    expect(greensText(19.5)).toBe('Slow greens');
   });
 });

@@ -154,6 +154,8 @@ export class Hud {
   private readonly windLine = document.getElementById('wind')!;
   private readonly windArrow = document.getElementById('windArrow')!;
   private readonly windWords = document.getElementById('windText')!;
+  private readonly greens = document.getElementById('greens')!;
+  private readonly putt = document.getElementById('putt')!;
   private readonly shaping = document.getElementById('bagShaping')!;
   private readonly shapeButton = document.getElementById('shapeButton')!;
   private readonly spinButton = document.getElementById('spinButton')!;
@@ -334,6 +336,29 @@ export class Hud {
   windDrawn(): { degrees: number; text: string } | null {
     if (this.windLine.hidden) return null;
     return { degrees: Number.isNaN(this.windTurn) ? 0 : this.windTurn, text: this.windWords.textContent };
+  }
+
+  /** How fast the hole's greens run, in a line under the wind: none for a hole that has not set it, which reads as it always did. */
+  setGreens(text: string | null) {
+    this.greens.hidden = text === null;
+    if (text !== null && this.greens.textContent !== text) this.greens.textContent = text;
+  }
+
+  /**
+   * The break of the putt from where the ball lies, in words under the greens' speed: only while the ball rests on the green
+   * or the first cut of a hole that has a contour to read; none puts it away. Written only when it changes.
+   */
+  setPutt(text: string | null) {
+    this.putt.hidden = text === null;
+    if (text !== null && this.putt.textContent !== text) this.putt.textContent = text;
+  }
+
+  /** The speed line and the putt's line as drawn: their words, or null for each that is put away. */
+  puttDrawn(): { greens: string | null; putt: string | null } {
+    return {
+      greens: this.greens.hidden ? null : this.greens.textContent,
+      putt: this.putt.hidden ? null : this.putt.textContent,
+    };
   }
 
   /** The hole's map, painted, put over the course; none puts it away. Drawn over from `overlay`, by `drawMap`. */

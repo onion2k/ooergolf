@@ -118,3 +118,42 @@ export async function ready(page: Page) {
     throw new Error(`the game did not boot: ${await page.locator('#bootMsg').textContent()}`);
   }
 }
+
+/**
+ * A golf hole of the test's own with a contoured green, for every test of putting: a fairway up the middle from the tee to a
+ * round green with the cup in it, a first cut a tile wide round the green and down the fairway's two edges, rough either
+ * side, and ground that leans to the west across the whole hole with a swell on the green, so the arrows have something to
+ * show and a putt something to break on. `greens` is how fast the greens run (12, fast); left out, the hole has none, as
+ * every golf hole had before. The terrain is plain numbers, one a tile from the south, made into a `Float32Array` in the page.
+ */
+export function puttingHole(greens: number | null = 12) {
+  const cols = 35,
+    rows = 46;
+  const cx = 17,
+    cupRow = 7;
+  const map = Array.from({ length: rows }, (_, r) =>
+    Array.from({ length: cols }, (_, c) => {
+      if (r === 0 || r === rows - 1 || c === 0 || c === cols - 1) return '#';
+      if (r === rows - 4) return c === cx ? 'T' : c === cx - 1 || c === cx + 1 ? 't' : 'f';
+      if (r === cupRow && c === cx) return 'C';
+      const d = Math.hypot(c - cx, r - cupRow);
+      if (d <= 5.2) return 'g';
+      if (d <= 6.4) return 'c';
+      if (c >= cx - 3 && c <= cx + 3) return 'f';
+      if (c === cx - 4 || c === cx + 4) return 'c';
+      return 'r';
+    }).join(''),
+  );
+  // heights a tile, from the south: a ramp rising to the east, and a swell round the green, never a step the physics refuses
+  const terrain: number[] = [];
+  for (let ty = 0; ty < rows; ty++)
+    for (let c = 0; c < cols; c++) {
+      const r = rows - 1 - ty;
+      const swell = 0.6 * Math.exp(-((c - (cx - 2)) ** 2 + (r - cupRow) ** 2) / 18);
+      terrain.push(2.4 + 0.1 * (c - cx) + swell);
+    }
+  return { name: 'Putting', par: 4, map, terrain, ...(greens === null ? {} : { greens }) };
+}
+
+/** The same hole, as the page builds it: its terrain a `Float32Array`. */
+export type PuttingHole = ReturnType<typeof puttingHole>;

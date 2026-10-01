@@ -15,7 +15,7 @@
 export type { Colour, Material, Model, Part, Pattern, V3 } from './models/part';
 export { PATTERN, bounds, group, triangles } from './models/part';
 export { FLAG_COLOURS, FLOWER_COLOURS, PALETTE, PENNANT_COLOURS, ROUGH } from './models/palette';
-export { CUP, collar, cup, flag, golfBall, teeMarkers } from './models/course';
+export { CUP, breakArrow, collar, cup, flag, golfBall, teeMarkers } from './models/course';
 export type { Conveyor, Footprint, Pond, Windmill } from './models/obstacles';
 export {
   BUNKER,
@@ -63,6 +63,7 @@ export const BUDGET = {
   tree: 860,
   golfTree: 320,
   stake: 120,
+  breakArrow: 8,
   hedge: 300,
   flowers: 650,
   rock: 150,

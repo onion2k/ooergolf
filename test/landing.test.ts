@@ -253,3 +253,36 @@ describe('a landing on a slope', () => {
     expect(gentle.ready).toBe(true);
   });
 });
+
+describe('a putt up a slope', () => {
+  /**
+   * A putting green rising to the north by `rise` a tile from the tee's box up, as a contoured green does at its steepest:
+   * a ball struck flat into a face that leans toward it is going into the ground by its speed times the slope, which at the
+   * putter's hardest and a tenth of a slope is more than a landing's least, and a landing is scrubbed.
+   */
+  const uphill = (rise: number, power: number) => {
+    const rows = 130,
+      cols = 41;
+    const heights = new Float32Array(rows * cols);
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) heights[r * cols + c] = Math.max(0, r - 6) * rise;
+    const { game, told } = golfGame(field('g', rows, cols, heights));
+    game.pick('putter');
+    // the tee is in a box of its own: the ball is struck from where the slope has begun
+    game.place(game.layout.tee.x, game.layout.tee.y + 8 * TILE);
+    const y0 = game.world.y[game.ball];
+    expect(game.shoot(NORTH, power)).toBe(true);
+    for (let f = 0; f < 60 * 40 && !(f > 1 && game.ready); f++) game.step(DT);
+    return { run: game.world.y[game.ball] - y0, landings: told.filter((t) => t.startsWith('landed ')).length };
+  };
+
+  it('is not a landing, and is slowed by the slope and the green and nothing else, up a tenth of a slope at its hardest', () => {
+    // the putter's hardest speed is 40: up a slope of 0.3 a tile, which is a tenth, it goes into the ground by about 4 a second
+    const up = uphill(0.3, 1),
+      level = uphill(0, 1);
+    expect(up.landings, 'it never came down').toBe(0);
+    // v squared over twice what slows it, which is the green's roll and the slope's pull (g times the sine of a tenth is 7)
+    const slows = 16 + 70 * Math.sin(Math.atan(0.1));
+    expect(up.run).toBeGreaterThan((40 * 40) / (2 * slows) - 3);
+    expect(up.run).toBeLessThan(level.run);
+  });
+});

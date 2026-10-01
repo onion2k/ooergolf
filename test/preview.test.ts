@@ -8,7 +8,9 @@ import { BAG, bagClub, carryOf } from '../src/bag';
 import type { HoleDef } from '../src/course';
 import { DISPERSION, carryFrom, maxScatter } from '../src/flight';
 import { Game } from '../src/game';
+import { heightAt } from '../src/arena';
 import { Previewer } from '../src/preview';
+import { Scene } from '../src/scene';
 import { Progress, memoryStore } from '../src/progress';
 import { LIE } from '../src/surfaces';
 import { DT, field, golfGame } from './helpers';
@@ -382,5 +384,130 @@ describe('the preview of a shot', () => {
       const at = { x: game.world.x[game.ball], y: game.world.y[game.ball] };
       expect(new Previewer(game).run(at, bagClub('putter'), NORTH, 0.5).n).toBe(0);
     });
+  });
+});
+
+describe('the roll of a putt, drawn before it is struck so its break is seen', () => {
+  const tilted = (per: number) => field('g', ROWS, COLS, slope(per, 'east'));
+  /** A game on a green that leans, the ball put down on it, and the previewer of it. */
+  function onGreen(per: number) {
+    const { game } = golfGame(tilted(per));
+    const from = { x: game.layout.originX + 40 * 3, y: game.layout.originY + 60 * 3 };
+    game.place(from.x, from.y);
+    for (let f = 0; f < 600 && !game.ready; f++) game.step(DT);
+    game.pick('putter');
+    return { game, from: { x: game.world.x[game.ball], y: game.world.y[game.ball] } };
+  }
+  /** Where the game itself leaves a ball struck true from `from`, which is the preview's word made good. */
+  function struck(per: number, angle: number, power: number) {
+    const { game, from } = onGreen(per);
+    game.shoot(angle, power);
+    for (let f = 0; f < 60 * 30 && !game.ready && game.phase === 'play'; f++) game.step(DT);
+    return { x: game.world.x[game.ball], y: game.world.y[game.ball], from };
+  }
+
+  it('comes to rest where the game leaves the ball, to a hair, on a green that leans and on one that does not', () => {
+    for (const per of [0, 0.05, 0.12])
+      for (const power of [0.15, 0.4, 0.8]) {
+        const { game, from } = onGreen(per);
+        const p = new Previewer(game).roll(from, bagClub('putter'), NORTH, power);
+        const real = struck(per, NORTH, power);
+        expect(p.n, `${per} ${power}`).toBeGreaterThan(2);
+        expect(p.end).toBe('landed');
+        expect(Math.hypot(p.x - real.x, p.y - real.y), `per ${per}, power ${power}`).toBeLessThan(0.05);
+      }
+  });
+
+  it('is a path along the ground that bends with the slope: straight on a level green, and carried downhill on a cross slope', () => {
+    const level = (() => {
+      const { game, from } = onGreen(0);
+      return { p: new Previewer(game).roll(from, bagClub('putter'), NORTH, 0.6), from };
+    })();
+    for (let k = 0; k < level.p.n; k++) expect(level.p.points[k * 3], 'straight north').toBeCloseTo(level.from.x, 4);
+    const hill = (() => {
+      const { game, from } = onGreen(0.1);
+      return { p: new Previewer(game).roll(from, bagClub('putter'), NORTH, 0.6), from };
+    })();
+    // the ground rises to the east, so the ball is carried west: its path ends west of where it began, more and more
+    const xs = Array.from({ length: hill.p.n }, (_, k) => hill.p.points[k * 3]);
+    expect(xs[xs.length - 1]).toBeLessThan(hill.from.x - 0.3);
+    for (let k = 1; k < xs.length; k++) expect(xs[k]).toBeLessThanOrEqual(xs[k - 1] + 1e-4);
+    // it starts at the ball and its lengths grow to the carry it ends at, which is the straight line to where it rests or more
+    expect(hill.p.points[0]).toBeCloseTo(hill.from.x, 2);
+    expect(hill.p.points[1]).toBeCloseTo(hill.from.y, 2);
+    for (let k = 1; k < hill.p.n; k++) expect(hill.p.length[k]).toBeGreaterThan(hill.p.length[k - 1]);
+    expect(hill.p.length[hill.p.n - 1]).toBeGreaterThanOrEqual(hill.p.carry - 1e-4);
+    expect(hill.p.rolled, 'it is a path on the ground, and the page draws it there').toBe(true);
+  });
+
+  it('says the ball is holed when the putt drops, and the ring is the cup’s', () => {
+    const { game } = golfGame(tilted(0));
+    const { cup } = game.layout;
+    const from = { x: cup.x + 12, y: cup.y };
+    game.place(from.x, from.y);
+    for (let f = 0; f < 600 && !game.ready; f++) game.step(DT);
+    const previewer = new Previewer(game);
+    let found = false;
+    for (let k = 1; k <= 60 && !found; k++) {
+      const p = previewer.roll(from, bagClub('putter'), Math.PI, k / 60);
+      if (p.end === 'holed') {
+        found = true;
+        expect([p.x, p.y]).toEqual([cup.x, cup.y]);
+      }
+    }
+    expect(found, 'some power drops it').toBe(true);
+  });
+
+  it('is nothing for a lofted club or a swing with no power, and writes into one result made once, changing nothing of the game', () => {
+    const { game, from } = onGreen(0.05);
+    const previewer = new Previewer(game);
+    expect(previewer.roll(from, bagClub('7-iron'), NORTH, 0.5).n).toBe(0);
+    expect(previewer.roll(from, bagClub('putter'), NORTH, 0).n).toBe(0);
+    const a = previewer.roll(from, bagClub('putter'), NORTH, 0.5);
+    const buffer = a.points;
+    const b = previewer.roll(from, bagClub('putter'), NORTH + 0.2, 0.9);
+    expect(b).toBe(a);
+    expect(b.points).toBe(buffer);
+    expect(previewer.bodies, 'the rehearsal has the one ball').toBe(1);
+    expect(previewer.result.n, 'the flight’s own result is not written by a roll').toBe(0);
+    expect(game.strokes).toBe(0);
+    expect([game.world.x[game.ball], game.world.y[game.ball]]).toEqual([from.x, from.y]);
+  });
+
+  it('is cheap to hold: the longest putt, struck hard on a slope, fits the buffers it was given', () => {
+    const { game, from } = onGreen(0.12);
+    const p = new Previewer(game).roll(from, bagClub('putter'), NORTH + 0.3, 1);
+    expect(p.n).toBeLessThan(p.points.length / 3);
+    expect(p.n).toBeLessThan(400);
+  });
+});
+
+describe('the roll of a putt as the scene draws it', () => {
+  it('is a line of dots lying on the ground along the roll, and the ring where it rests, and nothing for a flight’s knock', () => {
+    const hole = field('g', ROWS, COLS, slope(0.1, 'east'));
+    const { game } = golfGame(hole);
+    const from = { x: game.layout.originX + 40 * 3, y: game.layout.originY + 60 * 3 };
+    game.place(from.x, from.y);
+    for (let f = 0; f < 600 && !game.ready; f++) game.step(DT);
+    game.pick('putter');
+    const p = new Previewer(game).roll(from, bagClub('putter'), NORTH, 0.6);
+    const scene = new Scene();
+    scene.static(game.layout, 'roll');
+    scene.dynamic(undefined, game.layout, 'roll');
+    scene.setShot(p, 1);
+    scene.writeMoving(0);
+    const marks = scene.shotMarks();
+    expect(marks.arc).toBeGreaterThan(10);
+    expect(marks.ring).not.toBeNull();
+    expect(Math.hypot(marks.ring!.x - p.x, marks.ring!.y - p.y)).toBeLessThan(0.3);
+    expect(marks.knock).toBeNull();
+    expect(marks.spread, 'a putt has no spread').toBeNull();
+    // each dot is just over the ground it rolls on: a flight's dots would be a ball's radius up in the air
+    const dots = scene.writeMoving(0).find((m) => m.count === marks.arc)!;
+    for (let k = 0; k < marks.arc; k++) {
+      const [x, y, z] = [dots.matrices[k * 16 + 12], dots.matrices[k * 16 + 13], dots.matrices[k * 16 + 14]];
+      expect(z - heightAt(game.layout, x, y), `dot ${k}`).toBeGreaterThan(0);
+      expect(z - heightAt(game.layout, x, y), `dot ${k}`).toBeLessThan(0.6);
+    }
   });
 });

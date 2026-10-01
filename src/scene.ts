@@ -20,6 +20,7 @@ import { MATERIAL_STRIDE, PATTERN_STRIDE } from 'artshape-render/game/renderer';
 import type { Mesh } from 'artshape-render/mesh/types';
 import { BALL, BUMPER, KIND_RADIUS, TILE, WATER_LEVEL, heightAt, slopeInto, tileAt, type Layout } from './arena';
 import { CUP } from './course';
+import { GREEN, greenArrows } from './green';
 import { place, placeOnSlope } from './matrix';
 import { ball, plane } from './meshes';
 import {
@@ -33,6 +34,7 @@ import {
   cup,
   flag,
   flowers,
+  breakArrow,
   golfBall,
   group,
   hedge,
@@ -100,6 +102,8 @@ export const PALETTE = {
   puttingGreen: [...COLOURS.puttingGreen, 0.8],
   puttingGreenMown: [...COLOURS.puttingGreenMown, 0.8],
   teeBox: [...COLOURS.teeBox, 0.85],
+  /** The first cut: the fringe round a putting green and the strip along a fairway's edges. */
+  firstCut: [...COLOURS.firstCut, 0.85],
   /** The rail's timber sides, and the cap painted along its top, rounded over its edges. */
   rail: [...COLOURS.rail, 0.6],
   railCap: [...COLOURS.railCap, 0.45],
@@ -197,6 +201,46 @@ export function ringLift(
   }
   return RING_LIFT + rise;
 }
+/**
+ * How long the arrows over a green are, in yards: the shortest for a hair of slope and the longest at `GREEN.steepest`
+ * (a tile is three, so no two touch). Length is the strength, since a ball is carried further the steeper the ground.
+ */
+export const ARROWS = { shortest: 0.9, longest: 2.2 } as const;
+/** The arrow, built once: every arrow of every green is this one model, placed. */
+const ARROW = breakArrow();
+
+/** One arrow over a green: where it stands, which way it points, how long it is, and how the ground leans there. */
+export interface ArrowMark {
+  x: number;
+  y: number;
+  /** The way it points across the ground, as an angle from +x toward +y: downhill, the way a ball is carried. */
+  yaw: number;
+  /** How long it is, in yards. */
+  length: number;
+  slopeX: number;
+  slopeY: number;
+  /** How far it is lifted along the ground's upright to be clear of a hollow. */
+  lift: number;
+}
+
+/**
+ * The arrows over the green of a golf hole, each worked out once for the hole: pointing the way the ground carries a ball
+ * (against the slope `greenArrows` holds), as long as the ground is steep, and lifted off the turf far enough that no
+ * edge of it is in a rise. None for a level green or a hole of minigolf.
+ */
+export function arrowMarks(layout: Layout): ArrowMark[] {
+  return greenArrows(layout).map((a) => {
+    const steep = Math.hypot(a.slopeX, a.slopeY);
+    const length = ARROWS.shortest + (ARROWS.longest - ARROWS.shortest) * Math.min(1, steep / GREEN.steepest);
+    const yaw = Math.atan2(-a.slopeY, -a.slopeX);
+    // an arrow's own half length and half width, as the model has them, for the ring's way of finding the lift
+    const half = length / 2;
+    const lift =
+      ringLift(layout, a.x, a.y, a.slopeX, a.slopeY, half, half * 0.4, yaw) * Math.hypot(a.slopeX, a.slopeY, 1);
+    return { x: a.x, y: a.y, yaw, length, slopeX: a.slopeX, slopeY: a.slopeY, lift };
+  });
+}
+
 /** The rough, as one great square out past the fog. */
 const ROUGH_SIZE = 600;
 /**
@@ -298,6 +342,9 @@ export class Scene {
   private landed: { x: number; y: number; at: number } | null = null;
   /** The ring as the last frame placed it, and whether it is drawn: what the page reads back, and never the state it came from. */
   private mark: { matrices: Float32Array; count: number } | null = null;
+  /** The green's arrows of this hole, the entry that places them, and whether the page has them shown: set by `setArrows`. */
+  private arrows: Entry | null = null;
+  private arrowsOn = false;
   /** The shot in hand as the page last handed it, and how much bigger its marks are drawn for the view, and which way it is aimed. */
   private shot: { preview: Preview; scale: number } | null = null;
   /** What the last frame placed of its preview, for the page to read back: the arc, the ring, the spread and the knock. */
@@ -372,6 +419,7 @@ export class Scene {
         [ground.golf.rough, PALETTE.playRough, 0.4],
         [ground.golf.putting, PALETTE.puttingGreen, 0.3],
         [ground.golf.puttingMown, PALETTE.puttingGreenMown, 0.8],
+        [ground.golf.cut, PALETTE.firstCut, 0.35],
         [ground.golf.tee, PALETTE.teeBox, 0.5],
         [ground.golf.oob, PALETTE.oobGround, 0.6],
       );
@@ -613,6 +661,8 @@ export class Scene {
     this.landed = null;
     this.mark = null;
     this.drawnShot = null;
+    this.arrows = null;
+    this.arrowsOn = false;
     const pool = (model: { parts: Model['parts'] }, write: (out: Float32Array, t: number) => void, count = 1) => {
       const matrices = new Float32Array(16 * count);
       for (const part of model.parts) {
@@ -684,8 +734,55 @@ export class Scene {
       const [mr, mg, mb, mrough] = PALETTE.marker;
       out.push({ mesh: markMesh(), matrices, count: 0, albedo: [mr, mg, mb], roughness: mrough });
       this.shotGroups(layout, out);
+      this.arrowGroups(layout, out);
     }
     return out;
+  }
+
+  /**
+   * The arrows over a golf hole's green, placed once when the hole begins and shown by their count, so a frame writes
+   * nothing but how many: none at all, and no group, on a hole whose green is level. They are the last group.
+   */
+  private arrowGroups(layout: Layout, out: GameGroup[]) {
+    const marks = arrowMarks(layout);
+    if (!marks.length) return;
+    const matrices = new Float32Array(16 * marks.length);
+    marks.forEach((m, k) => {
+      placeOnSlope(
+        matrices,
+        k,
+        m.x,
+        m.y,
+        heightAt(layout, m.x, m.y),
+        m.slopeX,
+        m.slopeY,
+        m.yaw,
+        m.length,
+        m.length,
+        m.lift,
+      );
+    });
+    const entry: Entry = {
+      matrices,
+      count: 0,
+      write: () => {
+        entry.count = this.arrowsOn ? marks.length : 0;
+      },
+    };
+    this.moving.push(entry);
+    this.arrows = entry;
+    out.push(group(ARROW.parts[0], matrices, 0));
+  }
+
+  /** Whether the green's arrows are shown, from the next frame: while the ball rests on the green or the first cut. */
+  setArrows(on: boolean) {
+    this.arrowsOn = on;
+  }
+
+  /** How the arrows were drawn by the last frame, read back from what it wrote: whether any, and how many. */
+  arrowsDrawn(): { shown: boolean; count: number } {
+    const n = this.arrows?.count ?? 0;
+    return { shown: n > 0, count: n };
   }
 
   /**
@@ -709,9 +806,11 @@ export class Scene {
       const { preview: p, scale } = s;
       const size = ARC.radius * scale;
       const total = p.length[p.n - 1];
+      // a putt's roll is the ball's middle, a ball's radius over the ground, and its dots lie on the ground it rolls over
+      const down = p.rolled ? KIND_RADIUS[BALL] - size * 0.8 - 0.05 : 0;
       for (let k = 0; k < ARC.dots; k++) {
         p.along((total * (k + 1)) / (ARC.dots + 1), tmp);
-        place(m, k, tmp[0], tmp[1], tmp[2], 0, size);
+        place(m, k, tmp[0], tmp[1], tmp[2] - down, 0, size);
       }
       arc.count = ARC.dots;
     });

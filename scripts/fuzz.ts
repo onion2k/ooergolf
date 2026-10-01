@@ -1,14 +1,16 @@
 /**
  * The monkey, over many seeds side by side: see `fuzzer.ts`.
  *
- *   npm run fuzz                         seeds 1-12, 4000 frames each, on the courses, on The Range, on The Links and in wind
+ *   npm run fuzz                         seeds 1-12, 4000 frames each, on the courses, on The Range, on The Links, in wind and on contoured greens
  *   npm run fuzz -- --seeds 1-50 --frames 10000
  *   npm run fuzz -- --seed 17            one seed again, with what was done before it went wrong
  *   npm run fuzz -- --seed 17 --on range the seed's run on The Range again, if that is where it went wrong (or `links`, or
- *                                        `windy`, the holes of The Range with a wind on them)
+ *                                        `windy`, the holes of The Range with a wind on them, or `contoured`, The Links' holes with the steepest greens at
+ *                                        every speed)
  *
- * Every seed is played four times: once as a player who chooses among the courses, and once each on The Range, on The
- * Links and on the holes of The Range with a wind on them (`WINDY`) alone, where the clubs, the trees, the water, the out
+ * Every seed is played five times: once as a player who chooses among the courses, and once each on The Range, on The
+ * Links and on the holes of The Range with a wind on them (`WINDY`) and on The Links with the steepest greens at every speed
+ * (`contoured`) alone, where the clubs, the trees, the water, the out
  * of bounds and the wind are, since a monkey that chooses among six courses is on golf too seldom to hold it to anything.
  * Fails, and says how to play the failure again, if any seed breaks a rule
  * or throws. Says how much of each thing was done and happened, so a monkey
@@ -17,14 +19,20 @@
 import { availableParallelism } from 'node:os';
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
 import { COURSES } from '../src/course';
-import { WINDY, fuzz, type FuzzResult } from './fuzzer';
+import { WINDY, contoured, fuzz, type FuzzResult } from './fuzzer';
 
 /** The courses of golf a run may be played on alone, by the short name a replay asks for and the name a course has. */
-const GOLF = { range: 'The Range', links: 'The Links', windy: 'The Range with a wind' } as const;
+const GOLF = {
+  range: 'The Range',
+  links: 'The Links',
+  windy: 'The Range with a wind',
+  contoured: 'The Links, contoured',
+} as const;
 type Golf = keyof typeof GOLF;
 
-/** The holes a run alone on a course of golf plays: a course's own, or the windy range, which is no course of the game's. */
-const holesOf = (on: Golf) => (on === 'windy' ? WINDY : COURSES.find((c) => c.name === GOLF[on])!.holes);
+/** The holes a run alone on a course of golf plays: a course's own, or the windy range or the contoured Links, which are no courses of the game's. */
+const holesOf = (on: Golf) =>
+  on === 'windy' ? WINDY : on === 'contoured' ? contoured() : COURSES.find((c) => c.name === GOLF[on])!.holes;
 
 if (!isMainThread) {
   const { seed, frames, on } = workerData as { seed: number; frames: number; on: Golf | undefined };
@@ -46,7 +54,7 @@ async function main() {
   const started = performance.now();
   // each seed as a player choosing among the courses, and on each course of golf alone; or only the one asked for, to play a failure again
   const on = value('on') as Golf | undefined;
-  if (on !== undefined && !(on in GOLF)) throw new Error(`--on is range, links or windy, not ${on}`);
+  if (on !== undefined && !(on in GOLF)) throw new Error(`--on is range, links, windy or contoured, not ${on}`);
   const queue: { seed: number; on: Golf | undefined }[] = seeds.flatMap((seed) =>
     on
       ? [{ seed, on }]
@@ -57,6 +65,7 @@ async function main() {
             { seed, on: 'range' as const },
             { seed, on: 'links' as const },
             { seed, on: 'windy' as const },
+            { seed, on: 'contoured' as const },
           ],
   );
   const results: (FuzzResult & { on: Golf | undefined })[] = [];

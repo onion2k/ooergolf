@@ -33,7 +33,7 @@ export interface Ground {
    * What a golf hole's ground is besides its fairway, each in a mesh of its own so that each is its own colour: the
    * rough, the putting green in its two stripes, and the tee. None on a hole of minigolf, which is all one grass.
    */
-  golf?: { rough: Mesh; putting: Mesh; puttingMown: Mesh; tee: Mesh; oob: Mesh };
+  golf?: { rough: Mesh; putting: Mesh; puttingMown: Mesh; cut: Mesh; tee: Mesh; oob: Mesh };
 }
 
 /** Whether a tile is sand the ball rolls on: not rock, and not water. */
@@ -56,6 +56,7 @@ export function groundOf(l: Layout): Ground {
   const rough = new MeshBuilder(),
     putting = new MeshBuilder(),
     puttingMown = new MeshBuilder(),
+    cut = new MeshBuilder(),
     tee = new MeshBuilder(),
     oob = new MeshBuilder();
   const n = GROUND.pieces;
@@ -78,6 +79,7 @@ export function groundOf(l: Layout): Ground {
         if (l.oob[t]) b = oob;
         else if (lie === LIE.rough) b = rough;
         else if (lie === LIE.tee) b = tee;
+        else if (lie === LIE.cut) b = cut;
         else if (lie === LIE.green) b = odd ? puttingMown : putting;
       }
       const base = b.vertexCount;
@@ -142,6 +144,7 @@ export function groundOf(l: Layout): Ground {
       rough: rough.build(),
       putting: putting.build(),
       puttingMown: puttingMown.build(),
+      cut: cut.build(),
       tee: tee.build(),
       oob: oob.build(),
     };

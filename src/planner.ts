@@ -80,7 +80,7 @@ const TAP = 0.02;
  * rests a share of the way short wants that share more power, since how far a shot goes is very nearly how hard it
  * is struck (a secant through the last two trials was tried, and took as many), and one that rests to the left wants
  * the aim turned right by the angle it was out by. A club that cannot reach is left at full power and only its aim
- * corrected.
+ * corrected. A putt is held to a tighter `tolerance` and given more `trials`, since a cup is a small thing to be near.
  */
 export function refine(
   rehearsal: Rehearsal,
@@ -88,13 +88,15 @@ export function refine(
   target: { x: number; y: number },
   club: BagClub,
   guess: { angle: number; power: number },
+  tries: { tolerance?: number; trials?: number } = {},
 ): Refined {
+  const { tolerance = TOLERANCE, trials = MOST_TRIALS } = tries;
   const d = Math.hypot(target.x - from.x, target.y - from.y);
   const ux = (target.x - from.x) / (d || 1),
     uy = (target.y - from.y) / (d || 1);
   let { angle, power } = guess;
   let best: Refined | null = null;
-  for (let k = 0; k < MOST_TRIALS; k++) {
+  for (let k = 0; k < trials; k++) {
     const trial = rehearsal.shot(from, club.id, angle, power);
     if (trial.holed) return { angle, power, trial: { ...trial, x: target.x, y: target.y }, miss: 0 };
     if (trial.lost) {
@@ -108,9 +110,9 @@ export function refine(
       across = -rx * uy + ry * ux;
     const miss = Math.hypot(along - d, across);
     if (!best || miss < best.miss) best = { angle, power, trial, miss };
-    if (miss < TOLERANCE) break;
+    if (miss < tolerance) break;
     // out of reach at full power and aimed true: nothing more to be had of the shot
-    if (power >= 1 && along < d && Math.abs(across) < TOLERANCE) break;
+    if (power >= 1 && along < d && Math.abs(across) < tolerance) break;
     // the power: in proportion, since how far a shot goes is very nearly how hard it is struck
     const next = power * (d / Math.max(along, 1));
     // the aim: turned back by the angle it was out by, as seen from the start
@@ -139,8 +141,11 @@ export function putts(d: number): number {
   return 1 + (1 - Math.exp(-d / 9));
 }
 
-/** What a lie costs of the next shot, in strokes: the rough is hard to play from and the sand harder. */
-const LIE_COST: Partial<Record<number, number>> = { [LIE.rough]: 0.35, [LIE.sand]: 0.55 };
+/**
+ * What a lie costs of the next shot, in strokes: the rough is hard to play from and the sand harder, and the first cut
+ * a little, since it takes a few per cent off a club and is a touch wilder, which is a third of the rough's price at most.
+ */
+const LIE_COST: Partial<Record<number, number>> = { [LIE.cut]: 0.08, [LIE.rough]: 0.35, [LIE.sand]: 0.55 };
 /** What a ball under a tree's canopy costs of the next shot, in strokes: there is no playing it up, and it is played out. */
 const UNDER_A_TREE = 0.6;
 

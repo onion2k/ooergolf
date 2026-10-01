@@ -17,6 +17,8 @@ import type { Lie } from './surfaces';
 /** The frame a trial is stepped by, and the longest a flight is followed, in frames: far more than any flight takes. */
 const FRAME = 1 / 60;
 const FRAMES = 720;
+/** How many frames apart the points of a putt's roll are taken: it is a path along the ground that bends slowly, and a point a frame would be five hundred for no more to see. */
+const ROLL_EVERY = 3;
 
 /**
  * What the flight came to: the ball came down, dropped in the cup, went into the water, or came down out of bounds (where
@@ -26,8 +28,10 @@ export type Ending = 'landed' | 'holed' | 'water' | 'out';
 
 /** A flight, from the ball to where it first comes down. */
 export class Preview {
-  /** How many points of `points` are the flight: none for a shot that is not lofted. */
+  /** How many points of `points` are the flight: none for a shot that is not lofted, unless it is a putt's roll (`Previewer.roll`). */
   n = 0;
+  /** Whether the path is a ball rolling along the ground and not a flight, so the page lays it on the ground and not at the ball's height. */
+  rolled = false;
   /** The flight as x, y, z for each of its points, one a frame, and how far along it each lies, in yards. */
   readonly points = new Float32Array((FRAMES + 2) * 3);
   readonly length = new Float32Array(FRAMES + 2);
@@ -86,6 +90,7 @@ export class Preview {
   /** Emptied for the next shot. */
   clear() {
     this.n = 0;
+    this.rolled = false;
     this.knocked = false;
     this.end = 'landed';
     this.carry = 0;
@@ -107,8 +112,12 @@ export class Preview {
 export class Previewer {
   /** The preview of the last shot tried: the same one every time, written over. */
   readonly result = new Preview();
+  /** The roll of the last putt tried, a result of its own so that trying a putt never writes over a flight: made once, written over. */
+  readonly rolled = new Preview();
   private readonly rehearsal: Game;
   /** What the rehearsal told of the shot in hand. */
+  /** Whether the rehearsal is rolling a putt, whose knocks on the ground are the ball's own and not a flight's. */
+  private rolling = false;
   private readonly told = { landed: false, splash: false, out: false, x: 0, y: 0, z: 0 };
 
   /** How many bodies its rehearsal has in its world: the one ball, and never more, however many shots are tried. */
@@ -140,7 +149,8 @@ export class Previewer {
       },
       knocked: (_hard, x, y) => {
         // only what happens in the air is the flight's: nothing is knocked on the ground before the first landing
-        if (!this.told.landed) this.result.knockedAt(x, y, this.rehearsal.world.z[this.rehearsal.ball]);
+        if (!this.told.landed && !this.rolling)
+          this.result.knockedAt(x, y, this.rehearsal.world.z[this.rehearsal.ball]);
       },
     };
     this.rehearsal = game.rehearsal(events);
@@ -181,13 +191,65 @@ export class Previewer {
       if (over() || g.phase !== 'play' || g.ready) break;
       push(world.x[ball], world.y[ball], world.z[ball]);
     }
-    this.finish(layout, from, club, angle, power);
+    this.finish(this.result, layout, from, club, angle, power);
     return p;
   }
 
-  /** What the flight came to, and the ring's ground, from what the rehearsal told. */
-  private finish(layout: Layout, from: { x: number; y: number }, club: BagClub, angle: number, power: number) {
-    const p = this.result;
+  /**
+   * The roll of a putt of `club` (one with no loft), struck true from where a ball lies at `from`, toward `angle`, at
+   * `power`: the ball's track along the ground, a point every `ROLL_EVERY` frames, to where it comes to rest, drops in
+   * the cup, goes into the water or is lost out of bounds, written into `rolled`, which is returned. It is the game's own
+   * physics, so the slope's pull on the ball, the green's speed and a rail's bounce are in it to the digit, and the break
+   * is a curve a player sees and not a number they are told. Nothing for a club that has loft (`run` is its own) or a swing
+   * with no power.
+   */
+  roll(from: { x: number; y: number }, club: BagClub, angle: number, power: number): Preview {
+    const p = this.rolled;
+    const g = this.rehearsal;
+    const told = this.told;
+    p.clear();
+    told.landed = told.splash = told.out = false;
+    if (club.loft > 0 || !(power > 0)) return p;
+    this.rolling = true;
+    g.trial(from.x, from.y);
+    g.pick(club.id);
+    g.setShape(0);
+    g.setSpin(0);
+    if (!g.shoot(angle, power)) return p;
+    const { layout, world, ball } = g;
+    p.rolled = true;
+    const push = (x: number, y: number, z: number) => {
+      const k = p.n++;
+      p.points[k * 3] = x;
+      p.points[k * 3 + 1] = y;
+      p.points[k * 3 + 2] = z;
+      p.length[k] = k
+        ? p.length[k - 1] + Math.hypot(x - p.points[k * 3 - 3], y - p.points[k * 3 - 2], z - p.points[k * 3 - 1])
+        : 0;
+    };
+    push(world.x[ball], world.y[ball], world.z[ball]);
+    // read through a function, since the events that set these are told from inside the rehearsal's steps
+    const lost = () => told.splash || told.out;
+    for (let f = 0; f < FRAMES; f++) {
+      g.step(FRAME);
+      // a ball that comes to rest, drops in the cup or is lost ends the roll; one that merely rolls off a step is still rolling
+      if (lost() || g.phase !== 'play' || g.ready) break;
+      if (f % ROLL_EVERY === ROLL_EVERY - 1) push(world.x[ball], world.y[ball], world.z[ball]);
+    }
+    this.rolling = false;
+    this.finish(p, layout, from, club, angle, power);
+    return p;
+  }
+
+  /** What the flight came to, and the ring's ground, from what the rehearsal told: into `p`, the flight's or the roll's. */
+  private finish(
+    p: Preview,
+    layout: Layout,
+    from: { x: number; y: number },
+    club: BagClub,
+    angle: number,
+    power: number,
+  ) {
     const { world, ball, phase } = this.rehearsal;
     const told = this.told;
     if (phase !== 'play') {
@@ -199,7 +261,7 @@ export class Previewer {
     } else if (told.splash || told.out) {
       p.end = told.splash ? 'water' : 'out';
       [p.x, p.y, p.z] = [told.x, told.y, told.z];
-    } else if (told.landed) {
+    } else if (told.landed && !p.rolled) {
       p.end = 'landed';
       [p.x, p.y, p.z] = [told.x, told.y, told.z];
     } else {
@@ -227,6 +289,8 @@ export class Previewer {
     p.heading = p.carry > 1e-6 ? Math.atan2(p.y - from.y, p.x - from.x) : angle;
     // the swing's spread: a sideways miss of the whole scatter, and the speed lost at the worst, which the carry goes as
     // the square of
+    // (a putt has none: it never scatters)
+    if (p.rolled) return;
     const spread = maxScatter(club, lieAt(layout, from.x, from.y), power);
     const shortest = p.carry * (1 - DISPERSION.loss * Math.min(1, power)) ** 2;
     p.footprint.across = p.carry * Math.sin(spread);
