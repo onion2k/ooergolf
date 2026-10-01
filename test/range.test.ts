@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import { TILE, layoutOf, lieAt } from '../src/arena';
 import { COURSES } from '../src/course';
-import { RANGE, rangeHole } from '../src/range';
+import { RANGE, rangeHole, type RangeSpec } from '../src/range';
 import { LIE } from '../src/surfaces';
 
 const range = () => COURSES.find((c) => c.name === 'The Range')!;
@@ -19,6 +19,16 @@ describe('the range', () => {
     expect(c.holes).toBe(RANGE);
     expect(c.summary).toEqual({ holes: 3, par: 10 });
     expect(RANGE.map((h) => h.name)).toEqual(['Pitch and Putt', 'Iron Alley', 'The Long Way']);
+  });
+
+  it('draws a spec the old way where it names no width, and a wider fairway where it does, refusing what it cannot make', () => {
+    const spec: RangeSpec = { name: 'Test', par: 4, length: 175 };
+    const plain = rangeHole(spec);
+    expect(rangeHole({ ...spec, width: 13 }).map, 'thirteen is what it was').toEqual(plain.map);
+    const wide = rangeHole({ ...spec, width: 17 });
+    expect(wide.map[0].length - plain.map[0].length, 'four tiles wider').toBe(4);
+    expect(() => rangeHole({ ...spec, width: 12 })).toThrow(/odd number/);
+    expect(() => rangeHole({ ...spec, bend: 0.5, corner: 4 })).toThrow(/not made yet/);
   });
 
   it('is golf all through and no other course is: a course’s flag is what its holes’ layouts say', () => {

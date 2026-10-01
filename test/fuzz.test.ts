@@ -1,7 +1,7 @@
 /** The monkey itself: it gets about, and a clean seed is clean. `npm run fuzz` is the long form. */
 import { describe, expect, it } from 'vitest';
 import { layoutOf } from '../src/arena';
-import { WINDY, contoured, fuzz } from '../scripts/fuzzer';
+import { WINDS, WINDY, contoured, fuzz } from '../scripts/fuzzer';
 import { GREEN, greenArrows } from '../src/green';
 import { GREENS } from '../src/surfaces';
 import { LINKS_SPECS } from '../src/links';
@@ -128,7 +128,12 @@ describe('the fuzzer', () => {
       for (const name of Object.keys(r.visited)) visited.add(name);
     }
     // the holes it played are the windy ones, and so the wind was on the games it played
-    expect(WINDY.map((h) => h.wind)).toEqual([12, 18, 6]);
+    expect(WINDY.map((h) => h.wind)).toEqual(RANGE.map((_, k) => WINDS[k % WINDS.length]));
+    expect(WINDY.length, 'a windy hole for each of The Range').toBe(RANGE.length);
+    expect(
+      WINDY.every((h) => h.wind! > 0),
+      'none of them calm',
+    ).toBe(true);
     expect([...visited].sort()).toEqual(WINDY.map((h) => h.name).sort());
     for (const name of visited) expect(name).toMatch(/ windy$/);
     expect(aimed, 'shots aimed in the wind, each preview held to the game').toBeGreaterThan(20);

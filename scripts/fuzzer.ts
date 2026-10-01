@@ -60,14 +60,18 @@ const MISSES = 2;
 
 const DT = 1 / 60;
 
+/** The winds, in miles an hour, that the holes of The Range are given in turn, over again past the last. */
+export const WINDS = [12, 18, 6] as const;
+
 /**
- * The three holes of The Range with a wind on them, of 12, 18 and 6 miles an hour, under names of their own (the save
- * keeps a best score by name): where the monkey plays golf in wind, since The Range itself is calm and stays so.
+ * The holes of The Range with a wind on them, of 12, 18 and 6 miles an hour in turn and over again for a course of more
+ * than three (a hole past the list would otherwise be given none, and be calm without a word), under names of their own
+ * (the save keeps a best score by name): where the monkey plays golf in wind, since The Range itself is calm and stays so.
  */
 export const WINDY: readonly HoleDef[] = RANGE.map((hole, k) => ({
   ...hole,
   name: `${hole.name} windy`,
-  wind: [12, 18, 6][k],
+  wind: WINDS[k % WINDS.length],
 }));
 
 /**

@@ -95,7 +95,8 @@ describe('the courses', () => {
   });
 
   it('The Downs are half as long again as the holes there were: tee to cup, on the mean, and none of them short', () => {
-    const before = [...COURSE, ...HILLS].map(length);
+    // the thirteen holes there were: the Hills have since been given more, which are not what the Downs were measured by
+    const before = [...COURSE, ...HILLS.slice(0, 4)].map(length);
     const was = before.reduce((a, b) => a + b, 0) / before.length;
     const now = DOWNS.map(length);
     const mean = now.reduce((a, b) => a + b, 0) / now.length;

@@ -12,16 +12,25 @@ import type { HoleDef } from './course';
 import { TILE } from './arena';
 
 /** A range hole: what it is called, its par and how far it is from the tee to the cup, in units. */
-interface RangeSpec {
+export interface RangeSpec {
   name: string;
   par: number;
   length: number;
   /** A bunker short of the green on the left, which the sand wedge is for. */
   bunker?: boolean;
+  /** The fairway's width in tiles, an odd number so it lies about the middle; 13 where it is not said. */
+  width?: number;
+  /**
+   * A way of play bent once, for the holes of the range that are not straight: where the fairway turns, as a share of the
+   * way from the tee, and how far it is moved across the hole, in tiles. Not yet made (no hole asks for it, and a spec that
+   * names one is refused, not drawn straight), so that the holes there are stay exactly as they were.
+   */
+  bend?: number;
+  corner?: number;
 }
 
 /** The width of the fairway and of the rough beside it, in tiles, and the green's radius round the cup. */
-const FAIRWAY = 13,
+const FAIRWAY_WIDTH = 13,
   ROUGH = 9,
   GREEN = 5.5;
 /** How many rows of rough lie behind the tee and past the green. */
@@ -30,6 +39,11 @@ const BEHIND = 3,
 
 /** A hole of the range from its spec: its map, from the far end down, with nothing on it but its ground. */
 export function rangeHole(spec: RangeSpec): HoleDef {
+  if (spec.bend !== undefined || spec.corner !== undefined)
+    throw new Error(`${spec.name}: a bent hole of the range is not made yet`);
+  const FAIRWAY = spec.width ?? FAIRWAY_WIDTH;
+  if (!Number.isInteger(FAIRWAY) || FAIRWAY < 3 || FAIRWAY % 2 === 0)
+    throw new Error(`${spec.name}: a fairway is an odd number of tiles across, three or more, not ${FAIRWAY}`);
   const cols = 2 + 2 * ROUGH + FAIRWAY,
     middle = Math.floor(cols / 2);
   const teeRow = BEHIND,

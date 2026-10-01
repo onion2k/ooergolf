@@ -220,10 +220,15 @@ describe('the grass of a big hole', () => {
   /** The fields of every hole that exists, made as the page makes them, hashed: written from the game before any coarser cell was. */
   const GOLDEN = '47c5f0e840447698275ac03a6c4fd2cf7ee299ca39996228743521a3e96a47d8';
 
-  it('is the very field every hole that exists had, bit for bit, at the finest cell', () => {
+  /** The twenty-two holes the golden was written from: the Meadow, the first four Hills and the first nine Downs. */
+  const ORIGINAL = [...COURSE, ...HILLS.slice(0, 4), ...DOWNS.slice(0, 9)];
+  /** Every hand-drawn hole added since: held to the finest cell and to being made the same each time, not to a hash. */
+  const ADDED = [...COURSE, ...HILLS, ...DOWNS].filter((h) => !ORIGINAL.includes(h));
+
+  it('is the very field every hole that existed had, bit for bit, at the finest cell', () => {
     const all = createHash('sha256');
     let holes = 0;
-    for (const hole of [...COURSE, ...HILLS, ...DOWNS]) {
+    for (const hole of ORIGINAL) {
       const layout = layoutOf(hole.map, hole.terrain);
       expect(cellFor(layout), hole.name).toBe(TURF.cell);
       const f = fieldOf(layout, hole.name, clearings(layout, hole.name));
@@ -236,6 +241,17 @@ describe('the grass of a big hole', () => {
     }
     expect(holes).toBe(22);
     expect(all.digest('hex')).toBe(GOLDEN);
+  });
+
+  it('grows the field of every hole added since at the finest cell, the same each time', () => {
+    for (const hole of ADDED) {
+      const layout = layoutOf(hole.map, hole.terrain);
+      expect(cellFor(layout), hole.name).toBe(TURF.cell);
+      const make = () => fieldOf(layout, hole.name, clearings(layout, hole.name));
+      const [a, b] = [make(), make()];
+      expect(Buffer.from(a.mask.buffer).equals(Buffer.from(b.mask.buffer)), `${hole.name}: mask`).toBe(true);
+      expect(Buffer.from(a.heights.buffer).equals(Buffer.from(b.heights.buffer)), `${hole.name}: heights`).toBe(true);
+    }
   });
 
   it('takes the finest cell whose field the renderer takes: finer for a smaller hole, and none for one past the last', () => {

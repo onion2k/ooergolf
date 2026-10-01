@@ -160,10 +160,15 @@ describe('the scenery of a big hole', () => {
   /** Every hole that exists: its scatter, its dressing and its clearings, hashed, written before any of it grew. */
   const GOLDEN = '670cf99c0a8d7082257054557f4e68185915e66f8b5902fb0310d6be246333b5';
 
-  it('is what every hole that exists had, piece for piece, none of them being bigger than the biggest', () => {
+  /** The twenty-two holes the golden was written from: the Meadow, the first four Hills and the first nine Downs. */
+  const ORIGINAL = [...COURSE, ...HILLS.slice(0, 4), ...DOWNS.slice(0, 9)];
+  /** Every hand-drawn hole added since, each held to the same rules but not to a hash, so adding one moves nothing above. */
+  const ADDED = [...COURSE, ...HILLS, ...DOWNS].filter((h) => !ORIGINAL.includes(h));
+
+  it('is what every hole that existed had, piece for piece, none of them being bigger than the biggest', () => {
     const all = createHash('sha256');
     let holes = 0;
-    for (const hole of [...COURSE, ...HILLS, ...DOWNS]) {
+    for (const hole of ORIGINAL) {
       const l = layoutOf(hole.map, hole.terrain);
       expect(bigness(l), hole.name).toBe(1);
       all.update(JSON.stringify([scatter(l, hole.name), dress(l, hole.name), clearings(l, hole.name)]));
@@ -171,6 +176,17 @@ describe('the scenery of a big hole', () => {
     }
     expect(holes).toBe(22);
     expect(all.digest('hex')).toBe(GOLDEN);
+  });
+
+  it('gives every hole added since the same scenery twice, and none of them bigger than the biggest drawn by hand', () => {
+    for (const hole of ADDED) {
+      const l = layoutOf(hole.map, hole.terrain);
+      expect(bigness(l), hole.name).toBe(1);
+      const once = JSON.stringify([scatter(l, hole.name), dress(l, hole.name), clearings(l, hole.name)]);
+      expect(once, `${hole.name} is made the same each time`).toBe(
+        JSON.stringify([scatter(l, hole.name), dress(l, hole.name), clearings(l, hole.name)]),
+      );
+    }
   });
 
   it('is bigger by the perimeter past the biggest hole, and never below one', () => {

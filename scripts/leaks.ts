@@ -36,7 +36,10 @@ const DT = 1 / 60;
 export const WATCH: Partial<Record<string, { ceiling: number; steady?: boolean }>> = {
   bodies: { ceiling: BODY_CAPACITY },
   slots: { ceiling: BODY_CAPACITY },
-  'save bytes': { ceiling: 2_000 },
+  // a best is kept for each hole by its name and is written and never read, so the save only grows, a hole at a time, to
+  // every hole of every course done with every club owned: about 42 bytes a hole, 1,915 for the forty-three there were
+  // and about 2,380 for six courses of nine and four of them of the minigolf; 3,000 leaves room for a few holes beyond
+  'save bytes': { ceiling: 3_000 },
   // emptied at every new round: never more than a score a hole
   'card scores': { ceiling: COURSE.length },
   // the bodies in the rehearsal a golf hole's shots are previewed in: the ball, however many shots are tried, and the
