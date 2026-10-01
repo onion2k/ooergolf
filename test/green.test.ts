@@ -223,7 +223,7 @@ describe('the break, against the game’s own putt', () => {
     return { x: to.x + ((to.x - from.x) / length) * extra, y: to.y + ((to.y - from.y) / length) * extra };
   };
 
-  for (const greens of [12, 16, 22]) {
+  for (const greens of [GREENS.fast, GREENS.normal, GREENS.slow]) {
     it(`is the putt the game plays, at greens of ${greens}: struck as it says, the ball goes by the target within half a yard (the ninetieth of them within four tenths)`, () => {
       const offs: number[] = [];
       let ratios = 0,

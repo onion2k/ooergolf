@@ -1,6 +1,6 @@
 /**
- * The speed of the greens: how steadily a putting green slows a rolling ball, from the fast greens of a good club (12 yards
- * a second a second) to the slow ones of a bad (22), as one figure a hole has (`HoleDef.greens`), read in one place
+ * The speed of the greens: how steadily a putting green slows a rolling ball, from the fast greens of a good club (11 yards
+ * a second a second) to the slow ones of a bad (19.5), as one figure a hole has (`HoleDef.greens`), read in one place
  * (`rollOf`, and `Game.rollAt` for the ground at a point) and handed to the physics. Held here: that the figure says what
  * a ball does (it rolls v squared over twice the roll, on the physics' own arithmetic), that the first cut is slower
  * than the green by the same ratio at every speed, that a hole without the figure plays as every green always has, and that
@@ -45,7 +45,9 @@ describe('what a green’s speed is', () => {
     expect(GREENS.fast).toBeLessThan(GREENS.normal);
     expect(GREENS.normal).toBeLessThan(GREENS.slow);
     expect(GREENS.normal).toBe(SURFACES[LIE.green].roll);
-    expect(GREENS.normal).toBe(ROLL.roll);
+    // the putting green was retuned a touch faster than the minigolf green, which is as it was, and is held on its own
+    expect(SURFACES[LIE.none].roll).toBe(ROLL.roll);
+    expect(GREENS.normal).toBeLessThan(ROLL.roll);
   });
 
   it('is the green’s roll on a green, and the first cut’s as much slower as it always was, at every speed', () => {
@@ -69,14 +71,14 @@ describe('what a green’s speed is', () => {
 
 describe('Game.rollAt', () => {
   it('says what the ground at a point slows a ball by, from the hole’s greens: on every tile of a golf hole, by its letter', () => {
-    for (const greens of [12, 16, 22]) {
+    for (const greens of [GREENS.fast, GREENS.normal, GREENS.slow]) {
       const hole = golfHole({ ...LINKS_SPECS[1], greens });
       const { game } = golfGame(hole);
       const l = game.layout;
       const byLetter: Record<string, number> = {
         g: greens,
         C: greens,
-        c: (greens * 26) / 16,
+        c: (greens * SURFACES[LIE.cut].roll) / GREENS.normal,
         f: 20,
         r: 60,
         t: 20,
@@ -110,7 +112,7 @@ describe('Game.rollAt', () => {
 describe('the physics’ greens', () => {
   it('slow a ball as the figure says: it rolls v squared over twice the roll, within a tenth of a yard, at fast, normal and slow', () => {
     const v = 20;
-    for (const greens of [12, 16, 22]) {
+    for (const greens of [GREENS.fast, GREENS.normal, GREENS.slow]) {
       const r = rolled(fieldOf('g', greens), v);
       expect(r.lie).toBe(LIE.green);
       // the first step rolls before it is slowed, which is half a step's travel more
@@ -122,25 +124,25 @@ describe('the physics’ greens', () => {
   });
 
   it('are faster the lower the figure: a fast green runs a ball further than a normal, and a normal further than a slow', () => {
-    const [fast, normal, slow] = [12, 16, 22].map((g) => rolled(fieldOf('g', g), 20).dist);
+    const [fast, normal, slow] = [GREENS.fast, GREENS.normal, GREENS.slow].map((g) => rolled(fieldOf('g', g), 20).dist);
     expect(fast).toBeGreaterThan(normal);
     expect(normal).toBeGreaterThan(slow);
-    expect(fast / slow).toBeCloseTo(22 / 12, 1);
+    expect(fast / slow).toBeCloseTo(GREENS.slow / GREENS.fast, 1);
   });
 
-  it('slow the first cut as much more than the green at every speed: a ball of the same speed dies at 16 over 26 of the distance', () => {
+  it('slow the first cut as much more than the green at every speed: a ball of the same speed dies at the green’s roll over the cut’s of the distance', () => {
     const v = 20;
-    for (const greens of [12, 16, 22]) {
+    for (const greens of [GREENS.fast, GREENS.normal, GREENS.slow]) {
       const green = rolled(fieldOf('g', greens), v),
         cut = rolled(fieldOf('c', greens), v);
       expect(cut.lie).toBe(LIE.cut);
-      expect(green.dist / cut.dist, `greens ${greens}`).toBeGreaterThan(26 / 16 - 0.03);
-      expect(green.dist / cut.dist, `greens ${greens}`).toBeLessThan(26 / 16 + 0.03);
+      expect(green.dist / cut.dist, `greens ${greens}`).toBeGreaterThan(SURFACES[LIE.cut].roll / GREENS.normal - 0.03);
+      expect(green.dist / cut.dist, `greens ${greens}`).toBeLessThan(SURFACES[LIE.cut].roll / GREENS.normal + 0.03);
       expect(Math.abs(cut.dist - reach(v, rollOf(LIE.cut, greens))), `greens ${greens}`).toBeLessThan(0.2);
     }
   });
 
-  it('are as every green was for a hole that has none: the same ball, to the last digit, as a hole that says 16', () => {
+  it('are as every green was for a hole that has none: the same ball, to the last digit, as a hole that says the normal', () => {
     for (const ch of ['g', 'c']) {
       const none = rolled(fieldOf(ch), 33),
         normal = rolled(fieldOf(ch, GREENS.normal), 33);
@@ -155,8 +157,8 @@ describe('the physics’ greens', () => {
     for (const ch of ['f', 'r']) {
       const base = field(ch as 'f' | 'r');
       const a = rolled(base, 30),
-        b = rolled({ ...base, greens: 12 }, 30),
-        c = rolled({ ...base, greens: 22 }, 30);
+        b = rolled({ ...base, greens: GREENS.fast }, 30),
+        c = rolled({ ...base, greens: GREENS.slow }, 30);
       expect(b.dist, ch).toBe(a.dist);
       expect(c.dist, ch).toBe(a.dist);
     }

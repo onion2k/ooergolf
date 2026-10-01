@@ -58,7 +58,7 @@ export interface HoleDef {
   wind?: number;
   /**
    * How fast the greens of a golf hole are: the steady slowing of a ball rolling on them, in yards a second a second
-   * (`SURFACES` has 16 for a putting green, which a hole without it has). Less is faster, from `GREENS.fast` to
+   * (`GREENS.normal`, 14, which a hole without it has). Less is faster, from `GREENS.fast` to
    * `GREENS.slow`, and the first cut round a green is slowed in the same ratio. Handed to the physics when the hole
    * begins (`makeWorld`), and read by `Game.rollAt` and `breakOf`.
    */

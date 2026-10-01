@@ -99,13 +99,13 @@ describe('a lofted ball', () => {
       seven = run('7-iron'),
       pitch = run('pitching-wedge'),
       sand = run('sand-wedge');
-    // a driver runs on about an eighth of its carry, a mid iron about a sixteenth, a wedge a fiftieth
-    expect(driver).toBeGreaterThan(0.08);
-    expect(driver).toBeLessThan(0.17);
-    expect(seven).toBeGreaterThan(0.03);
-    expect(seven).toBeLessThan(0.1);
-    expect(pitch).toBeGreaterThan(0.005);
-    expect(pitch).toBeLessThan(0.045);
+    // a driver runs on about a fifth of its carry, a mid iron about a tenth, a wedge a twentieth (test/feel.test.ts holds the figures)
+    expect(driver).toBeGreaterThan(0.17);
+    expect(driver).toBeLessThan(0.26);
+    expect(seven).toBeGreaterThan(0.06);
+    expect(seven).toBeLessThan(0.13);
+    expect(pitch).toBeGreaterThan(0.02);
+    expect(pitch).toBeLessThan(0.08);
     expect(driver).toBeGreaterThan(five);
     expect(five).toBeGreaterThan(seven);
     expect(seven).toBeGreaterThan(pitch);

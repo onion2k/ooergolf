@@ -175,11 +175,14 @@ describe('putting on a green with a slope, at any speed', () => {
       const l = layout(greens);
       return speedAcross(l, l.cup.x + 10, l.cup.y, l.cup.x, l.cup.y, 0, g);
     };
-    expect(at(12)).toBeCloseTo(Math.sqrt(2 * 12 * 10), 6);
-    expect(at(22)).toBeCloseTo(Math.sqrt(2 * 22 * 10), 6);
-    // with none handed it is the green's own, 16, as on every hole that had none
-    const l = layout(16);
-    expect(speedAcross(l, l.cup.x + 10, l.cup.y, l.cup.x, l.cup.y, 0)).toBeCloseTo(Math.sqrt(2 * 16 * 10), 6);
+    expect(at(GREENS.fast)).toBeCloseTo(Math.sqrt(2 * GREENS.fast * 10), 6);
+    expect(at(GREENS.slow)).toBeCloseTo(Math.sqrt(2 * GREENS.slow * 10), 6);
+    // with none handed it is the green's own, GREENS.normal, as on every hole that had none
+    const l = layout(GREENS.normal);
+    expect(speedAcross(l, l.cup.x + 10, l.cup.y, l.cup.x, l.cup.y, 0)).toBeCloseTo(
+      Math.sqrt(2 * GREENS.normal * 10),
+      6,
+    );
   });
 
   it('with a player’s slips, never leaves a putt dying short or runs it off the green, on the fastest and slowest greens, downhill and across', () => {

@@ -216,7 +216,7 @@ export function breakOf(layout: Layout, x: number, y: number, greens: number = G
   return { across, rise };
 }
 
-/** What a hole's greens are called, from how fast they run: `fast` at 14 and under, `slow` over 19, and `medium` between. */
+/** What a hole's greens are called, from how fast they run: `fast` at 12.5 and under, `slow` over 17, and `medium` between. */
 export function speedName(greens: number): 'fast' | 'medium' | 'slow' {
-  return greens <= 14 ? 'fast' : greens > 19 ? 'slow' : 'medium';
+  return greens <= 12.5 ? 'fast' : greens > 17 ? 'slow' : 'medium';
 }

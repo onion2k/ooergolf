@@ -36,7 +36,7 @@ import {
   tileAt,
   type Layout,
 } from './arena';
-import { BAG, PUTTER, bagClub, type BagClub } from './bag';
+import { BAG, PUTTER, bagClub, carrying, type BagClub } from './bag';
 import type { HoleDef } from './course';
 import { carryFrom } from './flight';
 import type { Game } from './game';
@@ -47,7 +47,7 @@ import { Route } from './route';
 import type { Random } from './random';
 import type { Shot } from './shot';
 import { windReach } from './shaping';
-import { LIE, rollOf, type Lie } from './surfaces';
+import { LANDING, LIE, SURFACES, rollOf, type Lie } from './surfaces';
 
 /** How fast a ball it means for the cup is going when it gets there: inside what the cup catches off its middle, 7. */
 const ARRIVE = 4;
@@ -197,13 +197,33 @@ const LEANS = 0.002;
 const LAY_UP = { share: 0.94, within: 0.98, most: 4 };
 
 /**
- * How far a lofted ball runs on after it lands, as a share of its carry, by the club's loft in degrees: a driver runs
- * on about an eighth of it, a wedge a thirtieth. A rough estimate from what golfers know of a ball coming down steeply
- * and not from the game's own tables, which are what it is measuring: it lands short of the cup by a stroke's worth of
- * roll, and a putt finishes the hole.
+ * How far a lofted ball runs on after it lands, as a share of its carry, for `club` struck from `lie` and coming down on
+ * the fairway (or, from the rough or the sand, where it lay), on the level: worked out from the surfaces table by the arithmetic of a landing and not written down,
+ * so a retune of the ball's keep, bounce or roll moves it with them. The ball comes down at the speed it rose with, its
+ * speed along the ground scrubbed by the surface's `keep` less the steeper it came down (as `Game.landing` does), and
+ * hops up with the surface's `bounce` of its speed into the ground; each hop carries it along the ground for the time it
+ * is up, until one is too soft to be a landing (`LANDING.least`), and what it has then rolls out on the surface's roll.
+ * It lands short of the cup by this much, and a putt finishes the hole. The share is the same at every power to within
+ * a hair (a driver's 20.4 per cent at full power is 20.1 at half), so it is worked out at the hardest.
  */
-function runOn(loft: number): number {
-  return Math.max(0.01, 0.15 - 0.0025 * loft);
+export function runOn(club: BagClub, lie: Lie = LIE.fairway): number {
+  if (!(club.loft > 0)) return 0;
+  const from = SURFACES[lie];
+  // a ball played out of a hazard is guessed to come down in it, where nothing runs on, and any other onto the fairway
+  const landsIn = lie === LIE.rough || lie === LIE.sand ? lie : LIE.fairway;
+  const land = SURFACES[landsIn];
+  const speed = strikeSpeed(1, club.hardest) * from.power;
+  const loft = ((club.loft + from.loft) * Math.PI) / 180;
+  let along = speed * Math.cos(loft),
+    into = speed * Math.sin(loft),
+    run = 0;
+  for (let hops = 0; hops < 32 && into >= LANDING.least; hops++) {
+    along *= land.keep * Math.exp((-LANDING.steep * into) / Math.max(1e-6, along));
+    into *= land.bounce;
+    run += (along * 2 * into) / PHYSICS.gravity;
+  }
+  run += (along * along) / (2 * rollOf(landsIn));
+  return run / carrying(speed, club.loft + from.loft);
 }
 
 /**
@@ -241,7 +261,7 @@ export function golfCandidates(game: Game, x: number, y: number): Plan[] {
   // from the shortest club to the longest, those that reach; and the longest, flat out, for a distance none does
   const reaching: Plan[] = [];
   for (const club of BAG.filter((c) => c !== PUTTER).reverse()) {
-    const reach = (carryFrom(club, 1, lie) + windCarry(game, club, lie, angle)) * (1 + runOn(club.loft));
+    const reach = (carryFrom(club, 1, lie) + windCarry(game, club, lie, angle)) * (1 + runOn(club, lie));
     if (reach >= distance) reaching.push({ angle, power: distance / reach, club: club.id });
   }
   const out = reaching.length ? reaching.slice(0, 2) : [{ angle, power: 1, club: BAG[0].id }];
@@ -267,7 +287,7 @@ export function golfLayUps(game: Game, route: Route, x: number, y: number): Cand
   const out: Candidate[] = [];
   const bearing = Math.atan2(layout.cup.y - y, layout.cup.x - x);
   for (const club of BAG.filter((c) => c !== PUTTER).reverse()) {
-    const reach = (carryFrom(club, 1, lie) + windCarry(game, club, lie, bearing)) * (1 + runOn(club.loft));
+    const reach = (carryFrom(club, 1, lie) + windCarry(game, club, lie, bearing)) * (1 + runOn(club, lie));
     if (reach >= way * LAY_UP.within) continue;
     const to = route.waypoint(x, y, reach * LAY_UP.share);
     const distance = Math.hypot(to.x - x, to.y - y);

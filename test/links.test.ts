@@ -48,8 +48,8 @@ describe('The Links', () => {
     for (const spec of rest.slice(0, -1)) {
       expect(spec.contour!, spec.name).toBeGreaterThanOrEqual(first.contour! + 0.2);
       expect(spec.contour!, spec.name).toBeLessThanOrEqual(0.9);
-      expect(spec.greens!, spec.name).toBeGreaterThanOrEqual(13);
-      expect(spec.greens!, spec.name).toBeLessThanOrEqual(19);
+      expect(spec.greens!, spec.name).toBeGreaterThanOrEqual(11.4);
+      expect(spec.greens!, spec.name).toBeLessThanOrEqual(16.7);
       expect(last.greens!, spec.name).toBeLessThan(spec.greens!);
       expect(last.contour!, spec.name).toBeGreaterThan(spec.contour!);
     }

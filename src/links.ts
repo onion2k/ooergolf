@@ -36,7 +36,7 @@ export const LINKS_SPECS: readonly GolfSpec[] = [
     wind: 4,
     // a gentle, true green at the normal speed to open on: a first putt a player can read, and make.
     contour: 0.3,
-    greens: 16,
+    greens: 14,
   },
   {
     name: 'Water Carry',
@@ -52,7 +52,7 @@ export const LINKS_SPECS: readonly GolfSpec[] = [
     wind: 6,
     // a short par three, whose green is a little quick and a little turned, so a ball that carries the water is not safe on it.
     contour: 0.6,
-    greens: 15,
+    greens: 13.2,
   },
   {
     name: 'Long Bend',
@@ -68,7 +68,7 @@ export const LINKS_SPECS: readonly GolfSpec[] = [
     wind: 10,
     // a par five that is long enough: a green that runs a touch slow and swells modestly, so a third shot with a wedge can be held.
     contour: 0.7,
-    greens: 17,
+    greens: 15,
   },
   {
     name: 'Tight Left',
@@ -84,7 +84,7 @@ export const LINKS_SPECS: readonly GolfSpec[] = [
     wind: 12,
     // a par four with trouble left, so a green with a fair amount of turn at a lively pace asks for a careful approach.
     contour: 0.8,
-    greens: 15,
+    greens: 13.2,
   },
   {
     name: 'Island Green',
@@ -100,7 +100,7 @@ export const LINKS_SPECS: readonly GolfSpec[] = [
     wind: 5,
     // an island, where a ball that lands is held by a slow green with little on it: the water is the test, not the putt.
     contour: 0.5,
-    greens: 19,
+    greens: 16.7,
   },
   {
     name: 'Rushing Brook',
@@ -119,7 +119,7 @@ export const LINKS_SPECS: readonly GolfSpec[] = [
     wind: 8,
     // two ponds along the side, and a green at the normal pace with a good deal of break to finish the hole's tests.
     contour: 0.9,
-    greens: 16,
+    greens: 14,
   },
   {
     name: 'The Big Dogleg',
@@ -135,7 +135,7 @@ export const LINKS_SPECS: readonly GolfSpec[] = [
     wind: 7,
     // a three-shot hole with a big, slow, heavily contoured green, rewarding the shot that leaves an uphill putt.
     contour: 0.9,
-    greens: 18,
+    greens: 15.8,
   },
   {
     name: 'The Straight Mile',
@@ -154,7 +154,7 @@ export const LINKS_SPECS: readonly GolfSpec[] = [
     wind: 10,
     // long and straight, with a green that is fast but flatter, so the length and not the putt is what it asks.
     contour: 0.7,
-    greens: 14,
+    greens: 12.3,
   },
   {
     name: 'Home Stretch',
@@ -170,7 +170,7 @@ export const LINKS_SPECS: readonly GolfSpec[] = [
     wind: 12,
     // the last: the fastest green of the nine and the most contoured, so the round is decided on the putting green.
     contour: 1,
-    greens: 13,
+    greens: 11.4,
   },
 ];
 

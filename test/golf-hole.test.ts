@@ -11,7 +11,7 @@ import { TILE, layoutOf, lieAt, slopeAt, tileAt } from '../src/arena';
 import { CUP } from '../src/course';
 import { golfHole, type GolfSpec } from '../src/golf';
 import { terrainRefusal } from '../src/physics';
-import { LIE, SURFACES } from '../src/surfaces';
+import { GREENS, LIE, SURFACES } from '../src/surfaces';
 import { TREE } from '../src/trees';
 import { PHYSICS } from '../src/physics';
 
@@ -280,7 +280,7 @@ describe('every hole made is a hole that can be played', () => {
 describe('a hole’s greens and contour, which are the spec’s and are copied to it', () => {
   it('has the speed of its greens as HoleDef.greens when the spec says, and none when it does not, as a wind is', () => {
     expect(hole({ greens: 13 }).greens).toBe(13);
-    expect(hole({ greens: 22 }).greens).toBe(22);
+    expect(hole({ greens: GREENS.slow }).greens).toBe(GREENS.slow);
     expect('greens' in hole()).toBe(false);
     expect('wind' in hole()).toBe(false);
     expect(hole({ wind: 8, greens: 14 }).wind).toBe(8);

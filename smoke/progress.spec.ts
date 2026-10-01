@@ -16,6 +16,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { TILE, layoutOf } from '../src/arena';
 import { breakOf } from '../src/green';
 import { puttText } from '../src/readout';
+import { DRAG } from '../src/shot';
 import { scoreName } from '../src/score';
 import { LIE } from '../src/surfaces';
 import { drag, puttingHole, start, watch } from './game';
@@ -97,7 +98,9 @@ async function puttAsSuggested(page: Page) {
   const dx = plan.back.x - plan.from.x,
     dy = plan.back.y - plan.from.y;
   const len = Math.hypot(dx, dy);
-  const pull = plan.power * 0.35 * plan.short;
+  // a drag shorter than the dead zone is not a shot: a putt that softer takes the least a player can pull, as a player's would
+  // (faster greens ask less of a short putt, and the autopilot's tap of a hundredth under the dead zone could not be made)
+  const pull = Math.max(plan.power * DRAG.full, DRAG.dead * 1.1) * plan.short;
   await drag(
     page,
     plan.from,

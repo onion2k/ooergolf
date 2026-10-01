@@ -133,21 +133,23 @@ describe('a wind of ten miles an hour', () => {
 
 describe('a game with no wind, no shape and no spin', () => {
   // read off the game before the wind, the shape and the spin were in it: first landing x, y and where it came to rest x, y
+  // (the first landing is exactly what it was; where the ball rests was written again when the landing's keep and bounce were raised, which
+  // runs it on further)
   const BEFORE = {
     'driver on the fairway, a true swing': {
       random: () => 0.5,
       club: 'driver',
-      at: [-56.6651725769043, 2.7356882095336914, -52.067073822021484, 25.603944778442383],
+      at: [-56.6651725769043, 2.7356882095336914, -49.04219055175781, 40.64839553833008],
     },
     '7-iron on the fairway, a swing of the game’s own chance': {
       random: seeded(7),
       club: '7-iron',
-      at: [-31.28902244567871, -82.67829132080078, -32.743465423583984, -77.80592346191406],
+      at: [-31.28902244567871, -82.67829132080078, -34.16722106933594, -73.03626251220703],
     },
     'sand wedge on the fairway, a true swing': {
       random: () => 0.5,
       club: 'sand-wedge',
-      at: [-19.022672653198242, -126.00567626953125, -19.32667350769043, -125.0233154296875],
+      at: [-19.022672653198242, -126.00567626953125, -19.620878219604492, -124.0714111328125],
     },
   } as const;
 
@@ -277,8 +279,8 @@ describe('the autopilot in the wind', () => {
       });
     }
 
-    it(`plays a shot at the very limit of the driver, from 300 yards, in a fifteen mile an hour ${name}, as far as the club can go, and says where`, () => {
-      const w = plan(300, toward, 15);
+    it(`plays a shot at the very limit of the driver, from 330 yards, in a fifteen mile an hour ${name}, as far as the club can go, and says where`, () => {
+      const w = plan(330, toward, 15);
       expect(w.p.club).toBe('driver');
       expect(w.p.power).toBe(1);
       // what it expects is what the game does: it saw the wind

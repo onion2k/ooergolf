@@ -50,6 +50,13 @@ import { seeded } from '../src/random';
 import { groundAt } from '../src/shot';
 import { GREENS, LIE } from '../src/surfaces';
 
+/**
+ * How far off the cup a straight putt's line must pass for the break to say it misses: the cup takes a ball within about
+ * 1.45 yards of its line, and one that curves takes it from a little further (a putt that breaks 1.5 or 1.6 across, struck
+ * straight, still drops in the game's own rehearsal), so only a break clearly past that holds the autopilot to aiming off.
+ */
+const MISSES = 2;
+
 const DT = 1 / 60;
 
 /**
@@ -304,7 +311,7 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
                 ) * far;
               const { across } = breakOf(layout, from.x, from.y, game.def.greens);
               told.push(...breakProblems(game));
-              if (Math.abs(off + across) > 1 + 0.1 * far || (Math.abs(across) > 1.45 && off * across >= 0))
+              if (Math.abs(off + across) > 1 + 0.1 * far || (Math.abs(across) > MISSES && off * across >= 0))
                 told.push(
                   `a putt of ${far.toFixed(1)} was aimed ${off.toFixed(2)} off the cup, where the break says ${across.toFixed(2)}, on greens that run at ${game.def.greens ?? GREENS.normal}`,
                 );

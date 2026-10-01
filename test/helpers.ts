@@ -66,15 +66,24 @@ export function onGreen(seed = 1) {
 /**
  * A golf hole that is one surface from end to end, for tests of what a ball does on it: `surface` is a golf tile's
  * character (`f` fairway, `r` rough, `g` green, `s` sand), the tee is at the south end in the middle of the width and
- * the cup out of the way in the far corner, and the rail is a long way off either side. Flat unless given `terrain`.
+ * the cup out of the way in the far corner, and the rail is a long way off either side. Flat unless given `terrain`. The cup
+ * is `room` tiles in from the far rail (one, by default, which is close: a ball that runs on past the cup meets the rail
+ * six yards on and comes back, which is not what lies beyond a golf hole's cup, so a test of where a ball comes to rest
+ * on the cup gives it room).
  */
-export function field(surface: 'f' | 'r' | 'g' | 's', rows = 130, cols = 41, terrain?: Float32Array): HoleDef {
+export function field(
+  surface: 'f' | 'r' | 'g' | 's',
+  rows = 130,
+  cols = 41,
+  terrain?: Float32Array,
+  room = 1,
+): HoleDef {
   const middle = Math.floor(cols / 2);
   const map = [
     '#'.repeat(cols),
     ...Array.from({ length: rows - 2 }, (_, r) => {
       const row: string[] = Array.from({ length: cols }, (_, c) => (c === 0 || c === cols - 1 ? '#' : surface));
-      if (r === 1) row[2] = 'C';
+      if (r === room) row[2] = 'C';
       // the tee in a box of its own, which is also what makes a field of sand or rough a golf hole
       if (r === rows - 4) row.splice(middle - 1, 3, 't', 'T', 't');
       return row.join('');

@@ -44,20 +44,23 @@ export interface Surface {
  */
 export const SURFACES: readonly Surface[] = [
   { name: 'minigolf green', roll: 16, keep: 0.45, bounce: 0.3, power: 1, loft: 0, wild: 1 },
-  { name: 'tee', roll: 20, keep: 0.37, bounce: 0.3, power: 1, loft: 0, wild: 1 },
-  { name: 'fairway', roll: 20, keep: 0.37, bounce: 0.3, power: 0.98, loft: 0, wild: 1 },
+  { name: 'tee', roll: 20, keep: 0.48, bounce: 0.45, power: 1, loft: 0, wild: 1 },
+  { name: 'fairway', roll: 20, keep: 0.48, bounce: 0.45, power: 0.98, loft: 0, wild: 1 },
   { name: 'rough', roll: 60, keep: 0.12, bounce: 0.08, power: 0.76, loft: 0, wild: 1.5 },
-  { name: 'putting green', roll: 16, keep: 0.45, bounce: 0.3, power: 1, loft: 0, wild: 1 },
+  { name: 'putting green', roll: 14, keep: 0.58, bounce: 0.45, power: 1, loft: 0, wild: 1 },
   { name: 'sand', roll: 60, keep: 0.03, bounce: 0.03, power: 0.66, loft: 6, wild: 1.25 },
-  { name: 'first cut', roll: 26, keep: 0.28, bounce: 0.2, power: 0.97, loft: 0, wild: 1.1 },
+  { name: 'first cut', roll: 23, keep: 0.36, bounce: 0.3, power: 0.97, loft: 0, wild: 1.1 },
 ];
 
 /**
  * How fast the putting greens run, as the steady slowing of a ball rolling on one, in yards a second a second: less is
  * faster, the way a real green's speed is the distance a ball runs. `normal` is the table's own; a hole may ask for any
  * from `fast` to `slow` (`HoleDef.greens`), and the first cut round a green runs as much slower than it as it always did.
+ * `fast` is 11 and not the 10.5 that an eighth off the old 12 would make: the break (`green.ts`) is held to the game's own putt
+ * at every speed a hole may ask for, and at 10.5 a ball aimed straight at a putt the break says should miss begins to drop more
+ * often than the model allows (a slow one the slope carries to the cup); the fastest hole, Home Stretch, runs at 11.4.
  */
-export const GREENS = { fast: 12, normal: 16, slow: 22 } as const;
+export const GREENS = { fast: 11, normal: 14, slow: 19.5 } as const;
 
 /** How steadily `lie` slows a rolling ball, in yards a second a second, on a hole whose greens run at `greens`: the table's own on all but the green and its first cut. */
 export function rollOf(lie: Lie, greens: number = GREENS.normal): number {
@@ -71,6 +74,6 @@ export function rollOf(lie: Lie, greens: number = GREENS.normal): number {
  * and how much steeper a ball comes down scrubs more of its speed along the ground. A surface keeps `keep` of it
  * for a ball landing flat, and `keep` times e to the minus `steep` times the tangent of the angle it comes down at for
  * one steeper: a driver's shallow eleven degrees keeps about four fifths of that, and a wedge's forty-six about a fifth.
- * Fitted, with the hop, so that on the fairway a driver runs on about an eighth of its carry and a wedge a thirtieth.
+ * Fitted, with the hop, so that on the fairway a driver runs on about a fifth of its carry, a 7-iron an eleventh and a sand wedge a thirtieth.
  */
 export const LANDING = { least: 3, steep: 1.3 } as const;

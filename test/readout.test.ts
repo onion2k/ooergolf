@@ -170,7 +170,8 @@ describe('the readout of a putt’s break', () => {
     expect(greensText(GREENS.slow)).toBe('Slow greens');
     expect(greensText(undefined)).toBeNull();
     // between the three, as `speedName` says
-    expect(greensText(14)).toBe('Fast greens');
+    expect(greensText(12.5)).toBe('Fast greens');
+    expect(greensText(17)).toBe('Medium greens');
     expect(greensText(19.5)).toBe('Slow greens');
   });
 });
