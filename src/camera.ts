@@ -21,7 +21,7 @@ import type { Camera } from 'artshape-render/gpu/camera';
  * back further, `golfFar`, since a player who cannot see where a shot would come down cannot play it: a drive goes
  * 250 yards, and from 110 back the top of the screen is 98 yards off.
  */
-export const VIEW = { fov: 40, near: 30, far: 110, home: 62, golfFar: 200 };
+export const VIEW = { fov: 40, near: 30, far: 110, home: 62, golfFar: 200, phoneFar: 400 };
 /**
  * How far it tilts, as its angle from the vertical: at home, three-quarters from above, the steepest it goes, and the
  * lowest. The lowest is held to 57 degrees because the grass is what a frame costs, and looking toward the horizon
@@ -47,6 +47,22 @@ const WIDE = 1.25;
 /** How much further back a screen of `aspect` stands the camera than its distance says: one for a screen that is wide enough. */
 export function tallOf(aspect: number): number {
   return Math.sqrt(Math.max(1, WIDE / Math.max(aspect, 0.1)));
+}
+/**
+ * How much a screen is a phone held upright, from nought to one: nought at a tablet's shape and wider, one at a phone's
+ * (0.6 wide for each tall and narrower), and between in between. A phone's screen is so narrow that standing back far
+ * costs the frame less ground than a desk's does, and so tall that the coins and the shop across the top are in the way of
+ * a landing that is as far up it as the camera can put it.
+ */
+export function phoneOf(aspect: number): number {
+  return Math.max(0, Math.min(1, (0.75 - aspect) / 0.15));
+}
+/**
+ * The furthest the camera stands on a golf hole, tall screen and all: `VIEW.golfFar`, and for a phone upright, when the
+ * page tells the aim view is for one (`phones`), up to `VIEW.phoneFar`. The desk's and the tablet's are as they were.
+ */
+export function standOf(aspect: number, phones = true): number {
+  return VIEW.golfFar + (phones ? (VIEW.phoneFar - VIEW.golfFar) * phoneOf(aspect) : 0);
 }
 /**
  * How far ahead of the ball, the way the camera faces, it looks, so the ball
@@ -96,6 +112,9 @@ export class CameraRig {
   far: number = VIEW.far;
   /** The furthest the camera itself stands from what it looks at, tall screen and all: none on a hole of minigolf. */
   private stand = Infinity;
+  /** Whether the hole is golf, and the shape of the screen: what the zoom's limit and the camera's are worked out from. */
+  private golfNow = false;
+  private screen = 1.6;
   /** The view it is easing to, if it is, on a golf hole: each of the three is left alone where it is not a number. */
   private goal: { distance: number; tilt: number; lead: number } | null = null;
   /** Which way it faces, turned from up the course: nought at the tee's view, and within a turn either way of it. */
@@ -185,11 +204,28 @@ export class CameraRig {
    * tall the screen). A view zoomed out past the limits of the hole that is begun is brought within them.
    */
   setGolf(on: boolean) {
-    this.far = on ? VIEW.golfFar : VIEW.far;
-    this.stand = on ? VIEW.golfFar : Infinity;
-    this.distance = Math.min(this.far, this.distance);
+    this.golfNow = on;
+    this.limit();
     if (!on) this.lead = LEAD;
     this.goal = null;
+  }
+
+  /**
+   * Told the shape of the screen it is drawn on, which a phone upright makes the zoom's limit further on a golf hole
+   * (`standOf`): the zoom is of the distance before a tall screen pushes the camera back, so it must reach as far as
+   * the camera may stand once it has.
+   */
+  setScreen(aspect: number) {
+    this.screen = aspect;
+    this.limit();
+  }
+
+  /** The zoom's limit and how far the camera may stand, worked out from whether the hole is golf and the screen, and a view past them brought within. */
+  private limit() {
+    const on = this.golfNow;
+    this.stand = on ? standOf(this.screen) : Infinity;
+    this.far = on ? Math.max(VIEW.golfFar, this.stand / tallOf(this.screen)) : VIEW.far;
+    this.distance = Math.min(this.far, this.distance);
   }
 
   /** Whether the hole it is set for is golf. */
@@ -297,7 +333,10 @@ export class CameraRig {
 
   /** The camera put where the rig says at game time `t`, for a screen of the camera's aspect: any glide over, untold. */
   place(camera: Camera, t = Infinity) {
-    const r = Math.min(this.distance * tallOf(camera.aspect), this.stand);
+    const r = Math.min(
+      this.distance * tallOf(camera.aspect),
+      this.stand === Infinity ? this.stand : standOf(camera.aspect),
+    );
     const at = this.looking(t);
     const { azimuth, tilt } = this.view(t, this.seen);
     // the way it faces on the ground, and the point it looks at a lead ahead of the ball that way

@@ -754,6 +754,141 @@ test.describe('golf on The Links', () => {
   });
 });
 
+test.describe('the aim view on a phone held upright', () => {
+  test.use({ hasTouch: true, isMobile: true });
+  const SIZES = [
+    { width: 360, height: 640 },
+    { width: 375, height: 667 },
+    { width: 390, height: 844 },
+    { width: 430, height: 932 },
+  ];
+
+  test("costs a frame inside the budget from the aim view of every club, on the two longest holes of The Links and the range's longest, at the sizes of a phone, facing up the hole and turned round", async ({
+    page,
+  }) => {
+    test.setTimeout(480_000);
+    const worst = { ms: 0, where: '' };
+    for (const size of [SIZES[0], SIZES[2]]) {
+      await page.setViewportSize(size);
+      const problems = watch(page);
+      await start(page, { seed: 11, paused: true });
+      const rows = await page.evaluate(async () => {
+        const g = window.game!;
+        const out: { where: string; ms: number; back: number }[] = [];
+        const measure = async (course: string, hole: number, clubs: string[]) => {
+          g.chooseCourse(course);
+          g.startHole(hole);
+          for (const club of clubs) {
+            g.club(club);
+            g.step(300);
+            const back = g.view().distance;
+            out.push({ where: `${course} hole ${hole + 1}, the ${club}`, ms: await g.measureFrame(40), back });
+            g.orbit(Math.PI, 0);
+            g.step(2);
+            out.push({
+              where: `${course} hole ${hole + 1}, the ${club}, turned round`,
+              ms: await g.measureFrame(40),
+              back,
+            });
+            g.orbit(-Math.PI, 0);
+          }
+        };
+        const bag = ['driver', '3-wood', '5-iron', '9-iron', 'sand-wedge'];
+        await measure('The Links', 2, bag);
+        await measure('The Links', 6, bag);
+        await measure('The Range', 8, bag);
+        return out;
+      });
+      for (const r of rows) {
+        if (r.ms > worst.ms) Object.assign(worst, { ms: r.ms, where: `${size.width}x${size.height} ${r.where}` });
+        expect(
+          r.ms,
+          `${size.width}x${size.height} ${r.where} (${r.back.toFixed(0)} back): inside the 5 ms budget`,
+        ).toBeLessThan(5);
+      }
+      expect(problems).toEqual([]);
+    }
+    console.log(`the phone aim view: the worst is ${worst.where}, ${worst.ms.toFixed(2)} ms a frame`);
+  });
+
+  test("draws the driver's aim view on every rung of the ladder inside the budget on a phone, and the lower rungs no dearer", async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await page.setViewportSize(SIZES[0]);
+    const costs: number[] = [];
+    for (let rung = 0; rung < 4; rung++) {
+      const problems = watch(page);
+      await start(page, { seed: 11, paused: true, rung });
+      costs.push(
+        await page.evaluate(async () => {
+          const g = window.game!;
+          g.chooseCourse('The Links');
+          g.startHole(6);
+          g.step(300);
+          return g.measureFrame(40);
+        }),
+      );
+      expect(problems).toEqual([]);
+    }
+    console.log(
+      `the driver's aim view on a 360 by 640 phone, each rung: ${costs.map((c) => c.toFixed(2)).join(', ')} ms a frame`,
+    );
+    for (const [rung, ms] of costs.entries()) expect(ms, `rung ${rung}: inside the 5 ms budget`).toBeLessThan(5);
+    for (let rung = 1; rung < costs.length; rung++)
+      expect(costs[rung], `rung ${rung} against the one above`).toBeLessThan(costs[rung - 1] + 0.5);
+  });
+
+  test("shows the far edge of the driver's and the 3-wood's landing ring below the coins, the shop and the switch, at each size", async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    for (const size of SIZES) {
+      await page.setViewportSize(size);
+      const problems = watch(page);
+      for (const club of ['driver', '3-wood']) {
+        // a page of its own for each, since a drag held is not let go of
+        await start(page, { seed: 11, paused: true });
+        await page.evaluate(() => {
+          window.game!.chooseCourse('The Range');
+          window.game!.startHole(8);
+        });
+        await page.evaluate((c) => {
+          window.game!.club(c);
+          window.game!.step(300);
+        }, club);
+        // pressed low, where the bag is not: the aim is the same wherever on the page it is pulled from
+        const from = { x: size.width / 2, y: size.height * 0.4 };
+        await drag(
+          page,
+          from,
+          { x: from.x, y: from.y + 0.35 * Math.min(size.width, size.height) },
+          { hold: true, touch: true },
+        );
+        await page.evaluate(() => window.game!.step(2));
+        const top = await page.evaluate(() => {
+          const g = window.game!;
+          const ring = g.motions().shot?.ring;
+          if (!ring) return null;
+          // the far edge of the ring up the page, on the flat ground of a range hole
+          return Math.min(
+            g.project(ring.x, ring.y, 0).y,
+            g.project(ring.x, ring.y + ring.radius, 0).y,
+            g.project(ring.x, ring.y - ring.radius, 0).y,
+          );
+        });
+        expect(top, `${size.width}x${size.height} ${club}: a ring is drawn`).not.toBeNull();
+        expect(
+          top!,
+          `${size.width}x${size.height} ${club}: its far edge is below the switch (150 px)`,
+        ).toBeGreaterThanOrEqual(150);
+        await page.evaluate(() => window.game!.step(1));
+      }
+      expect(problems).toEqual([]);
+    }
+  });
+});
+
 test.describe('the cup and the rail', () => {
   /** The ball put down `back` short of the cup on the first hole, and struck at it to arrive at its edge at `speed`. */
   const putt = async (page: Page, speed: number, back = 5) => {

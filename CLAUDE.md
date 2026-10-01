@@ -238,7 +238,7 @@ change meant to move it, and the commit says why. Look at every picture.
   lead of `LEAD` units turns with the view so the ball stays low on the
   screen. A new hole puts the switch back to Aim and eases the view home
   over the glide, by the shortest way; nothing of the view is saved. On a
-  golf hole (`setGolf`) it may stand back `VIEW.golfFar`, 200, where minigolf
+  golf hole (`setGolf`) it may stand back `VIEW.golfFar`, 200 (on a tall phone `VIEW.phoneFar`, 400, which `setScreen(aspect)` gives the rig from the page's size: a phone's narrow screen draws less ground at 400 back than a desk does at 200, so a drive's landing ring and its spread clear the coins and the switch at the top, aimed for the far edge of the ring and the chips' real pixel height, `CHROME` in `aimview.ts`; desktop and tablet are as they were), where minigolf
   stops at 110 (and never further than that from what it looks at, tall
   screen and all), since a player who cannot see where a shot comes down cannot
   play it; and it is sent to the **aim view** of the club in hand (`aimAt`,
@@ -802,8 +802,7 @@ each step, and a gate handed what it needs in the same change:
   stands beyond out of bounds, a ball landing on a post's top or a box is left as the physics has it, the club in hand is
   not saved, and the planner knows nothing of a lay-up chosen for the next shot's
   sake. What stage 4 leaves: the preview is the true swing to the first landing (the run-out after it is not shown, nor
-  where the ball would rest, so a spin is not seen until the ball has landed); a full drive on a phone has its ring under
-  the coins and the shop at the top of the screen, since 200 back is the most the camera may stand; the map is not
+  where the ball would rest, so a spin is not seen until the ball has landed); the map is not
   interactive and does not turn with the camera; the camera can lose the ball behind a tree at a low tilt; and the aim
   view is not saved (nothing of the view is). What stage 5 leaves: the wind is steady (no gusts) and uniform along a hole,
   and a lofted club is blown further in yards than a driver; a shape's rate is fixed per club, so a half-power shot curves

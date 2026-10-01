@@ -11,7 +11,7 @@ import { GameRenderer, antialiasFor } from 'artshape-render/game/renderer';
 import { BALL, HARDEST_SHOT, KIND_RADIUS, heightAt, lieAt, onSand, rollsFor } from './arena';
 import { BAG, PUTTER, carryOf } from './bag';
 import { aimView, markScale } from './aimview';
-import { CameraRig, LEAD, TILT, VIEW, catchUp, facing, tallOf } from './camera';
+import { CameraRig, LEAD, TILT, catchUp, facing, standOf, tallOf } from './camera';
 import { CLUBS } from './clubs';
 import { createApi } from './debug';
 import { frameCost } from './frame-cost';
@@ -229,7 +229,7 @@ async function main() {
     // and as much further as a tailwind of the hole carries it, so the ring of a downwind shot is on the screen too
     const reach = carryFrom(inHand, 1, lie) * LANDS_PAST + (inHand.loft > 0 ? windReach(inHand, 1, windNow.speed) : 0);
     aimedFor = `${inHand.id}|${lie}`;
-    rig.aimAt(aimView(reach, aspect), now);
+    rig.aimAt(aimView(reach, aspect, innerHeight), now);
   };
   /**
    * The box the map is painted to, by the screen it is on: a phone on its side, which has no height to spare (the same
@@ -408,6 +408,7 @@ async function main() {
     canvas.width = width;
     canvas.height = height;
     cam.aspect = aspect = width / height;
+    rig.setScreen(aspect);
     // a screen of another shape stands the camera at another distance: the view is worked out again
     aimedFor = '';
     if (mapped && mapped.small !== mapBoxOf().key) paintHoleMap();
@@ -510,7 +511,7 @@ async function main() {
           );
         } else previewer.roll({ x, y }, inHand, aimed.angle, aimed.power);
       }
-      const r = Math.min(rig.distance * tallOf(aspect), VIEW.golfFar);
+      const r = Math.min(rig.distance * tallOf(aspect), standOf(aspect));
       shownPreview = flying ? previewer.result : previewer.rolled;
       scene.setShot(shownPreview, markScale(r));
       previewShown = true;
@@ -601,7 +602,7 @@ async function main() {
         previewer.roll({ x, y }, PUTTER, aimed.angle, aimed.power);
       }
       shownPreview = previewer.rolled;
-      scene.setShot(shownPreview, markScale(Math.min(rig.distance * tallOf(aspect), VIEW.golfFar)));
+      scene.setShot(shownPreview, markScale(Math.min(rig.distance * tallOf(aspect), standOf(aspect))));
       previewShown = true;
     } else if (previewShown) {
       shownPreview = null;

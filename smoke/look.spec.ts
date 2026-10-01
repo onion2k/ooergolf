@@ -923,6 +923,28 @@ test.describe('what it looks like', () => {
       expect(problems).toEqual([]);
     });
 
+    test("a full drive aimed on a 390 by 844 phone: the driver's ring clear of the coins, the shop and the switch", async ({
+      page,
+    }) => {
+      const problems = watch(page);
+      await page.setViewportSize({ width: 390, height: 844 });
+      await start(page, { seed: 11, paused: true });
+      await page.evaluate(() => {
+        window.game!.chooseCourse('The Links');
+        window.game!.startHole(2);
+        window.game!.step(300);
+      });
+      await pullDown(page, 1, 0, true);
+      const ring = await page.evaluate(() => {
+        const r = window.game!.motions().shot!.ring!;
+        const g = window.game!;
+        return g.project(r.x, r.y + r.radius, g.ball().z).y;
+      });
+      expect(ring, 'the far edge of the ring is below the switch, which ends at about 150').toBeGreaterThan(150);
+      await expect(page).toHaveScreenshot('phone-links-aim-driver-ring.png', TOLERANCE);
+      expect(problems).toEqual([]);
+    });
+
     test('the longest hole of The Moors, from its tee, on a phone', async ({ page }) => {
       const problems = watch(page);
       await start(page, { seed: 11, paused: true });
