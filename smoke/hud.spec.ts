@@ -103,7 +103,7 @@ for (const [where, device] of [
       // the bag does not sit on the switch, the help or the frame's cost, or the hole's words
       const box = async (sel: string) => (await page.locator(sel).boundingBox())!;
       const bag = await box('#bag');
-      for (const other of ['#viewMode', '#help', '#strokes']) {
+      for (const other of ['#viewMode', '#viewFlag', '#help', '#strokes']) {
         const o = await box(other);
         const apart =
           bag.x + bag.width <= o.x || o.x + o.width <= bag.x || bag.y + bag.height <= o.y || o.y + o.height <= bag.y;
@@ -155,7 +155,7 @@ for (const [where, device] of [
       const apart = (a: { x: number; y: number; width: number; height: number }, b: typeof a) =>
         a.x + a.width <= b.x || b.x + b.width <= a.x || a.y + a.height <= b.y || b.y + b.height <= a.y;
       const map = await box('#holePanel');
-      for (const other of ['#strokes', '#purse', '#bag', '#viewMode', '#help'])
+      for (const other of ['#strokes', '#purse', '#bag', '#viewMode', '#viewFlag', '#help'])
         expect(apart(map, await box(other)), `the map and ${other} do not overlap`).toBe(true);
       expect(map.x).toBeGreaterThanOrEqual(0);
       expect(map.x + map.width).toBeLessThanOrEqual(page.viewportSize()!.width);
@@ -242,7 +242,7 @@ for (const [where, device] of [
       }
       // the bag, taller for them, is clear of the other panels, and does not reach up into them
       const bag = await box('#bag');
-      for (const other of ['#viewMode', '#help', '#strokes', '#holePanel', '#purse'])
+      for (const other of ['#viewMode', '#viewFlag', '#help', '#strokes', '#holePanel', '#purse'])
         expect(apart(bag, await box(other)), `the bag and ${other} do not overlap`).toBe(true);
       expect(bag.y, 'the bag is on the screen').toBeGreaterThanOrEqual(0);
       // the wind line is in the strokes panel, under the pin, which is clear of the purse

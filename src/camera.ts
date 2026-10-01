@@ -57,11 +57,25 @@ export const LEAD = 10;
 
 /** How quickly it eases to an aim view, as a rate: the share of the way it goes in a second, as `EASE` is. */
 const AIM_EASE = 4;
+/** How quickly it turns to face a place it is told to, as a rate: most of the way round in a half second, and there in two. */
+const TURN_EASE = 6;
 /** How near an aim view it is called there, in yards of distance and in radians of tilt, which snaps it the rest of the way. */
-const SETTLED = { distance: 0.25, tilt: 0.002, lead: 0.25 };
+const SETTLED = { distance: 0.25, tilt: 0.002, lead: 0.25, turn: 0.002 };
 
 /** An angle brought within one turn either way of nought. */
 const wrap = (a: number) => a - 2 * Math.PI * Math.round(a / (2 * Math.PI));
+
+/**
+ * The azimuth that faces the camera from `from` toward `to` on the ground: nought for a place straight up the course, a
+ * quarter turn for one due east. Nothing for a place that is where it is (within a hundredth of a yard) or that is not a
+ * place, since there is no way to face it.
+ */
+export function facing(from: { x: number; y: number }, to: { x: number; y: number }): number | null {
+  const dx = to.x - from.x,
+    dy = to.y - from.y;
+  if (!Number.isFinite(dx) || !Number.isFinite(dy) || Math.hypot(dx, dy) < 0.01) return null;
+  return Math.atan2(dx, dy);
+}
 
 /**
  * How long the camera takes to glide to a new hole's tee, in seconds of game
@@ -88,6 +102,8 @@ export class CameraRig {
   azimuth = 0;
   /** How far from the vertical it looks down: `TILT.home` at the tee's view, and within `TILT`'s limits. */
   tilt: number = TILT.home;
+  /** The way it is turning to face, as an azimuth within a turn either way, if it is: eased to by `settle`. */
+  private heading: number | null = null;
   /** What is left of the way from where it was looking when a hole began, and when that was, in game time. */
   private readonly behind: [number, number, number] = [0, 0, 0];
   /** What is left of the turn and the tilt it was at when the hole began, eased away over the same glide. */
@@ -124,7 +140,8 @@ export class CameraRig {
     this.behind[1] = ay - y;
     this.behind[2] = az - z;
     this.glidFrom = t;
-    // home in the shortest way round, and the tee's own tilt
+    // home in the shortest way round, and the tee's own tilt; and no longer turning to face anywhere
+    this.heading = null;
     this.azimuth = 0;
     this.tilt = TILT.home;
     this.easeTurn = wrap(azimuth);
@@ -206,8 +223,34 @@ export class CameraRig {
     this.goal = { distance, tilt, lead };
   }
 
-  /** A step of `dt` seconds nearer the view it is easing to: by the time that has passed, so a slow frame goes as far as the frames it was. */
+  /**
+   * Sent to face `azimuth` (see `facing`), by the shortest way round, eased there by `settle`: only the way it faces, so
+   * the distance, the tilt, the lead and an aim view it is easing to are left as they are. A turn of the player's own takes it
+   * back from here, as it does an aim view; so does a new hole. A number that is not one faces nowhere.
+   */
+  turnTo(azimuth: number) {
+    if (Number.isFinite(azimuth)) this.heading = wrap(azimuth);
+  }
+
+  /** Whether it is turning to face a place. */
+  get turning(): boolean {
+    return this.heading !== null;
+  }
+
+  /**
+   * A step of `dt` seconds nearer the view it is easing to and the place it is turning to face: by the time that has
+   * passed, so a slow frame goes as far as the frames it was.
+   */
   settle(dt: number) {
+    const h = this.heading;
+    if (h !== null) {
+      const to = wrap(h - this.azimuth);
+      const left = to * Math.exp(-TURN_EASE * Math.max(0, dt));
+      if (Math.abs(left) < SETTLED.turn) {
+        this.azimuth = h;
+        this.heading = null;
+      } else this.azimuth = wrap(h - left);
+    }
     const g = this.goal;
     if (!g) return;
     const k = 1 - Math.exp(-AIM_EASE * Math.max(0, dt));
@@ -234,10 +277,12 @@ export class CameraRig {
 
   /**
    * Turned by `turn` radians (more is toward +X), which it may be without limit, and tilted by `tilt`, more being a
-   * lower view, within `TILT`. A number that is not one turns and tilts it nowhere.
+   * lower view, within `TILT`. A number that is not one turns and tilts it nowhere. The player's own, which ends an ease
+   * to an aim view and a turn to face a place (`turnTo`).
    */
   orbit(turn: number, tilt: number) {
     this.goal = null;
+    this.heading = null;
     if (Number.isFinite(turn)) this.azimuth = wrap(this.azimuth + turn);
     if (Number.isFinite(tilt)) this.tilt = Math.max(TILT.least, Math.min(TILT.most, this.tilt + tilt));
   }

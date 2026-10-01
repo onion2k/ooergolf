@@ -70,13 +70,21 @@ const EACH = 3;
  */
 const WIND_FLIGHT = 8;
 
+/** How long, in seconds, the camera may take to turn to face a place: a half turn is a second and a quarter, and this is a good way over. */
+export const TURN_TIME = 2;
+
 /**
  * The rules a camera must always keep, however a player has turned, tilted and zoomed it: its turn and its tilt are
  * numbers, it has turned no more than a turn either way and is tilted within `TILT`, it is no nearer or further than the
- * zoom allows (which is further on a golf hole), and it looks ahead of the ball by a number of yards.
+ * zoom allows (which is further on a golf hole), and it looks ahead of the ball by a number of yards. And a camera turning
+ * to face a place (`turning`) is not left at it: given `turningFor`, the seconds it has been, it is done within
+ * `TURN_TIME`, since the ease snaps home and a half turn takes a second and a quarter. The turn it is at is held to the
+ * same rules as any, which is all that can be said of the way it is going: the rig keeps that to itself.
  */
-export function viewProblems(rig: CameraRig): string[] {
+export function viewProblems(rig: CameraRig, turningFor = 0): string[] {
   const out: string[] = [];
+  if (rig.turning && turningFor > TURN_TIME)
+    out.push(`the camera is still turning to face a place after ${turningFor.toFixed(2)} seconds, past ${TURN_TIME}`);
   if (!Number.isFinite(rig.azimuth)) out.push(`the turn is not a number: ${rig.azimuth}`);
   else if (Math.abs(rig.azimuth) > Math.PI + 1e-9) out.push(`the turn is more than a turn: ${rig.azimuth}`);
   if (!Number.isFinite(rig.tilt)) out.push(`the tilt is not a number: ${rig.tilt}`);

@@ -33,6 +33,8 @@
     --sky-tint: #e3f0ff;
     --sky-face: #57b4ff;
     --title: #1b4fd8;
+    --flag: #ed332b;
+    --flag-deep: #b81f19;
     --sun: #ffcf33;
     --sun-hover: #ffda5c;
     --sun-deep: #d99a00;
@@ -888,6 +890,21 @@
     min-width: 64px;
     padding: 0 16px;
   }
+  /*
+   * the flag beside them turns the camera to face the cup: a quiet pill with a picture and no word, as narrow as a thumb
+   * allows, pressed and let go and never left on, so it is not one of the pair that say what a drag is
+   */
+  #viewMode #viewFlag {
+    display: grid;
+    place-items: center;
+    min-width: 44px;
+    padding: 0;
+  }
+  #viewFlag svg {
+    width: 29px;
+    height: 29px;
+    pointer-events: none;
+  }
   #viewMode button[aria-pressed='false'] {
     background: var(--paper);
     box-shadow:
@@ -903,6 +920,21 @@
     /* the frame's cost is not shown on a phone, so the switch takes its place at the bottom */
     #viewMode {
       bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    }
+    /* the pills are no wider than their words need, so the three together are 186px and leave the help a column of its own */
+    #viewMode button {
+      min-width: 56px;
+      padding: 0 12px;
+    }
+    /*
+     * the help wraps to two lines in what is left to its left of the switch (the screen less a margin each side, the switch's
+     * 186px and a gap), where one line of it ran under the switch on a phone, and is kept inside it as the screen narrows
+     */
+    #help {
+      max-width: calc(100vw - 16px - 16px - 186px - 8px);
+      padding: 6px 12px;
+      line-height: 1.2;
+      border-radius: 20px;
     }
   }
 
@@ -1104,9 +1136,22 @@
   <div id="bagClubs"></div>
 </div>
 <div class="panel" id="holePanel" hidden><canvas id="holeMap" role="img" aria-label="Map of the hole"></canvas></div>
-<div class="panel" id="viewMode" role="group" aria-label="What a drag does" hidden>
+<div class="panel" id="viewMode" role="group" aria-label="The view" hidden>
   <button id="modeAim" type="button" aria-pressed="true">Aim</button
-  ><button id="modeLook" type="button" aria-pressed="false">Look</button>
+  ><button id="modeLook" type="button" aria-pressed="false">Look</button
+  ><button id="viewFlag" class="quiet" type="button" aria-label="Look at the flag" title="Look at the flag">
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M5 21h9" fill="none" stroke="var(--sky-deep)" stroke-width="3" stroke-linecap="round" />
+      <path d="M9.5 21V3.5" fill="none" stroke="var(--ink)" stroke-width="3" stroke-linecap="round" />
+      <path
+        d="M9.5 4.5 20 8.6 9.5 12.7Z"
+        fill="var(--flag)"
+        stroke="var(--flag)"
+        stroke-width="3"
+        stroke-linejoin="round"
+      />
+    </svg>
+  </button>
 </div>
 <div class="panel" id="help" hidden>drag back and let go to putt</div>
 <div id="boot">

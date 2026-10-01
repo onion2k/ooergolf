@@ -14,6 +14,7 @@ import {
   planProblems,
   previewProblems,
   viewProblems,
+  TURN_TIME,
 } from '../src/invariants';
 import { Previewer } from '../src/preview';
 import { bagClub, carrying } from '../src/bag';
@@ -231,6 +232,43 @@ describe('what must always hold of the camera', () => {
     const mini = new CameraRig();
     mini.distance = VIEW.far + 1;
     expect(viewProblems(mini).join('\n')).toMatch(/distance/);
+  });
+
+  it('holds of a camera turning to face a place, every frame of the way, from any heading and to any heading', () => {
+    for (const from of [-3, -1.5, 0, 0.7, 3.1]) {
+      for (const to of [-3.1, -0.4, 0, 2, 3.14]) {
+        const rig = new CameraRig();
+        rig.orbit(from, 0);
+        rig.turnTo(to);
+        let seconds = 0;
+        while (rig.turning && seconds < 10) {
+          expect(viewProblems(rig, seconds), `${from} to ${to} at ${seconds}`).toEqual([]);
+          rig.settle(1 / 60);
+          seconds += 1 / 60;
+        }
+        expect(rig.turning, `${from} to ${to}`).toBe(false);
+        expect(seconds, 'a half turn is well within the time allowed').toBeLessThan(TURN_TIME);
+      }
+    }
+  });
+
+  it('reports a turn that is not a number, or more than a turn, while the camera is turning to face a place', () => {
+    const rig = new CameraRig();
+    rig.turnTo(1);
+    rig.azimuth = Number.NaN;
+    expect(viewProblems(rig, 0.1).join('\n')).toMatch(/turn.*not a number/);
+    rig.azimuth = 4;
+    expect(viewProblems(rig, 0.1).join('\n')).toMatch(/more than a turn/);
+  });
+
+  it('reports a camera left turning for longer than a turn takes, and only one that is turning', () => {
+    const rig = new CameraRig();
+    rig.turnTo(2);
+    expect(viewProblems(rig, TURN_TIME - 0.01)).toEqual([]);
+    expect(viewProblems(rig, TURN_TIME + 0.01).join('\n')).toMatch(/still turning/);
+    rig.settle(10);
+    expect(rig.turning).toBe(false);
+    expect(viewProblems(rig, TURN_TIME + 5), 'a camera that is not turning is not late').toEqual([]);
   });
 
   it('reports a lead that is not a number or is under nought', () => {

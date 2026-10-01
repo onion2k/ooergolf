@@ -2,7 +2,7 @@
 import { Camera } from 'artshape-render/gpu/camera';
 import { describe, expect, it } from 'vitest';
 import { layoutOf } from '../src/arena';
-import { CameraRig, GLIDE, LEAD, TILT, catchUp } from '../src/camera';
+import { CameraRig, GLIDE, LEAD, TILT, catchUp, facing } from '../src/camera';
 import { groundAt } from '../src/shot';
 import { GREEN } from './helpers';
 
@@ -387,5 +387,202 @@ describe('orbiting the camera', () => {
     const mid = rig.view(GLIDE / 2).azimuth;
     rig.orbit(0.5, 0);
     expect(rig.view(GLIDE / 2).azimuth).toBeCloseTo(mid + 0.5, 6);
+  });
+});
+
+describe('turning to face a place', () => {
+  const TAU = Math.PI * 2;
+  /** The way a placed camera looks along the ground, as an azimuth: from where it stands to where it looks. */
+  const faces = (rig: CameraRig, t = Infinity) => {
+    const cam = new Camera();
+    cam.fov = rig.fov;
+    cam.aspect = 1.6;
+    rig.place(cam, t);
+    return Math.atan2(cam.target[0] - cam.position[0], cam.target[1] - cam.position[1]);
+  };
+  /** The shortest way round from `a` to `b`, in radians. */
+  const between = (a: number, b: number) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
+  /** A rig that has finished easing, with every frame a sixtieth of a second. */
+  const settled = (rig: CameraRig, frames = 600) => {
+    for (let f = 0; f < frames; f++) rig.settle(1 / 60);
+    return rig;
+  };
+
+  describe('which way that is', () => {
+    it('is nought for a place straight up the course, a quarter turn for one due east, and a half for one behind', () => {
+      expect(facing({ x: 0, y: 0 }, { x: 0, y: 50 })).toBeCloseTo(0, 12);
+      expect(facing({ x: 0, y: 0 }, { x: 50, y: 0 })).toBeCloseTo(Math.PI / 2, 12);
+      expect(facing({ x: 0, y: 0 }, { x: -50, y: 0 })).toBeCloseTo(-Math.PI / 2, 12);
+      expect(Math.abs(facing({ x: 0, y: 0 }, { x: 0, y: -50 })!)).toBeCloseTo(Math.PI, 12);
+      expect(facing({ x: 10, y: 20 }, { x: 40, y: 60 })).toBeCloseTo(Math.atan2(30, 40), 12);
+    });
+
+    it('is nothing for a place that is where it is, or is not a place: there is no way to face', () => {
+      expect(facing({ x: 3, y: 4 }, { x: 3, y: 4 })).toBeNull();
+      expect(facing({ x: 3, y: 4 }, { x: 3.0001, y: 4 })).toBeNull();
+      expect(facing({ x: NaN, y: 4 }, { x: 3, y: 4 })).toBeNull();
+      expect(facing({ x: 3, y: 4 }, { x: Infinity, y: 4 })).toBeNull();
+    });
+  });
+
+  it('turns to face it, and the camera then looks along the line from the ball to it, which is what the flag being straight ahead is', () => {
+    for (const [dx, dy] of [
+      [40, 80],
+      [-60, 10],
+      [5, -90],
+      [100, 0],
+    ]) {
+      const rig = new CameraRig();
+      rig.jump(12, -7);
+      rig.turnTo(facing({ x: 12, y: -7 }, { x: 12 + dx, y: -7 + dy })!);
+      settled(rig);
+      expect(between(faces(rig), Math.atan2(dx, dy)), `toward ${dx},${dy}`).toBeLessThan(1e-6);
+      expect(rig.turning).toBe(false);
+    }
+  });
+
+  it('puts the flag in the middle of the screen across, however far to one side of the course it is', () => {
+    const rig = new CameraRig();
+    const cam = new Camera();
+    cam.fov = rig.fov;
+    cam.aspect = 1.6;
+    rig.jump(0, 0);
+    rig.turnTo(facing({ x: 0, y: 0 }, { x: 70, y: 40 })!);
+    settled(rig);
+    rig.place(cam);
+    cam.update();
+    const [nx] = ndc(cam, 70, 40, 0);
+    expect(Math.abs(nx), 'in the middle across').toBeLessThan(1e-6);
+    // and the ball is in the middle too, below it, since the flag is straight ahead of it
+    expect(Math.abs(ndc(cam, 0, 0, 1)[0])).toBeLessThan(1e-6);
+  });
+
+  it('eases round and does not jump: it is where it was at once, and a little nearer a moment on, and there in a second or two', () => {
+    const rig = new CameraRig();
+    rig.jump(0, 0);
+    rig.turnTo(1.2);
+    expect(rig.turning).toBe(true);
+    expect(rig.azimuth, 'not at once').toBe(0);
+    rig.settle(1 / 60);
+    expect(rig.azimuth).toBeGreaterThan(0.01);
+    expect(rig.azimuth).toBeLessThan(0.5);
+    let last = rig.azimuth;
+    for (let f = 0; f < 60; f++) {
+      rig.settle(1 / 60);
+      expect(rig.azimuth, 'never backward').toBeGreaterThanOrEqual(last);
+      last = rig.azimuth;
+    }
+    expect(Math.abs(1.2 - rig.azimuth), 'most of the way in a second').toBeLessThan(0.2);
+    settled(rig);
+    expect(rig.azimuth).toBe(1.2);
+    expect(rig.turning, 'and done').toBe(false);
+  });
+
+  it('goes as far in a slow frame as in the frames it was', () => {
+    const a = new CameraRig(),
+      b = new CameraRig();
+    a.turnTo(2);
+    b.turnTo(2);
+    for (let f = 0; f < 30; f++) a.settle(1 / 60);
+    for (let f = 0; f < 3; f++) b.settle(1 / 6);
+    expect(Math.abs(a.azimuth - b.azimuth)).toBeLessThan(0.02);
+  });
+
+  it('takes the shortest way round: from just east of south it goes through south, not the long way through north', () => {
+    const rig = new CameraRig();
+    rig.orbit(3, 0);
+    rig.turnTo(-3);
+    let most = Infinity;
+    for (let f = 0; f < 600; f++) {
+      rig.settle(1 / 60);
+      most = Math.min(most, Math.abs(rig.azimuth));
+    }
+    expect(most, 'it never came near north').toBeGreaterThan(2.5);
+    expect(rig.azimuth).toBeCloseTo(-3, 6);
+    // and the same from a view that has been turned past a whole turn and wrapped
+    const other = new CameraRig();
+    other.orbit(TAU * 3 + 0.5, 0);
+    other.turnTo(0);
+    let went = 0;
+    for (let f = 0; f < 600; f++) {
+      const before = other.azimuth;
+      other.settle(1 / 60);
+      went += Math.abs(other.azimuth - before);
+    }
+    expect(went, 'half a radian, not a turn').toBeLessThan(0.7);
+  });
+
+  it('is turned within a turn either way, whatever it is asked to face', () => {
+    const rig = new CameraRig();
+    for (const to of [0, 7, -7, 100, TAU * 5, -TAU * 2.4]) {
+      rig.turnTo(to);
+      settled(rig);
+      expect(Math.abs(rig.azimuth)).toBeLessThanOrEqual(Math.PI + 1e-9);
+      expect(between(rig.azimuth, to)).toBeLessThan(1e-6);
+    }
+  });
+
+  it('is taken back by the player: a turn or a tilt of their own ends it where it is, and a zoom does not', () => {
+    const rig = new CameraRig();
+    rig.turnTo(2);
+    for (let f = 0; f < 10; f++) rig.settle(1 / 60);
+    const part = rig.azimuth;
+    rig.zoom(5);
+    expect(rig.turning, 'a zoom is not a turn').toBe(true);
+    rig.orbit(0.1, 0);
+    expect(rig.turning, 'their own turn ends it').toBe(false);
+    settled(rig, 60);
+    expect(rig.azimuth).toBeCloseTo(part + 0.1, 6);
+    // a tilt of their own is theirs too, and ends it: the view is the player's from the moment they take it
+    const tilted = new CameraRig();
+    tilted.turnTo(2);
+    tilted.orbit(0, 0.1);
+    expect(tilted.turning).toBe(false);
+  });
+
+  it('leaves the distance, the tilt, the lead and a view it is easing to alone', () => {
+    const rig = new CameraRig();
+    rig.setGolf(true);
+    rig.aimAt({ distance: 150, tilt: 0.5, lead: 30 });
+    const was = { distance: rig.distance, tilt: rig.tilt, lead: rig.lead };
+    rig.turnTo(1);
+    expect(rig.aiming, 'the aim view is still being eased to').toBe(true);
+    expect({ distance: rig.distance, tilt: rig.tilt, lead: rig.lead }).toEqual(was);
+    settled(rig);
+    expect(rig.distance).toBe(150);
+    expect(rig.tilt).toBe(0.5);
+    expect(rig.lead).toBe(30);
+    expect(rig.azimuth).toBe(1);
+  });
+
+  it('is put away by a new hole, which eases home from where it is, by the shortest way, and never jumps', () => {
+    const rig = new CameraRig();
+    rig.turnTo(2);
+    for (let f = 0; f < 20; f++) rig.settle(1 / 60);
+    const at = faces(rig);
+    rig.glide(0, 0, 0, 5);
+    expect(rig.turning).toBe(false);
+    expect(between(faces(rig, 5), at), 'it begins where it was').toBeLessThan(1e-6);
+    settled(rig);
+    expect(between(faces(rig, 5 + GLIDE + 1), 0), 'and ends facing up the course').toBeLessThan(1e-6);
+  });
+
+  it('ignores a number that is not one, and faces nowhere it is not told', () => {
+    const rig = new CameraRig();
+    rig.orbit(0.4, 0);
+    rig.turnTo(NaN);
+    rig.turnTo(Infinity);
+    expect(rig.turning).toBe(false);
+    settled(rig, 10);
+    expect(rig.azimuth).toBeCloseTo(0.4, 12);
+  });
+
+  it('can be told again while it is turning, and goes to the last place told', () => {
+    const rig = new CameraRig();
+    rig.turnTo(2);
+    for (let f = 0; f < 15; f++) rig.settle(1 / 60);
+    rig.turnTo(-1);
+    settled(rig);
+    expect(rig.azimuth).toBeCloseTo(-1, 6);
   });
 });

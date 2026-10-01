@@ -1089,3 +1089,92 @@ test.describe('putting', () => {
     });
   });
 });
+
+// ---- the flag button: the switch with its flag icon, and a view turned round to face the cup ----
+
+/**
+ * The pictures of the switch are a small clip, in which the edges of the words come out a hundred pixels different on one
+ * run in ten or so (measured over 36 runs, 105 pixels of 32,000 at the worst, all in the glyphs). So they are held to a
+ * third of a per cent and not a fifth: more than that wobble, and far less than the icon, which is 2.6 per cent of the clip.
+ */
+const SMALL_CLIP = { maxDiffPixelRatio: 0.006, threshold: 0.02 };
+
+/** Every panel's spring finished, so a picture of one is of where it comes to rest and not part of the way. */
+const settled = (page: Page) =>
+  page.evaluate(async () => {
+    for (const a of document.getAnimations()) a.finish();
+    // and two frames drawn on it, so the words are painted where they rest and not as they were when the spring was cut short
+    await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
+  });
+
+test.describe('the flag button', () => {
+  test('the switch with its flag icon, close up on a desk', async ({ page }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true });
+    await page.evaluate(() => window.game!.step(60));
+    await hideStats(page);
+    await settled(page);
+    const b = (await page.locator('#viewMode').boundingBox())!;
+    const clip = {
+      x: Math.round(b.x) - 12,
+      y: Math.round(b.y) - 12,
+      width: Math.round(b.width) + 24,
+      height: Math.round(b.height) + 24,
+    };
+    await expect(page).toHaveScreenshot('flag-switch.png', { ...SMALL_CLIP, clip });
+    expect(problems).toEqual([]);
+  });
+
+  test.describe('on a phone', () => {
+    test.use({ viewport: { width: 400, height: 860 }, hasTouch: true, isMobile: true });
+
+    test('the switch with its flag icon and the help beside it, the foot of the screen', async ({ page }) => {
+      const problems = watch(page);
+      await start(page, { seed: 11, paused: true });
+      await page.evaluate(() => window.game!.step(60));
+      await settled(page);
+      await expect(page).toHaveScreenshot('phone-flag-switch.png', {
+        ...SMALL_CLIP,
+        clip: { x: 0, y: 780, width: 400, height: 80 },
+      });
+      expect(problems).toEqual([]);
+    });
+  });
+
+  test('a hole whose cup is off to one side, from the ball, and after the flag button has turned the camera to face it', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true });
+    // the ball on Long Bend put down where the cup is well off the way the camera faces: the first spot of grass, found in
+    // the same order every time, a hundred and fifty yards from the cup and well round from where the camera looks
+    const lie = await page.evaluate(() => {
+      const g = window.game!;
+      g.chooseCourse('The Links');
+      g.startHole(2);
+      const { cup } = g.content();
+      for (const bearing of [1.1, -1.1, 0.9, -0.9, 1.3, -1.3, 0.7, -0.7])
+        for (const d of [150, 120, 90]) {
+          try {
+            g.lay(cup.x - Math.sin(bearing) * d, cup.y - Math.cos(bearing) * d);
+            g.step(120);
+            return { bearing, d };
+          } catch {
+            // not a place a ball may lie: the next
+          }
+        }
+      throw new Error('nowhere to put the ball');
+    });
+    console.log(`the ball put ${lie.d} yards from the cup, ${lie.bearing} radians off`);
+    await hideStats(page);
+    await settled(page);
+    expect(await page.evaluate(() => window.game!.view().azimuth)).toBe(0);
+    await expect(page).toHaveScreenshot('flag-before.png', TOLERANCE);
+    await page.locator('#viewFlag').click();
+    // the frames the turn takes: it is within a thousandth of a radian in two seconds
+    await page.evaluate(() => window.game!.step(180));
+    expect((await page.evaluate(() => window.game!.view())).turning).toBe(false);
+    await expect(page).toHaveScreenshot('flag-after.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+});

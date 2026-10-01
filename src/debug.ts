@@ -190,6 +190,8 @@ export interface GameApi {
     /** How far ahead of the ball it looks, and whether it is still easing to the view that shows a golf shot's landing. */
     lead: number;
     aiming: boolean;
+    /** Whether it is turning to face the cup, which the flag button sends it to do. */
+    turning: boolean;
     rung: number;
     held: boolean;
     antialias: Antialias;
@@ -204,6 +206,11 @@ export interface GameApi {
   };
   /** The camera turned by `turn` radians and tilted by `tilt` (a bigger tilt is a lower view), as a drag in Look does. */
   orbit(turn: number, tilt: number): void;
+  /**
+   * The camera sent to face the cup from the ball, as the flag button does: false, and nothing done, under the start screen,
+   * while a drag is held on the course, or with the ball at the cup.
+   */
+  faceFlag(): boolean;
   /** The camera parked looking at a point, `distance` back, at once, and not following the ball until `follow`. */
   look(x: number, y: number, distance?: number): void;
   /** The camera following the ball again. */
@@ -329,6 +336,7 @@ export interface DebugHost {
   } | null;
   view(): ReturnType<GameApi['view']>;
   orbit(turn: number, tilt: number): void;
+  faceFlag(): boolean;
   measureFrame(warmup?: number): Promise<number>;
   judge(gap: number, work: number): number;
   motions(): Motions;
@@ -462,6 +470,7 @@ export function createApi(host: DebugHost): GameApi {
     map: () => host.map(),
     view: () => host.view(),
     orbit: (turn, tilt) => host.orbit(turn, tilt),
+    faceFlag: () => host.faceFlag(),
     save() {
       game.persist();
       return JSON.stringify(progress.save);

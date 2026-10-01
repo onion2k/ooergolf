@@ -31,6 +31,8 @@ export interface HudHandlers {
   equip(id: string): void;
   /** The switch pressed: what a drag on the course is from now on, a shot or a turn of the camera. */
   mode(mode: Mode): void;
+  /** The flag button pressed: the camera turned to face the cup. */
+  flag(): void;
   /** A club of the bag chosen on a golf hole, by its id. */
   club(id: string): void;
   /** The shape button pressed: the next shape in its cycle, from minus one (a draw) to one (a fade). */
@@ -147,6 +149,7 @@ export class Hud {
   private readonly modes = document.getElementById('viewMode')!;
   private readonly aimButton = document.getElementById('modeAim')!;
   private readonly lookButton = document.getElementById('modeLook')!;
+  private readonly flagButton = document.getElementById('viewFlag')!;
   private readonly bag = document.getElementById('bag')!;
   private readonly bagInfo = document.getElementById('bagInfo')!;
   private readonly bagClubs = document.getElementById('bagClubs')!;
@@ -206,6 +209,7 @@ export class Hud {
     });
     this.aimButton.addEventListener('click', () => handlers.mode('aim'));
     this.lookButton.addEventListener('click', () => handlers.mode('look'));
+    this.flagButton.addEventListener('click', () => handlers.flag());
     // each cycles to the next of its three, and the game says what it took (`setShaping`)
     this.shapeButton.addEventListener('click', () => handlers.shape(this.next(SHAPES, this.shapeShown)));
     this.spinButton.addEventListener('click', () => handlers.spin(this.next(SPINS, this.spinShown)));

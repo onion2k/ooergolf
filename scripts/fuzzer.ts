@@ -22,7 +22,7 @@ import { Camera } from 'artshape-render/gpu/camera';
 import { aimView } from '../src/aimview';
 import { heightAt } from '../src/arena';
 import { Autopilot } from '../src/autopilot';
-import { CameraRig } from '../src/camera';
+import { CameraRig, facing } from '../src/camera';
 import { CLUBS } from '../src/clubs';
 import { COURSES, type HoleDef } from '../src/course';
 import { Game, type GameEvents } from '../src/game';
@@ -36,6 +36,7 @@ import {
   planProblems,
   previewProblems,
   viewProblems,
+  TURN_TIME,
 } from '../src/invariants';
 import { breakOf, greenArrows } from '../src/green';
 import { golfHole } from '../src/golf';
@@ -566,6 +567,57 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
         for (const problem of viewProblems(rig)) told.push(problem);
       },
     ]);
+    /**
+     * A player pressing the flag button: the camera turned to face the cup from the ball, in either mode, while the ball
+     * rolls or between holes, from any lie. Done on a chance of its own, as reading a green is, so the monkey's own stream
+     * is as it was and every other run plays as before. The page refuses it while a drag is under way, and so does this.
+     */
+    const facer = seeded(seed * 17 + 3);
+    const face = () => {
+      if (input.aim !== null || !game.ready) return;
+      const { world, ball, layout } = game;
+      const ballAt = { x: world.x[ball], y: world.y[ball] };
+      const heading = facing(ballAt, layout.cup);
+      // a ball that is in the cup has nowhere to face: the page's button does nothing then, and so must the rig
+      if (heading === null) {
+        const before = rig.azimuth;
+        rig.turnTo(Number.NaN);
+        if (rig.turning || rig.azimuth !== before) told.push('turning to face nowhere moved the camera');
+        return;
+      }
+      const digest = JSON.stringify([game.t, game.strokes, ballAt.x, ballAt.y, world.z[ball], game.shape, game.spin]);
+      const drawn = draws;
+      rig.setGolf(layout.golf);
+      input.setMode(facer() < 0.5 ? 'look' : 'aim');
+      rig.turnTo(heading);
+      let seconds = 0;
+      // one more second than the rules allow, so a camera left turning is told of by them and not only by this loop
+      for (let k = 0; k < (TURN_TIME + 1) / DT; k++) {
+        for (const problem of viewProblems(rig, seconds)) told.push(problem);
+        if (!rig.turning) break;
+        rig.settle(DT);
+        seconds += DT;
+      }
+      for (const problem of viewProblems(rig, seconds)) told.push(problem);
+      if (rig.turning) told.push(`the camera was still turning to face the flag after ${seconds.toFixed(2)} seconds`);
+      const off = Math.abs(rig.azimuth - heading);
+      if (!(Math.min(off, 2 * Math.PI - off) <= 1e-6))
+        told.push(`the camera faces ${rig.azimuth}, and the flag is at ${heading} from the ball`);
+      // pressed again it changes nothing
+      const at = [rig.azimuth, rig.tilt, rig.distance, rig.lead];
+      rig.turnTo(heading);
+      rig.settle(DT);
+      if (rig.turning || JSON.stringify([rig.azimuth, rig.tilt, rig.distance, rig.lead]) !== JSON.stringify(at))
+        told.push('pressing the flag button again moved the camera');
+      input.setMode('aim');
+      if (
+        digest !==
+        JSON.stringify([game.t, game.strokes, world.x[ball], world.y[ball], world.z[ball], game.shape, game.spin])
+      )
+        told.push('facing the flag changed the game');
+      if (draws !== drawn) told.push(`facing the flag drew ${draws - drawn} numbers of the game's chance`);
+      did('face the flag');
+    };
     const total = actions.reduce((n, [w]) => n + w, 0);
     const act = () => {
       let pick = random() * total;
@@ -580,6 +632,8 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
         if (game.layout.golf && looking() < 0.04) read();
         act();
       }
+      // the button is there whatever the ball is doing, so it is pressed while it rolls and between holes too
+      if (facer() < 0.008) face();
       game.step(DT);
       // a knock told wrongly is told once, and waits for no check
       if (told.length) return fail(told.splice(0));

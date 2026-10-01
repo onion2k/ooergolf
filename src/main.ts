@@ -11,7 +11,7 @@ import { GameRenderer, antialiasFor } from 'artshape-render/game/renderer';
 import { BALL, HARDEST_SHOT, KIND_RADIUS, heightAt, lieAt, onSand, rollsFor } from './arena';
 import { BAG, carryOf } from './bag';
 import { aimView, markScale } from './aimview';
-import { CameraRig, LEAD, TILT, VIEW, catchUp, tallOf } from './camera';
+import { CameraRig, LEAD, TILT, VIEW, catchUp, facing, tallOf } from './camera';
 import { CLUBS } from './clubs';
 import { createApi } from './debug';
 import { frameCost } from './frame-cost';
@@ -133,6 +133,10 @@ async function main() {
       mode(mode) {
         input.setMode(mode);
         hud.setMode(mode);
+      },
+      // the flag: the camera turned to face the cup
+      flag() {
+        faceFlag();
       },
       // a club of the bag chosen on a golf hole
       club(id) {
@@ -420,6 +424,18 @@ async function main() {
   backToAim = () => {
     input.setMode('aim');
     hud.setMode('aim');
+  };
+  /**
+   * The camera turned to face the cup from the ball, the short way and eased, in either mode and on any hole; whether it
+   * was. Not under the start screen, and not while a drag is held, since the aim is the ground under the finger through the
+   * camera and a camera turning under it would turn the shot; and not when the ball is at the cup, where there is no way to face.
+   */
+  const faceFlag = (): boolean => {
+    if (choosing || input.aim) return false;
+    const to = facing({ x: played.world.x[played.ball], y: played.world.y[played.ball] }, played.layout.cup);
+    if (to === null) return false;
+    rig.turnTo(to);
+    return true;
   };
   canvas.addEventListener('pointerdown', (e) => {
     // the mouse's other buttons are not a shot
@@ -816,6 +832,7 @@ async function main() {
       distance: rig.distance,
       lead: rig.lead,
       aiming: rig.aiming,
+      turning: rig.turning,
       rung: governor.rung,
       held: governor.held,
       antialias: antialiasFor(renderer.look, renderer.economy),
@@ -826,6 +843,7 @@ async function main() {
       greens: hud.puttDrawn().greens,
     }),
     orbit: (turn, tilt) => rig.orbit(turn, tilt),
+    faceFlag,
     measureFrame,
     judge,
     motions: () => ({

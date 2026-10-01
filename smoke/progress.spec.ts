@@ -14,6 +14,7 @@
  */
 import { expect, test, type Page } from '@playwright/test';
 import { TILE, layoutOf } from '../src/arena';
+import { facing } from '../src/camera';
 import { breakOf } from '../src/green';
 import { puttText } from '../src/readout';
 import { DRAG } from '../src/shot';
@@ -1649,8 +1650,285 @@ test.describe('putting on a golf hole whose greens have a speed and a contour', 
           (await box('#greens')).y + (await box('#greens')).height - 1,
         );
         void wind;
-        for (const other of ['#purse', '#holePanel', '#bag', '#viewMode', '#help'])
+        for (const other of ['#purse', '#holePanel', '#bag', '#viewMode', '#viewFlag', '#help'])
           expect(apart(strokes, await box(other)), `the strokes panel and ${other} do not overlap`).toBe(true);
+        expect(problems).toEqual([]);
+      });
+    });
+  }
+});
+
+// ---- the flag button: the camera turned to face the cup, by the shortest way, whatever a drag is ----
+
+test.describe('the flag button', () => {
+  /** A golf hole begun with the ball put down east and south of the cup, so that the cup is well off to one side. */
+  async function offToOneSide(page: Page) {
+    await onHole(page, windHole('Off line', 0));
+    await page.evaluate(() => {
+      const g = window.game!;
+      const { cup } = g.content();
+      g.lay(cup.x + 45, cup.y - 30);
+      g.step(120);
+    });
+  }
+
+  /** The azimuth that faces the cup from the ball, worked out here from where each is. */
+  const toFace = (page: Page) =>
+    page
+      .evaluate(() => {
+        const g = window.game!;
+        const b = g.ball();
+        const c = g.content().cup;
+        return { from: { x: b.x, y: b.y }, to: { x: c.x, y: c.y } };
+      })
+      .then(({ from, to }) => facing(from, to)!);
+
+  const view = (page: Page) => page.evaluate(() => window.game!.view());
+  /** An angle's distance from another, the short way round. */
+  const gap = (a: number, b: number) => Math.abs(((a - b + 3 * Math.PI) % (2 * Math.PI)) - Math.PI);
+
+  test('a real click turns the camera to face the cup, eased, and touches neither the strokes nor the ball; the cup is then in the middle of the screen across', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true });
+    await offToOneSide(page);
+    const want = await toFace(page);
+    expect(Math.abs(want), 'the cup is well off the line').toBeGreaterThan(0.5);
+    const before = await page.evaluate(() => ({ ball: window.game!.ball(), strokes: window.game!.state().strokes }));
+    expect((await view(page)).turning, 'not turning before').toBe(false);
+    expect(gap((await view(page)).azimuth, want), 'not facing it before').toBeGreaterThan(0.5);
+    await page.locator('#viewFlag').click();
+    expect((await view(page)).turning, 'turning at once').toBe(true);
+    // eased: a frame on it has moved, and not all the way
+    await page.evaluate(() => window.game!.step(2));
+    const part = await view(page);
+    expect(part.turning).toBe(true);
+    expect(gap(part.azimuth, want)).toBeGreaterThan(0.01);
+    expect(gap(part.azimuth, want)).toBeLessThan(gap(0, want));
+    await page.evaluate(() => window.game!.step(120));
+    const after = await view(page);
+    expect(after.turning, 'there').toBe(false);
+    expect(gap(after.azimuth, want)).toBeLessThan(1e-6);
+    // and nothing else was done
+    expect(await page.evaluate(() => ({ ball: window.game!.ball(), strokes: window.game!.state().strokes }))).toEqual(
+      before,
+    );
+    // the cup is on the line down the middle of the screen
+    const across = await page.evaluate(() => {
+      const g = window.game!;
+      const c = g.content().cup;
+      return { x: g.project(c.x, c.y, g.ball().z).x, width: innerWidth };
+    });
+    expect(Math.abs(across.x - across.width / 2), 'the cup in the middle across').toBeLessThan(across.width * 0.03);
+    expect(await page.evaluate(() => window.game!.invariants())).toEqual([]);
+    expect(problems).toEqual([]);
+  });
+
+  test('it works whether a drag is Aim or Look and leaves the switch as it was; the button is not a toggle', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true });
+    await offToOneSide(page);
+    const want = await toFace(page);
+    await expect(page.locator('#viewFlag')).not.toHaveAttribute('aria-pressed', /.*/);
+    for (const mode of ['look', 'aim'] as const) {
+      await page.locator(mode === 'look' ? '#modeLook' : '#modeAim').click();
+      // turned away first, so there is a turn to make
+      await page.evaluate(() => {
+        window.game!.orbit(1.4, 0);
+        window.game!.step(1);
+      });
+      expect(gap((await view(page)).azimuth, want)).toBeGreaterThan(0.3);
+      await page.locator('#viewFlag').click();
+      await page.evaluate(() => window.game!.step(120));
+      const v = await view(page);
+      expect(gap(v.azimuth, want), `facing it in ${mode}`).toBeLessThan(1e-6);
+      expect(v.mode, `still ${mode}`).toBe(mode);
+      await expect(page.locator('#modeLook')).toHaveAttribute('aria-pressed', String(mode === 'look'));
+      await expect(page.locator('#modeAim')).toHaveAttribute('aria-pressed', String(mode === 'aim'));
+      await expect(page.locator('#viewFlag')).not.toHaveAttribute('aria-pressed', /.*/);
+    }
+    expect(problems).toEqual([]);
+  });
+
+  test('it turns the shortest way round: a quarter turn, and one that is nearer the other way than it looks', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true });
+    await offToOneSide(page);
+    const want = await toFace(page);
+    // from this far round, 3.5 radians one way is 2.78 the other: it goes forward, never back through nought
+    for (const start of [Math.PI / 2, -Math.PI / 2, 3.5, -3.5]) {
+      await page.evaluate(
+        ([from]) => {
+          const g = window.game!;
+          g.orbit(-g.view().azimuth + from, 0);
+          g.step(1);
+        },
+        [want + start] as const,
+      );
+      const first = gap((await view(page)).azimuth, want);
+      expect(first, `from ${start} round`).toBeCloseTo(Math.min(Math.abs(start), 2 * Math.PI - Math.abs(start)), 6);
+      await page.locator('#viewFlag').click();
+      // each frame is nearer than the last, and on the same side of it, so it never goes the long way
+      let last = first;
+      const side = Math.sign(Math.sin(want - (want + start)));
+      for (let f = 0; f < 60; f++) {
+        await page.evaluate(() => window.game!.step(1));
+        const az = (await view(page)).azimuth;
+        const left = gap(az, want);
+        expect(left, `frame ${f} from ${start}`).toBeLessThanOrEqual(last + 1e-9);
+        expect(Math.sign(Math.sin(want - az)) === side || left < 1e-6, `the same way round at frame ${f}`).toBe(true);
+        last = left;
+      }
+      // and the rest of the way, which the ease takes a little over a second to settle
+      await page.evaluate(() => window.game!.step(60));
+      expect(gap((await view(page)).azimuth, want)).toBeLessThan(1e-6);
+      expect((await view(page)).turning).toBe(false);
+    }
+    expect(problems).toEqual([]);
+  });
+
+  test('a player’s own turn of the view takes it over from the turn, which is not taken up again', async ({ page }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true });
+    await offToOneSide(page);
+    const want = await toFace(page);
+    await page.locator('#modeLook').click();
+    await page.locator('#viewFlag').click();
+    await page.evaluate(() => window.game!.step(3));
+    expect((await view(page)).turning).toBe(true);
+    await drag(page, { x: 300, y: 400 }, { x: 420, y: 400 });
+    await page.evaluate(() => window.game!.step(1));
+    const taken = await view(page);
+    expect(taken.turning, 'the drag ended the turn').toBe(false);
+    await page.evaluate(() => window.game!.step(120));
+    const later = await view(page);
+    expect(later.azimuth, 'and it stays where the drag left it').toBeCloseTo(taken.azimuth, 9);
+    expect(gap(later.azimuth, want), 'not at the flag').toBeGreaterThan(0.05);
+    expect(problems).toEqual([]);
+  });
+
+  test('it does nothing while a drag is held, which is still the shot it was, and works again once it is let go', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true });
+    await offToOneSide(page);
+    const want = await toFace(page);
+    await pull(page, 0.5);
+    const held = await page.evaluate(() => window.game!.aiming());
+    expect(held, 'a shot is being aimed').not.toBeNull();
+    const before = await view(page);
+    await press(page, '#viewFlag');
+    expect(await page.evaluate(() => window.game!.faceFlag()), 'refused through the API too').toBe(false);
+    await page.evaluate(() => window.game!.step(30));
+    const after = await view(page);
+    expect(after.turning).toBe(false);
+    expect(after.azimuth).toBe(before.azimuth);
+    expect(await page.evaluate(() => window.game!.aiming()), 'the same shot').toEqual(held);
+    await page.mouse.up();
+    expect(await page.evaluate(() => window.game!.state().strokes), 'and it was struck').toBe(1);
+    await untilReady(page, 'after the shot');
+    await press(page, '#viewFlag');
+    expect((await view(page)).turning, 'turning once the drag is over').toBe(true);
+    await page.evaluate(() => window.game!.step(120));
+    expect(gap((await view(page)).azimuth, await toFace(page))).toBeLessThan(1e-6);
+    void want;
+    expect(problems).toEqual([]);
+  });
+
+  test('it is not there under the start screen, and refuses; and is there with the switch on minigolf and on golf', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true, screen: true });
+    await expect(page.locator('#viewFlag')).toBeHidden();
+    expect(await page.evaluate(() => window.game!.faceFlag()), 'nothing under the screen').toBe(false);
+    expect((await view(page)).turning).toBe(false);
+    for (const course of ['The Meadow', 'The Range', 'The Links']) {
+      await page.evaluate((name) => {
+        window.game!.chooseCourse(name);
+        window.game!.step(60);
+      }, course);
+      await expect(page.locator('#viewMode'), course).toBeVisible();
+      await expect(page.locator('#viewFlag'), course).toBeVisible();
+      await expect(page.locator('#viewFlag'), course).toHaveAccessibleName('Look at the flag');
+      await expect(page.locator('#viewFlag')).toHaveAttribute('title', /flag/i);
+    }
+    expect(problems).toEqual([]);
+  });
+
+  test('on a hole of minigolf it turns the camera to the cup as well, from wherever the ball lies', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true });
+    await page.evaluate(() => {
+      window.game!.orbit(2.2, 0);
+      window.game!.step(1);
+    });
+    expect(await page.evaluate(() => window.game!.state().golf)).toBe(false);
+    const want = await toFace(page);
+    await page.locator('#viewFlag').click();
+    await page.evaluate(() => window.game!.step(120));
+    const v = await view(page);
+    expect(gap(v.azimuth, want)).toBeLessThan(1e-6);
+    expect(v.turning).toBe(false);
+    expect(problems).toEqual([]);
+  });
+
+  for (const [label, viewport, touch] of [
+    ['a desk', { width: 1280, height: 800 }, false],
+    ['a phone', { width: 400, height: 860 }, true],
+    ['a narrower phone', { width: 360, height: 780 }, true],
+  ] as const) {
+    test.describe(`on ${label}`, () => {
+      test.use({ viewport, hasTouch: touch, isMobile: touch });
+
+      test('the switch with its flag button is read well and touches nothing: not the help, the bag, the coins, the hole’s words or the map, on golf and on minigolf', async ({
+        page,
+      }) => {
+        const problems = watch(page);
+        const box = async (sel: string) => (await page.locator(sel).boundingBox())!;
+        const apart = (a: { x: number; y: number; width: number; height: number }, b: typeof a) =>
+          a.x + a.width <= b.x || b.x + b.width <= a.x || a.y + a.height <= b.y || b.y + b.height <= a.y;
+        for (const golf of [true, false]) {
+          if (golf) await longBend(page);
+          else {
+            await page.evaluate(() => {
+              window.game!.chooseCourse('The Meadow');
+              window.game!.step(60);
+            });
+          }
+          const r = await read(page);
+          expect(r.outside, 'nothing past the screen').toEqual([]);
+          expect(r.scrollWidth).toBeLessThanOrEqual(viewport.width);
+          expect(r.texts.filter((t) => t.ratio < CONTRAST).map((t) => `"${t.text}" ${t.ratio}:1`)).toEqual([]);
+          const flag = await box('#viewFlag');
+          expect(flag.height, 'a thumb high').toBeGreaterThanOrEqual(THUMB);
+          expect(flag.width, 'a thumb wide').toBeGreaterThanOrEqual(THUMB);
+          // as high as the pills beside it
+          expect(flag.height).toBeCloseTo((await box('#modeLook')).height, 0);
+          const panel = await box('#viewMode');
+          expect(flag.x).toBeGreaterThanOrEqual(panel.x);
+          expect(flag.x + flag.width).toBeLessThanOrEqual(panel.x + panel.width);
+          expect(apart(flag, await box('#modeLook')), 'beside Look, not on it').toBe(true);
+          const others = ['#help', '#strokes', '#purse', ...(golf ? ['#bag', '#holePanel'] : [])];
+          for (const other of others) {
+            const o = await box(other);
+            expect(apart(panel, o), `the switch and ${other} do not overlap, golf ${golf}`).toBe(true);
+            expect(apart(flag, o), `the flag button and ${other} do not overlap, golf ${golf}`).toBe(true);
+            // and do not touch: a pixel of the page between
+            const touching =
+              !(panel.x + panel.width < o.x - 0.5 || o.x + o.width < panel.x - 0.5) &&
+              !(panel.y + panel.height < o.y - 0.5 || o.y + o.height < panel.y - 0.5);
+            expect(touching, `the switch and ${other} do not touch, golf ${golf}`).toBe(false);
+          }
+        }
         expect(problems).toEqual([]);
       });
     });

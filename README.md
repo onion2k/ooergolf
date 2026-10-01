@@ -25,7 +25,7 @@ gem; the shop sells finer putters that strike harder. The coins, the clubs
 and the best score on each hole are kept in the browser. The camera follows
 the ball; the wheel zooms on a desktop, and two fingers pinch on a phone. A
 switch, Aim or Look, chooses whether a drag strikes the ball or turns and
-tilts the camera right round it. On The Range and The Links, the courses of golf, a bag of
+tilts the camera right round it, and a flag button beside it turns the camera to face the flag. On The Range and The Links, the courses of golf, a bag of
 eight clubs sits over the course: choose one, and the same drag swings it, the
 ball flying at the club's loft, coming down in a ring that marks where, hopping
 and running on by what it landed on, with a scatter that grows the harder it is

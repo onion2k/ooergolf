@@ -108,7 +108,10 @@ today, and what the next features must hand it:
   it rolls or between holes, waits, reloads, asks for another round when
   one is over, chooses a course at the start or at the card, and looks
   round: the switch to Look, drags and pinches anywhere on the screen, the
-  switch back, and nothing struck. It gets round every course. Each thing a
+  switch back, and nothing struck; and presses the flag button (`face the flag`: on its own stream, while the ball rolls and
+  between holes too, in either mode, refused while a drag is held as the page refuses it, and checked to turn the camera
+  to face the cup from the ball within a millionth of a radian inside `TURN_TIME`, touching nothing of the game, its clock
+  or its chance). It gets round every course. Each thing a
   player can do is an action in `scripts/fuzzer.ts`. On a golf hole it also
   chooses a club from the bag (and is refused one that is not in it) before
   most of its shots, aims shots (a preview of any club at any angle and power,
@@ -138,8 +141,8 @@ today, and what the next features must hand it:
   the live ball, where it is, at least `KNOCK.least` hard, in a direction
   of unit length (`knockProblems`, which the fuzzer checks each one by).
   And the camera keeps to its limits: turned within a turn either way,
-  tilted within `TILT`, stood back within the zoom (`viewProblems`, checked
-  after each look round). On a golf hole the club in hand is one of the
+  tilted within `TILT`, stood back within the zoom, and never left turning to face a place for longer than `TURN_TIME`, two
+  seconds (`viewProblems`, checked after each look round and every frame of a turn to the flag). On a golf hole the club in hand is one of the
   bag's, and the ball is never faster in all, in the air as on the ground,
   than the club that struck it could send it and a fall from the highest
   ground make it, never at rest out of bounds and never inside a tree's trunk
@@ -226,6 +229,9 @@ change meant to move it, and the commit says why. Look at every picture.
   it is handed, so the page and the fuzzer press on the course alike.
   `src/camera.ts` says where the camera is: it follows the ball, and can be
   orbited right round it (`azimuth`, wrapped to a turn either way) and
+  turned to face a place by `turnTo(facing(from, to))` (`facing` is the azimuth from one ground point to another, nothing
+  for the same place; `settle` eases it by the shortest way at a rate of six a second, and the player's own `orbit` or a new
+  hole's `glide` ends it, a zoom does not), and
   tilted between `TILT.least` and `TILT.most` (home is 0.78, 45 degrees; the
   lowest is 57 degrees only because the grass is what a frame costs, and a
   lower view draws far more of it: `TILT`'s comment has the figures, and the
@@ -589,7 +595,13 @@ change meant to move it, and the commit says why. Look at every picture.
   motion; in the system's rounded face, as decided. The Aim | Look switch
   (`#viewMode`) is a pill at the bottom right above the ms label, and the
   bottom slot on a phone; it is shown with the course's other panels and put
-  away under the start screen, and the help beside it says what a drag does.
+  away under the start screen, and the help beside it says what a drag does (on a phone the help wraps to two lines and
+  keeps clear of the switch, held by a test at 400 and 360 wide). It holds a third button, the **flag** (`#viewFlag`, a flag
+  icon, no text, labelled "Look at the flag"): not a mode but an action, which turns the camera to face the cup from the
+  ball (`faceFlag` in `main.ts`, through the hud's `flag` handler), eased and by the shortest way, in Aim and in Look and on
+  minigolf as on golf, leaving the mode, the zoom, the tilt and an aim view as they are; it does nothing under the start
+  screen, with the ball at the cup, or while a drag is held on the course (the aim is the ground under the finger through the
+  camera, and a camera turning under it would turn the shot), and a Look drag of the player's own takes the turn over.
 - `src/noise.ts` makes ground from noise: `gradientNoise(seed)` is Perlin's,
   and `noiseGround(layout, { seed, feel, steepness })` a hole's heights from
   it, the same for a seed every time, never below nought, with optional
@@ -747,7 +759,7 @@ says how far back it stands, how far ahead of the ball it looks (`lead`), whethe
 and which rung of the quality ladder the
 picture is on and whether the grass sways (`swaying`), what a drag is (`mode`,
 `aim` or `look`) and how the view is turned and tilted (`azimuth`, `tilt`),
-`orbit(turn, tilt)` turns it as a Look drag does, and `measureFrame`;
+`orbit(turn, tilt)` turns it as a Look drag does, `faceFlag()` presses the flag button's action (false when it did nothing), and `measureFrame`;
 `judge(frames, gapMs, workMs)` feeds the quality governor as the frame loop does, and says
 the rung; `grass()` how many blades of the rough the last frame drew near
 and far, and the wind; `bladesAround(x, y, radius)` how many the GPU drew
@@ -764,7 +776,7 @@ landing of the shot being aimed are on it. `state()` has the shape and the spin 
 `medium`, `slow` or null) and `arrows`, how many stand over its green;
 `motions()` has `wind` (the arrow's turn in degrees and its text, read back from the page), `controls` (the two buttons as drawn),
 `arrows` ({ shown, count }: what the last frame wrote), `shot.heading` and `press` (the grass pressed flat round a ball at rest in the rough this frame: where, how wide, and whether
-the renderer took it; null otherwise). `view()` also has `putt` and `greens`, the two lines under the pin as drawn (null when none). `?rung=N` on the page puts the picture
+the renderer took it; null otherwise). `view()` also has `turning` (whether the camera is turning to face the cup), and `putt` and `greens`, the two lines under the pin as drawn (null when none). `?rung=N` on the page puts the picture
 on a rung and holds it; paused, the governor never moves it, so pictures are
 always taken at the top rung unless a test asks. In unit tests, `game.place(x, y)` puts the
 ball down at a lie.
