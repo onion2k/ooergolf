@@ -379,23 +379,36 @@ change meant to move it, and the commit says why. Look at every picture.
   pieces, tries and rock clusters again as it is bigger, and its bunting on
   each side in strings of at most `REFERENCE.string` (60) units, each between
   posts of its own.
-- **The grass of a golf hole** is the rough and only the rough (`turf.ts`, `golfFieldOf`): the long blades grow on the
-  tiles of rough a ball is played from, inside the stakes, standing on the ground (each cell's own height, since a golf
-  hole's ground rises and falls), and nowhere else: not on the fairway, green, tee, sand or water (painted, as ever), and
-  not past the stakes, on out of bounds, the rock beyond it or on to the horizon (`outside` is left out), so the plain
-  beyond is bare. Nothing is scattered there either (`scatter` is empty on a golf hole, and its dressing is the bunting
+- **The grass of a golf hole** is the rough and the fairway, each its own kind (`turf.ts`, `golfFieldOf`, `golfKinds`):
+  the rough's long blades grow on the tiles of rough a ball is played from and the fairway's short ones on its fairway
+  tiles, inside the stakes, standing on the ground (each cell's own height, since a golf hole's ground rises and falls),
+  and nowhere else: not on the green, tee, first cut, sand or water (painted, as ever: the green and its fringe are mown
+  flat, and a bare cut keeps the putting surface and its edge one thing), and not past the stakes, on out of bounds, the
+  rock beyond it or on to the horizon (`outside` is left out), so the plain beyond is bare. The rough is the minigolf
+  rough at `GOLF_ROUGH_DENSITY` (60 a square unit, not 40); the fairway (`FAIRWAY`, `GOLF_FAIRWAY_DENSITY` 72) is 0.38
+  tall (a quarter of the rough's, 0.5 at the tallest, under the ball's middle, so a ball on it is seen and is not
+  pressed), in the painted fairway's green (`FAIRWAY_GREEN`, equal to `models/palette.ts` by a test: the blades average
+  to it by `grassGround`, so they read as the turf under them), stiff in the wind, and mown in the renderer's stripes,
+  two tiles across, the lighter on the rows the painted ones are, as strong (`FAIRWAY_STRIPE_ROWS`, held to
+  `ground.ts`'s). More was tried and cost for nothing: 160 a unit on the fairway, with the rough at 64, made a hole of
+  The Range's whole at 110 back 5.3 ms against 2.3 before, and looked the same as 72, since the ground under the blades
+  is their colour and the renderer thins them with the square of the distance; the cost of a view follows the blades it
+  draws (about 0.02 ms a thousand), and the rings (`GRASS`, shared with minigolf) are left as they were. A golf hole's
+  densest view draws 162,000 blades of the 262,144 there is room for (`BLADE_ROOM`), held by `smoke/game.spec.ts`.
+  Nothing is scattered there either (`scatter` is empty on a golf hole, and its dressing is the bunting
   alone, which marks where it ends), and the ground under it reaches the horizon (`GOLF_GROUND_REACH` past the hole's edge, in
   the dry colour of out of bounds), where a square 600 across ran out under a hole 650 long and showed the sky. A ball at
   rest in the rough has the grass pressed flat in a disc round it (`FLATTEN`, 6 yards across the radius, standing again 6
   seconds after the ball is struck), through the renderer's own trample (`renderer.press`, once a frame at the game's
   time, in the wind's direction): the grid it presses in is `trampleOf`, over the box round the hole at a cell of 0.5 to 1
-  yard, at most 320,000 texels; `flattenFor` says when and where, and the page reads it back as `motions().press`. A
-  minigolf hole's grass, scatter and dressing are exactly what they were (held to a hash).
+  yard, at most 320,000 texels; `flattenFor` says when and where (the rough only), and the page reads it back as
+  `motions().press`. A minigolf hole's grass, scatter and dressing are exactly what they were (held to a hash, and its
+  one kind of forty blades to a literal).
 - `src/turf.ts` is a hole's grass, as the renderer's GPU grass grows it: a
   field of cells saying where the rough grows (off the course,
   down where the rough lies, and on past the field as its `outside`), and
   the hole's own wind from its name. The rough is long, lush grass: forty
-  blades a square unit, 1.6 tall and a third more or less, its tallest still
+  blades a square unit (sixty on a golf hole, which also grows its fairway), 1.6 tall and a third more or less, its tallest still
   under the level of the course; the blades sway in a wind that bends them
   about 30 degrees across the ground at one moment, in gusts eight units
   across that the renderer carries downwind at five units a second, which

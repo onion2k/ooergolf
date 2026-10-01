@@ -4,13 +4,27 @@
  * lost among the blades. A hole of minigolf is the field it always was, which `turf.test.ts` holds to a hash.
  */
 import { describe, expect, it } from 'vitest';
-import { MAX_TRAMPLE, checkField } from 'artshape-render/game/grass';
+import { MAX_TRAMPLE, checkField, grassGround } from 'artshape-render/game/grass';
 import { heightAt, layoutOf, TILE, tileAt } from '../src/arena';
 import { COURSES } from '../src/course';
 import { golfHole } from '../src/golf';
 import { LINKS_SPECS } from '../src/links';
 import { dress, scatter } from '../src/scenery';
-import { FLATTEN, GRASS, ROUGH, cellFor, fieldOf, flattenFor, grassOptionsOf, trampleOf } from '../src/turf';
+import {
+  FAIRWAY,
+  FLATTEN,
+  GRASS,
+  KINDS,
+  ROUGH,
+  cellFor,
+  fieldOf,
+  flattenFor,
+  grassOptionsOf,
+  trampleOf,
+} from '../src/turf';
+import { STRIPE_ROWS } from '../src/ground';
+import { KIND_RADIUS } from '../src/arena';
+import { PALETTE } from '../src/models/palette';
 import { LIE } from '../src/surfaces';
 
 const COLS = 31,
@@ -87,11 +101,10 @@ describe('the grass of a golf hole', () => {
       expect(grown(field, p.x + dx, p.y + dy).kind).toBe(ROUGH + 1);
   });
 
-  it('grows nothing where the ball is played from but the rough: not on the fairway, the green, the tee, or in sand or water', () => {
+  it('grows nothing on the green, the tee, the first cut or the cup, or in sand or water: they are mown flat or are not grass', () => {
     for (const [what, r, c] of [
-      ['the fairway', 30, 15],
-      ['the fairway at its edge', 30, 12],
       ['the green', 5, 14],
+      ['the first cut', 30, 11],
       ["the tee's box", ROWS - 4, 14],
       ['the tee', ROWS - 4, 15],
       ['the cup', 3, 15],
@@ -101,6 +114,32 @@ describe('the grass of a golf hole', () => {
       const p = tile(r, c);
       expect(grown(field, p.x, p.y).kind, what).toBe(0);
     }
+  });
+
+  it('grows the fairway its own short grass, in every cell of every fairway tile and in no other', () => {
+    for (const [r, c] of [
+      [30, 15],
+      [30, 12],
+      [30, 18],
+      [12, 14],
+      [ROWS - 5, 16],
+    ]) {
+      const p = tile(r, c);
+      expect(layout.lie[tileAt(layout, p.x, p.y)], `row ${r} column ${c} is fairway`).toBe(LIE.fairway);
+      for (const [dx, dy] of [
+        [-1.4, -1.4],
+        [1.4, 1.4],
+        [-1.4, 1.4],
+        [1.4, -1.4],
+        [0, 0],
+      ])
+        expect(grown(field, p.x + dx, p.y + dy).kind, `row ${r} column ${c}`).toBe(FAIRWAY + 1);
+    }
+    expect(field.kinds.length).toBe(2);
+    expect(FAIRWAY).not.toBe(ROUGH);
+    // the fairway stands on the ground it lies on, as the rough does
+    const p = tile(30, 15);
+    expect(grown(field, p.x, p.y).height).toBeCloseTo(heightAt(layout, p.x, p.y), 0);
   });
 
   it('grows nothing past the stakes, where a ball is lost: not on out of bounds, the rock beyond it, the rail, or beyond the hole at all', () => {
@@ -116,7 +155,7 @@ describe('the grass of a golf hole', () => {
     }
     // and none beyond the field's grid, which is all there is of it: nothing grows on to the horizon
     expect(field.outside, 'no grass beyond the hole').toBeUndefined();
-    // every cell that grows anything is on a tile of the rough, of which the whole hole has no other
+    // every cell that grows anything is on a tile of the rough or the fairway, each its own kind, and no other
     let grows = 0;
     for (let cy = 0; cy < field.rows; cy++)
       for (let cx = 0; cx < field.cols; cx++) {
@@ -124,7 +163,9 @@ describe('the grass of a golf hole', () => {
         grows++;
         const t = tileAt(layout, field.origin[0] + (cx + 0.5) * field.cell, field.origin[1] + (cy + 0.5) * field.cell);
         expect(t, 'on the hole').toBeGreaterThanOrEqual(0);
-        expect(layout.lie[t], 'a tile of rough').toBe(LIE.rough);
+        expect(layout.lie[t], 'a tile of rough or fairway').toBe(
+          field.mask[cy * field.cols + cx] === ROUGH + 1 ? LIE.rough : LIE.fairway,
+        );
         expect(layout.oob[t] + layout.sand[t] + layout.water[t] + layout.solid[t], 'and nothing else').toBe(0);
       }
     expect(grows, 'a good deal of it').toBeGreaterThan(5000);
@@ -164,22 +205,27 @@ describe('the grass of a golf hole', () => {
       expect(f.outside, hl.name).toBeUndefined();
       expect(cellFor(l)).toBeGreaterThanOrEqual(0.25);
       let rough = 0,
+        fairway = 0,
         elsewhere = 0;
       for (let cy = 0; cy < f.rows; cy += 3)
         for (let cx = 0; cx < f.cols; cx += 3) {
-          if (!f.mask[cy * f.cols + cx]) continue;
+          const m = f.mask[cy * f.cols + cx];
+          if (!m) continue;
           const t = tileAt(l, f.origin[0] + (cx + 0.5) * f.cell, f.origin[1] + (cy + 0.5) * f.cell);
-          if (t >= 0 && l.lie[t] === LIE.rough && !l.oob[t] && !l.sand[t] && !l.water[t]) rough++;
+          const clear = t >= 0 && !l.oob[t] && !l.sand[t] && !l.water[t];
+          if (clear && m === ROUGH + 1 && l.lie[t] === LIE.rough) rough++;
+          else if (clear && m === FAIRWAY + 1 && l.lie[t] === LIE.fairway) fairway++;
           else elsewhere++;
         }
       expect(rough, hl.name).toBeGreaterThan(500);
+      expect(fairway, hl.name).toBeGreaterThan(100);
       expect(elsewhere, hl.name).toBe(0);
     }
   });
 });
 
 describe('the first cut of a golf hole', () => {
-  it('grows no blade: the rough is the only ground that does, and a cut tile is as bare as the fairway', () => {
+  it('grows no blade: it is mown flat like the green it fringes, and painted, so the putting surface and its edge read as one', () => {
     for (const [r, c] of [
       [30, 11],
       [30, 19],
@@ -195,15 +241,21 @@ describe('the first cut of a golf hole', () => {
     expect(grown(field, rough.x, rough.y).kind).toBeGreaterThan(0);
   });
 
-  it('leaves exactly as many cells of grass as the tiles of rough say, so none of the cut is counted among them', () => {
+  it('leaves exactly as many cells of grass as the tiles of rough and fairway say, so none of the cut is counted among them', () => {
     let cells = 0;
     for (const k of field.mask) if (k) cells++;
-    let rough = 0;
+    let tiles = 0;
     for (let t = 0; t < layout.cols * layout.rows; t++)
-      if (layout.lie[t] === LIE.rough && !layout.oob[t] && !layout.sand[t] && !layout.water[t] && !layout.solid[t])
-        rough++;
+      if (
+        (layout.lie[t] === LIE.rough || layout.lie[t] === LIE.fairway) &&
+        !layout.oob[t] &&
+        !layout.sand[t] &&
+        !layout.water[t] &&
+        !layout.solid[t]
+      )
+        tiles++;
     const per = (TILE / field.cell) ** 2;
-    expect(cells).toBe(rough * per);
+    expect(cells).toBe(tiles * per);
   });
 });
 
@@ -269,7 +321,7 @@ describe('pressing the grass flat round a ball in the rough, so it is seen', () 
     expect(FLATTEN.radius, 'wider than the ball, a good deal').toBeGreaterThan(2.5);
   });
 
-  it('is none where nothing grows to be seen through: on the fairway, the green, the tee, in sand, out of bounds', () => {
+  it('is none where nothing grows to be seen through, or only grass shorter than the ball: on the fairway, the green, the tee, in sand, out of bounds', () => {
     for (const [r, c] of [
       [30, 15],
       [5, 14],
@@ -303,5 +355,88 @@ describe('pressing the grass flat round a ball in the rough, so it is seen', () 
     const mini = layoutOf(COURSES[0].holes[0].map);
     expect(flattenFor(mini, mini.tee.x, mini.tee.y, true)).toBeNull();
     expect(flattenFor(layout, layout.originX - 50, 0, true)).toBeNull();
+  });
+});
+
+describe('the kinds of grass of a golf hole', () => {
+  const rough = field.kinds[ROUGH],
+    fairway = field.kinds[FAIRWAY];
+  const luminance = (c: readonly number[]) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+
+  it('grows the fairway short, as the mown grass it is: a quarter of the rough at the most, and under the ball’s middle at its tallest', () => {
+    expect(fairway.height).toBeLessThanOrEqual(rough.height / 4);
+    expect(fairway.height * (1 + (fairway.heightSpread ?? 0.3)), 'a ball lies in it and is seen').toBeLessThan(
+      KIND_RADIUS[0] / 2,
+    );
+  });
+
+  it('is denser, in the rough and in the fairway, than the rough was: sixty blades a square unit or more, and the fairway the denser', () => {
+    expect(rough.density).toBeGreaterThanOrEqual(60);
+    expect(rough.density, 'denser than the rough that was').toBeGreaterThan(KINDS[ROUGH].density);
+    expect(fairway.density, 'a short blade needs more of them to cover the ground').toBeGreaterThan(rough.density);
+  });
+
+  it('keeps the rough as it was but for how many blades there are, and the fairway not mown to stand up in the wind', () => {
+    expect({ ...rough, density: 0 }).toEqual({ ...KINDS[ROUGH], density: 0 });
+    expect(fairway.give, 'stiffer than long grass').toBeLessThan(rough.give ?? 1);
+  });
+
+  it('colours the fairway lighter and yellower than the rough, and as the green it is painted: the blades average to the painted fairway', () => {
+    const ground = grassGround(fairway),
+      rough_ = grassGround(rough);
+    expect(luminance(ground), 'lighter').toBeGreaterThan(luminance(rough_) * 2);
+    // the rough is a blue-green, the fairway a yellow-green: how much of the red there is against the blue
+    expect(ground[0] / ground[2], 'yellower').toBeGreaterThan((rough_[0] / rough_[2]) * 2);
+    // the painted fairway is the game's green in its two stripes, an eighth either side of the middle
+    for (let c = 0; c < 3; c++)
+      expect(ground[c], `channel ${c}`).toBeCloseTo((PALETTE.grass[c] + PALETTE.grassMown[c]) / 2, 2);
+  });
+
+  it('mows the fairway in the stripes it is painted in: the same width, the same rows, the lighter band on the same side, the same strength', () => {
+    const s = fairway.stripes!;
+    expect(s).toBeDefined();
+    expect(s.width).toBe(STRIPE_ROWS * TILE);
+    expect(rough.stripes, 'the rough is not mown').toBeUndefined();
+    // the renderer's band of a blade: its distance across the stripes (north, as the angle is nought) over the width
+    const band = (y: number) => Math.floor((y + (s.offset ?? 0)) / s.width);
+    for (let ty = 0; ty < ROWS; ty++) {
+      const y = layout.originY + (ty + 0.5) * TILE;
+      const painted = Math.floor(ty / STRIPE_ROWS) % 2;
+      expect(((band(y) % 2) + 2) % 2, `row ${ty}`).toBe(painted);
+    }
+    // the stripes' shade is the painted pair's: lighter over darker by the same ratio
+    const painted = PALETTE.grassMown[1] / PALETTE.grass[1];
+    expect((1 + 0.5 * s.shade) / (1 - 0.5 * s.shade)).toBeCloseTo(painted, 1);
+  });
+
+  it('is a field the renderer takes on a hole too big for the finest cell, where a chunk holds fewer blades, with both densities in what it holds', () => {
+    const cols = 340,
+      rows = 340;
+    const map = Array.from({ length: rows }, (_, r) =>
+      Array.from({ length: cols }, (_, c) => {
+        if (r === 0 || r === rows - 1 || c === 0 || c === cols - 1) return '#';
+        if (r === rows - 3 && c === 170) return 'T';
+        if (r === 2 && c === 170) return 'C';
+        return c > 100 && c < 240 ? 'f' : 'r';
+      }).join(''),
+    );
+    const big = layoutOf(map);
+    expect(cellFor(big)).toBe(1.5);
+    const f = fieldOf(big, 'big golf');
+    expect(() => checkField(f, grassOptionsOf(big))).not.toThrow();
+    expect(
+      f.kinds.map((k) => k.density),
+      'not thinned for the cell',
+    ).toEqual([rough.density, fairway.density]);
+    expect(f.kinds[FAIRWAY].stripes!.offset).toBeCloseTo(-big.originY, 5);
+  });
+
+  it('is the grass minigolf has had on a hole of minigolf: one kind, forty blades, long, and the rings are the same', () => {
+    const mini = layoutOf(COURSES[0].holes[0].map);
+    const f = fieldOf(mini, COURSES[0].holes[0].name);
+    expect(f.kinds).toEqual([KINDS[ROUGH]]);
+    expect(KINDS[ROUGH].density).toBe(40);
+    expect(KINDS[ROUGH].height).toBe(1.6);
+    expect(grassOptionsOf(mini)).toEqual(GRASS);
   });
 });

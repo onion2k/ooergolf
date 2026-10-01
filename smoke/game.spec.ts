@@ -10,9 +10,11 @@ import { PNG } from 'pngjs';
 import { BALL, KIND_RADIUS, ROLL, heightAt, layoutOf, powerFor } from '../src/arena';
 import { COURSE, COURSES, CUP, DOWNS } from '../src/course';
 import { ORBIT } from '../src/gesture';
+import { LIE } from '../src/surfaces';
+import { links } from '../src/links';
 import { noiseGround } from '../src/noise';
 import { clearings } from '../src/scenery';
-import { BLADE_ROOM, cellFor } from '../src/turf';
+import { BLADE_ROOM, GOLF_FAIRWAY_DENSITY, GOLF_ROUGH_DENSITY, cellFor } from '../src/turf';
 import { drag, start, touches, watch } from './game';
 import { holeOut, read, toCard } from './panels';
 
@@ -639,12 +641,145 @@ test.describe('golf', () => {
       g.orbit(Math.PI, 10);
       g.step(2);
       const worst = await g.measureFrame(60);
-      return { tee, air, worst };
+      // the whole hole from the middle of it, as far back as the zoom goes: the fairway and the rough at their densest
+      g.orbit(-Math.PI, -10);
+      const { tee: t, cup } = g.content();
+      g.look((t.x + cup.x) / 2, (t.y + cup.y) / 2, 110);
+      g.step(2);
+      const whole = await g.measureFrame(60);
+      return { tee, air, worst, whole };
     });
     console.log(
-      `the range, The Long Road: tee ${cost.tee.toFixed(2)} ms, in the air ${cost.air.toFixed(2)} ms, the worst view ${cost.worst.toFixed(2)} ms a frame`,
+      `the range, The Long Road: tee ${cost.tee.toFixed(2)} ms, in the air ${cost.air.toFixed(2)} ms, the worst view ${cost.worst.toFixed(2)} ms, the whole hole ${cost.whole.toFixed(2)} ms a frame`,
     );
     for (const [where, ms] of Object.entries(cost)) expect(ms, `${where}: inside the 5 ms budget`).toBeLessThan(5);
+    expect(problems).toEqual([]);
+  });
+});
+
+test.describe('the grass of a golf hole', () => {
+  /** The middle of the first tile of Links hole `hole` that is `lie` and has nothing else (another lie, out of bounds, sand, water, a tree) within `apart` tiles of it, which is where the grass of that lie alone grows. */
+  function inside(hole: number, lie: number, apart: number) {
+    const def = links()[hole];
+    const l = layoutOf(def.map, def.terrain);
+    for (let t = 0; t < l.cols * l.rows; t++) {
+      const tx = t % l.cols,
+        ty = Math.floor(t / l.cols);
+      let alone = true;
+      for (let dy = -apart; dy <= apart && alone; dy++)
+        for (let dx = -apart; dx <= apart && alone; dx++) {
+          const u = (ty + dy) * l.cols + tx + dx;
+          if (
+            tx + dx < 0 ||
+            ty + dy < 0 ||
+            tx + dx >= l.cols ||
+            ty + dy >= l.rows ||
+            l.lie[u] !== lie ||
+            l.oob[u] ||
+            l.sand[u] ||
+            l.water[u] ||
+            l.solid[u]
+          )
+            alone = false;
+        }
+      if (alone) return { x: l.originX + (tx + 0.5) * 3, y: l.originY + (ty + 0.5) * 3 };
+    }
+    throw new Error(`no ${lie} on hole ${hole + 1}`);
+  }
+
+  test('grows the fairway short and thick and the rough dense, and none on the green, the tee or the first cut', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true });
+    // a tile of each, the camera 30 back so every blade within view is kept: a circle inside the tile, 1.4 across
+    const where = {
+      fairway: inside(0, LIE.fairway, 1),
+      rough: inside(0, LIE.rough, 1),
+      green: inside(0, LIE.green, 0),
+      tee: inside(0, LIE.tee, 0),
+      cut: inside(0, LIE.cut, 0),
+    };
+    const counted = await page.evaluate(async (at) => {
+      const g = window.game!;
+      g.chooseCourse('The Links');
+      g.startHole(0);
+      g.step(60);
+      const out: Record<string, number> = {};
+      for (const [what, p] of Object.entries(at)) {
+        g.look(p.x, p.y, 30);
+        g.step(3);
+        out[what] = await g.bladesAround(p.x, p.y, 1.4);
+      }
+      return out;
+    }, where);
+    const area = Math.PI * 1.4 ** 2;
+    // about as many as the density says, the jitter of a lattice and the renderer's thinning allowing a quarter either way
+    expect(counted.fairway, 'the fairway: its own short grass').toBeGreaterThan(GOLF_FAIRWAY_DENSITY * area * 0.7);
+    expect(counted.fairway).toBeLessThan(GOLF_FAIRWAY_DENSITY * area * 1.3);
+    expect(counted.rough, 'the rough: denser than it was').toBeGreaterThan(GOLF_ROUGH_DENSITY * area * 0.7);
+    expect(counted.rough).toBeLessThan(GOLF_ROUGH_DENSITY * area * 1.3);
+    expect(counted.green, 'the green is mown flat').toBe(0);
+    expect(counted.tee, 'the tee box is mown flat').toBe(0);
+    expect(counted.cut, 'the first cut is mown flat').toBe(0);
+    expect(problems).toEqual([]);
+  });
+
+  test("never runs the renderer out of blades on the longest holes at the widest views, and is thinned by the ladder's rungs and never given up", async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    const problems = watch(page);
+    const shares: number[] = [];
+    let full = 0,
+      most = 0;
+    for (const rung of [0, 1, 2, 3]) {
+      await start(page, { seed: 11, paused: true, rung });
+      const seen = await page.evaluate(async () => {
+        const g = window.game!;
+        const out: number[] = [];
+        for (const [course, hole] of [
+          ['The Links', 6],
+          ['The Links', 2],
+          ['The Range', 8],
+        ] as const) {
+          g.chooseCourse(course);
+          g.startHole(hole);
+          g.club('driver');
+          g.step(300);
+          const { tee, cup } = g.content();
+          // the aim view, and the whole hole from the middle of it at the widest zoom there is, and the home zoom
+          for (const [x, y, d] of [
+            [tee.x, tee.y, 0],
+            [(tee.x + cup.x) / 2, (tee.y + cup.y) / 2, 110],
+            [(tee.x + cup.x) / 2, (tee.y + cup.y) / 2, 200],
+            [(tee.x + cup.x) / 2, (tee.y + cup.y) / 2, 62],
+          ]) {
+            if (d) g.look(x, y, d);
+            else g.step(0);
+            g.step(2);
+            const grass = await g.grass();
+            out.push(grass.near + grass.far);
+          }
+        }
+        return out;
+      });
+      const total = seen.reduce((a, b) => a + b, 0);
+      most = Math.max(most, ...seen);
+      if (rung === 0) full = total;
+      shares.push(total / full);
+      for (const n of seen) {
+        expect(n, `rung ${rung}: grass in view`).toBeGreaterThan(1_000);
+        expect(n, `rung ${rung}: room to spare`).toBeLessThan(BLADE_ROOM * 0.85);
+      }
+    }
+    console.log(
+      `golf grass: the most blades drawn in any scene ${most}, of room for ${BLADE_ROOM}; rungs' shares ${shares.map((x) => x.toFixed(2)).join(', ')}`,
+    );
+    expect(shares[1], 'half on the first rung').toBeGreaterThan(0.4);
+    expect(shares[1]).toBeLessThan(0.6);
+    expect(shares[3], 'a quarter on the last').toBeGreaterThan(0.15);
+    expect(shares[3]).toBeLessThan(0.35);
     expect(problems).toEqual([]);
   });
 });

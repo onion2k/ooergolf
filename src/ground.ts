@@ -21,7 +21,7 @@ type V3 = [number, number, number];
 export const GROUND = { pieces: 3 } as const;
 
 /** How many rows of tiles each mown stripe is. */
-const STRIPE_ROWS = 2;
+export const STRIPE_ROWS = 2;
 
 export interface Ground {
   /** The grass in its lighter stripe, and in its darker: on a golf hole, the fairway's. */
