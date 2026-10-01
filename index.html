@@ -335,6 +335,35 @@
     color: var(--ink-soft);
   }
   /*
+   * the wind, in a line under the pin on a golf hole: an arrow that points the way it blows across the screen (the page
+   * turns it with the camera) and how hard, in whole miles an hour, or the word calm with no arrow
+   */
+  #wind {
+    grid-area: 6 / 1 / 7 / -1;
+    align-items: center;
+    gap: 3px;
+    margin-top: 0;
+    font-size: 13px;
+    font-weight: 800;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink-soft);
+  }
+  #wind:not([hidden]) {
+    display: flex;
+  }
+  #windArrow {
+    width: 16px;
+    height: 16px;
+    /* room to turn in, so a corner of the arrow turned a half way round stays in its line */
+    margin: 3px;
+    flex: none;
+    fill: currentColor;
+  }
+  #wind[data-calm] #windArrow {
+    display: none;
+  }
+  /*
    * the map of a golf hole, at the left edge halfway down where neither the words at the top nor the bag and switch
    * at the bottom are: a picture over the course, which a finger passes through to aim
    */
@@ -882,10 +911,41 @@
     display: flex;
     gap: 3px;
   }
+  /*
+   * the shape and the spin of a lofted shot: two buttons that each cycle through three, side by side across the width
+   * of the clubs below them, so the bag is no wider for them and a longer word on one never moves the other
+   */
+  #bagShaping {
+    align-self: stretch;
+    grid-template-columns: 1fr 1fr;
+    gap: 3px;
+  }
+  #bagShaping:not([hidden]) {
+    display: grid;
+  }
+  #bagShaping button {
+    min-width: 0;
+    padding: 0 8px;
+    white-space: nowrap;
+  }
   #bag button {
     min-width: 44px;
     padding: 0 8px;
     font-size: 15px;
+  }
+  /* straight and flat are the quiet buttons they were; a shape or a spin chosen stands up in the sun's yellow */
+  #bagShaping button[data-shape='0'],
+  #bagShaping button[data-spin='0'] {
+    background: var(--paper);
+    box-shadow:
+      inset 0 0 0 3px var(--sky),
+      0 4px 0 var(--sky-deep);
+  }
+  #bagShaping button[data-shape='0']:active,
+  #bagShaping button[data-spin='0']:active {
+    box-shadow:
+      inset 0 0 0 3px var(--sky),
+      0 0 0 var(--sky-deep);
   }
   #bag button[aria-pressed='false'] {
     background: var(--paper);
@@ -906,6 +966,9 @@
       min-width: 36px;
       padding: 0 5px;
       font-size: 14px;
+    }
+    #bagShaping button {
+      min-width: 0;
     }
   }
 
@@ -955,6 +1018,10 @@
     <span id="holePar"></span>
     <p class="count"><b>0</b> <span class="unit">strokes</span></p>
     <small id="pin" hidden></small>
+    <small id="wind" hidden
+      ><svg id="windArrow" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1 14 8H10.2V15H5.8V8H2Z" /></svg
+      ><span id="windText"></span
+    ></small>
   </div>
   <div class="panel" id="purse" hidden>
     <span class="coin"><b id="coins">0</b><em> coins</em></span
@@ -1002,6 +1069,10 @@
 <div class="panel" id="stats" hidden></div>
 <div class="panel" id="bag" role="group" aria-label="Club" hidden>
   <small id="bagInfo"></small>
+  <div id="bagShaping" role="group" aria-label="Shape and spin" hidden>
+    <button id="shapeButton" type="button" data-shape="0"></button>
+    <button id="spinButton" type="button" data-spin="0"></button>
+  </div>
   <div id="bagClubs"></div>
 </div>
 <div class="panel" id="holePanel" hidden><canvas id="holeMap" role="img" aria-label="Map of the hole"></canvas></div>

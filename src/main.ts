@@ -20,7 +20,8 @@ import { Game, type GameEvents } from './game';
 import { Hud } from './hud';
 import { mapInto, mapSize, paintMap, type MapSize } from './holemap';
 import { Previewer } from './preview';
-import { landingText, pinReadout, pinText } from './readout';
+import { landingText, pinReadout, pinText, windArrow } from './readout';
+import { windReach } from './shaping';
 import { daylight } from './look';
 import { Progress } from './progress';
 import { seeded } from './random';
@@ -138,6 +139,15 @@ async function main() {
           aimFor(false);
         }
       },
+      // the shape and the spin chosen for the next lofted shot: the game takes it, and the buttons show what it took
+      shape(value) {
+        game?.setShape(value);
+        if (game) hud.setShaping(game.shape, game.spin);
+      },
+      spin(value) {
+        game?.setSpin(value);
+        if (game) hud.setShaping(game.shape, game.spin);
+      },
     },
     CLUBS,
   );
@@ -164,8 +174,12 @@ async function main() {
   /** The previews of this golf hole's shots, worked out in a rehearsal of it: none on a hole of minigolf. */
   let previewer: Previewer | null = null;
   /** The shot the preview was last worked out for, so it is worked out again only when the aim, the club or the ball changes; and whether one is shown. */
-  const previewed = { x: NaN, y: NaN, angle: NaN, power: NaN, club: '' };
+  const previewed = { x: NaN, y: NaN, angle: NaN, power: NaN, club: '', shape: NaN, spin: NaN };
   let previewShown = false;
+  /** The wind of the hole being played, read once as it begins: which way it blows across the ground and how hard in miles an hour. */
+  const windNow = { x: 0, y: 0, speed: 0 };
+  /** The camera's turn as the wind's arrow is worked out from it, written into each frame and never made. */
+  const turnNow = { azimuth: 0, tilt: 0 };
   /** The hole's map as it was painted, and whether it was for a phone's box: painted again if the screen changes to the other. */
   let mapped: { size: MapSize; small: boolean } | null = null;
   /** Where the ball was when the pin was last read, so it is read again only when it has moved. */
@@ -188,7 +202,8 @@ async function main() {
     const { world, ball, layout, inHand } = game;
     const lie = lieAt(layout, world.x[ball], world.y[ball]);
     // a club goes a little further than its formula, four in a hundred on the level: the landing it is to show
-    const reach = carryFrom(inHand, 1, lie) * LANDS_PAST;
+    // and as much further as a tailwind of the hole carries it, so the ring of a downwind shot is on the screen too
+    const reach = carryFrom(inHand, 1, lie) * LANDS_PAST + (inHand.loft > 0 ? windReach(inHand, 1, windNow.speed) : 0);
     aimedFor = `${inHand.id}|${lie}`;
     rig.aimAt(aimView(reach, aspect), now);
   };
@@ -216,6 +231,11 @@ async function main() {
       if (!game) return;
       const { layout } = game;
       const { name } = game.course[index];
+      // the hole's wind, for the line under the pin and for how far the camera must stand back for a tailwind
+      const blowing = game.wind;
+      windNow.x = blowing.x;
+      windNow.y = blowing.y;
+      windNow.speed = layout.golf ? blowing.speed : 0;
       // the hole's own wind, which the grass bends in and the flag and the trees follow
       const wind = windOf(name);
       renderer.setStatic(scene.static(layout, name, game.obstacles));
@@ -245,18 +265,25 @@ async function main() {
       // the pin is read off the ball from the first frame of a golf hole, and is not there on a hole of minigolf
       pinned.x = NaN;
       if (!layout.golf) hud.setPin(null);
+      // the wind is told on a golf hole, as a number or as calm, and is not there on a hole of minigolf
+      hud.setWind(layout.golf ? windNow.speed : null);
+      hud.setShaping(game.shape, game.spin);
       // a hole is begun aiming, and the view eases home to the tee's over the glide
       backToAim?.();
       squash.clear();
       hud.started({ index, count: game.course.length, name: game.course[index].name, par });
       // the bag on a golf hole, with the driver in hand, and none on a hole of minigolf
       hud.setBag(
-        layout.golf ? BAG.map((c) => ({ id: c.id, name: c.name, label: c.label, carry: carryOf(c, 1) })) : null,
+        layout.golf
+          ? BAG.map((c) => ({ id: c.id, name: c.name, label: c.label, carry: carryOf(c, 1), loft: c.loft }))
+          : null,
         game.inHand.id,
       );
     },
     struck(power, x, y) {
       hud.setStrokes(game?.strokes ?? 0);
+      // the game puts the shape and the spin back to straight and flat as a shot is struck, and the buttons say so
+      if (game) hud.setShaping(game.shape, game.spin);
       // sand from a ball that lay in a bunker, and grass from any other
       const ground = game && onSand(game.layout, x, y) ? 'sand' : 'grass';
       drawn.puff = ground;
@@ -392,7 +419,7 @@ async function main() {
    * the ball when it lies at rest; and the map redrawn with the ball, the aim and what the camera shows over it.
    */
   function aimOnGolf(flying: { angle: number; power: number } | null) {
-    const { world, ball, layout, inHand } = played;
+    const { world, ball, layout, inHand, shape, spin } = played;
     const x = world.x[ball],
       y = world.y[ball];
     if (flying && previewer) {
@@ -401,14 +428,18 @@ async function main() {
         previewed.y !== y ||
         previewed.angle !== flying.angle ||
         previewed.power !== flying.power ||
-        previewed.club !== inHand.id
+        previewed.club !== inHand.id ||
+        previewed.shape !== shape ||
+        previewed.spin !== spin
       ) {
-        Object.assign(previewed, { x, y, angle: flying.angle, power: flying.power, club: inHand.id });
-        const p = previewer.run({ x, y }, inHand, flying.angle, flying.power);
-        hud.setLanding(p.n ? landingText({ carry: p.carry, end: p.end, lie: p.lie, hit: p.hit !== null }) : null);
+        Object.assign(previewed, { x, y, angle: flying.angle, power: flying.power, club: inHand.id, shape, spin });
+        const p = previewer.run({ x, y }, inHand, flying.angle, flying.power, shape, spin);
+        hud.setLanding(
+          p.n ? landingText({ carry: p.carry, end: p.end, lie: p.lie, hit: p.hit !== null, shape, spin }) : null,
+        );
       }
       const r = Math.min(rig.distance * tallOf(aspect), VIEW.golfFar);
-      scene.setShot(previewer.result, markScale(r), flying.angle);
+      scene.setShot(previewer.result, markScale(r));
       previewShown = true;
     } else if (previewShown) {
       scene.setShot(null);
@@ -436,11 +467,12 @@ async function main() {
       const { across, along } = p.footprint;
       if (p.end !== 'holed' && p.end !== 'water' && (across >= 0.4 || along >= 0.4)) {
         o.spread = true;
-        mapInto(size, p.x - Math.cos(flying.angle) * along, p.y - Math.sin(flying.angle) * along, o.ellipse);
+        // laid along the way the ball went, which a shape and the wind turn from the way it was aimed
+        mapInto(size, p.x - Math.cos(p.heading) * along, p.y - Math.sin(p.heading) * along, o.ellipse);
         o.ellipse[2] = along * size.scale;
         o.ellipse[3] = across * size.scale;
-        // the map has north up, which turns the aim's angle the other way
-        o.ellipse[4] = -flying.angle;
+        // the map has north up, which turns the heading the other way
+        o.ellipse[4] = -p.heading;
       }
     }
     // what the camera shows, from the four corners of the screen on the ground at the ball's height; none if any is sky
@@ -479,7 +511,13 @@ async function main() {
       ? carryFrom(played.inHand, 1, lieAt(played.layout, world.x[ball], world.y[ball])) / AIM_REACH
       : rollsFor(played.hardest) / rollsFor(HARDEST_SHOT);
     const dots = played.ready && !flying ? scene.writeAim(world.x[ball], world.y[ball], input.aim, reach, played.t) : 0;
-    if (golf) aimOnGolf(flying);
+    if (golf) {
+      aimOnGolf(flying);
+      // the shape and the spin the game holds, shown on their buttons whoever chose them; and the wind's arrow turned by
+      // the camera as it is this frame, which includes the glide to a new tee
+      hud.setShaping(played.shape, played.spin);
+      if (windNow.speed >= 0.5) hud.setWindArrow(windArrow(windNow.x, windNow.y, rig.view(played.t, turnNow).azimuth));
+    }
     renderer.move(1, scene.aim, dots);
     // the nearest dot's size, as it was placed: nought for none
     drawn.pulse = dots ? scene.aim[0] - 1 : 0;
@@ -746,8 +784,11 @@ async function main() {
         const m = scene.shotMarks();
         if (!m.ring || !previewer) return null;
         const p = previewer.result;
-        return { ...m, end: p.end, carry: p.carry, lie: p.lie };
+        return { ...m, end: p.end, carry: p.carry, lie: p.lie, heading: p.heading };
       })(),
+      // the wind's arrow as it was last turned, and the words beside it; and the shape and spin buttons as they are drawn
+      wind: hud.windDrawn(),
+      controls: hud.controls(),
     }),
     course: () => courseName,
     choosing: () => choosing,

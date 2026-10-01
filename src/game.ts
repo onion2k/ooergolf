@@ -41,6 +41,7 @@ import { Obstacles } from './obstacles';
 import { PHYSICS, THE_CUP, makeWorld, type World } from './physics';
 import { Progress, memoryStore } from './progress';
 import type { Random } from './random';
+import { curveRate, spunKeep, windDirection, windPush } from './shaping';
 import { LANDING, SURFACES } from './surfaces';
 import { hitCanopy, treeCone, turned, type Cone } from './trees';
 
@@ -146,6 +147,23 @@ export class Game {
   struckWith = 0;
   /** The club of the bag in hand, on a golf hole: chosen a shot at a time, and the driver again at each tee. */
   inHand: BagClub = PUTTER;
+  /**
+   * The shape chosen for the next lofted shot, from minus one (a draw) to one (a fade), nought straight; and its spin,
+   * from minus one (backspin) to one (topspin), nought flat. Chosen a shot at a time: put back to nought when a shot is
+   * struck and at each hole. See `shaping.ts`.
+   */
+  shape = 0;
+  spin = 0;
+  /**
+   * What the shot in the air was struck with, latched at the strike so that choosing the next shape while it flies
+   * changes nothing of it: how fast its heading turns, in radians a second (a fade is positive), and its spin.
+   */
+  private flightRate = 0;
+  private flightSpin = 0;
+  /** The hole's wind, worked out once a hole, and how hard it pushes a ball in the air along x and along y, in yards a second a second. */
+  private blowing = { x: 0, y: 0, speed: 0 };
+  private windAx = 0;
+  private windAy = 0;
   /** Whether the ball's next landing is the first since it was struck. */
   private firstLanding = false;
   /** Whether the ball was moving at the end of the last step: its coming to rest is told once, when it does. */
@@ -205,7 +223,31 @@ export class Game {
     this.firstLanding = false;
     this.firstStep = false;
     this.knockAt = -Infinity;
+    this.letGoOfShape();
     this.spawnAt(x, y);
+  }
+
+  /** What was chosen for a shot, and what a shot in the air was struck with, put back to straight and flat. */
+  private letGoOfShape() {
+    this.shape = this.spin = this.flightRate = this.flightSpin = 0;
+  }
+
+  /** The next shot's shape, set within its limits; a number that is not one leaves it as it was. */
+  setShape(v: number) {
+    if (Number.isFinite(v)) this.shape = Math.max(-1, Math.min(1, v));
+  }
+
+  /** The next shot's spin, set within its limits; a number that is not one leaves it as it was. */
+  setSpin(v: number) {
+    if (Number.isFinite(v)) this.spin = Math.max(-1, Math.min(1, v));
+  }
+
+  /**
+   * The wind on this hole: the way it pushes, as a unit vector across the ground, and how hard in miles an hour (nought for
+   * calm, and for every hole of minigolf). The same object until the next hole begins, so a page may read it every frame.
+   */
+  get wind(): Readonly<{ x: number; y: number; speed: number }> {
+    return this.blowing;
   }
 
   /** The hole being played. */
@@ -266,6 +308,15 @@ export class Game {
     // a knock on the hole before holds back none on this one
     this.knockAt = -Infinity;
     this.firstStep = false;
+    // nor does a shape, a spin or a wind: the new hole's own, from its name, and none at all on minigolf
+    this.letGoOfShape();
+    const [wx, wy] = windDirection(this.def.name);
+    // a hole of minigolf is calm whatever it is given: its ball never leaves the ground
+    const speed = this.layout.golf ? (this.def.wind ?? 0) : 0;
+    const push = windPush(speed);
+    this.blowing = { x: wx, y: wy, speed };
+    this.windAx = wx * push;
+    this.windAy = wy * push;
     this.settle();
     this.events.started?.(index, this.def.par);
   }
@@ -330,10 +381,16 @@ export class Game {
       const launch = strike(this.inHand, p, angle, lieAt(this.layout, this.lie.x, this.lie.y), this.random);
       world.hit(ball, launch.vx, launch.vy, launch.vz);
       this.firstLanding = true;
+      // a putt goes along the ground, where neither a shape nor a spin has anything to work on
+      const lofted = this.inHand.loft > 0;
+      this.flightRate = lofted ? curveRate(this.shape, this.inHand.loft) : 0;
+      this.flightSpin = lofted ? this.spin : 0;
     } else {
       const speed = strikeSpeed(p, this.hardest);
       world.hit(ball, Math.cos(angle) * speed, Math.sin(angle) * speed, 0);
     }
+    // chosen for this shot, and so used up by it
+    this.shape = this.spin = 0;
     this.strokes++;
     this.moving = true;
     this.struckAt = this.t;
@@ -366,6 +423,7 @@ export class Game {
       this.stepped += PHYSICS.step;
       this.obstacles.update(this.stepped, PHYSICS.step);
       const { world, ball } = this;
+      this.blow(PHYSICS.step);
       const vx = world.vx[ball],
         vy = world.vy[ball],
         vz = world.vz[ball];
@@ -460,6 +518,34 @@ export class Game {
   }
 
   /**
+   * The air's work on a ball in flight, over one physics step of `dt`, done before the step's velocities are read, so a
+   * landing and a knock are judged by what the ball really did: the shape turns its heading, a pure rotation of its speed
+   * across the ground that adds none and takes none (only until it first comes down, since a hop is not a flight), and
+   * the wind adds a steady push along the way it blows. Only on a golf hole, to a ball that is moving and more than
+   * `ON_THE_GROUND` above where it would rest: a ball on the ground, in the cup or in the water is left alone, and
+   * so is every ball when there is neither a shape nor a wind, which is the whole of minigolf and The Range.
+   */
+  private blow(dt: number) {
+    const { world, ball, layout } = this;
+    const rate = this.firstLanding ? this.flightRate : 0;
+    if ((rate === 0 && this.windAx === 0 && this.windAy === 0) || !layout.golf || !this.moving || !world.alive[ball])
+      return;
+    const x = world.x[ball],
+      y = world.y[ball];
+    if (world.z[ball] - heightAt(layout, x, y) - restingAbove(layout, x, y, world.r[ball]) <= ON_THE_GROUND) return;
+    let vx = world.vx[ball],
+      vy = world.vy[ball];
+    if (rate !== 0) {
+      // clockwise from above for a fade: the heading, from +x toward +y, grows smaller
+      const c = Math.cos(rate * dt),
+        s = Math.sin(rate * dt);
+      [vx, vy] = [vx * c + vy * s, vy * c - vx * s];
+    }
+    world.vx[ball] = vx + this.windAx * dt;
+    world.vy[ball] = vy + this.windAy * dt;
+  }
+
+  /**
    * A lofted ball that came down in the step just taken (from (vx, vy, vz), going into the ground on a golf hole) has
    * its landing made what the surface says it is: the physics gives every floor the one bounce, and none of the
    * scrub of a real ball's impact, so what it did is undone and done again. The speed along the ground is cut to
@@ -490,7 +576,10 @@ export class Game {
     const ax = world.vx[ball] - nx * out,
       ay = world.vy[ball] - ny * out,
       az = world.vz[ball] - nz * out;
-    const keep = surface.keep * Math.exp((-LANDING.steep * into) / Math.max(1e-6, Math.hypot(ax, ay, az)));
+    // a spin tells at the first landing only: after that the ball is on the ground, hopping and rolling as it always did
+    const keep =
+      spunKeep(surface.keep, this.firstLanding ? this.flightSpin : 0) *
+      Math.exp((-LANDING.steep * into) / Math.max(1e-6, Math.hypot(ax, ay, az)));
     const tx = ax * keep,
       ty = ay * keep,
       tz = az * keep;

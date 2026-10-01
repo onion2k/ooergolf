@@ -42,6 +42,11 @@ export class Preview {
   /** How far along the ground from the ball to there, in yards. */
   carry = 0;
   /**
+   * Which way the ball went, from the ball to where it came down, as an angle from +x toward +y: the aim for a straight
+   * shot in no wind, and the aim turned by a shape and the wind otherwise. What the spread is laid along.
+   */
+  heading = 0;
+  /**
    * The spread of a swing that is not true, in yards, as an ellipse along the line of the shot: the half of its width
    * across it, and the half of its length along it. Its far end is the ring (a swing never adds speed, so nothing goes
    * past the true landing) and its near end the landing of the worst mishit of speed.
@@ -84,6 +89,7 @@ export class Preview {
     this.knocked = false;
     this.end = 'landed';
     this.carry = 0;
+    this.heading = 0;
     this.footprint.across = this.footprint.along = 0;
   }
 
@@ -145,7 +151,7 @@ export class Previewer {
    * `result`, which is returned. Nothing for a club that has no loft (a putt goes along the ground and is aimed as it
    * always was) or a shot with no power.
    */
-  run(from: { x: number; y: number }, club: BagClub, angle: number, power: number): Preview {
+  run(from: { x: number; y: number }, club: BagClub, angle: number, power: number, shape = 0, spin = 0): Preview {
     const p = this.result;
     const g = this.rehearsal;
     const told = this.told;
@@ -154,6 +160,8 @@ export class Previewer {
     if (!(club.loft > 0) || !(power > 0)) return p;
     g.trial(from.x, from.y);
     g.pick(club.id);
+    g.setShape(shape);
+    g.setSpin(spin);
     if (!g.shoot(angle, power)) return p;
     const { layout, world, ball } = g;
     const push = (x: number, y: number, z: number) => {
@@ -173,12 +181,12 @@ export class Previewer {
       if (over() || g.phase !== 'play' || g.ready) break;
       push(world.x[ball], world.y[ball], world.z[ball]);
     }
-    this.finish(layout, from, club, power);
+    this.finish(layout, from, club, angle, power);
     return p;
   }
 
   /** What the flight came to, and the ring's ground, from what the rehearsal told. */
-  private finish(layout: Layout, from: { x: number; y: number }, club: BagClub, power: number) {
+  private finish(layout: Layout, from: { x: number; y: number }, club: BagClub, angle: number, power: number) {
     const p = this.result;
     const { world, ball, phase } = this.rehearsal;
     const told = this.told;
@@ -214,6 +222,9 @@ export class Previewer {
     p.slope.x = sx;
     p.slope.y = sy;
     p.carry = Math.hypot(p.x - from.x, p.y - from.y);
+    // which way it went, from the ball to the ring: the aim turned by a shape and the wind; a ball that came down where it
+    // was struck has gone no way, and is said to have gone the way it was aimed
+    p.heading = p.carry > 1e-6 ? Math.atan2(p.y - from.y, p.x - from.x) : angle;
     // the swing's spread: a sideways miss of the whole scatter, and the speed lost at the worst, which the carry goes as
     // the square of
     const spread = maxScatter(club, lieAt(layout, from.x, from.y), power);

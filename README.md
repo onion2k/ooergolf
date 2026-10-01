@@ -36,7 +36,11 @@ golf hole the camera stands back and tips lower for the club in hand until where
 would come down is on the screen; a drag draws the shot's flight as an arc to a ring
 (blue over water, red out of bounds, with a spread showing how far a swing may miss
 it), the bag says how far and onto what, the strokes say how far the pin is and how
-much higher or lower, and a map of the hole sits at the side. A
+much higher or lower, and a map of the hole sits at the side. A shot can be shaped, a
+draw or a fade that curves in the air, and spun, backspin to check it and topspin to run
+it on, each chosen by a button in the bag; and the holes of The Links have a wind, shown
+under the strokes as an arrow and a speed, that pushes a ball for as long as it is in the
+air, and which the drawn flight already allows for. A
 machine that cannot keep up has the picture stepped down a rung at a time.
 
 The green is painted smooth in its mown stripes, and the rough round it is
@@ -111,6 +115,7 @@ fixed, and no baseline is moved to make it green.
     src/route.ts       the way to the cup round water, out of bounds and trees
     src/planner.ts     a golf shot tried in a rehearsal, judged, and chosen
     src/marker.ts      the ring where a lofted ball first came down
+    src/shaping.ts     a shot's shape and spin, and a hole's wind: what the air and the landing do to it
     src/preview.ts     the flight a drag would make, worked out in a rehearsal before it is taken
     src/aimview.ts     the view a golf shot is aimed from: back and low enough to see where it lands
     src/readout.ts     the pin's distance and rise, and where a shot comes down, in words

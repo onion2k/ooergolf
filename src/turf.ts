@@ -12,6 +12,7 @@
 import type { GrassField, GrassKind, GrassOptions, Wind } from 'artshape-render/game/grass';
 import { TILE, tileAt, type Layout } from './arena';
 import { seeded } from './random';
+import { nameSeed, windDirection } from './shaping';
 
 /** How far below the green the rough lies: the scene's own, kept here too so the turf imports no drawing. */
 const ROUGH_DEPTH = 3;
@@ -103,13 +104,6 @@ export const BLADE_ROOM = 262_144;
  */
 export const GRASS: GrassOptions = { near: 45, mid: 110, far: 300, capacity: BLADE_ROOM };
 
-/** A seed from a name: FNV-1a, so the same hole grows the same grass and blows the same wind. */
-function seedOf(name: string): number {
-  let h = 0x811c9dc5;
-  for (const c of name) h = Math.imul(h ^ c.charCodeAt(0), 0x01000193);
-  return h >>> 0;
-}
-
 /** A disc of the rough where no blade grows: a rock stands there, and would be lost in the grass. */
 export interface Clearing {
   x: number;
@@ -166,7 +160,7 @@ export function fieldOf(
     heights,
     kinds: [...KINDS],
     outside: { kind: ROUGH, height: -ROUGH_DEPTH },
-    seed: seedOf(name),
+    seed: nameSeed(name),
   };
 }
 
@@ -178,7 +172,8 @@ export function fieldOf(
  * gusts.
  */
 export function windOf(name: string): Wind {
-  const random = seeded(seedOf(`${name} wind`));
-  const a = random() * Math.PI * 2;
-  return { direction: [Math.cos(a), Math.sin(a)], strength: 0.7 + random() * 0.3, gustSize: 8, gustSpeed: 5 };
+  // the first draw is the way it blows, which is the ball's as much as the grass's and so is `windDirection`'s; the second is how hard
+  const random = seeded(nameSeed(`${name} wind`));
+  random();
+  return { direction: windDirection(name), strength: 0.7 + random() * 0.3, gustSize: 8, gustSpeed: 5 };
 }

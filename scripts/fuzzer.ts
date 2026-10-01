@@ -7,7 +7,9 @@
  * rolls or between holes, wait, reload, ask for another round when one is
  * over, and buy and use clubs in the shop, which it can afford now and then
  * with what its holes pay. Random shots reach each hole's limit, and good ones hole out, so
- * the monkey gets round the whole course. Each knock the game tells of is
+ * the monkey gets round the whole course. On a golf hole it chooses a shape (straight, a draw or a fade) and a spin (flat,
+ * back or top) before its shots, as a player's buttons do, and the game must put them back to nought when the stroke is
+ * taken. Each knock the game tells of is
  * checked as it is told, since what is wrong with one is gone by the next.
  *
  * Only what a player could do. A monkey that did what no player can would
@@ -34,6 +36,7 @@ import {
   viewProblems,
 } from '../src/invariants';
 import { Previewer } from '../src/preview';
+import { RANGE } from '../src/range';
 import { BAG } from '../src/bag';
 import { carryFrom } from '../src/flight';
 import { lieAt } from '../src/arena';
@@ -42,6 +45,20 @@ import { seeded } from '../src/random';
 import { groundAt } from '../src/shot';
 
 const DT = 1 / 60;
+
+/**
+ * The three holes of The Range with a wind on them, of 12, 18 and 6 miles an hour, under names of their own (the save
+ * keeps a best score by name): where the monkey plays golf in wind, since The Range itself is calm and stays so.
+ */
+export const WINDY: readonly HoleDef[] = RANGE.map((hole, k) => ({
+  ...hole,
+  name: `${hole.name} windy`,
+  wind: [12, 18, 6][k],
+}));
+
+/** What a player's buttons give a shape and a spin: straight or flat, and one way or the other, straight the likeliest for a shape. */
+const SHAPES = [0, 0, -1, 1];
+const SPINS = [0, -1, 1];
 /** What a knock is told with, and a landing. */
 type Knock = Parameters<NonNullable<GameEvents['knocked']>>;
 type Landing = Parameters<NonNullable<GameEvents['landed']>>;
@@ -99,8 +116,8 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
             // a shot taken as it was aimed comes down within the spread the preview showed, and never past its ring
             if (first && aimed) {
               const a = aimed;
-              const u = (x - a.x) * Math.cos(a.angle) + (y - a.y) * Math.sin(a.angle);
-              const v = -(x - a.x) * Math.sin(a.angle) + (y - a.y) * Math.cos(a.angle);
+              const u = (x - a.x) * Math.cos(a.heading) + (y - a.y) * Math.sin(a.heading);
+              const v = -(x - a.x) * Math.sin(a.heading) + (y - a.y) * Math.cos(a.heading);
               const slack = 2 + 0.03 * a.carry;
               // inside the box of what a swing can do: no further across than its scatter, and no further along than the
               // ring and the worst mishit of speed (the two together, in a corner, which the spread's ellipse leaves out)
@@ -122,7 +139,7 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
   };
   /** The shot aimed and then taken, where the preview said it comes down, for the landing to be held to when it is told. */
   let aimed: {
-    angle: number;
+    heading: number;
     x: number;
     y: number;
     across: number;
@@ -158,6 +175,17 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
       course: null,
     };
     const between = (a: number, b: number) => a + random() * (b - a);
+    /** A shape and a spin chosen for the next shot, on a golf hole, as a player's buttons do; the game keeps them within -1 to 1. */
+    const choose = () => {
+      if (!game.layout.golf) return;
+      game.setShape(SHAPES[Math.floor(random() * SHAPES.length)]);
+      game.setSpin(SPINS[Math.floor(random() * SPINS.length)]);
+    };
+    /** After a stroke the choices are spent: the next shot is straight and flat unless chosen again. */
+    const spent = () => {
+      if (game.shape !== 0 || game.spin !== 0)
+        throw new Error(`a stroke was taken and left a shape of ${game.shape} and a spin of ${game.spin} chosen`);
+    };
     const did = (what: string) => {
       count(done, what);
       log.push(`frame ${frame}: ${what}`);
@@ -171,7 +199,11 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
           // of the bag, which a player picks before the drag
           if (game.layout.golf && random() < 0.8) game.pick(BAG[Math.floor(random() * BAG.length)].id);
           const power = random() < 0.15 ? 1 : random();
-          if (game.shoot(between(-Math.PI, Math.PI), power)) did('shoot');
+          choose();
+          if (game.shoot(between(-Math.PI, Math.PI), power)) {
+            spent();
+            did('shoot');
+          }
           busy = Math.floor(between(10, 90));
         },
       ],
@@ -185,7 +217,18 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
           const bad = planProblems(game, shot);
           if (bad.length) throw new Error(`the autopilot planned no shot: ${bad.join('; ')}`);
           if (shot.club) game.pick(shot.club);
-          if (game.shoot(shot.angle + between(-0.08, 0.08), shot.power * between(0.85, 1.15))) did('shoot well');
+          // mostly as planned, which is straight and flat, and now and then with whatever else a player may choose
+          if (!game.layout.golf) {
+            // nothing to choose on a hole of minigolf
+          } else if (random() < 0.3) choose();
+          else {
+            game.setShape(0);
+            game.setSpin(0);
+          }
+          if (game.shoot(shot.angle + between(-0.08, 0.08), shot.power * between(0.85, 1.15))) {
+            spent();
+            did('shoot well');
+          }
           busy = Math.floor(between(10, 90));
         },
       ],
@@ -250,23 +293,38 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
               game.phase,
               game.hole,
               game.inHand.id,
+              game.shape,
+              game.spin,
               world.x[ball],
               world.y[ball],
               world.z[ball],
             ]);
+          // the shape and the spin a player has chosen are the player's until the stroke, and not the preview's to change
+          if (random() < 0.5) choose();
           const before = digest(),
             drawn = draws;
-          const p = previewer.run(at, club, angle, power);
+          const p = previewer.run(at, club, angle, power, game.shape, game.spin);
           const bad = previewProblems(game, at, club, p);
-          if (bad.length) throw new Error(`a preview of the ${club.id} at ${power.toFixed(3)}: ${bad.join('; ')}`);
+          if (bad.length)
+            throw new Error(
+              `a preview of the ${club.id} at ${power.toFixed(3)} with shape ${game.shape} and spin ${game.spin}, in a wind of ${game.wind.speed}: ${bad.join('; ')}`,
+            );
           if (digest() !== before) throw new Error('aiming a shot changed the game');
           if (draws !== drawn) throw new Error(`aiming a shot drew ${draws - drawn} numbers of the game's chance`);
           did('aim a shot');
           // taken as aimed, where nothing in the air turns the flight (a swing that is not true may meet a tree or the rail
           // where the true swing does not, or the other way): it comes down within the spread that was shown
-          if (random() < 0.7 && p.n > 1 && p.end === 'landed' && !p.hit && !layout.trees.length && power > 0.05) {
+          if (
+            random() < 0.7 &&
+            p.n > 1 &&
+            p.end === 'landed' &&
+            !p.hit &&
+            !layout.trees.length &&
+            power > 0.05 &&
+            game.shape === 0
+          ) {
             aimed = {
-              angle,
+              heading: p.heading,
               x: at.x,
               y: at.y,
               across: p.footprint.across,
@@ -275,9 +333,12 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
               what: `${club.id} at ${power.toFixed(3)} from ${at.x.toFixed(1)},${at.y.toFixed(1)} on lie ${lieAt(layout, at.x, at.y)}, ring ${p.x.toFixed(1)},${p.y.toFixed(1)}, carry ${p.carry.toFixed(1)}, angle ${angle.toFixed(3)}`,
             };
             // the ring is the far end of the spread, and the spread's middle is a half length short of it
-            aimed.x = p.x - Math.cos(angle) * p.footprint.along;
-            aimed.y = p.y - Math.sin(angle) * p.footprint.along;
-            if (game.shoot(angle, power)) did('shoot as aimed');
+            aimed.x = p.x - Math.cos(p.heading) * p.footprint.along;
+            aimed.y = p.y - Math.sin(p.heading) * p.footprint.along;
+            if (game.shoot(angle, power)) {
+              spent();
+              did('shoot as aimed');
+            }
             busy = Math.floor(between(10, 90));
           }
         },

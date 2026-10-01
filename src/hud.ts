@@ -15,6 +15,7 @@
  */
 import type { Club } from './clubs';
 import type { Mode } from './gesture';
+import { windText } from './readout';
 import { SCORE_KINDS, againstPar, scoreKind, scoreName } from './score';
 
 /** Each kind of word the callout over the course says, which the stylesheet colours: a score's kind, the water, or out of bounds. */
@@ -32,14 +33,43 @@ export interface HudHandlers {
   mode(mode: Mode): void;
   /** A club of the bag chosen on a golf hole, by its id. */
   club(id: string): void;
+  /** The shape button pressed: the next shape in its cycle, from minus one (a draw) to one (a fade). */
+  shape(value: number): void;
+  /** The spin button pressed: the next spin in its cycle, from minus one (backspin) to one (topspin). */
+  spin(value: number): void;
 }
 
-/** A club of the bag as the picker shows it: what to press, what to call it, and how far it carries at full power. */
+/** A club of the bag as the picker shows it: what to press, what to call it, how far it carries at full power, and its loft (none for the putter). */
 export interface BagInfo {
   id: string;
   name: string;
   label: string;
   carry: number;
+  loft: number;
+}
+
+/**
+ * The shapes and the spins a button cycles through, in the order it is pressed: straight, draw, fade; flat, back, top.
+ * Each is a value the game takes, and each has the word the button shows and the one it says to a screen reader.
+ */
+const SHAPES = [
+  { value: 0, label: 'Straight', say: 'straight' },
+  { value: -1, label: 'Draw', say: 'draw, curving left' },
+  { value: 1, label: 'Fade', say: 'fade, curving right' },
+] as const;
+const SPINS = [
+  { value: 0, label: 'Flat', say: 'flat' },
+  { value: -1, label: 'Back', say: 'backspin' },
+  { value: 1, label: 'Top', say: 'topspin' },
+] as const;
+
+/** What the shape and spin buttons show, as the page drew it: whether they are up, each one's value and its words. */
+export interface ControlsDrawn {
+  shown: boolean;
+  shape: number;
+  spin: number;
+  shapeText: string;
+  spinText: string;
 }
 
 /**
@@ -121,6 +151,12 @@ export class Hud {
   private readonly bagInfo = document.getElementById('bagInfo')!;
   private readonly bagClubs = document.getElementById('bagClubs')!;
   private readonly pin = document.getElementById('pin')!;
+  private readonly windLine = document.getElementById('wind')!;
+  private readonly windArrow = document.getElementById('windArrow')!;
+  private readonly windWords = document.getElementById('windText')!;
+  private readonly shaping = document.getElementById('bagShaping')!;
+  private readonly shapeButton = document.getElementById('shapeButton')!;
+  private readonly spinButton = document.getElementById('spinButton')!;
   private readonly mapPanel = document.getElementById('holePanel')!;
   private readonly mapCanvas = document.getElementById('holeMap') as HTMLCanvasElement;
   /** The map's drawing context, made when a golf hole first has a map and not at boot, which is every course's. */
@@ -147,6 +183,10 @@ export class Hud {
   /** The clubs the picker has, none on a hole of minigolf; and what a drag does, which the help says. */
   private bagList: readonly BagInfo[] = [];
   private mode: Mode = 'aim';
+  /** The shape and the spin the buttons show, and the turn the wind's arrow was last written at, so each is written only when it changes. */
+  private shapeShown = 0;
+  private spinShown = 0;
+  private windTurn = NaN;
 
   constructor(
     private readonly handlers: HudHandlers,
@@ -164,6 +204,47 @@ export class Hud {
     });
     this.aimButton.addEventListener('click', () => handlers.mode('aim'));
     this.lookButton.addEventListener('click', () => handlers.mode('look'));
+    // each cycles to the next of its three, and the game says what it took (`setShaping`)
+    this.shapeButton.addEventListener('click', () => handlers.shape(this.next(SHAPES, this.shapeShown)));
+    this.spinButton.addEventListener('click', () => handlers.spin(this.next(SPINS, this.spinShown)));
+    this.setShaping(0, 0, true);
+  }
+
+  /** The value after `value` in a cycle of buttons: the first for one that is not in it. */
+  private next(cycle: readonly { value: number }[], value: number): number {
+    const at = cycle.findIndex((c) => c.value === value);
+    return cycle[(at + 1) % cycle.length].value;
+  }
+
+  /**
+   * The shape and the spin chosen, shown on their buttons: the word, the value (for the stylesheet, which lights a
+   * button that is not straight or flat) and what a screen reader is told. Written only when one changes, so the page
+   * may say it every frame; a value that is not one of the cycle's shows as the nearest, by its sign.
+   */
+  setShaping(shape: number, spin: number, force = false) {
+    if (!force && shape === this.shapeShown && spin === this.spinShown) return;
+    this.shapeShown = shape;
+    this.spinShown = spin;
+    const s = SHAPES.find((c) => c.value === Math.sign(shape)) ?? SHAPES[0];
+    const p = SPINS.find((c) => c.value === Math.sign(spin)) ?? SPINS[0];
+    this.shapeButton.textContent = `Shape: ${s.label}`;
+    this.shapeButton.dataset.shape = String(s.value);
+    this.shapeButton.setAttribute('aria-label', `Shape: ${s.say}. Press to change.`);
+    this.spinButton.textContent = `Spin: ${p.label}`;
+    this.spinButton.dataset.spin = String(p.value);
+    this.spinButton.setAttribute('aria-label', `Spin: ${p.say}. Press to change.`);
+  }
+
+  /** The two buttons as they are drawn now, read from the page and not from what was last said to it: for the test API. */
+  controls(): ControlsDrawn {
+    return {
+      // up when the bag is and a lofted club is in hand; a panel put away stays drawn while it shrinks, so it is its `hidden` that says
+      shown: !this.shaping.hidden && !this.bag.hidden,
+      shape: Number(this.shapeButton.dataset.shape),
+      spin: Number(this.spinButton.dataset.spin),
+      shapeText: this.shapeButton.textContent,
+      spinText: this.spinButton.textContent,
+    };
   }
 
   /** The switch shows which a drag is, and the help says what to do with it: swing, on a golf hole, and not putt. */
@@ -184,6 +265,7 @@ export class Hud {
     this.setMode(this.mode);
     if (!clubs) {
       this.bag.hidden = true;
+      this.shaping.hidden = true;
       return;
     }
     this.bagClubs.replaceChildren(
@@ -206,6 +288,8 @@ export class Hud {
     for (const b of Array.from(this.bagClubs.querySelectorAll('button')))
       b.setAttribute('aria-pressed', String(b.dataset.club === active));
     const c = this.bagList.find((x) => x.id === active);
+    // a shape and a spin are for a lofted club: the putter rolls along the ground, where neither does anything
+    this.shaping.hidden = !(c && c.loft > 0);
     this.club = c ? c.name : '';
     this.carryLine = c ? (c.carry > 0 ? `${c.name} \u00b7 carries ${Math.round(c.carry)}` : c.name) : '';
     this.bagInfo.textContent = this.carryLine;
@@ -221,6 +305,35 @@ export class Hud {
   setPin(text: string | null) {
     this.pin.hidden = text === null;
     if (text !== null && this.pin.textContent !== text) this.pin.textContent = text;
+  }
+
+  /**
+   * The wind of a golf hole in a line under the pin: how hard it blows in whole miles an hour, or the word calm with no
+   * arrow, which a player always has; none for a hole that has no such thing. Its arrow is turned by `setWindArrow`.
+   */
+  setWind(speed: number | null) {
+    this.windLine.hidden = speed === null;
+    if (speed === null) return;
+    const text = windText(speed);
+    if (this.windWords.textContent !== text) this.windWords.textContent = text;
+    this.windLine.toggleAttribute('data-calm', text === 'calm');
+    this.windTurn = NaN;
+  }
+
+  /**
+   * The wind's arrow turned `degrees` clockwise from pointing up, written only when it has turned by a visible amount
+   * (a quarter of a degree), so the page may say it every frame, as a camera glides, and nothing is made.
+   */
+  setWindArrow(degrees: number) {
+    if (Math.abs(degrees - this.windTurn) < 0.25) return;
+    this.windTurn = degrees;
+    this.windArrow.style.transform = `rotate(${degrees.toFixed(1)}deg)`;
+  }
+
+  /** How the wind is drawn: its arrow's turn as it was last written, and the words beside it; null when there is no wind line up. */
+  windDrawn(): { degrees: number; text: string } | null {
+    if (this.windLine.hidden) return null;
+    return { degrees: Number.isNaN(this.windTurn) ? 0 : this.windTurn, text: this.windWords.textContent };
   }
 
   /** The hole's map, painted, put over the course; none puts it away. Drawn over from `overlay`, by `drawMap`. */

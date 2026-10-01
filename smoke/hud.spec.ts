@@ -185,6 +185,92 @@ for (const [where, device] of [
       expect(problems).toEqual([]);
     });
 
+    test('the shape and spin buttons and the wind line, on a golf hole: a thumb high and clear in every state, inside the bag and the strokes panel, clear of every other panel and the edges, and away for the putter and on minigolf', async ({
+      page,
+    }) => {
+      const problems = watch(page);
+      await start(page, { seed: 11, paused: true, screen: true });
+      // a golf hole of the test's own with a gale on it, the most wind there is, which makes the longest words
+      await page.evaluate(() => {
+        const cols = 41,
+          rows = 70;
+        const map = Array.from({ length: rows }, (_, r) =>
+          Array.from({ length: cols }, (_, c) => {
+            if (r === 0 || r === rows - 1 || c === 0 || c === cols - 1) return '#';
+            if (r === rows - 4) return c === 20 ? 'T' : c === 19 || c === 21 ? 't' : 'f';
+            if (r === 2 && c === 3) return 'C';
+            return 'f';
+          }).join(''),
+        );
+        const g = window.game!;
+        g.chooseCourse('The Meadow');
+        g.playCourse([{ name: 'Gale', par: 4, map, wind: 25 }]);
+        g.step(60);
+      });
+      await expect(page.locator('#bagShaping')).toBeVisible();
+      await expect(page.locator('#wind')).toBeVisible();
+      await expect(page.locator('#windText')).toHaveText('25 mph');
+      const box = async (sel: string) => (await page.locator(sel).boundingBox())!;
+      const apart = (a: { x: number; y: number; width: number; height: number }, b: typeof a) =>
+        a.x + a.width <= b.x || b.x + b.width <= a.x || a.y + a.height <= b.y || b.y + b.height <= a.y;
+      const inside = (a: { x: number; y: number; width: number; height: number }, b: typeof a, what: string) => {
+        expect(a.x, `${what}: left`).toBeGreaterThanOrEqual(b.x - 1);
+        expect(a.x + a.width, `${what}: right`).toBeLessThanOrEqual(b.x + b.width + 1);
+        expect(a.y, `${what}: top`).toBeGreaterThanOrEqual(b.y - 1);
+        expect(a.y + a.height, `${what}: bottom`).toBeLessThanOrEqual(b.y + b.height + 1);
+      };
+      // every state of both buttons, each read: nine in all, from straight and flat round to a fade and topspin
+      for (let k = 0; k < 9; k++) {
+        const r = await read(page);
+        const label = `${await page.locator('#shapeButton').textContent()} / ${await page.locator('#spinButton').textContent()}`;
+        expect(r.outside, `${label}: nothing past the screen`).toEqual([]);
+        expect(r.scrollWidth, `${label}: nothing scrolls sideways`).toBeLessThanOrEqual(page.viewportSize()!.width);
+        expect(r.texts.filter((t) => t.ratio < CONTRAST).map((t) => `"${t.text}" ${t.ratio}:1`)).toEqual([]);
+        for (const b of r.buttons.filter((b) => b.text.startsWith('Shape') || b.text.startsWith('Spin')))
+          expect(b.height, `the ${b.text} button`).toBeGreaterThanOrEqual(THUMB);
+        const bag = await box('#bag');
+        inside(await box('#shapeButton'), bag, `${label}: the shape button in the bag`);
+        inside(await box('#spinButton'), bag, `${label}: the spin button in the bag`);
+        expect(apart(await box('#shapeButton'), await box('#spinButton')), `${label}: the two do not overlap`).toBe(
+          true,
+        );
+        expect(bag.x).toBeGreaterThanOrEqual(0);
+        expect(bag.x + bag.width).toBeLessThanOrEqual(page.viewportSize()!.width);
+        // pressed again, and again: the shape every press, the spin every third, so nine states go through all of both
+        await page.locator('#shapeButton').click();
+        if (k % 3 === 2) await page.locator('#spinButton').click();
+      }
+      // the bag, taller for them, is clear of the other panels, and does not reach up into them
+      const bag = await box('#bag');
+      for (const other of ['#viewMode', '#help', '#strokes', '#holePanel', '#purse'])
+        expect(apart(bag, await box(other)), `the bag and ${other} do not overlap`).toBe(true);
+      expect(bag.y, 'the bag is on the screen').toBeGreaterThanOrEqual(0);
+      // the wind line is in the strokes panel, under the pin, which is clear of the purse
+      const strokes = await box('#strokes');
+      const wind = await box('#wind');
+      const pin = await box('#pin');
+      inside(wind, strokes, 'the wind in the strokes panel');
+      expect(wind.y, 'under the pin').toBeGreaterThanOrEqual(pin.y + pin.height - 1);
+      expect(apart(strokes, await box('#purse')), 'the strokes and the purse do not overlap').toBe(true);
+      expect(apart(strokes, await box('#holePanel')), 'the strokes and the map do not overlap').toBe(true);
+      // the arrow is there and drawn, and calm has the word only
+      const arrow = await box('#windArrow');
+      expect(arrow.width).toBeGreaterThan(8);
+      inside(arrow, wind, 'the arrow in the wind line');
+      // the putter has neither button, and the bag is the shorter for it
+      await page.locator('#bagClubs button[data-club="putter"]').click();
+      await expect(page.locator('#bagShaping')).toBeHidden();
+      expect((await box('#bag')).height).toBeLessThan(bag.height - 40);
+      // and on a hole of minigolf neither the buttons nor the wind are there
+      await page.evaluate(() => {
+        window.game!.chooseCourse('The Meadow');
+        window.game!.step(60);
+      });
+      await expect(page.locator('#bagShaping')).toBeHidden();
+      await expect(page.locator('#wind')).toBeHidden();
+      expect(problems).toEqual([]);
+    });
+
     test('the map is put away under the start screen, from the card of a round of golf, and is back with the next course of golf', async ({
       page,
     }) => {

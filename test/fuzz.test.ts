@@ -1,6 +1,6 @@
 /** The monkey itself: it gets about, and a clean seed is clean. `npm run fuzz` is the long form. */
 import { describe, expect, it } from 'vitest';
-import { fuzz } from '../scripts/fuzzer';
+import { WINDY, fuzz } from '../scripts/fuzzer';
 import { DOWNS, moors } from '../src/course';
 import { COURSES } from '../src/course';
 import { RANGE } from '../src/range';
@@ -103,6 +103,31 @@ describe('the fuzzer', () => {
     expect(knocked, 'and knocked about, by trees among the rest').toBeGreaterThan(50);
     expect(clubs, 'clubs chosen from the bag').toBeGreaterThan(10);
     expect(holed + finished, 'and holed out, or round').toBeGreaterThan(0);
+  });
+
+  it('plays golf in a wind at random from start to finish, every seed clean, aims and strokes taken with a shape and a spin chosen', () => {
+    let aimed = 0,
+      struck = 0,
+      holed = 0,
+      landed = 0;
+    const visited = new Set<string>();
+    for (const seed of [4, 9, 21, 30]) {
+      const r = fuzz(seed, 12000, WINDY);
+      expect(r.failure, `seed ${seed}: ${JSON.stringify(r.failure)}`).toBe(null);
+      aimed += r.done['aim a shot'] || 0;
+      struck += (r.done.shoot || 0) + (r.done['shoot well'] || 0) + (r.done['shoot as aimed'] || 0);
+      holed += r.happened.holed || 0;
+      landed += r.happened.landed || 0;
+      for (const name of Object.keys(r.visited)) visited.add(name);
+    }
+    // the holes it played are the windy ones, and so the wind was on the games it played
+    expect(WINDY.map((h) => h.wind)).toEqual([12, 18, 6]);
+    expect([...visited].sort()).toEqual(WINDY.map((h) => h.name).sort());
+    for (const name of visited) expect(name).toMatch(/ windy$/);
+    expect(aimed, 'shots aimed in the wind, each preview held to the game').toBeGreaterThan(20);
+    expect(struck, 'and shots struck').toBeGreaterThan(20);
+    expect(landed, 'balls come down in it, each landing told').toBeGreaterThan(50);
+    expect(holed, 'and holed out').toBeGreaterThan(0);
   });
 
   it('plays The Downs at random from start to finish, every seed clean, holing out and getting round all nine', () => {

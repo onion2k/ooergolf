@@ -293,7 +293,7 @@ export class Scene {
   /** The ring as the last frame placed it, and whether it is drawn: what the page reads back, and never the state it came from. */
   private mark: { matrices: Float32Array; count: number } | null = null;
   /** The shot in hand as the page last handed it, and how much bigger its marks are drawn for the view, and which way it is aimed. */
-  private shot: { preview: Preview; scale: number; angle: number } | null = null;
+  private shot: { preview: Preview; scale: number } | null = null;
   /** What the last frame placed of its preview, for the page to read back: the arc, the ring, the spread and the knock. */
   private drawnShot: { arc: Entry; ring: Entry; spread: Entry; knock: Entry; ringLooks: Float32Array } | null = null;
   /** How many sparkles each pond has, worked out once for a hole; and what each frame writes into and reads, made once. */
@@ -736,7 +736,8 @@ export class Scene {
       const s = this.shot;
       spread.count = 0;
       if (!s || s.preview.n < 2) return;
-      const { preview: p, angle } = s;
+      const { preview: p } = s;
+      const angle = p.heading;
       const { across, along } = p.footprint;
       // where a ball goes in water or drops in the cup has no spread to show, and a tap hardly any
       if (p.end === 'holed' || p.end === 'water' || (across < 0.4 && along < 0.4)) return;
@@ -771,10 +772,11 @@ export class Scene {
 
   /**
    * The shot in hand, which is drawn from the next frame: its preview, how much bigger its marks are for how far back
-   * the camera stands, and which way it is aimed. None puts it away.
+   * the camera stands. None puts it away. The spread is laid along the way the ball actually went (`Preview.heading`),
+   * which a shape and the wind turn from the way it was aimed.
    */
-  setShot(preview: Preview | null, scale = 1, angle = 0) {
-    this.shot = preview ? { preview, scale, angle } : null;
+  setShot(preview: Preview | null, scale = 1) {
+    this.shot = preview ? { preview, scale } : null;
   }
 
   /**
@@ -785,7 +787,7 @@ export class Scene {
   shotMarks(): {
     arc: number;
     ring: { x: number; y: number; radius: number; colour: [number, number, number] } | null;
-    spread: { x: number; y: number; across: number; along: number } | null;
+    spread: { x: number; y: number; across: number; along: number; heading: number } | null;
     knock: { x: number; y: number } | null;
   } {
     const d = this.drawnShot;
@@ -807,6 +809,8 @@ export class Scene {
             y: m(d.spread)[13],
             along: Math.hypot(m(d.spread)[0], m(d.spread)[1], m(d.spread)[2]),
             across: Math.hypot(m(d.spread)[4], m(d.spread)[5], m(d.spread)[6]),
+            // the way its long axis lies across the ground, read from where the matrix puts it (as it is turned on level ground, and near it on a slope)
+            heading: Math.atan2(m(d.spread)[1], m(d.spread)[0]),
           }
         : null,
       knock: d.knock.count ? { x: m(d.knock)[12], y: m(d.knock)[13] } : null,

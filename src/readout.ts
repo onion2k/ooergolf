@@ -1,7 +1,8 @@
 /**
  * What a golfer is told of the pin from where the ball lies: how far it is along the ground and how much higher or
- * lower than the ball it stands, in yards (a unit is a yard). Arithmetic on a layout, so it is tested without a page;
- * the page shows the words and never works the numbers out.
+ * lower than the ball it stands, in yards (a unit is a yard); where a shot would come down, with its shape and spin; and
+ * the wind, as words and as the way its arrow turns on a screen the camera has turned. Arithmetic on a layout, so it is
+ * tested without a page; the page shows the words and never works the numbers out.
  */
 import { heightAt, type Layout } from './arena';
 import { SURFACES, type Lie } from './surfaces';
@@ -33,22 +34,56 @@ export function pinText(pin: Pin): string {
   return yards;
 }
 
-/** What a shot is struck to do, as the preview works it out: how far it carries, what it comes to, what ground, and whether a tree is met. */
+/**
+ * What a shot is struck to do, as the preview works it out: how far it carries, what it comes to, what ground, and whether
+ * a tree is met; and the shape and the spin chosen for it (nought, or none given, is straight and flat).
+ */
 export interface Landing {
   carry: number;
   end: 'landed' | 'holed' | 'water' | 'out';
   lie: Lie;
   hit: boolean;
+  shape?: number;
+  spin?: number;
+}
+
+/** The words for a shot's shape and spin, as a golfer says them: a draw or a fade, backspin or topspin, and nothing for straight and flat. */
+export function shapingWords(shape = 0, spin = 0): string[] {
+  const words: string[] = [];
+  if (shape < 0) words.push('draw');
+  else if (shape > 0) words.push('fade');
+  if (spin < 0) words.push('back');
+  else if (spin > 0) words.push('top');
+  return words;
 }
 
 /**
- * Where a shot would come down, in words: the tree in the way first if there is one, then how far and what it comes
- * down on, which is the news where it is the water or out of bounds; or that it drops in the cup.
+ * Where a shot would come down, in words: its shape and spin first when it has any, then the tree in the way if there is
+ * one, then how far and what it comes down on, which is the news where it is the water or out of bounds; or that it
+ * drops in the cup.
  */
 export function landingText(l: Landing): string {
-  if (l.end === 'holed') return 'drops in the cup';
+  const shaped = shapingWords(l.shape, l.spin).map((w) => `${w} \u00b7 `);
+  if (l.end === 'holed') return `${shaped.join('')}drops in the cup`;
   const yards = `lands ${Math.round(l.carry)} yd`;
   const where =
     l.end === 'water' ? 'in the water' : l.end === 'out' ? 'out of bounds' : (SURFACES[l.lie]?.name ?? 'ground');
-  return `${l.hit ? 'hits a tree · ' : ''}${yards} · ${where}`;
+  return `${shaped.join('')}${l.hit ? 'hits a tree \u00b7 ' : ''}${yards} \u00b7 ${where}`;
+}
+
+/** What the wind is called on the page: whole miles an hour, or calm, so a player always knows. */
+export function windText(speed: number): string {
+  const mph = Math.round(speed);
+  return mph >= 1 ? `${mph} mph` : 'calm';
+}
+
+/**
+ * How far a wind arrow, drawn pointing up, is turned clockwise on the screen, in degrees from minus one hundred and
+ * eighty to one hundred and eighty, for a wind blowing toward the unit vector (`x`, `y`) on the ground, seen by a
+ * camera turned `azimuth` radians: it faces (sin a, cos a), which is up the screen, and its right is (cos a, -sin a).
+ */
+export function windArrow(x: number, y: number, azimuth: number): number {
+  const sx = x * Math.cos(azimuth) - y * Math.sin(azimuth),
+    sy = x * Math.sin(azimuth) + y * Math.cos(azimuth);
+  return (Math.atan2(sx, sy) * 180) / Math.PI;
 }

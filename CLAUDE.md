@@ -24,8 +24,9 @@ The Range is the first of golf proper: three flat holes at a yard a unit, each
 a tee, a fairway, rough and a green, played with a bag of eight clubs that
 loft the ball into the air. The Links is nine holes of it, a par three to a par
 five, made by a generator on hills, with bunkers, water, trees and out of
-bounds, from the plan in `~/.claude/plans/ooergolf-proper-golf.md` (stage 4
-of six is built: a player sees where a shot lands). The golf goes in
+bounds, from the plan in `~/.claude/plans/ooergolf-proper-golf.md` (stage 5
+of six is built: a player sees where a shot lands, and shapes it, spins it and plays it
+in the wind). The golf goes in
 a feature at a time, in the order `DESIGN.md` gives.
 
 ## The factory
@@ -113,8 +114,10 @@ today, and what the next features must hand it:
   which must hold `previewProblems` and leave the game, its chance and its
   clock as they were) and takes some as aimed, which must come down within the
   spread that was shown (where nothing in the air turns the flight), and sends
-  the camera to an aim view in its look round. `npm run fuzz` plays every seed three times, as a player who
-  chooses among the courses and on The Range and The Links alone, since a monkey
+  the camera to an aim view in its look round; it chooses a shape and a spin before a stroke or an aim, and the game must
+  have put them back to nought after the stroke. `npm run fuzz` plays every seed four times, as a player who
+  chooses among the courses, on The Range and The Links alone, and on the windy Range (`WINDY`: its three holes
+  with winds of 12, 18 and 6), since a monkey
   choosing among six is on golf too seldom to hold it to anything; each landing
   the game tells of is checked as it is told (`landingProblems`).
 - **Invariants:** bodies are of a kind, are numbers and are out of the rock;
@@ -137,8 +140,10 @@ today, and what the next features must hand it:
   least `LANDING.least` hard (`landingProblems`). A preview is a flight from
   the ball to where it says it came down, in numbers, growing in length, no
   further than the club goes and a fall adds, with a spread that is a spread
-  (`previewProblems`); and the camera's distance is within the zoom of its
-  hole, further on golf, and its lead is a number of yards.
+  (`previewProblems`, which allow the longest tailwind's carry and need a heading); and the camera's distance is within the
+  zoom of its hole, further on golf, and its lead is a number of yards. Shape and spin are numbers within -1 and 1, the wind
+  a speed from nought to `WIND.most` along a unit direction and calm on a hole of minigolf, and a ball's speed is held to the
+  club that struck it, a fall, and what the wind adds over eight seconds of flight.
 - **Determinism:** the autopilot plays, with a player's slips from its own
   chance, round after round, and the hash takes in the hole and the card.
 - **Pace:** the strokes a round of each course takes; see above. The
@@ -415,6 +420,25 @@ change meant to move it, and the commit says why. Look at every picture.
   `roll`, is what makes a driver run on an eighth of its carry and a wedge a
   thirtieth (`surfaces.ts` says why); `landed(x, y, speed, first)` tells of
   it. Golf pays no coins, and the rail is a wall to a ball in the air.
+- `src/shaping.ts` is what a golf shot has besides its aim and power, and what the air does to it: a **shape** (the
+  player's choice per lofted shot of straight, draw or fade: -1, 0, +1, a heading that turns in the air at
+  `curveRate(shape, loft)` radians a second, positive a fade, to the right as seen from behind the ball, a pure
+  rotation that adds and takes no speed, falling with the club's loft to nothing at 72 degrees so a driver curves 22
+  yards at the fullest, a 7-iron 12 and a sand wedge 3, and only until the ball first comes down); a **spin** (flat,
+  back or top: 0, -1, +1, which multiplies the share of its ground speed the ball keeps at its FIRST landing by
+  `spunKeep`: full topspin about 2.7 times a driver's roll-out, full backspin takes more than all of it, so the ball is
+  checked and comes back a yard or nine); and a **wind** (`HoleDef.wind`, miles an hour, `WIND.most` 25, calm
+  without it, which is every minigolf hole and The Range; it blows the way the hole's grass and flag already show,
+  `windDirection`, the very vector `turf.ts windOf` gives, and pushes a ball in the air, steady, `windPush` yards a second
+  a second, 10 mph moving a full driver 9 yards sideways or along and a sand wedge 23, since a high ball is blown
+  longer). `Game.shape`/`spin` are chosen (`setShape`, `setSpin`, a number that is not one is refused, a value past the
+  limits held in them), latched at the strike, and put back to nought by it and at each hole; `Game.wind` is worked out
+  once a hole. All three are plain additions in `Game.step` (`blow`, before the step's velocities are read, only to a ball in the air on
+  a golf hole) and `Game.landing`, with no chance drawn, so the preview and the autopilot's rehearsal, trials of the same
+  game, include them to the digit (`Previewer.run` and `Rehearsal.shot` take shape and spin; `Preview.heading` is
+  where the ball went, which the spread is laid along). `airTime` and `windReach` say how long a shot is in the air and how
+  much a tailwind carries it further, which the camera's aim view adds to its reach. The Links have winds of 4, 6, 10, 12,
+  5, 8, 7, 10 and 12 miles an hour (nine holes' own, chosen so the autopilot's round stays within a seventh of what it was).
 - `src/preview.ts` is the flight a drag would make, worked out before it is taken: a trial in a rehearsal of the hole
   (`Game.rehearsal`, handed the events it is told by), with chance in the middle, so it is what the game does to the
   shot struck true, exactly (the arithmetic carry is four in a hundred short, and worse on a slope), a knock by a
@@ -436,8 +460,12 @@ change meant to move it, and the commit says why. Look at every picture.
   (`Scene.setShot`, `shotMarks`), scaled for the camera's distance (`markScale`) and laid along the ground's slope and
   lifted clear of a hollow (`placeOnSlope`, `ringLift`: a flat ring over a hill is a crescent in the turf). The bag says
   where it comes down after the club ("Driver · lands 260 yd · fairway", "hits a tree · lands 67 yd · fairway"), the
-  strokes panel says the pin ("503 yd ▲ 1"), and the map is shown on a golf hole and away on minigolf and under the start
-  screen.
+  strokes panel says the pin ("503 yd ▲ 1") and under it the wind (an arrow that points the way it blows on the screen,
+  turned with the camera by `windArrow`, and "12 mph", or "calm"), and the map is shown on a golf hole and away on minigolf
+  and under the start screen. In the bag, between the words and the clubs, two cycle buttons, **Shape: Straight / Draw /
+  Fade** and **Spin: Flat / Back / Top**, shown with a lofted club in hand and put back to straight and flat by a
+  stroke (the hud is reconciled to the game's values each frame), and the bag's words name them ("Driver · fade · back ·
+  lands 262 yd · fairway").
 - `src/range.ts` is The Range (`rangeHole`: tee box, fairway, rough, round
   green, bunker if asked): Pitch and Putt 105, Iron Alley 175, The Long Way 330. A `Course` has `golf`, held by a test to its holes' layouts. `ground.ts`
   draws each kind of golf ground as a mesh of its own colour; the rough is
@@ -623,8 +651,8 @@ phase (`play`, `done`, `over`), the card, the coins and gems, the club in
 hand and those owned, the hardest shot the club in hand strikes, the
 course's name, whether the start screen is up (`choosing`), and whether the
 hole is golf and the club of the bag in hand (`golf`, `inHand`).
-Playing: `shoot(angle, power, club?)` (with a club of the bag put in hand
-first, on a golf hole), `club(id)`, `bag()` (each club's loft, hardest launch
+Playing: `shoot(angle, power, club?, shape?, spin?)` (with a club of the bag put in hand
+first, on a golf hole, and a shape and a spin chosen for it), `club(id)`, `bag()` (each club's loft, hardest launch
 speed and carry) and `suggest()` for the autopilot's shot from
 where the ball lies (with its `club` on a golf hole), `chooseCourse(name)`, which presses that course's
 button on the start screen, `startHole(index)`, `playCourse(holes)` for
@@ -655,7 +683,9 @@ threw up, sand or grass, and where the ring is that marks a lofted ball's
 first landing and how wide, and `shot`: the preview of the shot being aimed, its dots of arc, its ring with its
 colour and size, the spread's half axes, where a tree knocks it and what it comes to, null when none is drawn), read back
 from what the last frame placed; and `map()`, the hole's map over the course: its size and where the ball, the cup and the
-landing of the shot being aimed are on it. `?rung=N` on the page puts the picture
+landing of the shot being aimed are on it. `state()` has the shape and the spin chosen and the hole's `wind` (x, y, speed);
+`motions()` has `wind` (the arrow's turn in degrees and its text, read back from the page), `controls` (the two buttons as drawn)
+and `shot.heading`. `?rung=N` on the page puts the picture
 on a rung and holds it; paused, the governor never moves it, so pictures are
 always taken at the top rung unless a test asks. In unit tests, `game.place(x, y)` puts the
 ball down at a lie.
@@ -665,19 +695,22 @@ ball down at a lie.
 Each of these is the first feature's to bring, with every gate green at
 each step, and a gate handed what it needs in the same change:
 
-- The rest of golf, from `~/.claude/plans/ooergolf-proper-golf.md`: stage 5, shape, spin and wind; stage 6, putting
-  greens with contour, a fringe and the break shown, which the planner leaves to the arithmetic putt. What stage 3
-  leaves as it found it: a golf hole's rough is painted and grows no blades inside the rough's edge (its wild grass
-  beyond the stakes does grow, which is the turf's own), its green is round and stepped by the tile, so are its
-  bunkers, there is no first cut, an invisible wall stands beyond out of bounds, a ball landing on a post's top or a
-  box is left as the physics has it, the club in hand is not saved, and the planner aims at the cup or a place on the
-  route and knows nothing of the wind (there is none), a green's contour (there is none) or a lay-up chosen for the
-  next shot's sake. What stage 4 leaves: the preview is the true swing to the first landing (the run-out after it is
-  not shown, nor where the ball would rest), and it is unaware of wind and spin, which stage 5 brings; a full drive
-  on a phone has its ring under the coins and the shop at the top of the screen, since 200 back is the most the
-  camera may stand and the landing cannot go lower there; the map is not interactive and does not turn with the
-  camera; the camera can lose the ball behind a tree at a low tilt, which the aim view makes more likely; and the
-  aim view is not saved (nothing of the view is).
+- The rest of golf, from `~/.claude/plans/ooergolf-proper-golf.md`: stage 6, putting greens with contour, a fringe and
+  the break shown, which the planner leaves to the arithmetic putt. What stage 3 leaves as it found it: a golf hole's
+  rough is painted and grows no blades inside the rough's edge (its wild grass beyond the stakes does grow, which is the
+  turf's own), its green is round and stepped by the tile, so are its bunkers, there is no first cut, an invisible wall
+  stands beyond out of bounds, a ball landing on a post's top or a box is left as the physics has it, the club in hand is
+  not saved, and the planner knows nothing of a green's contour (there is none) or a lay-up chosen for the next shot's
+  sake. What stage 4 leaves: the preview is the true swing to the first landing (the run-out after it is not shown, nor
+  where the ball would rest, so a spin is not seen until the ball has landed); a full drive on a phone has its ring under
+  the coins and the shop at the top of the screen, since 200 back is the most the camera may stand; the map is not
+  interactive and does not turn with the camera; the camera can lose the ball behind a tree at a low tilt; and the aim
+  view is not saved (nothing of the view is). What stage 5 leaves: the wind is steady (no gusts) and uniform along a hole,
+  and a lofted club is blown further in yards than a driver; a shape's rate is fixed per club, so a half-power shot curves
+  about an eighth as far in yards as a full one; the autopilot plays straight and flat, copes with the wind through its
+  rehearsal (12 to 22 trials a shot in 15 mph, against 12 to 17 calm) and does not choose a shape or a spin; the shape
+  and spin are chosen in three steps, not continuously; and the shape and spin buttons are not in the golf pictures the
+  look gate holds, which were not rewritten for them (see the commit).
 
 - An autopilot that keeps a margin from water that grows with the shot. It
   skirts a pond by 1.3 units, and a 5% slip over a 45-unit shot wanders 2.3,

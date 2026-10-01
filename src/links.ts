@@ -4,7 +4,10 @@
  * over water, a long hole that bends and one that bends the other way, a green behind a pond, a fairway with water along
  * its side, and two long holes at the end. What each hole asks is in its spec; which seed of its ground it has was chosen
  * by playing forty of them with the pace gate's player and taking the one whose round came nearest what the hole is for,
- * with no ball lost more than the hazards asked for, and by looking at the pictures. Content, as `course.ts` is.
+ * with no ball lost more than the hazards asked for, and by looking at the pictures. Content, as `course.ts` is. Each hole has
+ * a wind in miles an hour, from a breath to a fresh breeze, which blows the way the hole's grass and flag show (a name's, so
+ * it is set against the way the hole plays): the long holes that turn into it or across it blow ten or twelve, the others
+ * less, and none above fifteen, which is what the autopilot's round was measured with.
  *
  * Made when first asked for and not as the page loads: nine holes of this size are a good part of a second of the page's
  * boot, for a course a player may never choose.
@@ -27,6 +30,7 @@ export const LINKS_SPECS: readonly GolfSpec[] = [
     bunkers: { fairway: 1, green: 2 },
     ponds: [],
     trees: 36,
+    wind: 4,
   },
   {
     name: 'Water Carry',
@@ -39,6 +43,7 @@ export const LINKS_SPECS: readonly GolfSpec[] = [
     bunkers: { fairway: 0, green: 3 },
     ponds: [{ at: 0.72, side: -1, size: [3, 4] }],
     trees: 20,
+    wind: 6,
   },
   {
     name: 'Long Bend',
@@ -51,6 +56,7 @@ export const LINKS_SPECS: readonly GolfSpec[] = [
     bunkers: { fairway: 2, green: 2 },
     ponds: [{ at: 0.4, side: -1, size: [3, 4] }],
     trees: 80,
+    wind: 10,
   },
   {
     name: 'Tight Left',
@@ -63,6 +69,7 @@ export const LINKS_SPECS: readonly GolfSpec[] = [
     bunkers: { fairway: 2, green: 2 },
     ponds: [],
     trees: 70,
+    wind: 12,
   },
   {
     name: 'Island Green',
@@ -75,6 +82,7 @@ export const LINKS_SPECS: readonly GolfSpec[] = [
     bunkers: { fairway: 0, green: 3 },
     ponds: [{ at: 0.86, side: 0, size: [3, 3.6] }],
     trees: 24,
+    wind: 5,
   },
   {
     name: 'Rushing Brook',
@@ -90,6 +98,7 @@ export const LINKS_SPECS: readonly GolfSpec[] = [
       { at: 0.65, side: 1, size: [3, 4] },
     ],
     trees: 50,
+    wind: 8,
   },
   {
     name: 'The Big Dogleg',
@@ -102,6 +111,7 @@ export const LINKS_SPECS: readonly GolfSpec[] = [
     bunkers: { fairway: 3, green: 3 },
     ponds: [{ at: 0.6, side: 1, size: [3, 4] }],
     trees: 100,
+    wind: 7,
   },
   {
     name: 'The Straight Mile',
@@ -114,6 +124,7 @@ export const LINKS_SPECS: readonly GolfSpec[] = [
     bunkers: { fairway: 3, green: 3 },
     ponds: [],
     trees: 50,
+    wind: 10,
   },
   {
     name: 'Home Stretch',
@@ -126,6 +137,7 @@ export const LINKS_SPECS: readonly GolfSpec[] = [
     bunkers: { fairway: 2, green: 2 },
     ponds: [{ at: 0.8, side: -1, size: [3, 4] }],
     trees: 60,
+    wind: 12,
   },
 ];
 

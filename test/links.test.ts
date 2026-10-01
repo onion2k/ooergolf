@@ -110,4 +110,15 @@ describe('The Links', () => {
       expect(crow, h.name).toBeGreaterThan(LINKS_SPECS[i].length * 0.75);
     });
   });
+
+  it('has a wind on every hole, a mix from a breath to a fresh breeze and none above fifteen, as each spec says, with a hole or two of ten or more', () => {
+    holes.forEach((h, i) => {
+      expect(h.wind, h.name).toBe(LINKS_SPECS[i].wind);
+      expect(h.wind, h.name).toBeGreaterThan(0);
+      expect(h.wind, h.name).toBeLessThanOrEqual(15);
+    });
+    expect(new Set(holes.map((h) => h.wind)).size, 'a mix and not one wind for all').toBeGreaterThan(4);
+    expect(holes.filter((h) => h.wind! >= 10).length).toBeGreaterThanOrEqual(2);
+    expect(holes.filter((h) => h.wind! <= 6).length).toBeGreaterThanOrEqual(2);
+  });
 });

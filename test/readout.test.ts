@@ -1,7 +1,7 @@
 /** What a golfer is told of the pin: how far it is and how much higher or lower than the ball, in yards. */
 import { describe, expect, it } from 'vitest';
 import { heightAt, layoutOf } from '../src/arena';
-import { landingText, pinReadout, pinText } from '../src/readout';
+import { landingText, pinReadout, pinText, shapingWords, windArrow, windText } from '../src/readout';
 import { LIE } from '../src/surfaces';
 import { field } from './helpers';
 
@@ -67,5 +67,69 @@ describe('the words for where a shot would come down', () => {
   it('says a tree is in the way, before where it comes down after it', () => {
     expect(landingText({ ...base, carry: 88, hit: true })).toBe('hits a tree · lands 88 yd · fairway');
     expect(landingText({ ...base, end: 'water', hit: true })).toBe('hits a tree · lands 249 yd · in the water');
+  });
+});
+
+describe('the words for a shot with a shape and a spin', () => {
+  const base = { carry: 262.2, end: 'landed' as const, lie: LIE.fairway, hit: false };
+
+  it('says the shape and the spin first, and nothing for a shot that is straight and flat', () => {
+    expect(landingText({ ...base, shape: 1 })).toBe('fade \u00b7 lands 262 yd \u00b7 fairway');
+    expect(landingText({ ...base, shape: -1 })).toBe('draw \u00b7 lands 262 yd \u00b7 fairway');
+    expect(landingText({ ...base, spin: -1 })).toBe('back \u00b7 lands 262 yd \u00b7 fairway');
+    expect(landingText({ ...base, spin: 1 })).toBe('top \u00b7 lands 262 yd \u00b7 fairway');
+    expect(landingText({ ...base, shape: 1, spin: -1 })).toBe('fade \u00b7 back \u00b7 lands 262 yd \u00b7 fairway');
+    // none given, or nought, is as it always was
+    expect(landingText({ ...base, shape: 0, spin: 0 })).toBe(landingText(base));
+    expect(landingText(base)).toBe('lands 262 yd \u00b7 fairway');
+  });
+
+  it('keeps the shape before a tree, the water and the cup', () => {
+    expect(landingText({ ...base, shape: -1, hit: true })).toBe(
+      'draw \u00b7 hits a tree \u00b7 lands 262 yd \u00b7 fairway',
+    );
+    expect(landingText({ ...base, shape: 1, end: 'water' })).toBe('fade \u00b7 lands 262 yd \u00b7 in the water');
+    expect(landingText({ ...base, spin: 1, end: 'holed' })).toBe('top \u00b7 drops in the cup');
+  });
+
+  it('names a shape and a spin by the way of its sign', () => {
+    expect(shapingWords(0, 0)).toEqual([]);
+    expect(shapingWords(0.5, -0.2)).toEqual(['fade', 'back']);
+    expect(shapingWords(-1, 1)).toEqual(['draw', 'top']);
+  });
+});
+
+describe('the wind on the page', () => {
+  it('is whole miles an hour, or calm, so a player always knows', () => {
+    expect(windText(0)).toBe('calm');
+    expect(windText(0.4)).toBe('calm');
+    expect(windText(12)).toBe('12 mph');
+    expect(windText(11.6)).toBe('12 mph');
+    expect(windText(25)).toBe('25 mph');
+  });
+
+  it('turns an arrow drawn pointing up by the way the wind blows across the screen, for a camera facing north', () => {
+    // the camera at azimuth nought faces +y: up the screen is up the course and its right is +x
+    expect(windArrow(0, 1, 0)).toBeCloseTo(0, 9);
+    expect(windArrow(1, 0, 0)).toBeCloseTo(90, 9);
+    expect(Math.abs(windArrow(0, -1, 0))).toBeCloseTo(180, 9);
+    expect(windArrow(-1, 0, 0)).toBeCloseTo(-90, 9);
+  });
+
+  it('turns with the camera: turned a quarter, a wind that blew up the screen blows from the side', () => {
+    // facing (sin a, cos a): at a quarter turn it faces +x, whose right is -y, so +x is up and +y is to the left
+    expect(windArrow(1, 0, Math.PI / 2)).toBeCloseTo(0, 9);
+    expect(windArrow(0, 1, Math.PI / 2)).toBeCloseTo(-90, 9);
+    expect(windArrow(0, -1, Math.PI / 2)).toBeCloseTo(90, 9);
+    // and every heading of the camera keeps the wind where it is round the compass, by the camera's turn
+    for (const wind of [0.3, 2, 4.4]) {
+      const x = Math.cos(wind),
+        y = Math.sin(wind);
+      for (const a of [-3, -1.2, 0, 0.7, 2.5]) {
+        const turned = windArrow(x, y, a) - windArrow(x, y, 0);
+        const wrapped = ((((turned + a * (180 / Math.PI)) % 360) + 540) % 360) - 180;
+        expect(wrapped, `wind ${wind}, camera ${a}`).toBeCloseTo(0, 6);
+      }
+    }
   });
 });

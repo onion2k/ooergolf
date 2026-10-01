@@ -16,7 +16,10 @@
  * among them, and the club in hand is one of them. On a golf hole the club in
  * hand is one of the bag's, and the ball is never going faster in all, in the
  * air as on the ground, than the club that struck it could send it, and a
- * fall from the highest ground could make it, never at rest out of bounds, and never inside a tree's trunk or canopy. And a knock told is of
+ * fall from the highest ground could make it (and what the wind adds, for as long as a ball flies), never at rest out
+ * of bounds, and never inside a tree's trunk or canopy. The shape and the spin chosen for the next shot are numbers
+ * from minus one to one, and the wind is a speed from nought to the most a hole has along a unit direction, and calm on
+ * every hole that is not golf. And a knock told is of
  * the ball, where it is, as hard as a knock is, along a direction: a rule of
  * what is told rather than of what is, so `knockProblems` is asked of each
  * knock as it is told, and `landingProblems` of each landing.
@@ -44,10 +47,17 @@ import { CLUBS } from './clubs';
 import { LIMIT_OVER_PAR, fastest, type Game } from './game';
 import type { Preview } from './preview';
 import { LANDING } from './surfaces';
+import { WIND, windPush, windReach } from './shaping';
 import { TREE, insideCanopy } from './trees';
 
 /** How many broken rules of one sort are reported before the rest are only counted. */
 const EACH = 3;
+
+/**
+ * How long, in seconds, a ball may be pushed by the wind before the rules give up on it: more than the longest flight
+ * of any club by a good way, so the allowance for the wind is generous and never the thing that is wrong.
+ */
+const WIND_FLIGHT = 8;
 
 /**
  * The rules a camera must always keep, however a player has turned, tilted and zoomed it: its turn and its tilt are
@@ -102,16 +112,31 @@ export function checkInvariants(game: Game): string[] {
   if (live !== world.live) out.push(`the world counts ${world.live} live, and has ${live}`);
   if (!Number.isFinite(game.t) || game.t < 0) out.push(`the time is ${game.t}`);
 
+  // what a player chooses for the next shot, and what the hole's wind is: numbers, in their limits, and calm off the golf
+  for (const [what, v] of [
+    ['shape', game.shape],
+    ['spin', game.spin],
+  ] as const)
+    if (!(Number.isFinite(v) && v >= -1 && v <= 1)) out.push(`the ${what} is ${v}, not a number from -1 to 1`);
+  const wind = game.wind;
+  if (!(Number.isFinite(wind.speed) && wind.speed >= 0 && wind.speed <= WIND.most))
+    out.push(`the wind is ${wind.speed} miles an hour, not from nought to ${WIND.most}`);
+  if (!(Math.abs(Math.hypot(wind.x, wind.y) - 1) < 1e-6))
+    out.push(`the wind blows along ${wind.x},${wind.y}, no direction`);
+  if (!layout.golf && wind.speed !== 0) out.push(`the wind is ${wind.speed} on a hole of minigolf, where it is calm`);
+
   const { ball, strokes, phase, hole, course, card } = game;
   if (!Number.isInteger(hole) || hole < 0 || hole >= course.length) out.push(`the hole is ${hole}`);
   if (phase === 'play' && !world.alive[ball]) out.push('the ball is gone, with the hole still in play');
   if (world.alive[ball]) {
     // along the ground: a fall into the cup, into water or off raised grass gains speed downward, and only downward
     const speed = Math.hypot(world.vx[ball], world.vy[ball]);
+    // the wind pushes a ball in the air for as long as it flies, steady, and adds that to what the club and a fall give it
+    const blown = windPush(wind.speed) * WIND_FLIGHT;
     // a hair over, for the float arithmetic of a shot at full power; nothing that moves goes as fast as that
     // a post throws a ball faster than it came, up to the course's ceiling, of the club that struck it and not one put in
     // hand since; and a ball rolled down a slope is faster by what the drop gives it
-    if (speed > fastest(game, world.x[ball], world.y[ball]) * 1.001)
+    if (speed > fastest(game, world.x[ball], world.y[ball]) * 1.001 + blown)
       out.push(`the ball is going ${speed.toFixed(2)} along the ground, faster than a post and a slope may make it`);
     // inside a tree: a trunk is a post, met by the physics, and a canopy is met by the game; the ball is in neither
     if (layout.trees.length) {
@@ -126,7 +151,7 @@ export function checkInvariants(game: Game): string[] {
     // a lofted ball's speed in all: no club sends it faster than it has, and a fall only adds what the height gives
     if (layout.golf) {
       const all = Math.hypot(world.vx[ball], world.vy[ball], world.vz[ball]);
-      if (all > fastest(game, world.x[ball], world.y[ball]) * 1.001)
+      if (all > fastest(game, world.x[ball], world.y[ball]) * 1.001 + blown)
         out.push(`the ball is going ${all.toFixed(2)} in all, faster than any club could send it, and a fall make it`);
     }
     // into a post by more than the physics lets a ball sink into anything, below the post's top
@@ -254,7 +279,8 @@ export function planProblems(game: Game, plan: Plan): string[] {
  * What is wrong with a preview, the flight a drag would make worked out before the shot is taken: it is a flight that
  * begins at the ball and is numbers all through, its lengths grow and its last is the path's own, it ends at the place
  * it says it came down, it goes no further than a club can send a ball (from the level, and with a fall from the highest
- * ground besides), and its spread is a spread (across and along nought or more, and never longer than half the flight).
+ * ground besides, and what the wind at its strongest and a shape can add), it has a heading that is a number, and its
+ * spread is a spread (across and along nought or more, and never longer than half the flight).
  * A club with no loft has no preview, and nothing to be wrong.
  */
 export function previewProblems(game: Game, from: { x: number; y: number }, club: BagClub, p: Preview): string[] {
@@ -282,11 +308,15 @@ export function previewProblems(game: Game, from: { x: number; y: number }, club
     out.push(
       `the flight ends at ${p.points[last]},${p.points[last + 1]}, not where it says it came down, ${p.x},${p.y}`,
     );
+  if (!Number.isFinite(p.heading)) out.push(`the flight's heading is ${p.heading}`);
   if (!['landed', 'holed', 'water', 'out'].includes(p.end)) out.push(`the flight ended as ${p.end}`);
   // no further than the club can send a ball: its own carry at its hardest (a little over, since a ball comes down below
   // where it left), and what a fall from the highest ground adds to it, and a little for the ball's own size
   const fall = highestTerrain(game.layout) + 5;
-  const most = carrying(club.hardest, club.loft) * 1.06 + club.hardest * Math.sqrt((2 * fall) / PHYSICS.gravity) + 10;
+  // and the most a tailwind of the strongest hole carries it further
+  const blown = windReach(club, 1, WIND.most) * 1.1 + 5;
+  const most =
+    carrying(club.hardest, club.loft) * 1.06 + club.hardest * Math.sqrt((2 * fall) / PHYSICS.gravity) + 10 + blown;
   if (!(p.carry >= 0 && p.carry <= most))
     out.push(`the flight carries ${p.carry}, which the ${club.id} cannot (at most ${most.toFixed(0)})`);
   const { across, along: length } = p.footprint;

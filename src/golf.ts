@@ -16,6 +16,7 @@ import type { HoleDef } from './course';
 import { FEELS, gradientNoise, noiseGround, type Feel, type Flat } from './noise';
 
 import { seeded, type Random } from './random';
+import { WIND } from './shaping';
 import { LIE, SURFACES } from './surfaces';
 
 /** A pond: how far along the way of play it lies, which side of it (nought is across it, on the line) and how big, in tiles of radius. */
@@ -43,6 +44,8 @@ export interface GolfSpec {
   bunkers: { fairway: number; green: number };
   ponds: PondSpec[];
   trees: number;
+  /** How hard the wind blows on the hole, in miles an hour: calm unless told. See `HoleDef.wind`. */
+  wind?: number;
 }
 
 /** How wide the rough is either side of the fairway, and how wide out of bounds is beyond it, in tiles, and the rock beyond that. */
@@ -73,7 +76,7 @@ const HOLLOW = 0.6;
 
 /** A spec that is not a hole is refused here, by what is wrong with it. */
 function refuse(spec: GolfSpec) {
-  const { name, par, seed, length, bend, width, steepness, bunkers, ponds, trees, corner } = spec;
+  const { name, par, seed, length, bend, width, steepness, bunkers, ponds, trees, corner, wind } = spec;
   const fault = (what: string) => new RangeError(`${name || 'a golf hole'}: ${what}`);
   if (!name) throw new RangeError('a golf hole has to have a name');
   if (!Number.isInteger(par) || par < 1) throw fault(`its par is a whole number from one, not ${par}`);
@@ -83,6 +86,8 @@ function refuse(spec: GolfSpec) {
   if (!(Math.abs(bend) <= 70)) throw fault(`its bend is no more than seventy degrees either way, not ${bend}`);
   if (corner !== undefined && !(corner >= 0.3 && corner <= 0.7))
     throw fault(`its bend is a third to seven tenths of the way, not ${corner}`);
+  if (wind !== undefined && !(wind >= 0 && wind <= WIND.most))
+    throw fault(`its wind is from nought to ${WIND.most} miles an hour, not ${wind}`);
   if (!(steepness > 0 && steepness < 1)) throw fault(`its steepness is between nought and one, not ${steepness}`);
   for (const [what, n] of [
     ['fairway bunkers', bunkers.fairway],
@@ -173,7 +178,7 @@ type Tile = [number, number];
 
 export function golfHole(spec: GolfSpec): HoleDef {
   refuse(spec);
-  const { name, par, seed, feel, steepness, width, bunkers, ponds, trees } = spec;
+  const { name, par, seed, feel, steepness, width, bunkers, ponds, trees, wind } = spec;
   const random = seeded(seed);
   const { points, total } = way(spec);
   const shape = gradientNoise(seed * 3 + 1);
@@ -424,7 +429,7 @@ export function golfHole(spec: GolfSpec): HoleDef {
   // ball: a hole that cannot be played is never returned
   for (let k = 0, steep = steepness; k < GENTLER.tries; k++, steep *= GENTLER.by) {
     const terrain = noiseGround(flat, { seed, feel, steepness: steep, flats });
-    if (rests(layoutOf(map, terrain))) return { name, par, map, terrain };
+    if (rests(layoutOf(map, terrain))) return { name, par, map, terrain, ...(wind ? { wind } : {}) };
   }
   throw new Error(`${name}: its fairway will not rest a ball, however gentle its hills`);
 }

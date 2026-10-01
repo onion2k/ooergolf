@@ -58,6 +58,11 @@ export interface GameState {
   /** Whether the hole is golf, played with the bag: and the club of it in hand. */
   golf: boolean;
   inHand: string;
+  /** The shape chosen for the next lofted shot, from minus one (a draw) to one (a fade), and its spin, from minus one (backspin) to one (topspin). */
+  shape: number;
+  spin: number;
+  /** The hole's wind: the way it blows across the ground as a unit vector, and how hard in miles an hour (nought for calm). */
+  wind: { x: number; y: number; speed: number };
 }
 
 /** The ball, where it is and how fast it is going. */
@@ -131,9 +136,10 @@ export interface GameApi {
   lay(x: number, y: number): void;
   /**
    * The ball struck as a let-go drag strikes it: toward `angle`, at `power` of the club's hardest, and on a golf hole
-   * with `club` of the bag put in hand first, if one is named. Whether it was taken.
+   * with `club` of the bag put in hand first, if one is named, and with `shape` and `spin` chosen first, if they are
+   * given (as a press on each button chooses them). Whether it was taken.
    */
-  shoot(angle: number, power: number, club?: string): boolean;
+  shoot(angle: number, power: number, club?: string, shape?: number, spin?: number): boolean;
   /** A club of the bag put in hand, as a press on its button does, on a golf hole; whether it was. */
   club(id: string): boolean;
   /** The clubs of the bag: each one's id, name, loft, hardest launch speed and how far it carries at full power. */
@@ -250,12 +256,25 @@ export interface Motions {
   shot: {
     arc: number;
     ring: { x: number; y: number; radius: number; colour: [number, number, number] } | null;
-    spread: { x: number; y: number; across: number; along: number } | null;
+    spread: { x: number; y: number; across: number; along: number; heading: number } | null;
     knock: { x: number; y: number } | null;
     end: 'landed' | 'holed' | 'water' | 'out';
     carry: number;
     lie: number;
+    /** Which way the ball went, as an angle from +x toward +y: the aim turned by the shape and the wind. */
+    heading: number;
   } | null;
+  /**
+   * The wind line of a golf hole as drawn: how far its arrow is turned clockwise from pointing up, in degrees, as it was
+   * last written (it follows the camera's turn, glide included), and the words beside it, `N mph` or `calm`. Null on a hole
+   * of minigolf, where there is none.
+   */
+  wind: { degrees: number; text: string } | null;
+  /**
+   * The shape and spin buttons as drawn: whether they are up (a lofted club in hand on a golf hole), each one's value
+   * (0 straight or flat, minus one a draw or backspin, one a fade or topspin) and the words on it.
+   */
+  controls: { shown: boolean; shape: number; spin: number; shapeText: string; spinText: string };
 }
 
 /** The grass a frame drew, and the wind it bent in. */
@@ -348,6 +367,9 @@ export function createApi(host: DebugHost): GameApi {
         choosing: host.choosing(),
         golf: game.layout.golf,
         inHand: game.inHand.id,
+        shape: game.shape,
+        spin: game.spin,
+        wind: game.wind,
       };
     },
     ball() {
@@ -401,8 +423,10 @@ export function createApi(host: DebugHost): GameApi {
       game.world.wake(slot);
     },
     lay: (x, y) => game.place(x, y),
-    shoot(angle, power, club) {
+    shoot(angle, power, club, shape, spin) {
       if (club !== undefined && !game.pick(club)) return false;
+      if (shape !== undefined) game.setShape(shape);
+      if (spin !== undefined) game.setSpin(spin);
       return game.shoot(angle, power);
     },
     club: (id) => game.pick(id),

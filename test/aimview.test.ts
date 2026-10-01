@@ -6,8 +6,9 @@ import { Camera } from 'artshape-render/gpu/camera';
 import { describe, expect, it } from 'vitest';
 import { AIM, aimView, markScale } from '../src/aimview';
 import { BAG } from '../src/bag';
-import { CameraRig, LEAD, TILT, VIEW } from '../src/camera';
+import { CameraRig, LEAD, TILT, VIEW, tallOf } from '../src/camera';
 import { carryFrom } from '../src/flight';
+import { WIND, windReach } from '../src/shaping';
 import { LIE } from '../src/surfaces';
 
 function ndc(c: Camera, x: number, y: number, z: number): [number, number] {
@@ -50,6 +51,33 @@ describe('the aim view', () => {
         expect(Math.abs(bx)).toBeLessThan(0.3);
         expect(by).toBeGreaterThan(-0.9);
         expect(by).toBeLessThan(0);
+      });
+    }
+
+    for (const club of LOFTED) {
+      for (const extra of [10, 25]) {
+        it(`still shows where a ${club.id} comes down with a tailwind that carries it ${extra} yards further, at aspect ${aspect.toFixed(2)}`, () => {
+          // the page adds how much further a tailwind carries a shot to the reach it aims the camera for
+          const landing = carryFrom(club, 1, LIE.fairway) * 1.04 + extra;
+          const { cam } = seen(landing, aspect);
+          const [, top] = ndc(cam, 0, landing, 0);
+          expect(top, 'the landing is on the screen').toBeLessThan(0.92);
+          expect(top, 'and is not a speck down the middle of it').toBeGreaterThan(0.45);
+          const [bx, by] = ndc(cam, 0, 0, 1);
+          expect(Math.abs(bx)).toBeLessThan(0.3);
+          expect(by).toBeGreaterThan(-0.9);
+        });
+      }
+
+      it(`stands the camera back for the strongest tailwind there is, and never nearer, for the ${club.id}, at aspect ${aspect.toFixed(2)}`, () => {
+        const reach = carryFrom(club, 1, LIE.fairway) * 1.04;
+        const wind = windReach(club, 1, WIND.most);
+        expect(wind, 'a tailwind never shortens the reach').toBeGreaterThanOrEqual(0);
+        const calm = aimView(reach, aspect),
+          blown = aimView(reach + wind, aspect);
+        expect(blown.distance * tallOf(aspect)).toBeGreaterThanOrEqual(calm.distance * tallOf(aspect) - 1e-9);
+        const { cam } = seen(reach + wind, aspect);
+        expect(ndc(cam, 0, reach + wind, 0)[1], 'its landing is on the screen').toBeLessThan(0.92);
       });
     }
 

@@ -50,6 +50,12 @@ export interface HoleDef {
    * noise: flat without it. See `layoutOf`.
    */
   terrain?: readonly string[] | Float32Array;
+  /**
+   * How hard the wind blows on a golf hole, in miles an hour (`WIND.most` at the most): it pushes a ball in the air, from
+   * the direction the hole's grass and flag already show (`windDirection`). Calm without it, which is every hole of
+   * minigolf, so a hole that has none plays as it always did.
+   */
+  wind?: number;
 }
 
 /**

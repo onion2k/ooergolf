@@ -1037,3 +1037,245 @@ test.describe('aiming a golf shot', () => {
     expect(problems).toEqual([]);
   });
 });
+
+// ---- shape, spin and wind: the buttons that choose them, the preview that shows them, and the wind that is told ----
+
+/** A plain fairway a long way up a field, with its wind in miles an hour (calm for nought): a hole for a shape and a wind to be seen on. */
+function windHole(name: string, wind: number) {
+  const cols = 61,
+    rows = 130;
+  const tee = rows - 4;
+  const map = Array.from({ length: rows }, (_, r) =>
+    Array.from({ length: cols }, (_, c) => {
+      if (r === 0 || r === rows - 1 || c === 0 || c === cols - 1) return '#';
+      if (r === tee) return c === 30 ? 'T' : c === 29 || c === 31 ? 't' : 'f';
+      if (r === 2 && c === 3) return 'C';
+      return 'f';
+    }).join(''),
+  );
+  return { name, par: 4, map, wind };
+}
+
+/** A hole of the test's own begun and the camera settled on its tee. */
+async function onHole(page: Page, hole: ReturnType<typeof windHole>) {
+  await page.evaluate((h) => {
+    const g = window.game!;
+    g.playCourse([h]);
+    g.step(300);
+  }, hole);
+  await expect(page.locator('#start')).toBeHidden();
+}
+
+/** A button of the bag's pressed as a click on the element presses it, which a drag held on the course is not let go by. */
+const press = (page: Page, selector: string) => page.locator(selector).evaluate((el: HTMLElement) => el.click());
+
+test.describe('shape, spin and wind', () => {
+  test('the shape and spin buttons each cycle through their three by a real click, are there for a lofted club on a golf hole and nowhere else, and are put back when a shot is struck', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true, screen: true });
+    // under the start screen, and on a hole of minigolf, there are none
+    await expect(page.locator('#bagShaping')).toBeHidden();
+    await page.evaluate(() => {
+      window.game!.chooseCourse('The Meadow');
+      window.game!.step(60);
+    });
+    await expect(page.locator('#bagShaping')).toBeHidden();
+    expect((await page.evaluate(() => window.game!.motions().controls)).shown).toBe(false);
+    await onHole(page, windHole('Calm', 0));
+    await expect(page.locator('#bagShaping')).toBeVisible();
+    const shape = page.locator('#shapeButton'),
+      spin = page.locator('#spinButton');
+    const state = () => page.evaluate(() => ({ shape: window.game!.state().shape, spin: window.game!.state().spin }));
+    // straight and flat to begin with, the buttons say so, and so does the game
+    await expect(shape).toHaveText('Shape: Straight');
+    await expect(spin).toHaveText('Spin: Flat');
+    expect(await state()).toEqual({ shape: 0, spin: 0 });
+    // each a click on to the next, and round again: straight, draw, fade; flat, back, top
+    for (const [word, value, aria] of [
+      ['Draw', -1, 'draw'],
+      ['Fade', 1, 'fade'],
+      ['Straight', 0, 'straight'],
+    ] as const) {
+      await shape.click();
+      await expect(shape).toHaveText(`Shape: ${word}`);
+      await expect(shape).toHaveAttribute('data-shape', String(value));
+      await expect(shape).toHaveAttribute('aria-label', new RegExp(`^Shape: ${aria}`));
+      expect((await state()).shape).toBe(value);
+    }
+    for (const [word, value, aria] of [
+      ['Back', -1, 'backspin'],
+      ['Top', 1, 'topspin'],
+      ['Flat', 0, 'flat'],
+    ] as const) {
+      await spin.click();
+      await expect(spin).toHaveText(`Spin: ${word}`);
+      await expect(spin).toHaveAttribute('data-spin', String(value));
+      await expect(spin).toHaveAttribute('aria-label', new RegExp(`^Spin: ${aria}`));
+      expect((await state()).spin).toBe(value);
+    }
+    // what the test API reads back is what the buttons draw
+    await shape.click();
+    await spin.click();
+    expect(await page.evaluate(() => window.game!.motions().controls)).toEqual({
+      shown: true,
+      shape: -1,
+      spin: -1,
+      shapeText: 'Shape: Draw',
+      spinText: 'Spin: Back',
+    });
+    // the putter has neither, and the driver again has them
+    await page.locator('#bagClubs button[data-club="putter"]').click();
+    await expect(page.locator('#bagShaping')).toBeHidden();
+    expect((await page.evaluate(() => window.game!.motions().controls)).shown).toBe(false);
+    await page.locator('#bagClubs button[data-club="driver"]').click();
+    await expect(page.locator('#bagShaping')).toBeVisible();
+    // a shot struck by a drag puts both back to straight and flat, in the game and on the buttons
+    // (a draw and a back spin from above, so one press on each goes on to a fade and a topspin)
+    await shape.click();
+    await expect(shape).toHaveText('Shape: Fade');
+    await spin.click();
+    await page.evaluate(() => window.game!.step(300));
+    await pull(page, 0.5);
+    await page.mouse.up();
+    await play(page, 5, 'the shot struck');
+    expect(await page.evaluate(() => window.game!.state().strokes)).toBe(1);
+    expect(await state(), 'put back in the game').toEqual({ shape: 0, spin: 0 });
+    await expect(shape).toHaveText('Shape: Straight');
+    await expect(spin).toHaveText('Spin: Flat');
+    // a choice made, and the hole begun again, is put back too
+    await shape.click();
+    await page.evaluate(() => window.game!.startHole(0));
+    await play(page, 5, 'the hole begun');
+    expect(await state()).toEqual({ shape: 0, spin: 0 });
+    await expect(shape).toHaveText('Shape: Straight');
+    // a shape and a spin given to the test API's shot are shown and put back as well
+    await page.evaluate(() => window.game!.shoot(Math.PI / 2, 0.4, 'driver', 1, -1));
+    await play(page, 5, 'a shot of the test API');
+    expect(await state()).toEqual({ shape: 0, spin: 0 });
+    expect(problems).toEqual([]);
+  });
+
+  test('the preview of a fade ends to the right of the straight shot, and of a draw to the left, and the words and the spread say so', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true });
+    await onHole(page, windHole('Calm', 0));
+    // a full drive straight up the field, held
+    await pull(page, 1);
+    const straight = await page.evaluate(() => window.game!.motions().shot);
+    expect(straight, 'a preview drawn').not.toBeNull();
+    await expect(page.locator('#bagInfo')).not.toContainText('fade');
+    // a fade chosen while the drag is held draws the flight again, without the finger moving
+    await press(page, '#shapeButton');
+    await press(page, '#shapeButton');
+    await page.evaluate(() => window.game!.step(2));
+    const fade = await page.evaluate(() => window.game!.motions().shot);
+    expect(fade).not.toBeNull();
+    // up the field is up the screen, and to the right of that is +x: a fade comes down to the right of the straight shot
+    expect(fade!.ring!.x - straight!.ring!.x, 'the ring of a fade is to the right of the straight one').toBeGreaterThan(
+      2,
+    );
+    expect(fade!.heading, 'its heading is turned clockwise from the aim').toBeLessThan(straight!.heading);
+    await expect(page.locator('#bagInfo')).toContainText('fade');
+    await expect(page.locator('#bagInfo')).toContainText('Driver');
+    // the spread lies along the way the ball went, and not the way it was aimed
+    expect(fade!.spread, 'the spread of a swing that is not true').not.toBeNull();
+    expect(Math.cos(fade!.spread!.heading - fade!.heading), 'its long axis along the heading').toBeGreaterThan(0.98);
+    // the same drag with a draw comes down to the left, and the map's ring moved with it
+    const map = await page.evaluate(() => window.game!.map()!.aim);
+    // fade, straight, draw
+    await press(page, '#shapeButton');
+    await press(page, '#shapeButton');
+    await page.evaluate(() => window.game!.step(2));
+    const draw = await page.evaluate(() => window.game!.motions().shot);
+    expect(straight!.ring!.x - draw!.ring!.x, 'the ring of a draw is to the left').toBeGreaterThan(2);
+    await expect(page.locator('#bagInfo')).toContainText('draw');
+    const mapDraw = await page.evaluate(() => window.game!.map()!.aim);
+    expect(mapDraw![0], 'on the map, the aim ends to the left of where the fade did').toBeLessThan(map![0]);
+    // a spin is said in the words, and does not move the flight in the air
+    await press(page, '#shapeButton');
+    await press(page, '#shapeButton');
+    await press(page, '#spinButton');
+    await page.evaluate(() => window.game!.step(2));
+    const back = await page.evaluate(() => window.game!.motions().shot);
+    await expect(page.locator('#bagInfo')).toContainText('back');
+    expect(Math.hypot(back!.ring!.x - straight!.ring!.x, back!.ring!.y - straight!.ring!.y)).toBeLessThan(0.5);
+    await page.mouse.up();
+    expect(problems).toEqual([]);
+  });
+
+  test('the wind is told under the pin on a golf hole: calm for none, and for a wind its miles an hour with an arrow that points the way it blows on the screen, turning with the camera; and it is not there on minigolf', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true, screen: true });
+    await expect(page.locator('#wind')).toBeHidden();
+    await page.evaluate(() => {
+      window.game!.chooseCourse('The Meadow');
+      window.game!.step(60);
+    });
+    await expect(page.locator('#wind'), 'none on minigolf').toBeHidden();
+    expect(await page.evaluate(() => window.game!.motions().wind)).toBeNull();
+    // calm: the word, and no arrow
+    await onHole(page, windHole('Calm', 0));
+    await expect(page.locator('#wind')).toBeVisible();
+    await expect(page.locator('#windText')).toHaveText('calm');
+    await expect(page.locator('#windArrow')).toBeHidden();
+    expect(await page.evaluate(() => window.game!.motions().wind)).toMatchObject({ text: 'calm' });
+    expect((await page.evaluate(() => window.game!.state().wind)).speed).toBe(0);
+    const calm = await page.evaluate(() => window.game!.view());
+    // twelve miles an hour: the number, and an arrow
+    await onHole(page, windHole('Breezy', 12));
+    await expect(page.locator('#windText')).toHaveText('12 mph');
+    await expect(page.locator('#windArrow')).toBeVisible();
+    const wind = await page.evaluate(() => window.game!.state().wind);
+    expect(wind.speed).toBe(12);
+    expect(Math.hypot(wind.x, wind.y), 'a direction, as a unit vector').toBeCloseTo(1, 6);
+    const arrow = () => page.evaluate(() => window.game!.motions().wind!);
+    const drawn = async () =>
+      page.locator('#windArrow').evaluate((el) => {
+        const m = new DOMMatrix(getComputedStyle(el).transform);
+        return (Math.atan2(m.b, m.a) * 180) / Math.PI;
+      });
+    const first = await arrow();
+    expect(first.text).toBe('12 mph');
+    // what the stylesheet draws is what the test API reads back
+    expect(Math.abs((((await drawn()) - first.degrees + 540) % 360) - 180)).toBeLessThan(0.5);
+    // where the wind blows on the page, from where it carries a point of the course (the tilt of the view squeezes what runs up the screen, so within thirty degrees): the arrow is turned that way, clockwise from up
+    const onScreen = () =>
+      page.evaluate((w) => {
+        const g = window.game!;
+        const b = g.ball();
+        const from = g.project(b.x, b.y, b.z),
+          to = g.project(b.x + w.x * 20, b.y + w.y * 20, b.z);
+        return (Math.atan2(to.x - from.x, from.y - to.y) * 180) / Math.PI;
+      }, wind);
+    const gap = (a: number, b: number) => Math.abs(((a - b + 540) % 360) - 180);
+    expect(gap(first.degrees, await onScreen()), 'the arrow points as the wind goes on the screen').toBeLessThan(30);
+    // the camera turned by a quarter turn turns the arrow the other way by as much, and every turn after it
+    for (const turn of [Math.PI / 2, 0.7, -2.2]) {
+      const before = (await arrow()).degrees;
+      await page.evaluate((t) => {
+        window.game!.orbit(t, 0);
+        window.game!.step(1);
+      }, turn);
+      const after = (await arrow()).degrees;
+      expect(gap(after, before - (turn * 180) / Math.PI), `after a turn of ${turn}`).toBeLessThan(0.5);
+      expect(gap(after, await onScreen()), `and on the screen after a turn of ${turn}`).toBeLessThan(30);
+    }
+    // a wind never makes the camera stand nearer than a calm one: a tailwind's reach is in the view
+    await page.evaluate(() => window.game!.startHole(0));
+    await page.evaluate(() => window.game!.step(300));
+    const windy = await page.evaluate(() => window.game!.view());
+    expect(windy.distance).toBeGreaterThanOrEqual(calm.distance - 1e-9);
+    // the strongest wind there is, and back to calm, and the words follow
+    await onHole(page, windHole('Gale', 25));
+    await expect(page.locator('#windText')).toHaveText('25 mph');
+    await onHole(page, windHole('Calm', 0));
+    await expect(page.locator('#windText')).toHaveText('calm');
+    expect(problems).toEqual([]);
+  });
+});

@@ -36,7 +36,7 @@ import {
   tileAt,
   type Layout,
 } from './arena';
-import { BAG, PUTTER, bagClub } from './bag';
+import { BAG, PUTTER, bagClub, type BagClub } from './bag';
 import type { HoleDef } from './course';
 import { carryFrom } from './flight';
 import type { Game } from './game';
@@ -46,7 +46,8 @@ import { choose, Rehearsal, type Candidate } from './planner';
 import { Route } from './route';
 import type { Random } from './random';
 import type { Shot } from './shot';
-import { LIE } from './surfaces';
+import { windReach } from './shaping';
+import { LIE, type Lie } from './surfaces';
 
 /** How fast a ball it means for the cup is going when it gets there: inside what the cup catches off its middle, 7. */
 const ARRIVE = 4;
@@ -177,6 +178,18 @@ function runOn(loft: number): number {
 }
 
 /**
+ * How much further the hole's wind carries a full swing of `club` toward `angle`, in yards: a tail wind adds and a head
+ * wind takes off, the share of the wind along the line, and nothing across it (which only turns the shot aside, for the
+ * planner's trials to find). Nought, to the digit, where the hole is calm, so a calm hole is planned as it was.
+ */
+export function windCarry(game: Game, club: BagClub, lie: Lie, angle: number): number {
+  const { x, y, speed } = game.wind;
+  if (!(speed > 0)) return 0;
+  const along = speed * (x * Math.cos(angle) + y * Math.sin(angle));
+  return Math.sign(along) * windReach(club, 1, Math.abs(along), lie);
+}
+
+/**
  * The arithmetic's shots on a golf hole from (x, y), best first, as guesses for the planner to correct: from the green,
  * the putt, at the speed that arrives at the cup gently enough to drop; from anywhere else the two shortest clubs that
  * reach the cup from the ground the ball lies on, each at the power that lands it short of the cup by what it will run
@@ -198,7 +211,7 @@ export function golfCandidates(game: Game, x: number, y: number): Plan[] {
   // from the shortest club to the longest, those that reach; and the longest, flat out, for a distance none does
   const reaching: Plan[] = [];
   for (const club of BAG.filter((c) => c !== PUTTER).reverse()) {
-    const reach = carryFrom(club, 1, lie) * (1 + runOn(club.loft));
+    const reach = (carryFrom(club, 1, lie) + windCarry(game, club, lie, angle)) * (1 + runOn(club.loft));
     if (reach >= distance) reaching.push({ angle, power: distance / reach, club: club.id });
   }
   const out = reaching.length ? reaching.slice(0, 2) : [{ angle, power: 1, club: BAG[0].id }];
@@ -221,8 +234,9 @@ export function golfLayUps(game: Game, route: Route, x: number, y: number): Cand
   const way = route.distance(x, y);
   if (!Number.isFinite(way) || lie === LIE.green) return [];
   const out: Candidate[] = [];
+  const bearing = Math.atan2(layout.cup.y - y, layout.cup.x - x);
   for (const club of BAG.filter((c) => c !== PUTTER).reverse()) {
-    const reach = carryFrom(club, 1, lie) * (1 + runOn(club.loft));
+    const reach = (carryFrom(club, 1, lie) + windCarry(game, club, lie, bearing)) * (1 + runOn(club.loft));
     if (reach >= way * LAY_UP.within) continue;
     const to = route.waypoint(x, y, reach * LAY_UP.share);
     const distance = Math.hypot(to.x - x, to.y - y);

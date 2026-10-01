@@ -4,9 +4,11 @@ import type { HoleDef } from '../src/course';
 import { CameraRig, TILT, VIEW } from '../src/camera';
 import { checkInvariants, planProblems, previewProblems, viewProblems } from '../src/invariants';
 import { Previewer } from '../src/preview';
-import { bagClub } from '../src/bag';
+import { bagClub, carrying } from '../src/bag';
 import { Autopilot } from '../src/autopilot';
-import { field, golfGame, newGame as newOn, onGreen as newGame, settle } from './helpers';
+import { fastest } from '../src/game';
+import { WIND, windPush, windReach } from '../src/shaping';
+import { GREEN, field, golfGame, newGame as newOn, onGreen as newGame, settle } from './helpers';
 
 describe('what must always hold', () => {
   it('holds of a new game, and of one played on a little', () => {
@@ -310,5 +312,110 @@ describe('what must always hold of a plan', () => {
     const putt = new Autopilot(mini.game).plan()!;
     expect(planProblems(mini.game, putt)).toEqual([]);
     expect(planProblems(mini.game, { ...putt, club: 'driver' }).join('\n')).toMatch(/club/);
+  });
+});
+
+describe('what must always hold of shape, spin and wind', () => {
+  const windy = (speed: number) => golfGame({ ...field('f', 200, 81), wind: speed });
+
+  it('holds of a game that has a shape and a spin chosen, in a wind, and played a little', () => {
+    const { game } = windy(WIND.most);
+    expect(checkInvariants(game)).toEqual([]);
+    game.setShape(1);
+    game.setSpin(-1);
+    expect(checkInvariants(game)).toEqual([]);
+    game.pick('7-iron');
+    game.shoot(Math.PI / 2, 0.8);
+    for (let k = 0; k < 6; k++) {
+      settle(game, 40);
+      expect(checkInvariants(game), `after ${k + 1} of 40 frames`).toEqual([]);
+    }
+  });
+
+  it('reports a shape or a spin that is not a number from minus one to one', () => {
+    const { game } = windy(10);
+    game.shape = 2;
+    expect(checkInvariants(game).join('\n')).toMatch(/the shape is 2, not a number from -1 to 1/);
+    game.shape = NaN;
+    expect(checkInvariants(game).join('\n')).toMatch(/the shape is NaN/);
+    game.shape = -1;
+    expect(checkInvariants(game)).toEqual([]);
+    game.spin = -1.5;
+    expect(checkInvariants(game).join('\n')).toMatch(/the spin is -1.5/);
+    game.spin = Infinity;
+    expect(checkInvariants(game).join('\n')).toMatch(/the spin is Infinity/);
+    game.spin = 1;
+    expect(checkInvariants(game)).toEqual([]);
+  });
+
+  it('reports a wind that is not a speed from nought to the most, or that blows along no direction', () => {
+    // a hole's wind is worked out as it begins, so each bad one is a hole that begins with it
+    expect(checkInvariants(windy(10).game)).toEqual([]);
+    expect(checkInvariants(windy(WIND.most).game)).toEqual([]);
+    expect(checkInvariants(windy(WIND.most + 1).game).join('\n')).toMatch(/the wind is 26 miles an hour/);
+    expect(checkInvariants(windy(-3).game).join('\n')).toMatch(/the wind is -3/);
+    expect(checkInvariants(windy(NaN).game).join('\n')).toMatch(/the wind is NaN/);
+    // a direction that is no unit vector, put on the game itself
+    const { game } = windy(10);
+    Object.defineProperty(game, 'wind', { get: () => ({ x: 3, y: 4, speed: 5 }), configurable: true });
+    expect(checkInvariants(game).join('\n')).toMatch(/blows along 3,4, no direction/);
+    delete (game as unknown as Record<string, unknown>).wind;
+    expect(checkInvariants(game)).toEqual([]);
+  });
+
+  it('reports any wind at all on a hole of minigolf, which is always calm: the game makes it so, and the rule holds it to it', () => {
+    // a hole of minigolf given a wind is calm all the same, since its ball never leaves the ground
+    const given = newOn(1, null, [{ ...GREEN, wind: 8 }]);
+    expect(given.game.layout.golf).toBe(false);
+    expect(given.game.wind.speed).toBe(0);
+    expect(checkInvariants(given.game)).toEqual([]);
+    // but a game of minigolf that is blowing is reported
+    Object.defineProperty(given.game, 'wind', { get: () => ({ x: 0, y: 1, speed: 8 }), configurable: true });
+    expect(checkInvariants(given.game).join('\n')).toMatch(/the wind is 8 on a hole of minigolf, where it is calm/);
+    const calm = newOn(1, null, [GREEN]);
+    expect(checkInvariants(calm.game)).toEqual([]);
+  });
+
+  it('lets a tailwind add to the ball its push for as long as it flies, and nothing more', () => {
+    const { game } = windy(WIND.most);
+    game.shoot(0, 1);
+    const { world, ball } = game;
+    const most = fastest(game, world.x[ball], world.y[ball]) * 1.001;
+    const blown = windPush(WIND.most) * 8;
+    expect(blown, 'a push that is something').toBeGreaterThan(0);
+    world.vx[ball] = most + blown * 0.99;
+    world.vy[ball] = world.vz[ball] = 0;
+    expect(checkInvariants(game), 'within what the wind adds').toEqual([]);
+    world.vx[ball] = most + blown * 1.05;
+    const found = checkInvariants(game).join('\n');
+    expect(found).toMatch(/along the ground, faster than a post and a slope may make it/);
+    expect(found).toMatch(/in all, faster than any club could send it/);
+    // the same speed in a calm is too fast
+    const calm = windy(0);
+    calm.game.shoot(0, 1);
+    calm.game.world.vx[calm.game.ball] = most + blown * 0.99;
+    calm.game.world.vy[calm.game.ball] = calm.game.world.vz[calm.game.ball] = 0;
+    expect(checkInvariants(calm.game).join('\n')).toMatch(/faster than a post/);
+  });
+
+  it('allows a preview the carry a wind adds, and a heading that is a number, and no more', () => {
+    const { game } = windy(WIND.most);
+    const at = { x: game.world.x[game.ball], y: game.world.y[game.ball] };
+    const club = bagClub('driver');
+    const p = new Previewer(game).run(at, club, Math.PI / 2, 1, 1, 0);
+    expect(previewProblems(game, at, club, p)).toEqual([]);
+    // a carry past what the club and the strongest tailwind could do is reported, and one within it is not
+    const carry = p.carry;
+    p.carry = carrying(club.hardest, club.loft) * 1.06 + windReach(club, 1, WIND.most) + 5;
+    expect(previewProblems(game, at, club, p).join('\n'), 'a little over, with the wind').not.toMatch(/carries/);
+    p.carry = 1000 + windReach(club, 1, WIND.most) * 1.1;
+    expect(previewProblems(game, at, club, p).join('\n')).toMatch(/carries/);
+    p.carry = carry;
+    p.heading = NaN;
+    expect(previewProblems(game, at, club, p).join('\n')).toMatch(/heading is NaN/);
+    p.heading = Infinity;
+    expect(previewProblems(game, at, club, p).join('\n')).toMatch(/heading is Infinity/);
+    p.heading = 1;
+    expect(previewProblems(game, at, club, p)).toEqual([]);
   });
 });

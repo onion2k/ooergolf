@@ -43,11 +43,13 @@ export class Rehearsal {
   constructor(private readonly game: Game) {}
 
   /** The shot struck from where a ball lies at `from`, with `club`, toward `angle`, at `power`, struck true: what came of it. */
-  shot(from: { x: number; y: number }, club: string, angle: number, power: number): Trial {
+  shot(from: { x: number; y: number }, club: string, angle: number, power: number, shape = 0, spin = 0): Trial {
     const g = this.game;
     this.trials++;
     g.trial(from.x, from.y);
     g.pick(club);
+    g.setShape(shape);
+    g.setSpin(spin);
     if (!g.shoot(angle, power)) return { x: from.x, y: from.y, holed: false, lost: true };
     for (let f = 0; f < LONGEST / DT && g.phase === 'play' && !g.ready; f++) g.step(DT);
     // a ball lost in water is put back and a stroke added, which is the only way a second stroke is counted here
