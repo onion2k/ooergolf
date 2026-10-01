@@ -1,8 +1,8 @@
 /**
  * What the game costs a player, held to a budget and to what it cost
  * before: how long it takes to boot, what a frame costs to draw at the
- * standard view, how much is downloaded, and what the biggest hole there is
- * costs to begin and to draw. The budget is what a good
+ * standard view, how much is downloaded, and what the biggest holes there are
+ * (a large test hole of minigolf, and The Links' longest) cost to begin and to draw. The budget is what a good
  * browser game may cost at all; the baseline is what this one cost at the
  * last commit, so a step toward the budget is noticed as much as a step
  * over it.
@@ -20,6 +20,8 @@ import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
 import { expect, test } from '@playwright/test';
+import { moors } from '../src/course';
+import { bigHole, plain } from './bighole';
 import { start, watch } from './game';
 
 const BASELINE = 'smoke/perf-baseline.json';
@@ -57,7 +59,7 @@ interface Figures {
   bootMs: number;
   frameMs: number;
   bundleKb: number;
-  /** The biggest hole of the biggest course begun: the middle of nine begins, alternating with the smallest. */
+  /** The biggest hole that is not golf (`BIG`) begun: the middle of nine begins, alternating with the smallest. */
   beginMs: number;
   /** A frame of that hole at the worst of three views: from its tee, and from outside its rail's corner at two zooms. */
   bigFrameMs: number;
@@ -94,24 +96,26 @@ test('boots, draws and downloads within budget, and as it did before', async ({ 
     // a GPU idle while the page booted runs slow for a while: warmed first, or the figure is two figures
     return g.measureFrame(300);
   });
-  // the biggest hole of The Moors, which is many times the size of any other: what it costs to begin, and to draw. A hole is
+  // the biggest hole that is not golf (`BIG`, in `bighole.ts`, a test hole of the test's own: The Moors are tight now), many times the size of
+  // any on a course: what it costs to begin, and to draw. A hole is
   // begun and its readback awaited with nothing stepped between, since a frame stepped and not yet drawn is queued, and the
   // begin after it would wait on that as well; the biggest is begun in turn with the smallest, so each begin is a new hole
-  const big = await page.evaluate(async () => {
+  const holes = [plain(moors()[0]), bigHole()];
+  const big = await page.evaluate(async (holes) => {
     const g = window.game!;
-    g.chooseCourse('The Moors');
+    g.playCourse(holes.map((h) => ({ ...h, terrain: Float32Array.from(h.terrain) }) as never));
     g.step(2);
     await g.grass();
     const begins: number[] = [];
     for (let k = 0; k < 11; k++) {
       const t = performance.now();
-      g.startHole(k % 2 ? 0 : 8);
+      g.startHole(k % 2 ? 0 : 1);
       await g.grass();
       if (k % 2 === 0) begins.push(performance.now() - t);
     }
     begins.sort((a, b) => a - b);
     // a frame of the biggest, at the views that draw the most of it: the tee, and the rough from outside its corner
-    g.startHole(8);
+    g.startHole(1);
     g.step(120);
     const { floor } = g.content();
     const frames: number[] = [];
@@ -125,7 +129,7 @@ test('boots, draws and downloads within budget, and as it did before', async ({ 
       frames.push(await g.measureFrame(120));
     }
     return { begin: begins[Math.floor(begins.length / 2)], frame: Math.max(...frames) };
-  });
+  }, holes);
   // and the same of the biggest hole of The Links, the par five that bends: golf's holes are of a different sort, tens of
   // thousands of tiles of map with hills and trees and out of bounds on them, and what they cost is held on their own
   const links = await page.evaluate(async () => {

@@ -133,7 +133,8 @@ same seed and the same strokes give the same round.
 
 ### The first nine
 
-Each hole brings one new thing, and the ninth has them all.
+Each hole brings one new thing, and the ninth was to have them all: as it is drawn it
+has the barrier, the windmill, the conveyor and water, and no sand or post.
 
 | Hole | Brings                                  |
 | ---- | --------------------------------------- |
@@ -143,9 +144,9 @@ Each hole brings one new thing, and the ninth has them all.
 | 4    | Water                                   |
 | 5    | A sliding barrier                       |
 | 6    | Bumpers                                 |
-| 7    | A raised green, up a step from a bumper |
+| 7    | A raised green, up a ramp between ponds |
 | 8    | A windmill                              |
-| 9    | All of them, and a conveyor to the cup  |
+| 9    | A barrier, the windmill and a conveyor  |
 
 Hole 7 was to be a ramp and a jump. Without slopes it is a raised green,
 and whether a ball can be got up a step without a ramp was for its feature
@@ -158,21 +159,40 @@ The Bunker (sand across the front of the cup, to be gone round or blasted
 through), Pond, Barriers, Bumpers (five posts, one on the straight line to
 the cup), Up and Over (the ramp onto a plateau between two ponds, and a
 drop to the cup), Windmill, and The Mill Race (a barrier, the windmill,
-and a conveyor to the cup between ponds). The Mill Race does not yet have
-everything, as the ninth is to.
+and a conveyor to the cup between ponds). The Windmill and The Mill Race are
+drawn long enough that the cup shows over the tower from the tee, with room to lay
+up before the door, and the race's barrier opens a quarter of a cycle late so
+that its window is 0.84 s of every 2. The Mill Race does not yet have
+everything, as the ninth is to: it has no sand and no post. The Bunker is par 2.
 
-The Hills is a second course, of four holes whose ground slopes, each
+The Hills is a second course, of nine holes whose ground slopes, each
 bringing one thing a slope does, chosen on the start screen beside The
-Meadow:
+Meadow, in this order, easy to hard (par 24 in all; the names are the save's
+keys, so the order is free):
 
-- **The Hollow,** par 3: from a raised tee down into a dip and up a steep
-  bank to the cup's plateau. Short, and it rolls back into the dip.
-- **The Volcano,** par 3: the cup on the top of a mound, whose flanks a
-  ball too soft rolls back down and one too hard runs over.
 - **The Bowl,** par 2: the cup in the bottom of a bowl, which brings
   everything to it; a hole to breathe on.
+- **The Hollow,** par 2: from a raised tee down into a dip and up a steep
+  bank to the cup's plateau. Short, and it rolls back into the dip.
+- **The Sink,** par 3: a shallow dish a tile to the left of the line pulls
+  every putt toward it, so the putt is aimed to the right of the cup.
+- **The Volcano,** par 2: the cup on the top of a mound, whose flanks a
+  ball too soft rolls back down and one too hard runs over.
+- **The Sunken Lane,** par 3: a lane worn a yard and a half into a plateau
+  runs north from the tee, bends east and ends at the cup; the way to play it
+  cuts the bend, and the lane's far wall brings the ball to the cup.
+- **The Hump,** par 3: a low hill to the right of the line pushes every putt
+  away from it, so the putt is aimed over its shoulder.
 - **Side-hill,** par 3: a green tilted across, so every putt breaks and has
   to be aimed above the cup.
+- **The Shelf,** par 3: a ramp up to a table that leans to the right, and a
+  steep drop to the cup.
+- **Hill and Dale,** par 3: a long climb of two units past a dish on the left
+  and a hill on the right: two putts, the first to lay up and the second read
+  across the same ground.
+
+The break is shown on every one: arrows over the green, the putt's roll drawn
+as it is aimed, and the break in words.
 
 Round each cup the ground is no steeper than the green holds a ball, 13
 degrees, so a ball can come to rest beside it. The autopilot does not read

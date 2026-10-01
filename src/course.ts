@@ -15,7 +15,7 @@
  *
  * The Meadow is the nine holes in DESIGN.md, level but for its steps:
  * grass, rail, sand, water, raised grass, posts, barriers, windmills and
- * belts. The Hills are four whose ground slopes, drawn in a second grid, the
+ * belts. The Hills are nine whose ground slopes, drawn in a second grid, the
  * hole's `terrain`, beside the map. The Downs are nine long holes whose ground
  * is noise, a smooth surface made from a seed and a feel, and nothing else on
  * them.
@@ -120,7 +120,7 @@ export const COURSE: readonly HoleDef[] = [
   },
   {
     name: 'The Bunker',
-    par: 3,
+    par: 2,
     // sand across the front of the cup: round it by the sides, or straight through it at three quarters of the hardest
     map: [
       '#########',
@@ -218,10 +218,14 @@ export const COURSE: readonly HoleDef[] = [
   {
     name: 'Windmill',
     par: 3,
+    // the cup stands six tiles, eighteen units, past the door, which is far enough for the tower not to hide it from the tee, and four tiles of green between the tee and the door leave room to lay up
     map: [
       '#########',
       '#.......#',
       '#...C...#',
+      '#.......#',
+      '#.......#',
+      '#.......#',
       '#.......#',
       '#.......#',
       '####.####',
@@ -232,18 +236,23 @@ export const COURSE: readonly HoleDef[] = [
       '#.......#',
       '#########',
     ],
-    obstacles: [{ kind: 'windmill', at: [4, 5], period: 8 }],
+    obstacles: [{ kind: 'windmill', at: [4, 8], period: 8 }],
   },
   {
     name: 'The Mill Race',
     par: 4,
+    // the barrier's phase is a quarter, so its open window is 0.84 s of every 2 and not 0.4, and the cup shows over the tower
     map: [
       '#########',
       '#~~...~~#',
       '#~~.C.~~#',
       '#~~...~~#',
       '#~~...~~#',
+      '#~~...~~#',
+      '#~~...~~#',
+      '#~~...~~#',
       '####.####',
+      '#.......#',
       '#.......#',
       '#.......#',
       '#.......#',
@@ -253,102 +262,25 @@ export const COURSE: readonly HoleDef[] = [
       '#########',
     ],
     obstacles: [
-      { kind: 'barrier', at: [4, 8], length: 1, travel: 5, period: 4 },
-      { kind: 'windmill', at: [4, 5], period: 8, phase: 0.125 },
+      { kind: 'barrier', at: [4, 12], length: 1, travel: 5, period: 4, phase: 0.25 },
+      { kind: 'windmill', at: [4, 8], period: 8, phase: 0.125 },
       { kind: 'conveyor', from: [4, 4], to: [4, 3], speed: 5 },
     ],
   },
 ];
 
 /**
- * The Hills: holes whose ground slopes, a height a tile in each one's
+ * The Hills: nine holes whose ground slopes, a height a tile in each one's
  * `terrain`, beside its map, the far end at the top as the map is. Each
- * brings one thing a slope does: a hollow to be carried, a mound to be
- * climbed and stopped on, a bowl that brings everything to the cup, and a
- * green tilted so every putt breaks. Round each cup the ground is no
- * steeper than the green holds a ball, so one can come to rest beside it.
+ * brings one thing a slope does: a bowl that brings everything to the cup, a
+ * hollow to be carried, a dish that pulls a putt toward it, a mound to be
+ * climbed and stopped on, a lane worn into a plateau, a hill that pushes a
+ * putt away, a green tilted so every putt breaks, a table that leans and a
+ * long climb that takes two putts. They run easy to hard (the names are the
+ * save's keys, so the order is free to change). Round each cup the ground is
+ * no steeper than the green holds a ball, so one can come to rest beside it.
  */
 export const HILLS: readonly HoleDef[] = [
-  {
-    name: 'The Hollow',
-    par: 3,
-    // from a raised tee down into a dip and up a steep bank to the cup's plateau: short, and it rolls back into the dip
-    map: [
-      '#########',
-      '#.......#',
-      '#...C...#',
-      '#.......#',
-      '#.......#',
-      '#.......#',
-      '#.......#',
-      '#.......#',
-      '#.......#',
-      '#.......#',
-      '#.......#',
-      '#.......#',
-      '#.......#',
-      '#...T...#',
-      '#########',
-    ],
-    terrain: [
-      '444444444',
-      '444444444',
-      '444444444',
-      '444444444',
-      '444444444',
-      '444444444',
-      '222222222',
-      '000000000',
-      '000000000',
-      '000000000',
-      '111111111',
-      '222222222',
-      '222222222',
-      '222222222',
-      '222222222',
-    ],
-  },
-  {
-    name: 'The Volcano',
-    par: 3,
-    // the cup on the flat top of a mound, its sides steep all round: short rolls back down, long rolls off the far side
-    map: [
-      '#############',
-      '#...........#',
-      '#...........#',
-      '#...........#',
-      '#...........#',
-      '#.....C.....#',
-      '#...........#',
-      '#...........#',
-      '#...........#',
-      '#...........#',
-      '#...........#',
-      '#...........#',
-      '#...........#',
-      '#...........#',
-      '#.....T.....#',
-      '#############',
-    ],
-    terrain: [
-      '0222222222220',
-      '0244444444420',
-      '0246666666420',
-      '0246666666420',
-      '0246666666420',
-      '0246666666420',
-      '0246666666420',
-      '0246666666420',
-      '0246666666420',
-      '0244444444420',
-      '0222222222220',
-      '0000000000000',
-      '0000000000000',
-      '0000000000000',
-      '0000000000000',
-      '0000000000000',
-    ],
-  },
   {
     name: 'The Bowl',
     par: 2,
@@ -388,6 +320,217 @@ export const HILLS: readonly HoleDef[] = [
       '7777777777777',
       '7777777777777',
       '7777777777777',
+    ],
+  },
+  {
+    name: 'The Hollow',
+    par: 2,
+    // from a raised tee down into a dip and up a steep bank to the cup's plateau: short, and it rolls back into the dip
+    map: [
+      '#########',
+      '#.......#',
+      '#...C...#',
+      '#.......#',
+      '#.......#',
+      '#.......#',
+      '#.......#',
+      '#.......#',
+      '#.......#',
+      '#.......#',
+      '#.......#',
+      '#.......#',
+      '#.......#',
+      '#...T...#',
+      '#########',
+    ],
+    terrain: [
+      '444444444',
+      '444444444',
+      '444444444',
+      '444444444',
+      '444444444',
+      '444444444',
+      '222222222',
+      '000000000',
+      '000000000',
+      '000000000',
+      '111111111',
+      '222222222',
+      '222222222',
+      '222222222',
+      '222222222',
+    ],
+  },
+  {
+    name: 'The Sink',
+    par: 3,
+    // a dish to the left of the line pulls every putt toward it: aim to the right of the cup and let the dish bring the ball back
+    map: [
+      '###########',
+      '#.........#',
+      '#....C....#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#....T....#',
+      '#.........#',
+      '###########',
+    ],
+    terrain: [
+      '66666666666',
+      '66666666666',
+      '66666666666',
+      '66666666666',
+      '66666666666',
+      '66555556666',
+      '65443445666',
+      '65432345666',
+      '65322235666',
+      '65432345666',
+      '65443445666',
+      '66555556666',
+      '66666666666',
+      '66666666666',
+      '66666666666',
+      '66666666666',
+      '66666666666',
+    ],
+  },
+  {
+    name: 'The Volcano',
+    par: 2,
+    // the cup on the flat top of a mound, its sides steep all round: short rolls back down, long rolls off the far side
+    map: [
+      '#############',
+      '#...........#',
+      '#...........#',
+      '#...........#',
+      '#...........#',
+      '#.....C.....#',
+      '#...........#',
+      '#...........#',
+      '#...........#',
+      '#...........#',
+      '#...........#',
+      '#...........#',
+      '#...........#',
+      '#...........#',
+      '#.....T.....#',
+      '#############',
+    ],
+    terrain: [
+      '0222222222220',
+      '0244444444420',
+      '0246666666420',
+      '0246666666420',
+      '0246666666420',
+      '0246666666420',
+      '0246666666420',
+      '0246666666420',
+      '0246666666420',
+      '0244444444420',
+      '0222222222220',
+      '0000000000000',
+      '0000000000000',
+      '0000000000000',
+      '0000000000000',
+      '0000000000000',
+    ],
+  },
+  {
+    name: 'The Sunken Lane',
+    par: 3,
+    // a lane worn 1.5 units into a plateau runs north from the tee, bends east and ends at the cup: the direct line cuts across the plateau at the bend and is brought back to the cup by the lane's far wall; a putt along the lane runs out of speed at the bend
+    map: [
+      '###########',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.......C.#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#..T......#',
+      '###########',
+    ],
+    terrain: [
+      '66666666666',
+      '66666666666',
+      '66666666666',
+      '66666666666',
+      '66666666666',
+      '66666666666',
+      '66666555566',
+      '66654444446',
+      '66543333345',
+      '66433344446',
+      '65433555566',
+      '65434566666',
+      '65434566666',
+      '65434566666',
+      '65434566666',
+      '65434566666',
+      '65434566666',
+      '66444666666',
+    ],
+  },
+  {
+    name: 'The Hump',
+    par: 3,
+    // a low hill to the right of the line pushes every putt away from it: aim over its shoulder, to the right of the cup
+    map: [
+      '###########',
+      '#.........#',
+      '#.........#',
+      '#......C..#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#..T......#',
+      '#.........#',
+      '###########',
+    ],
+    terrain: [
+      '00000000000',
+      '00000000000',
+      '00000000000',
+      '00000000000',
+      '00000000000',
+      '00000000000',
+      '00001111100',
+      '00011222110',
+      '00012232210',
+      '00012333210',
+      '00012232210',
+      '00011222110',
+      '00001111100',
+      '00000000000',
+      '00000000000',
+      '00000000000',
+      '00000000000',
     ],
   },
   {
@@ -431,6 +574,98 @@ export const HILLS: readonly HoleDef[] = [
       '01234567899',
     ],
   },
+  {
+    name: 'The Shelf',
+    par: 3,
+    // a ramp up to a table that leans to the right, and a steep drop to the cup: struck hard enough to crest the ramp, the ball runs off the far edge to the cup, and the lean turns it
+    map: [
+      '#########',
+      '#.......#',
+      '#...C...#',
+      '#.......#',
+      '#.......#',
+      '#.......#',
+      '#.......#',
+      '#.......#',
+      '#.......#',
+      '#.......#',
+      '#.......#',
+      '#.......#',
+      '#.......#',
+      '#.......#',
+      '#.......#',
+      '#..T....#',
+      '#.......#',
+      '#########',
+    ],
+    terrain: [
+      '111111111',
+      '111111111',
+      '111111111',
+      '222222222',
+      '122222233',
+      '333444555',
+      '455667788',
+      '455667788',
+      '455667788',
+      '455667788',
+      '344556677',
+      '333444555',
+      '233333344',
+      '222222222',
+      '111111111',
+      '111111111',
+      '111111111',
+      '111111111',
+    ],
+  },
+  {
+    name: 'Hill and Dale',
+    par: 3,
+    // a long climb of two units past a dish on the left and a hill on the right: two putts, the first to lay up, the second read across the same ground
+    map: [
+      '###########',
+      '#.........#',
+      '#....C....#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#....T....#',
+      '###########',
+    ],
+    terrain: [
+      '77777777777',
+      '66666666666',
+      '66666666666',
+      '66666666666',
+      '55555556655',
+      '55555566665',
+      '55555667766',
+      '55445677776',
+      '44434567776',
+      '43223467765',
+      '32112345654',
+      '32111234444',
+      '22111223333',
+      '32111233333',
+      '32222233333',
+      '32222233333',
+      '22222222222',
+      '22222222222',
+      '22222222222',
+    ],
+  },
 ];
 
 /** How a hole of The Downs is made: its name and par, its shape, and its ground. */
@@ -442,41 +677,55 @@ interface DownsSpec {
   feel: Feel;
   steepness: number;
   seed: number;
+  /** What stands on it, if anything, placed by `openHole` (so the tee and the cup are two tiles in from the rail). */
+  features?: Feature[];
 }
 
 /**
- * The Downs: nine holes half as long again as the others, tee to cup thirteen
- * tiles and a bit against eight and three quarters, whose ground is a smooth
- * curve of noise and whose only obstacle it is. Gentle ground first, that a ball
- * rests on wherever it lies; rolling ground, that carries a putt across it;
- * choppy ground, that turns one every few tiles; and, for the last three, a
- * rolling swell with choppy detail on it, each steeper than the one before. Par
- * is each hole's intent, as The Hills' is: the autopilot does not read a
- * break.
+ * The Downs: nine holes whose ground is a smooth curve of noise and whose only obstacle it is, but for one stand of
+ * posts, and that climb in length and in strokes, from thirty-nine units tee to cup to eighty-nine, so the course
+ * comes between The Hills and The Moors in size. Gentle ground first, that a ball rests on wherever it lies; rolling
+ * ground, that carries a putt across it; choppy ground, that turns one every few tiles; long hills, that lean a putt
+ * a long way; the post office, a stand of posts across the line; and, for the last two, rolling swell with choppy
+ * detail on it, each steeper than the one before and long enough to want two putts. A hole is longer than the putter's
+ * fifty units from the sixth of the nine, so no putt from the tee can reach the cup on the last three. Par is each
+ * hole's intent, as The Hills' is: the autopilot does not read a break.
+ *
+ * The first five are the five of the first nine that were not twins of another, in the order they play from easiest
+ * to hardest; the rest were chosen by playing forty-eight seeds of each with the pace gate's player, and the seeds
+ * checked again on sixteen others (see the figures in the commit).
  */
 const DOWNS_SPECS: readonly DownsSpec[] = [
   { name: 'Easy Does It', par: 3, shape: [11, 17, [5, 15], [5, 2]], feel: 'gentle', steepness: 0.3, seed: 9 },
-  { name: 'The Roll', par: 3, shape: [13, 17, [3, 15], [9, 2]], feel: 'rolling', steepness: 0.55, seed: 24 },
-  { name: 'Lazy Lawn', par: 3, shape: [9, 16, [6, 14], [3, 2]], feel: 'gentle', steepness: 0.3, seed: 5 },
-  { name: 'Washboard', par: 3, shape: [13, 16, [10, 14], [3, 2]], feel: 'choppy', steepness: 0.6, seed: 23 },
-  { name: 'Long Swell', par: 3, shape: [11, 16, [2, 14], [6, 2]], feel: 'rolling', steepness: 0.65, seed: 17 },
   { name: 'Cobbles', par: 3, shape: [15, 17, [6, 15], [9, 2]], feel: 'choppy', steepness: 0.65, seed: 26 },
+  { name: 'Long Swell', par: 3, shape: [11, 16, [2, 14], [6, 2]], feel: 'rolling', steepness: 0.65, seed: 17 },
   { name: 'Sea Legs', par: 3, shape: [13, 16, [4, 14], [9, 2]], feel: 'rolling and choppy', steepness: 0.6, seed: 26 },
+  { name: 'The Roll', par: 3, shape: [13, 17, [3, 15], [9, 2]], feel: 'rolling', steepness: 0.55, seed: 24 },
+  { name: 'Long Hill', par: 3, shape: [13, 19, [4, 17], [9, 2]], feel: 'long hills', steepness: 0.6, seed: 2 },
   {
-    name: 'Whitecaps',
-    par: 3,
-    shape: [11, 17, [6, 15], [4, 2]],
+    name: 'Post Office',
+    par: 4,
+    shape: [15, 17, [3, 14], [11, 2]],
+    feel: 'rolling',
+    steepness: 0.55,
+    seed: 11,
+    features: [{ kind: 'stand', count: 1, size: [3, 5] }],
+  },
+  {
+    name: 'Two Shots',
+    par: 4,
+    shape: [13, 27, [4, 25], [9, 2]],
     feel: 'rolling and choppy',
     steepness: 0.66,
-    seed: 23,
+    seed: 13,
   },
   {
     name: 'The Big Dipper',
     par: 4,
-    shape: [15, 17, [4, 15], [11, 2]],
+    shape: [15, 33, [4, 31], [11, 2]],
     feel: 'rolling and choppy',
     steepness: 0.72,
-    seed: 8,
+    seed: 6,
   },
 ];
 
@@ -484,95 +733,113 @@ const DOWNS_SPECS: readonly DownsSpec[] = [
 export const DOWNS_FEELS: readonly Feel[] = DOWNS_SPECS.map((d) => d.feel);
 
 export const DOWNS: readonly HoleDef[] = DOWNS_SPECS.map(
-  ({ name, par, shape: [cols, rows, tee, cup], feel, steepness, seed }) => {
+  ({ name, par, shape: [cols, rows, tee, cup], feel, steepness, seed, features }) => {
+    // the same ground either way (`openHole` with nothing on it is the noise as it is), but a hole that is drawn by
+    // hand keeps its tee and cup where it was, a tile from the rail on the first
+    if (features) return openHole({ name, par, shape: [cols, rows, tee, cup], feel, steepness, seed, features });
     const map = fairway(cols, rows, tee, cup);
     return { name, par, map, terrain: noiseGround(layoutOf(map), { seed, feel, steepness }) };
   },
 );
 
 /** What stands on the open holes: a pond, a bunker and a stand of posts, each as big as the tiles it is placed on allow. */
-const POND: Feature = { kind: 'pond', count: 1, size: [2.5, 4] };
-const BUNKERS = (count: number): Feature => ({ kind: 'sand', count, size: [1.8, 3] });
-const STANDS = (count: number): Feature => ({ kind: 'stand', count, size: [3, 5] });
-
-/** A hole of `cols` tiles by `rows`, the tee a quarter of the way across and the cup three quarters, and each two tiles in from the rail. */
-const across = (cols: number, rows: number): OpenSpec['shape'] => [
-  cols,
-  rows,
-  [Math.floor(cols / 4), rows - 3],
-  [Math.floor((cols * 3) / 4), 2],
-];
+const pond = (count: number, least = 2.5, most = 3.5): Feature => ({ kind: 'pond', count, size: [least, most] });
+const sand = (count: number, least = 1.8, most = 2.6): Feature => ({ kind: 'sand', count, size: [least, most] });
+const stand = (count: number, least = 3, most = 5): Feature => ({ kind: 'stand', count, size: [least, most] });
 
 /**
- * The Moors: nine open holes, each six to fourteen times the size of The Downs' mean, a hundred to a hundred and
- * fifty units from the tee to the cup, so a hole is three to five shots of the putter and a round is a long walk. Made
- * by `openHole` from a spec and a seed: ground, and ponds, bunkers and stands of posts on it, placed so a route wide
- * enough to putt along is always left. The ground is hills, swells ninety and a hundred and thirty-five units across
- * (`hills` and `long hills`) at a steepness from 0.55 to 0.7, so a hole stands seven to eighteen units from its lowest
- * ground to its highest and its steepest slope is about nineteen degrees, and a ball rests on nearly all of it; a pond
- * lies in a valley and a bunker on a bed cut into a slope. Each seed was chosen by playing forty of them, eight rounds
- * each, with the pace gate's player: none of the chosen took the limit or went into the water, a hazard of each was
- * near the line from the tee to the cup, there were at least seven units of relief and the ball rested on nine tenths of
- * the ground, and the mean was about a stroke under par, as The Downs' is; then by looking at the pictures. Par is each
- * hole's intent.
+ * The Moors: nine open holes of tight minigolf, from fifty-one to eighty-two units tee to cup, so the cup is on the
+ * screen from the tee at the widest zoom, and a hole is two or three strokes of the putter. They were nine holes of
+ * a hundred to a hundred and fifty units, three to five strokes a hole and more than half of them full-power rolls with
+ * nothing to decide, with a hazard nowhere near the line; now each hazard stands on the line, in the landing zone or at
+ * the cup, so it is in play. Made by `openHole` from a spec and a seed: ground, and ponds, bunkers and stands of
+ * posts on it, placed so a route wide enough to putt along is always left. The ground is hills, swells ninety and a
+ * hundred and thirty-five units across (`hills` and `long hills`) at a steepness from 0.5 to 0.7, and a pond lies in a
+ * valley and a bunker on a bed cut into a slope. Each seed was chosen by playing forty with the pace gate's player,
+ * and those of Long Roll and The Far Pin again, since the first picks lost one first shot in eleven and one in fifty to
+ * the water. Par is each hole's intent, as The Downs' is: the pace player takes about a stroke under it.
  */
 const MOORS_SPECS: readonly OpenSpec[] = [
-  { name: 'Wide Open', par: 4, shape: across(30, 34), feel: 'hills', steepness: 0.55, seed: 8, features: [] },
+  {
+    name: 'Wide Open',
+    par: 3,
+    shape: [16, 20, [4, 17], [12, 2]],
+    feel: 'hills',
+    steepness: 0.5,
+    seed: 3,
+    features: [],
+  },
   {
     name: 'Lily Ponds',
-    par: 5,
-    shape: across(33, 39),
+    par: 3,
+    shape: [18, 24, [4, 21], [13, 2]],
     feel: 'hills',
     steepness: 0.6,
-    seed: 6,
-    features: [{ ...POND, count: 2 }],
+    seed: 5,
+    features: [pond(1)],
   },
   {
     name: 'Sandy Reach',
-    par: 5,
-    shape: across(36, 39),
+    par: 3,
+    shape: [20, 26, [5, 23], [14, 2]],
     feel: 'hills',
     steepness: 0.6,
-    seed: 13,
-    features: [BUNKERS(3)],
+    seed: 21,
+    features: [sand(2)],
   },
-  { name: 'The Grove', par: 5, shape: across(36, 42), feel: 'hills', steepness: 0.65, seed: 6, features: [STANDS(2)] },
-  { name: 'Long Roll', par: 5, shape: across(39, 45), feel: 'long hills', steepness: 0.65, seed: 29, features: [POND] },
+  {
+    name: 'The Grove',
+    par: 4,
+    shape: [20, 26, [14, 23], [5, 2]],
+    feel: 'hills',
+    steepness: 0.65,
+    seed: 11,
+    features: [stand(2)],
+  },
+  {
+    name: 'Long Roll',
+    par: 4,
+    shape: [18, 30, [9, 27], [9, 2]],
+    feel: 'long hills',
+    steepness: 0.65,
+    seed: 34,
+    features: [pond(1, 3, 4)],
+  },
   {
     name: 'Broken Ground',
-    par: 5,
-    shape: across(39, 45),
+    par: 4,
+    shape: [22, 26, [5, 23], [16, 2]],
     feel: 'long hills',
     steepness: 0.7,
     seed: 21,
-    features: [BUNKERS(2)],
+    features: [sand(2, 2, 3)],
   },
   {
     name: 'Water Meadow',
-    par: 6,
-    shape: across(42, 48),
+    par: 4,
+    shape: [24, 28, [6, 25], [18, 2]],
     feel: 'hills',
-    steepness: 0.7,
-    seed: 28,
-    features: [{ ...POND, count: 2 }, BUNKERS(2)],
+    steepness: 0.65,
+    seed: 9,
+    features: [pond(2), sand(1)],
   },
   {
     name: 'The Ridge',
-    par: 6,
-    shape: across(45, 48),
+    par: 4,
+    shape: [22, 30, [16, 27], [5, 2]],
     feel: 'long hills',
     steepness: 0.7,
-    seed: 21,
-    features: [STANDS(2), BUNKERS(1)],
+    seed: 12,
+    features: [stand(2), sand(1)],
   },
   {
     name: 'The Far Pin',
-    par: 6,
-    shape: across(45, 51),
+    par: 5,
+    shape: [26, 28, [6, 25], [20, 2]],
     feel: 'long hills',
     steepness: 0.7,
-    seed: 27,
-    features: [POND, BUNKERS(2), STANDS(1)],
+    seed: 16,
+    features: [pond(1, 3, 4), sand(2), stand(1)],
   },
 ];
 

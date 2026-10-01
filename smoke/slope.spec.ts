@@ -8,6 +8,7 @@ import { layoutOf } from '../src/arena';
 import { COURSES } from '../src/course';
 import { breakOf } from '../src/green';
 import { puttText } from '../src/readout';
+import { bigHole } from './bighole';
 import { drag, start, watch } from './game';
 import { CONTRAST, read } from './panels';
 
@@ -105,12 +106,12 @@ test.describe('the break on a sloped hole of minigolf', () => {
   }) => {
     const problems = watch(page);
     await start(page, { seed: 5, paused: true });
-    await page.evaluate(() => {
+    // the biggest hole of minigolf there is, which is a test hole of its own now that The Moors are tight (`bighole.ts`)
+    await page.evaluate((hole) => {
       const g = window.game!;
-      g.chooseCourse('The Moors');
-      g.startHole(g.content().holes.findIndex((h) => h.name === 'The Far Pin'));
+      g.playCourse([{ ...hole, terrain: Float32Array.from(hole.terrain) }] as never);
       for (let f = 0; f < 120; f++) g.step(1);
-    });
+    }, bigHole());
     await aim(page, 100, 10);
     const seen = await page.evaluate(async () => ({
       arrows: window.game!.motions().arrows,

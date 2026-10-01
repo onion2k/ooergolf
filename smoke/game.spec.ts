@@ -198,14 +198,17 @@ test.describe('the start screen', () => {
       'BUTTON:The Range',
       'BUTTON:The Links',
     ]);
+    await expect(page.locator('#start .course').nth(1)).toContainText('The Hills');
+    await expect(page.locator('#start .course').nth(1)).toContainText('9 holes');
+    await expect(page.locator('#start .course').nth(1)).toContainText('par 24');
     await expect(page.locator('#start .course').nth(2)).toContainText('The Downs');
     await expect(page.locator('#start .course').nth(2)).toContainText('9 holes');
     await expect(page.locator('#start .course').nth(3)).toContainText('The Moors');
     await expect(page.locator('#start .course').nth(3)).toContainText('9 holes');
     await expect(page.locator('#start .course').nth(3)).toContainText('par 47');
     await expect(page.locator('#start .course').nth(4)).toContainText('The Range');
-    await expect(page.locator('#start .course').nth(4)).toContainText('3 holes');
-    await expect(page.locator('#start .course').nth(4)).toContainText('par 10');
+    await expect(page.locator('#start .course').nth(4)).toContainText('9 holes');
+    await expect(page.locator('#start .course').nth(4)).toContainText('par 32');
     await expect(page.locator('#start .course').nth(5)).toContainText('The Links');
     await expect(page.locator('#start .course').nth(5)).toContainText('9 holes');
     await expect(page.locator('#start .course').nth(5)).toContainText('par 36');
@@ -219,8 +222,8 @@ test.describe('the start screen', () => {
     await page.locator('#start .course', { hasText: 'The Hills' }).click();
     await expect(page.locator('#start')).toBeHidden();
     await expect(page.locator('#strokes')).toBeVisible();
-    await expect(page.locator('#holeName')).toContainText('Hole 1 of 4');
-    await expect(page.locator('#holeName')).toContainText('The Hollow');
+    await expect(page.locator('#holeName')).toContainText('Hole 1 of 9');
+    await expect(page.locator('#holeName')).toContainText('The Bowl');
     expect(await page.evaluate(() => window.game!.state())).toMatchObject({
       choosing: false,
       course: 'The Hills',
@@ -609,7 +612,7 @@ test.describe('looking round', () => {
 });
 
 test.describe('golf', () => {
-  test('costs a frame inside the budget on the longest hole of the range: from its tee, in the air, and at the worst view', async ({
+  test('costs a frame inside the budget on the longest hole of the range, The Long Road: from its tee, in the air, and at the worst view', async ({
     page,
   }) => {
     test.setTimeout(120_000);
@@ -618,7 +621,7 @@ test.describe('golf', () => {
     const cost = await page.evaluate(async () => {
       const g = window.game!;
       g.chooseCourse('The Range');
-      g.startHole(2);
+      g.startHole(8);
       g.step(120);
       const tee = await g.measureFrame(60);
       // a drive in the air, the camera on it
@@ -633,7 +636,7 @@ test.describe('golf', () => {
       return { tee, air, worst };
     });
     console.log(
-      `the range: tee ${cost.tee.toFixed(2)} ms, in the air ${cost.air.toFixed(2)} ms, the worst view ${cost.worst.toFixed(2)} ms a frame`,
+      `the range, The Long Road: tee ${cost.tee.toFixed(2)} ms, in the air ${cost.air.toFixed(2)} ms, the worst view ${cost.worst.toFixed(2)} ms a frame`,
     );
     for (const [where, ms] of Object.entries(cost)) expect(ms, `${where}: inside the 5 ms budget`).toBeLessThan(5);
     expect(problems).toEqual([]);
@@ -1001,10 +1004,11 @@ test.describe('the grass', () => {
             return drawn.near + drawn.far;
           }, zoom);
           most = Math.max(most, blades);
-          // grass in view, where the hole leaves any: on a green a hundred and fifty units across, the middle and the tee
-          // have next to none in view, and it is the corner below that holds it
-          if (course !== 'The Moors')
-            expect(blades, `${course} hole ${hole + 1} at zoom ${zoom}: grass there`).toBeGreaterThan(10_000);
+          // grass in view, where the hole leaves any: at the closest zoom from the tee of a tight hole of The Moors the course
+          // fills most of the view and what is left is a few thousand blades (2,915 at the least, measured)
+          expect(blades, `${course} hole ${hole + 1} at zoom ${zoom}: grass there`).toBeGreaterThan(
+            course === 'The Moors' && zoom === 30 ? 1_000 : 10_000,
+          );
           expect(blades, `${course} hole ${hole + 1} at zoom ${zoom}: room to spare`).toBeLessThan(BLADE_ROOM * 0.85);
         }
         // the rough from just outside the rail's corner: on every hole there is grass in view there, and not too much

@@ -193,6 +193,11 @@ test.describe('what it looks like', () => {
     ['The Hills', 'The Volcano', 'volcano.png'],
     ['The Hills', 'The Bowl', 'bowl.png'],
     ['The Hills', 'Side-hill', 'side-hill.png'],
+    ['The Hills', 'The Sink', 'sink.png'],
+    ['The Hills', 'The Sunken Lane', 'sunken-lane.png'],
+    ['The Hills', 'The Hump', 'hump.png'],
+    ['The Hills', 'The Shelf', 'shelf.png'],
+    ['The Hills', 'Hill and Dale', 'hill-and-dale.png'],
   ] as const) {
     test(`${name}, from its tee`, async ({ page }) => {
       const problems = watch(page);
@@ -215,8 +220,8 @@ test.describe('what it looks like', () => {
     });
   }
 
-  // The Moors, a hole each from the middle of the way from its tee to its cup: each is many times the size of any other,
-  // more than the widest zoom takes in, so no one picture has the whole of one, and the middle is where its hazards are
+  // The Moors, a hole each from the middle of the way from its tee to its cup: tight holes, fifty to eighty units long, and
+  // the middle is where their hazards are
   for (const [i, hole] of MOORS.entries()) {
     test(`${hole.name}, hole ${i + 1} of The Moors, from the middle of the way`, async ({ page }) => {
       const problems = watch(page);
@@ -235,7 +240,7 @@ test.describe('what it looks like', () => {
     });
   }
 
-  // and the first and the last from their tees, as a player begins them: how much of a big hole is not in view
+  // and the first and the last from their tees, as a player begins them: the cup in view, from the shortest and the longest
   for (const i of [0, 8]) {
     test(`${MOORS[i].name}, hole ${i + 1} of The Moors, from its tee`, async ({ page }) => {
       const problems = watch(page);
@@ -251,7 +256,7 @@ test.describe('what it looks like', () => {
     });
   }
 
-  // The Downs, a hole each from its tee: half as long again as the others, so the whole of it is in view from further back
+  // The Downs, a hole each from the middle of it: forty to ninety units long, so the whole of the longest is in view only from far back
   for (const [i, hole] of DOWNS.entries()) {
     test(`${hole.name}, hole ${i + 1} of The Downs, from its tee`, async ({ page }) => {
       const problems = watch(page);
@@ -918,7 +923,7 @@ test.describe('what it looks like', () => {
       expect(problems).toEqual([]);
     });
 
-    test('the biggest hole of The Moors, from its tee, on a phone', async ({ page }) => {
+    test('the longest hole of The Moors, from its tee, on a phone', async ({ page }) => {
       const problems = watch(page);
       await start(page, { seed: 11, paused: true });
       await page.evaluate(() => {

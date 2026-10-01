@@ -172,7 +172,7 @@ test('a hole played out to the cup by drags, its score shown, and the next hole 
   expect(problems).toEqual([]);
 });
 
-test('a hole of The Moors, a hundred units from tee to cup, played out by drags, the camera following the ball the whole way', async ({
+test('a hole of The Moors, fifty-one units from tee to cup, played out by drags, the camera following the ball the whole way', async ({
   page,
 }) => {
   const problems = watch(page);
@@ -194,7 +194,7 @@ test('a hole of The Moors, a hundred units from tee to cup, played out by drags,
       if (phase !== 'play' || ready) break;
     }
     if ((await page.evaluate(() => window.game!.state().phase)) !== 'play') break;
-    // the camera has followed the ball a long way up the hole: it is still well on the screen a moment after it stops
+    // the camera has followed the ball up the hole: it is still well on the screen a moment after it stops
     await play(page, 40, `after stroke ${stroke}`);
     const onScreen = await page.evaluate(() => {
       const b = window.game!.ball();
@@ -207,8 +207,8 @@ test('a hole of The Moors, a hundred units from tee to cup, played out by drags,
   expect(done.phase, 'holed').toBe('done');
   expect(done.course).toBe('The Moors');
   expect(done.card.length).toBe(1);
-  // a hundred units at the putter's fifty a stroke: three at the least, and a hole of its own par or so
-  expect(strokes, 'not in one or two').toBeGreaterThanOrEqual(3);
+  // fifty-one units at the putter's fifty a stroke: two at the least, and a hole of its own par or so
+  expect(strokes, 'not in one').toBeGreaterThanOrEqual(2);
   expect(done.card[0], 'inside its limit').toBeLessThan(done.par + 5);
   await expect(page.locator('#toast')).toBeVisible();
   await expect(page.locator('#holeName')).toContainText('Wide Open');

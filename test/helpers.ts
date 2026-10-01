@@ -10,18 +10,12 @@ export const DT = 1 / 60;
 
 /**
  * The holes the slow tests that try every tile of every hole are run on: every hole of the courses drawn by hand or
- * made small, and of The Moors the smallest, the middle and the biggest. Its nine holes are one open green with other
- * things on it, and each has tiles to the thousand, so what their size costs is tried on three, and what is on them is
- * held by the tests of the generator and the course, which do try all nine. So of The Links, whose holes are
+ * made small, The Moors' nine among them (a few hundred tiles each, since they were made tight). Of The Links, whose holes are
  * twenty thousand tiles of map and eight thousand of ground each: three, the shortest, a par four and the longest, made
  * singly so that importing this does not make all nine.
  */
 export const SAMPLE_HOLES: HoleDef[] = COURSES.flatMap((c) =>
-  c.name === 'The Moors'
-    ? [c.holes[0], c.holes[4], c.holes[8]]
-    : c.name === 'The Links'
-      ? [1, 3, 6].map((i) => golfHole(LINKS_SPECS[i]))
-      : c.holes,
+  c.name === 'The Links' ? [1, 3, 6].map((i) => golfHole(LINKS_SPECS[i])) : c.holes,
 );
 
 /**

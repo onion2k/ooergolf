@@ -218,15 +218,31 @@ describe('the grass of a big hole', () => {
     );
 
   /** The fields of every hole that exists, made as the page makes them, hashed: written from the game before any coarser cell was. */
-  const GOLDEN = '47c5f0e840447698275ac03a6c4fd2cf7ee299ca39996228743521a3e96a47d8';
+  const GOLDEN = '29be30e09d95e421af49f0a82732bb8dd8d8130baeff1291ff9ac46f29aae2bf';
+  /**
+   * The five Downs that were kept when the course was made to climb (Easy Does It, Cobbles, Long Swell, Sea Legs and The
+   * Roll, the first five of the nine now), hashed apart. The hash of the nine was retired with the four that were replaced:
+   * this one was written again from the code of f25a448 for those five, in the order they stand in now, and it is
+   * the same from the code as it is now. The four made since are held as the others added are.
+   */
+  const GOLDEN_DOWNS = 'a61bbebe53d410be063a8f837c5c452be066840359b67acc7910c3489dd54214';
 
-  /** The twenty-two holes the golden was written from: the Meadow, the first four Hills and the first nine Downs. */
-  const ORIGINAL = [...COURSE, ...HILLS.slice(0, 4), ...DOWNS.slice(0, 9)];
+  /**
+   * The holes the golden was written from, in the order it was: the Meadow but for the windmill and the mill race, which
+   * were drawn again so that the cup shows, the four Hills there were (now the Hills' second, fourth, first and seventh)
+   * and five of the nine Downs there were (the first five of those now). Sixteen of the twenty-two there were.
+   */
+  const ORIGINAL = [
+    ...COURSE.filter((h) => !['Windmill', 'The Mill Race'].includes(h.name)),
+    ...['The Hollow', 'The Volcano', 'The Bowl', 'Side-hill'].map((n) => HILLS.find((h) => h.name === n)!),
+    ...DOWNS.slice(0, 5),
+  ];
   /** Every hand-drawn hole added since: held to the finest cell and to being made the same each time, not to a hash. */
   const ADDED = [...COURSE, ...HILLS, ...DOWNS].filter((h) => !ORIGINAL.includes(h));
 
   it('is the very field every hole that existed had, bit for bit, at the finest cell', () => {
     const all = createHash('sha256');
+    const downs = createHash('sha256');
     let holes = 0;
     for (const hole of ORIGINAL) {
       const layout = layoutOf(hole.map, hole.terrain);
@@ -236,11 +252,12 @@ describe('the grass of a big hole', () => {
       h.update(JSON.stringify([f.origin, f.cell, f.cols, f.rows, f.seed, f.outside, f.kinds.length]));
       h.update(Buffer.from(f.mask.buffer, f.mask.byteOffset, f.mask.byteLength));
       h.update(Buffer.from(f.heights.buffer, f.heights.byteOffset, f.heights.byteLength));
-      all.update(h.digest());
+      (DOWNS.includes(hole) ? downs : all).update(h.digest());
       holes++;
     }
-    expect(holes).toBe(22);
-    expect(all.digest('hex')).toBe(GOLDEN);
+    expect(holes).toBe(16);
+    expect(all.digest('hex'), 'the hand-drawn holes').toBe(GOLDEN);
+    expect(downs.digest('hex'), 'the Downs').toBe(GOLDEN_DOWNS);
   });
 
   it('grows the field of every hole added since at the finest cell, the same each time', () => {
