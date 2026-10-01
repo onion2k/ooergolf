@@ -16,6 +16,9 @@ export const GREEN = { steepest: 0.1 } as const;
 /** The slope, rise over run, a tile of green has to be more than for an arrow to stand on it: a hair, about a fifth of a per cent. */
 const HAIR = 0.002;
 
+/** How many arrows a hole of minigolf may be given before the field is thinned: a little over the biggest real hole's floor. */
+const ARROWS_MOST = 3000;
+
 /**
  * One arrow of the grid laid over a green: where it stands (the middle of a tile), and the slope there, rise over run, in
  * x and in y, as `slopeAt` says it: the way the ground climbs, so the ball is carried the other way.
@@ -37,7 +40,11 @@ export interface Arrow {
 export function greenArrows(layout: Layout): Arrow[] {
   const arrows: Arrow[] = [];
   const cupTile = layout.golf ? -1 : tileAt(layout, layout.cup.x, layout.cup.y);
+  // a hole of minigolf bigger than any there is (a test's hundred thousand tiles) is shown by a thinner field, every second or
+  // third tile each way, so that what it costs a frame stays what the biggest real hole's does
+  const every = layout.golf ? 1 : Math.max(1, Math.ceil(Math.sqrt((layout.cols * layout.rows) / ARROWS_MOST)));
   for (let t = 0; t < layout.cols * layout.rows; t++) {
+    if (every > 1 && ((t % layout.cols) % every || Math.floor(t / layout.cols) % every)) continue;
     const x = layout.originX + ((t % layout.cols) + 0.5) * TILE,
       y = layout.originY + (Math.floor(t / layout.cols) + 0.5) * TILE;
     if (layout.solid[t]) continue;

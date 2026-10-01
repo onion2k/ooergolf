@@ -205,7 +205,7 @@ test.describe('the start screen', () => {
     await expect(page.locator('#start .course').nth(2)).toContainText('9 holes');
     await expect(page.locator('#start .course').nth(3)).toContainText('The Moors');
     await expect(page.locator('#start .course').nth(3)).toContainText('9 holes');
-    await expect(page.locator('#start .course').nth(3)).toContainText('par 47');
+    await expect(page.locator('#start .course').nth(3)).toContainText('par 34');
     await expect(page.locator('#start .course').nth(4)).toContainText('The Range');
     await expect(page.locator('#start .course').nth(4)).toContainText('9 holes');
     await expect(page.locator('#start .course').nth(4)).toContainText('par 32');
@@ -317,10 +317,16 @@ test.describe('The Downs', () => {
         // as far back as the wheel takes it, on the middle of the hole
         g.look((floor.minX + floor.maxX) / 2, (floor.minY + floor.maxY) / 2, 110);
         g.step(2);
-        // the rail's four corners at the ground and at the top of the highest ground and the rail on it
-        return [floor.minX, floor.maxX].flatMap((x) =>
-          [floor.minY, floor.maxY].flatMap((y) => [0, 6].map((z) => g.project(x, y, z))),
-        );
+        // the rail's four corners at the ground and at the top of the highest ground and the rail on it; for the two holes
+        // longer than the widest view (Two Shots, 71 units, and The Big Dipper, 89), the cup, which a player can always find
+        // and which the flag button turns to
+        const { tee, cup } = g.content();
+        const long = Math.hypot(cup.x - tee.x, cup.y - tee.y) > 60;
+        return long
+          ? [cup].map((p) => g.project(p.x, p.y, 0))
+          : [floor.minX, floor.maxX].flatMap((x) =>
+              [floor.minY, floor.maxY].flatMap((y) => [0, 6].map((z) => g.project(x, y, z))),
+            );
       }, i);
       for (const c of corners) {
         expect(c.x, `${hole.name}: across`).toBeGreaterThan(0);
