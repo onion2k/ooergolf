@@ -115,6 +115,8 @@ export class Previewer {
   /** The roll of the last putt tried, a result of its own so that trying a putt never writes over a flight: made once, written over. */
   readonly rolled = new Preview();
   private readonly rehearsal: Game;
+  /** The game played, whose putter in the shop's hand a roll on minigolf is struck with. */
+  private readonly played: Game;
   /** What the rehearsal told of the shot in hand. */
   /** Whether the rehearsal is rolling a putt, whose knocks on the ground are the ball's own and not a flight's. */
   private rolling = false;
@@ -153,6 +155,7 @@ export class Previewer {
           this.result.knockedAt(x, y, this.rehearsal.world.z[this.rehearsal.ball]);
       },
     };
+    this.played = game;
     this.rehearsal = game.rehearsal(events);
   }
 
@@ -213,6 +216,8 @@ export class Previewer {
     this.rolling = true;
     g.trial(from.x, from.y);
     g.pick(club.id);
+    // a hole of minigolf is putted with the shop's putter, which the rehearsal has its own save for: the one in hand now
+    if (!g.layout.golf) g.progress.save.club = this.played.progress.save.club;
     g.setShape(0);
     g.setSpin(0);
     if (!g.shoot(angle, power)) return p;

@@ -20,7 +20,7 @@ import { MATERIAL_STRIDE, PATTERN_STRIDE } from 'artshape-render/game/renderer';
 import type { Mesh } from 'artshape-render/mesh/types';
 import { BALL, BUMPER, KIND_RADIUS, TILE, WATER_LEVEL, heightAt, slopeInto, tileAt, type Layout } from './arena';
 import { CUP } from './course';
-import { GREEN, greenArrows } from './green';
+import { GREEN, greenArrows, leansOnMinigolf } from './green';
 import { place, placeOnSlope } from './matrix';
 import { ball, plane } from './meshes';
 import {
@@ -226,7 +226,7 @@ export interface ArrowMark {
 /**
  * The arrows over the green of a golf hole, each worked out once for the hole: pointing the way the ground carries a ball
  * (against the slope `greenArrows` holds), as long as the ground is steep, and lifted off the turf far enough that no
- * edge of it is in a rise. None for a level green or a hole of minigolf.
+ * edge of it is in a rise. None for a level green, and for a hole of minigolf that is level; one for each tile of floor that leans on one that is not.
  */
 export function arrowMarks(layout: Layout): ArrowMark[] {
   return greenArrows(layout).map((a) => {
@@ -735,12 +735,17 @@ export class Scene {
       out.push({ mesh: markMesh(), matrices, count: 0, albedo: [mr, mg, mb], roughness: mrough });
       this.shotGroups(layout, out);
       this.arrowGroups(layout, out);
+    } else if (layout && leansOnMinigolf(layout)) {
+      // a hole of minigolf whose ground leans shows its break as golf's green does: the putt's roll and the arrows. A level
+      // hole has neither, and the groups it always had
+      this.shotGroups(layout, out);
+      this.arrowGroups(layout, out);
     }
     return out;
   }
 
   /**
-   * The arrows over a golf hole's green, placed once when the hole begins and shown by their count, so a frame writes
+   * The arrows over a golf hole's green, or a leaning hole of minigolf's floor, placed once when the hole begins and shown by their count, so a frame writes
    * nothing but how many: none at all, and no group, on a hole whose green is level. They are the last group.
    */
   private arrowGroups(layout: Layout, out: GameGroup[]) {

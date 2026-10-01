@@ -9,7 +9,7 @@ import { createContext } from 'artshape-render/gpu/context';
 import { LightPool } from 'artshape-render/game/lights';
 import { GameRenderer, antialiasFor } from 'artshape-render/game/renderer';
 import { BALL, HARDEST_SHOT, KIND_RADIUS, heightAt, lieAt, onSand, rollsFor } from './arena';
-import { BAG, carryOf } from './bag';
+import { BAG, PUTTER, carryOf } from './bag';
 import { aimView, markScale } from './aimview';
 import { CameraRig, LEAD, TILT, VIEW, catchUp, facing, tallOf } from './camera';
 import { CLUBS } from './clubs';
@@ -20,7 +20,7 @@ import { Game, type GameEvents } from './game';
 import { Hud } from './hud';
 import { mapInto, mapSize, paintMap, type MapSize } from './holemap';
 import { Previewer, type Preview } from './preview';
-import { breakOf } from './green';
+import { breakOf, leansOnMinigolf } from './green';
 import { greensText, landingText, pinReadout, pinText, puttText, windArrow } from './readout';
 import { LIE } from './surfaces';
 import { windReach } from './shaping';
@@ -191,6 +191,8 @@ async function main() {
   let aimedFor = '';
   /** The previews of this golf hole's shots, worked out in a rehearsal of it: none on a hole of minigolf. */
   let previewer: Previewer | null = null;
+  /** Whether the hole being played is a hole of minigolf whose ground leans, which shows its break as golf's green does: the arrows, the putt's roll and the break in words. */
+  let leans = false;
   /** The shot the preview was last worked out for, so it is worked out again only when the aim, the club or the ball changes; and whether one is shown. */
   const previewed = { x: NaN, y: NaN, angle: NaN, power: NaN, club: '', shape: NaN, spin: NaN };
   let previewShown = false;
@@ -280,7 +282,8 @@ async function main() {
       if (layout.golf) aimFor(!looked);
       looked = true;
       // the preview of this hole's shots is worked out in a rehearsal of it, made once here and let go with the hole
-      previewer = layout.golf ? new Previewer(game) : null;
+      leans = leansOnMinigolf(layout);
+      previewer = layout.golf || leans ? new Previewer(game) : null;
       previewed.club = '';
       previewShown = false;
       shownPreview = null;
@@ -567,6 +570,48 @@ async function main() {
     hud.drawMap();
   }
 
+  /**
+   * What a hole of minigolf whose ground leans shows of the putt: the roll the drag would make, drawn along the ground as
+   * golf's putt is, worked out again only when the aim or the ball changes; and, while the ball rests, the arrows over the
+   * floor and the break in words, worked out once for the ball where it lies. Nothing of the golf the rest of the page shows.
+   */
+  function aimOnSlope(aimed: { angle: number; power: number } | null) {
+    const { world, ball, layout } = played;
+    const x = world.x[ball],
+      y = world.y[ball];
+    if (aimed && previewer) {
+      if (
+        previewed.x !== x ||
+        previewed.y !== y ||
+        previewed.angle !== aimed.angle ||
+        previewed.power !== aimed.power
+      ) {
+        Object.assign(previewed, { x, y, angle: aimed.angle, power: aimed.power, club: PUTTER.id });
+        previewer.roll({ x, y }, PUTTER, aimed.angle, aimed.power);
+      }
+      shownPreview = previewer.rolled;
+      scene.setShot(shownPreview, markScale(Math.min(rig.distance * tallOf(aspect), VIEW.golfFar)));
+      previewShown = true;
+    } else if (previewShown) {
+      shownPreview = null;
+      scene.setShot(null);
+      previewed.club = '';
+      previewShown = false;
+    }
+    const resting = played.ready && played.phase === 'play';
+    scene.setArrows(resting);
+    if (resting) {
+      if (putted.x !== x || putted.y !== y) {
+        putted.x = x;
+        putted.y = y;
+        hud.setPutt(puttText(breakOf(layout, x, y)));
+      }
+    } else if (!Number.isNaN(putted.x)) {
+      putted.x = NaN;
+      hud.setPutt(null);
+    }
+  }
+
   function upload() {
     const { world, ball } = played;
     scene.writeBall(world, ball);
@@ -591,6 +636,7 @@ async function main() {
         ? input.aim
         : null;
     const dots = played.ready && !flying ? scene.writeAim(world.x[ball], world.y[ball], input.aim, reach, played.t) : 0;
+    if (leans) aimOnSlope(played.ready ? input.aim : null);
     if (golf) {
       aimOnGolf(flying, rolling);
       // the shape and the spin the game holds, shown on their buttons whoever chose them; and the wind's arrow turned by

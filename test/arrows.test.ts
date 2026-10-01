@@ -81,12 +81,13 @@ describe('where the arrows stand and which way they point', () => {
     expect(ARROWS.longest).toBeLessThan(TILE);
   });
 
-  it('has none on a level green, on the rough or first cut round it, or on a hole of minigolf or The Range', () => {
+  it('has none on a level green, on the rough or first cut round it, or on a level hole of minigolf or The Range', () => {
     expect(arrowMarks(LEVEL)).toEqual([]);
     const l2 = tilted(0.03);
     for (const m of arrowMarks(l2)) expect(l2.lie[tileAt(l2, m.x, m.y)]).toBe(4);
-    // every hole of the minigolf's hand-drawn courses and of The Range, which has no contour
-    for (const course of COURSES.filter((c) => ['The Meadow', 'The Hills', 'The Downs', 'The Range'].includes(c.name)))
+    // every hole of The Meadow, which is level, and of The Range, which has no contour; the minigolf holes that slope have
+    // arrows on their floor (test/slope-aids.test.ts)
+    for (const course of COURSES.filter((c) => ['The Meadow', 'The Range'].includes(c.name)))
       for (const h of course.holes) expect(arrowMarks(layoutOf(h.map, h.terrain)), h.name).toEqual([]);
   });
 });

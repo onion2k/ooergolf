@@ -7,7 +7,7 @@
  * physics changes and the tests that play the break in the game's own rehearsals say so. Without it a break would be a
  * number the page drew and nobody could trust.
  */
-import { PHYSICS, TILE, heightAt, lieAt, slopeAt, slopeInto, type Layout } from './arena';
+import { PHYSICS, TILE, heightAt, lieAt, slopeAt, slopeInto, tileAt, type Layout } from './arena';
 import { GREENS, LIE, rollOf } from './surfaces';
 
 /** The steepest a contoured green is, as a slope (rise over run): 10 per cent, at a contour of one. A green's tilt is most of it; at a 3-yard cup and a 2-yard ball a break under the cup's radius is lost in the cup, and 5 per cent was. */
@@ -28,20 +28,29 @@ export interface Arrow {
 }
 
 /**
- * The arrows over the green of a golf hole: one for each tile of putting green whose slope is more than a hair, none for
- * a level one or a hole of minigolf. Worked out once for a hole.
+ * The arrows over the ground of a hole that leans, worked out once for a hole. On a golf hole, one for each tile of putting
+ * green whose slope is more than a hair. On a hole of minigolf, whose whole floor is its green, one for each tile of floor
+ * (not rail, not water, and not the cup's own tile, which is a hole) whose slope is more than a hair: so at most as many as
+ * the floor has tiles, a couple of thousand on the biggest hole there is, and none at all on a level hole, which reads and
+ * looks as it always did.
  */
 export function greenArrows(layout: Layout): Arrow[] {
   const arrows: Arrow[] = [];
-  if (!layout.golf) return arrows;
+  const cupTile = layout.golf ? -1 : tileAt(layout, layout.cup.x, layout.cup.y);
   for (let t = 0; t < layout.cols * layout.rows; t++) {
     const x = layout.originX + ((t % layout.cols) + 0.5) * TILE,
       y = layout.originY + (Math.floor(t / layout.cols) + 0.5) * TILE;
-    if (layout.solid[t] || lieAt(layout, x, y) !== LIE.green) continue;
+    if (layout.solid[t]) continue;
+    if (layout.golf ? lieAt(layout, x, y) !== LIE.green : layout.water[t] || t === cupTile) continue;
     const [slopeX, slopeY] = slopeAt(layout, x, y);
     if (Math.hypot(slopeX, slopeY) > HAIR) arrows.push({ x, y, slopeX, slopeY });
   }
   return arrows;
+}
+
+/** Whether a hole of minigolf has ground that leans, so that it shows the break as golf does: false for a golf hole, which always does, and for every level hole. */
+export function leansOnMinigolf(layout: Layout): boolean {
+  return !layout.golf && greenArrows(layout).length > 0;
 }
 
 /** What a putt from (x, y) to the cup will do: how far across its line it breaks, and how much it climbs. */
@@ -200,6 +209,9 @@ export function puttFrom(layout: Layout, x: number, y: number, greens: number = 
   }
   if (!best.found) return { ...none, work };
   const aimed = wrap(best.heading - toCup);
+  // aimed more than half a right angle round (the aim point then further to the side than the cup is far) is no putt's break,
+  // but a hill too steep for the putt to be worked out: none is said
+  if (Math.abs(aimed) > Math.PI / 4) return { ...none, work };
   // aimed that far round, the aim point at the cup's distance is that far to the side of the cup; to the right is negative round
   const across = -length * Math.tan(Math.max(-1.2, Math.min(1.2, aimed)));
   if (!Number.isFinite(across) || !Number.isFinite(best.speed)) return { ...none, work };

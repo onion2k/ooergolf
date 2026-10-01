@@ -56,7 +56,7 @@ import { BAG, carrying, type BagClub } from './bag';
 import { CLUBS } from './clubs';
 import { LIMIT_OVER_PAR, fastest, type Game } from './game';
 import type { Preview } from './preview';
-import { GREEN, breakOf, greenArrows, type Arrow, type Break } from './green';
+import { GREEN, breakOf, greenArrows, leansOnMinigolf, type Arrow, type Break } from './green';
 import { GREENS, LANDING, LIE, SURFACES } from './surfaces';
 import { WIND, windPush, windReach } from './shaping';
 import { TREE, insideCanopy } from './trees';
@@ -153,19 +153,21 @@ export function groundProblems(layout: Layout, { slope: leans = true }: { slope?
 
 /**
  * What is wrong with the arrows laid over a green (the hole's own, as `greenArrows` says them, unless given): each is
- * numbers, stands on a tile of putting green, and there are no more of them than the green has tiles.
+ * numbers, stands on a tile of putting green (on a hole of minigolf, a tile of its floor: not rail and not water), and there
+ * are no more of them than the green has tiles.
  */
 export function arrowProblems(layout: Layout, arrows: readonly Arrow[] = greenArrows(layout)): string[] {
   const out: string[] = [];
   let tiles = 0;
+  const onGreen = (t: number, x: number, y: number) =>
+    !layout.solid[t] && (layout.golf ? lieAt(layout, x, y) === LIE.green : !layout.water[t]);
   for (let t = 0; t < layout.cols * layout.rows; t++)
     if (
-      !layout.solid[t] &&
-      lieAt(
-        layout,
+      onGreen(
+        t,
         layout.originX + ((t % layout.cols) + 0.5) * TILE,
         layout.originY + (Math.floor(t / layout.cols) + 0.5) * TILE,
-      ) === LIE.green
+      )
     )
       tiles++;
   for (const a of arrows) {
@@ -174,12 +176,17 @@ export function arrowProblems(layout: Layout, arrows: readonly Arrow[] = greenAr
       continue;
     }
     const t = tileAt(layout, a.x, a.y);
-    if (t < 0 || layout.solid[t] || lieAt(layout, a.x, a.y) !== LIE.green)
-      out.push(`an arrow at ${a.x.toFixed(1)},${a.y.toFixed(1)} is not on the putting green`);
+    if (t < 0 || !onGreen(t, a.x, a.y))
+      out.push(
+        `an arrow at ${a.x.toFixed(1)},${a.y.toFixed(1)} is not on the ${layout.golf ? 'putting green' : 'floor'}`,
+      );
   }
   if (arrows.length > tiles) out.push(`${arrows.length} arrows, more arrows than the green has tiles, ${tiles}`);
   return out;
 }
+
+/** The farthest a putt on the minigolf green is held to the break's rule, in units: what the starting putter rolls on the level. Past it a hill can ask for an aim that is no putt's (the model gives up at a right angle). */
+const PUTTABLE = 50;
 
 /**
  * What is wrong with the break a player is shown for the putt from where the ball lies (or the one given): it is numbers,
@@ -188,14 +195,16 @@ export function arrowProblems(layout: Layout, arrows: readonly Arrow[] = greenAr
 export function breakProblems(game: Game, given?: Break): string[] {
   const out: string[] = [];
   const { world, ball, layout } = game;
-  if (!layout.golf || !world.alive[ball]) return out;
+  if (!world.alive[ball]) return out;
   const x = world.x[ball],
     y = world.y[ball];
   const b = given ?? breakOf(layout, x, y, game.def.greens);
   if (!Number.isFinite(b.across)) out.push(`the break's across is ${b.across}`);
   if (!Number.isFinite(b.rise)) out.push(`the break's rise is ${b.rise}`);
   const far = Math.hypot(layout.cup.x - x, layout.cup.y - y);
-  if (Number.isFinite(b.across) && Math.abs(b.across) > far + 1e-6)
+  // a putt of minigolf past what a putter rolls is not one anyone makes, and what it breaks by on a hill is not held to the
+  // cup's distance
+  if (Number.isFinite(b.across) && Math.abs(b.across) > far + 1e-6 && (layout.golf || far <= PUTTABLE))
     out.push(`the break is ${b.across.toFixed(2)} across, further than the cup is, ${far.toFixed(2)}`);
   return out;
 }
@@ -257,7 +266,14 @@ export function checkInvariants(game: Game): string[] {
   if (layout.golf) {
     report('the ground', [...groundProblems(layout, { slope: greens !== undefined }), ...arrowProblems(layout)]);
     report('the break', breakProblems(game));
-  } else report('the ground', groundProblems(layout));
+  } else {
+    report('the ground', groundProblems(layout));
+    // a hole of minigolf whose ground leans shows the arrows and the break golf's green does, and is held to the same
+    if (leansOnMinigolf(layout)) {
+      report('the ground', arrowProblems(layout));
+      report('the break', breakProblems(game));
+    }
+  }
 
   const { ball, strokes, phase, hole, course, card } = game;
   if (!Number.isInteger(hole) || hole < 0 || hole >= course.length) out.push(`the hole is ${hole}`);

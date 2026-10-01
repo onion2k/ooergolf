@@ -38,7 +38,7 @@ import {
   viewProblems,
   TURN_TIME,
 } from '../src/invariants';
-import { breakOf, greenArrows } from '../src/green';
+import { breakOf, greenArrows, leansOnMinigolf } from '../src/green';
 import { golfHole } from '../src/golf';
 import { LINKS_SPECS } from '../src/links';
 import { Previewer } from '../src/preview';
@@ -244,7 +244,8 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
     const read = () => {
       // a player reading a green before a putt: the break from where the ball lies and the arrows over the green, which
       // are looked at and change nothing, draw none of the game's chance and are finite whatever the ball's lie
-      if (!game.layout.golf || !game.ready) return;
+      // on golf, and on a hole of minigolf whose ground leans, which shows its break the same way
+      if (!(game.layout.golf || leansOnMinigolf(game.layout)) || !game.ready) return;
       const { world, ball, layout } = game;
       const digest = JSON.stringify([
         game.t,
