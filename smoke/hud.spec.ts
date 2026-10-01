@@ -478,6 +478,14 @@ test.describe('motion', () => {
  * screen, the card and the shop. A short screen asks for less of the playfield than a tall one has to spare.
  */
 const PHONES = [
+  ['280 by 560', 280, 560],
+  ['300 by 640', 300, 640],
+  ['320 by 568', 320, 568],
+  ['340 by 700', 340, 700],
+  ['560 by 280', 560, 280],
+  ['568 by 320', 568, 320],
+  ['580 by 290', 580, 290],
+  ['640 by 300', 640, 300],
   ['360 by 640', 360, 640],
   ['375 by 667', 375, 667],
   ['390 by 844', 390, 844],
@@ -513,7 +521,7 @@ async function chrome(page: Page) {
       const b = el.getBoundingClientRect();
       rects[id] = { x: b.x, y: b.y, width: b.width, height: b.height };
     }
-    return { rects, width: innerWidth, height: innerHeight };
+    return { rects, width: innerWidth, height: innerHeight, air: 0 };
   });
 }
 
@@ -533,8 +541,8 @@ function crowding(c: Awaited<ReturnType<typeof chrome>>): string[] {
         b = c.rects[names[j]];
       const gapX = Math.max(b.x - (a.x + a.width), a.x - (b.x + b.width));
       const gapY = Math.max(b.y - (a.y + a.height), a.y - (b.y + b.height));
-      if (Math.max(gapX, gapY) < AIR)
-        out.push(`#${names[i]} (${at(a)}) and #${names[j]} (${at(b)}) are less than ${AIR}px apart`);
+      if (Math.max(gapX, gapY) < c.air)
+        out.push(`#${names[i]} (${at(a)}) and #${names[j]} (${at(b)}) are less than ${c.air.toFixed(1)}px apart`);
     }
   return out;
 }
@@ -560,6 +568,7 @@ for (const [label, width, height] of PHONES) {
         });
         const c = await chrome(page);
         const r = await read(page);
+        c.air = AIR * r.ui;
         expect.soft(crowding(c), `${what}: crowding`).toEqual([]);
         expect.soft(r.outside, `${what}: past the screen`).toEqual([]);
         expect(r.scrollWidth, `${what}: scrolls sideways`).toBeLessThanOrEqual(width);
@@ -637,7 +646,9 @@ for (const [label, width, height] of PHONES) {
       // the switch stands under the coins and the shop, at the right edge, and at least a pillow of air from the purse
       const sw = golf.rects.viewMode,
         pu = golf.rects.purse;
-      expect(sw.y - (pu.y + pu.height), 'the switch under the purse').toBeGreaterThanOrEqual(AIR);
+      expect(sw.y - (pu.y + pu.height), 'the switch under the purse').toBeGreaterThanOrEqual(
+        AIR * (await read(page)).ui,
+      );
       expect(width - (sw.x + sw.width), 'the switch and the purse share the right edge').toBeCloseTo(
         width - (pu.x + pu.width),
         0,

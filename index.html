@@ -130,6 +130,15 @@
       sans-serif;
     color: var(--ink);
   }
+  /*
+   * everything over the course is scaled down by --ui on a screen too small for it (the page sets it from the screen's size,
+   * and it is one, so no change at all, on any screen the panels were laid out for): zoom scales every length in the
+   * panel, its offsets from the screen's edges too, so it is laid out as for a screen 1/--ui times the size
+   */
+  #top,
+  body > .panel {
+    zoom: var(--ui, 1);
+  }
   #stage {
     position: fixed;
     inset: 0;
@@ -478,7 +487,7 @@
     top: 20%;
     left: 50%;
     width: max-content;
-    max-width: calc(100vw - 32px);
+    max-width: calc(100vw / var(--ui, 1) - 32px);
     padding: 6px 30px 10px;
     font-size: clamp(38px, 10vw, 64px);
     font-weight: 900;
@@ -578,7 +587,7 @@
   #card {
     --edge: var(--leaf);
     --lip: var(--leaf-deep);
-    width: min(380px, calc(100vw - 32px));
+    width: min(380px, calc(100vw / var(--ui, 1) - 32px));
   }
   #card table {
     width: 100%;
@@ -659,7 +668,7 @@
   #shop {
     --edge: var(--grape);
     --lip: var(--grape-deep);
-    width: min(420px, calc(100vw - 32px));
+    width: min(420px, calc(100vw / var(--ui, 1) - 32px));
   }
   #shop p {
     margin: 0 0 8px;
@@ -709,7 +718,7 @@
   #start {
     --edge: var(--sky);
     --lip: var(--sky-deep);
-    width: min(560px, calc(100vw - 32px));
+    width: min(560px, calc(100vw / var(--ui, 1) - 32px));
     padding: 22px 22px 26px;
     text-align: center;
   }
@@ -983,7 +992,7 @@
     flex-direction: column;
     align-items: center;
     gap: 4px;
-    max-width: calc(100vw - 32px);
+    max-width: calc(100vw / var(--ui, 1) - 32px);
     padding: 4px 6px 6px;
     border-radius: 24px;
     transform-origin: bottom center;

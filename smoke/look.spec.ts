@@ -1217,6 +1217,31 @@ test.describe('the flag button', () => {
     });
   });
 
+  // a phone with its display size or its font turned up has a CSS viewport far smaller than the panels were laid out for, and
+  // they are scaled down to it (`--ui`): the whole layout, in the smaller screen
+  test.describe('on a small screen', () => {
+    for (const [name, width, height] of [
+      ['upright', 300, 640],
+      ['on its side', 580, 290],
+    ] as const)
+      test(`a hole of The Links aimed, ${name}, at ${width} by ${height}: everything over the course scaled to fit`, async ({
+        browser,
+      }) => {
+        const context = await browser.newContext({ viewport: { width, height }, hasTouch: true, isMobile: true });
+        const page = await context.newPage();
+        const problems = watch(page);
+        await start(page, { seed: 11, paused: true });
+        await page.evaluate(() => {
+          window.game!.chooseCourse('The Links');
+          window.game!.startHole(2);
+          window.game!.step(300);
+        });
+        await expect(page).toHaveScreenshot(`small-${width}x${height}.png`, TOLERANCE);
+        expect(problems).toEqual([]);
+        await context.close();
+      });
+  });
+
   test('a hole whose cup is off to one side, from the ball, and after the flag button has turned the camera to face it', async ({
     page,
   }) => {

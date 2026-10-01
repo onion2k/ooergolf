@@ -21,10 +21,12 @@ export interface Reading {
   texts: { text: string; ratio: number; colour: string; behind: string }[];
   /** Anything up that reaches past a side of the screen, and how far. */
   outside: string[];
-  /** Each button that is up, and how high it is. */
+  /** Each button that is up, and how high it is in the panel's own pixels: on a screen too small for the panels they are scaled by `ui`, so a button is a thumb when this is, however small it is drawn. */
   buttons: { text: string; height: number }[];
   /** The panels that are up, by id. */
   panels: string[];
+  /** How much the panels are scaled down on this screen: one on every screen they were laid out for. */
+  ui: number;
   /** How wide the page scrolls. */
   scrollWidth: number;
 }
@@ -70,7 +72,9 @@ export function read(page: Page): Promise<Reading> {
     const up = Array.from(document.querySelectorAll<HTMLElement>('.panel')).filter((p) =>
       p.checkVisibility({ visibilityProperty: true }),
     );
+    const ui = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--ui')) || 1;
     const reading: Reading = {
+      ui,
       texts: [],
       outside: [],
       buttons: [],
@@ -95,7 +99,7 @@ export function read(page: Page): Promise<Reading> {
             `${el.tagName.toLowerCase()}${el.id ? `#${el.id}` : ''} "${el.textContent.trim().slice(0, 30)}" from ${Math.round(box.left)} to ${Math.round(box.right)} of ${innerWidth}`,
           );
         if (el instanceof HTMLButtonElement)
-          reading.buttons.push({ text: el.textContent.trim(), height: Math.round(box.height * 10) / 10 });
+          reading.buttons.push({ text: el.textContent.trim(), height: Math.round((box.height / ui) * 10) / 10 });
         const own = Array.from(el.childNodes)
           .filter((n) => n.nodeType === Node.TEXT_NODE)
           .map((n) => n.textContent ?? '')

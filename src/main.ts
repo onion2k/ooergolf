@@ -18,6 +18,7 @@ import { frameCost } from './frame-cost';
 import { COURSES, CUP } from './course';
 import { Game, type GameEvents } from './game';
 import { Hud } from './hud';
+import { uiScale } from './uiscale';
 import { mapInto, mapSize, paintMap, type MapSize } from './holemap';
 import { Previewer, type Preview } from './preview';
 import { breakOf, leansOnMinigolf } from './green';
@@ -408,6 +409,8 @@ async function main() {
     canvas.width = width;
     canvas.height = height;
     cam.aspect = aspect = width / height;
+    // the words over the course are laid out for a screen of a size and shrunk to a smaller one
+    document.documentElement.style.setProperty('--ui', String(uiScale(innerWidth, innerHeight)));
     rig.setScreen(aspect);
     // a screen of another shape stands the camera at another distance: the view is worked out again
     aimedFor = '';
