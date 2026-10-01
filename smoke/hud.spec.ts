@@ -35,6 +35,24 @@ for (const [where, device] of [
   test.describe(where, () => {
     test.use(device);
 
+    test('the start screen holds its four minigolf and two golf courses without scrolling, the colours going round the cards', async ({
+      page,
+    }) => {
+      const problems = watch(page);
+      await start(page, { seed: 11, paused: true, screen: true });
+      const r = await page.evaluate(() => {
+        const panel = document.querySelector<HTMLElement>('#start')!;
+        const faces = Array.from(document.querySelectorAll<HTMLElement>('#courses .course')).map(
+          (c) => getComputedStyle(c).getPropertyValue('--face').trim() || getComputedStyle(c).backgroundColor,
+        );
+        return { fits: panel.scrollHeight <= panel.clientHeight, faces };
+      });
+      expect(r.fits, 'no scrolling in the start screen').toBe(true);
+      // six cards, six colours: a heading among them must not shift the cycle
+      expect(new Set(r.faces).size, 'each card its own colour').toBe(6);
+      expect(problems).toEqual([]);
+    });
+
     test('every text is clear against its panel and every button is a thumb high, on every screen', async ({
       page,
     }) => {

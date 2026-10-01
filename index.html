@@ -731,6 +731,21 @@
     grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
     gap: 18px 16px;
   }
+  /* a heading for each kind of game runs across the grid; the cards count among the buttons only (nth-of-type), so
+     the colours go round the courses as they did before there were headings */
+  #courses h2 {
+    grid-column: 1 / -1;
+    margin: 0;
+    font-size: 15px;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    text-align: left;
+    color: var(--ink-soft);
+  }
+  #courses h2:not(:first-child) {
+    margin-top: 6px;
+  }
   /* a card for each course, a colour each, striped as a mown green is */
   #courses .course {
     --face: var(--leaf);
@@ -750,23 +765,23 @@
       0 6px 0 var(--deep),
       0 12px 20px var(--shade);
   }
-  #courses .course:nth-child(6n + 2) {
+  #courses .course:nth-of-type(6n + 2) {
     --face: var(--orange);
     --deep: var(--orange-deep);
   }
-  #courses .course:nth-child(6n + 3) {
+  #courses .course:nth-of-type(6n + 3) {
     --face: var(--sky-face);
     --deep: var(--sky-deep);
   }
-  #courses .course:nth-child(6n + 4) {
+  #courses .course:nth-of-type(6n + 4) {
     --face: var(--grape);
     --deep: var(--grape-deep);
   }
-  #courses .course:nth-child(6n + 5) {
+  #courses .course:nth-of-type(6n + 5) {
     --face: var(--rose);
     --deep: var(--rose-deep);
   }
-  #courses .course:nth-child(6n + 6) {
+  #courses .course:nth-of-type(6n + 6) {
     --face: var(--teal);
     --deep: var(--teal-deep);
   }
@@ -833,6 +848,13 @@
     /* six cards fit a tall phone's screen at this height, and a short one scrolls */
     #courses {
       gap: 12px 16px;
+    }
+    #courses h2 {
+      font-size: 13px;
+      margin-top: -4px;
+    }
+    #courses h2:not(:first-child) {
+      margin-top: 0;
     }
     #courses .course {
       min-height: 88px;

@@ -102,7 +102,7 @@ async function main() {
   let courseName = COURSES[0].name;
   let choosing = true;
   // what the start screen says of each course, which is known without making a course that is made when it is chosen
-  const summaries = COURSES.map((c) => ({ name: c.name, ...c.summary }));
+  const summaries = COURSES.map((c) => ({ name: c.name, ...c.summary, golf: c.golf }));
   const hud = new Hud(
     {
       again: () => game?.newRound(),

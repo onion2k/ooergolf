@@ -485,27 +485,39 @@ export class Hud {
 
   /**
    * The start screen, over the course, with a card for each course: its name,
-   * how many holes and its par. Everything else over the course is put away
-   * while it is up; a click on a card goes back through `choose`.
+   * how many holes and its par, under a heading for each kind of game (Minigolf,
+   * then Golf), since the two are played so differently and a player chooses
+   * between them first. A kind with no course has no heading. Everything else over
+   * the course is put away while it is up; a click on a card goes back through `choose`.
    */
-  showStart(courses: readonly { name: string; holes: number; par: number }[]) {
-    this.courseList.replaceChildren(
-      ...courses.map((c) => {
-        const card = document.createElement('button');
-        card.className = 'course';
-        const name = document.createElement('b');
-        name.textContent = c.name;
-        const about = document.createElement('small');
-        for (const text of [`${c.holes} holes`, `par ${c.par}`]) {
-          const pill = document.createElement('span');
-          pill.textContent = text;
-          about.append(pill);
-        }
-        card.append(name, about);
-        card.addEventListener('click', () => this.handlers.choose(c.name));
-        return card;
-      }),
-    );
+  showStart(courses: readonly { name: string; holes: number; par: number; golf?: boolean }[]) {
+    const cardOf = (c: { name: string; holes: number; par: number }) => {
+      const card = document.createElement('button');
+      card.className = 'course';
+      const name = document.createElement('b');
+      name.textContent = c.name;
+      const about = document.createElement('small');
+      for (const text of [`${c.holes} holes`, `par ${c.par}`]) {
+        const pill = document.createElement('span');
+        pill.textContent = text;
+        about.append(pill);
+      }
+      card.append(name, about);
+      card.addEventListener('click', () => this.handlers.choose(c.name));
+      return card;
+    };
+    const parts: HTMLElement[] = [];
+    for (const [title, golf] of [
+      ['Minigolf', false],
+      ['Golf', true],
+    ] as const) {
+      const of = courses.filter((c) => !!c.golf === golf);
+      if (!of.length) continue;
+      const heading = document.createElement('h2');
+      heading.textContent = title;
+      parts.push(heading, ...of.map(cardOf));
+    }
+    this.courseList.replaceChildren(...parts);
     for (const el of [
       this.panel,
       this.purse,

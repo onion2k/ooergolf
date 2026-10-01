@@ -180,6 +180,24 @@ test.describe('the start screen', () => {
     await start(page, { seed: 1, paused: true, screen: true });
     await expect(page.locator('#start')).toBeVisible();
     await expect(page.locator('#start .course')).toHaveCount(6);
+    // the courses sit under two headings, minigolf then golf, the Meadow first of all
+    await expect(page.locator('#start h2')).toHaveText(['Minigolf', 'Golf']);
+    expect(
+      await page.evaluate(() =>
+        Array.from(document.querySelectorAll('#courses > *')).map(
+          (e) => `${e.tagName}:${e.textContent.split(/\d/)[0]}`,
+        ),
+      ),
+    ).toEqual([
+      'H2:Minigolf',
+      'BUTTON:The Meadow',
+      'BUTTON:The Hills',
+      'BUTTON:The Downs',
+      'BUTTON:The Moors',
+      'H2:Golf',
+      'BUTTON:The Range',
+      'BUTTON:The Links',
+    ]);
     await expect(page.locator('#start .course').nth(2)).toContainText('The Downs');
     await expect(page.locator('#start .course').nth(2)).toContainText('9 holes');
     await expect(page.locator('#start .course').nth(3)).toContainText('The Moors');
