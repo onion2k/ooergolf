@@ -211,19 +211,28 @@ describe('what the retune did not touch', () => {
       for (let i = 0; i < s.length; i++) x = Math.imul(x ^ s.charCodeAt(i), 16777619) >>> 0;
       return x;
     };
+    // seven of The Links' maps were written again with stage 9 of the courses plan (the corners, the ponds across the line,
+    // two lengths): The Big Dogleg's and Home Stretch's are as they were, and so are The Range's
     const WAS: Record<string, number> = {
-      'The Opener': 1390258913,
-      'Water Carry': 2740761302,
-      'Long Bend': 1440155680,
-      'Tight Left': 3785091468,
-      'Island Green': 3734856994,
-      'Rushing Brook': 2350931257,
+      'The Opener': 129467283,
+      'Water Carry': 1080251253,
+      'Long Bend': 2579849166,
+      'Tight Left': 1665164726,
+      'Island Green': 3979605520,
+      'Rushing Brook': 1055624489,
       'The Big Dogleg': 3635079015,
-      'The Straight Mile': 3733726231,
+      'The Straight Mile': 2049515231,
       'Home Stretch': 3791081546,
       'Pitch and Putt': 2341210762,
       'Iron Alley': 1911647415,
       'The Long Way': 3269530478,
+      // the six appended to The Range at stage 8, held so a hazard that moves is a change that was meant
+      'Sand Trap': 3230414894,
+      'Narrow Straits': 2394408145,
+      'Over the Pond': 2029183406,
+      Gusty: 1252087741,
+      'The Corner': 560475841,
+      'The Long Road': 2869480547,
     };
     for (const h of [...links(), ...RANGE])
       expect(hash(h.map.join('\n') + JSON.stringify([h.par, null])), h.name).toBe(WAS[h.name]);

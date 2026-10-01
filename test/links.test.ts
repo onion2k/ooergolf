@@ -79,8 +79,10 @@ describe('The Links', () => {
     });
   });
 
-  it('is a hole of each of the lengths a golfer calls by a par: a three is 150 to 220 yards, a four 350 to 450, a five 500 to 600', () => {
-    const range: Record<number, [number, number]> = { 3: [150, 220], 4: [350, 450], 5: [500, 600] };
+  it('is a hole of each of the lengths a golfer calls by a par: a three is 150 to 220 yards, a four 350 to 480, a five 500 to 600', () => {
+    // a four reaches 480 only for The Straight Mile, lengthened from 440 to 475 because at 441 the autopilot took 67% of its
+    // rounds under par: it is straight and a long hitter's par four, and the four of 350 to 450 stays the bend's
+    const range: Record<number, [number, number]> = { 3: [150, 220], 4: [350, 480], 5: [500, 600] };
     LINKS_SPECS.forEach((spec) => {
       expect(spec.length, spec.name).toBeGreaterThanOrEqual(range[spec.par][0]);
       expect(spec.length, spec.name).toBeLessThanOrEqual(range[spec.par][1]);
@@ -123,6 +125,47 @@ describe('The Links', () => {
     expect(new Set(sizes).size).toBeGreaterThanOrEqual(7);
   });
 
+  it('asks what the plan for the water and the corners says: the bends turn late enough that a drive is a choice, the long and short holes are as long as they are for', () => {
+    const by = (name: string) => LINKS_SPECS.find((s) => s.name === name)!;
+    expect(by('Long Bend').corner).toBe(0.64);
+    expect(by('Tight Left').corner).toBe(0.66);
+    expect(by('The Opener').length).toBe(400);
+    expect(by('The Straight Mile').length).toBe(475);
+    // the three water holes have one pond each, across the line of play and not beside it
+    for (const name of ['Water Carry', 'Island Green', 'Rushing Brook']) {
+      expect(by(name).ponds, name).toHaveLength(1);
+      expect(by(name).ponds[0].side, name).toBe(0);
+      expect(by(name).ponds[0].size[0], name).toBeGreaterThanOrEqual(4.5);
+    }
+    // a corner is where the second leg begins: the cup is that much further across than a straight hole's, and no more
+    for (const name of ['Long Bend', 'Tight Left']) {
+      const l = layoutOf(holes[LINKS_SPECS.indexOf(by(name))].map, holes[LINKS_SPECS.indexOf(by(name))].terrain);
+      const s = by(name);
+      const f = s.corner!;
+      const turn = (Math.abs(s.bend) * Math.PI) / 180;
+      const crow = s.length * Math.hypot(f + (1 - f) * Math.cos(turn), (1 - f) * Math.sin(turn));
+      expect(Math.hypot(l.cup.x - l.tee.x, l.cup.y - l.tee.y), name).toBeCloseTo(crow, -1);
+    }
+  });
+
+  it('has a pond across the line of play on each of the holes where the water is the test, so the straight way from the tee to the cup (or its first part) wets a ball', () => {
+    for (const name of ['Water Carry', 'Island Green']) {
+      const i = LINKS_SPECS.findIndex((s) => s.name === name);
+      const l = layoutOf(holes[i].map, holes[i].terrain);
+      const len = Math.hypot(l.cup.x - l.tee.x, l.cup.y - l.tee.y);
+      let wet = 0;
+      for (let d = 0; d <= len; d += 1) {
+        const x = l.tee.x + ((l.cup.x - l.tee.x) * d) / len,
+          y = l.tee.y + ((l.cup.y - l.tee.y) * d) / len;
+        const tx = Math.floor((x - l.originX) / TILE),
+          ty = Math.floor((y - l.originY) / TILE);
+        if (l.water[ty * l.cols + tx] === 1) wet++;
+      }
+      // a pond five tiles in radius is fifteen yards to the tile and some thirty across: well over ten of the line's yards
+      expect(wet, `${name}: yards of the line that are water`).toBeGreaterThan(10);
+    }
+  });
+
   it('has hills of a height worth playing over on every hole, and none too steep for the fairway to rest a ball on', () => {
     for (const h of holes) {
       const l = layoutOf(h.map, h.terrain);
@@ -160,16 +203,18 @@ describe('The Links', () => {
 
   it('has the hills it had before it had contoured greens, from thirty-four tiles of the cup outward, to the digit', () => {
     // each hole's terrain beyond the plate the green stands on, hashed as it was on 1 October 2026 before the green was given a
-    // contour: a contour is the green's, and what was chosen by playing forty seeds and looking is the hills round it
+    // contour: a contour is the green's, and what was chosen by playing forty seeds and looking is the hills round it. Seven holes
+    // were respecified and their seeds chosen again that day (stage 9 of the courses plan: the corners, the ponds across the
+    // line and two lengths), so theirs are the hills of the new spec; The Big Dogleg's and Home Stretch's are exactly as they were
     const WAS: Record<string, number> = {
-      'The Opener': 4003916115,
-      'Water Carry': 3983871294,
-      'Long Bend': 1190595892,
-      'Tight Left': 3378659102,
-      'Island Green': 206486223,
-      'Rushing Brook': 2319811042,
+      'The Opener': 2923654288,
+      'Water Carry': 910302477,
+      'Long Bend': 3955879483,
+      'Tight Left': 1543323856,
+      'Island Green': 2381509869,
+      'Rushing Brook': 101997881,
       'The Big Dogleg': 3741846546,
-      'The Straight Mile': 3631621028,
+      'The Straight Mile': 401805934,
       'Home Stretch': 334171249,
     };
     for (const h of holes) {

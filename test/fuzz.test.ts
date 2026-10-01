@@ -70,7 +70,9 @@ describe('the fuzzer', () => {
       landed = 0,
       clubs = 0;
     const visited = new Set<string>();
-    for (const seed of [4, 9, 21, 30]) {
+    // a seed starts on the hole its number comes to over the nine, so nine in a row begin on each of them; the monkey
+    // reloads now and then, which starts a round again, and of these only 17 gets from the last hole to the card
+    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8, 9, 17]) {
       const r = fuzz(seed, 12000, RANGE);
       expect(r.failure, `seed ${seed}: ${JSON.stringify(r.failure)}`).toBe(null);
       holed += r.happened.holed || 0;
@@ -118,7 +120,7 @@ describe('the fuzzer', () => {
       holed = 0,
       landed = 0;
     const visited = new Set<string>();
-    for (const seed of [4, 9, 21, 30]) {
+    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8, 9]) {
       const r = fuzz(seed, 12000, WINDY);
       expect(r.failure, `seed ${seed}: ${JSON.stringify(r.failure)}`).toBe(null);
       aimed += r.done['aim a shot'] || 0;
@@ -205,8 +207,8 @@ describe('the fuzzer', () => {
   });
 
   it('plays The Moors at random from start to finish, every seed clean, holing out and getting round all nine', () => {
-    // holes a hundred units and more from tee to cup, where a monkey striking any way at any power is many strokes from the
-    // cup and the limit takes it up often: a longer run, and seeds that go the whole way round
+    // holes fifty to eighty units from tee to cup, with water, sand and posts on the line, where a monkey striking any way at
+    // any power is many strokes from the cup and the limit takes it up often: a longer run, and seeds that go the whole way round
     let holed = 0,
       finished = 0,
       knocked = 0,

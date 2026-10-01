@@ -177,8 +177,10 @@ describe('a game with no wind, no shape and no spin', () => {
     expect(play(25).slice(2)).toEqual([0, 0]);
   });
 
-  it('has no wind on The Range or the courses of minigolf, and a wind from the hole on The Links', () => {
-    for (const hole of [...COURSE, ...RANGE]) expect(hole.wind, hole.name).toBeUndefined();
+  it('has no wind on the courses of minigolf or on The Range but Gusty, and a wind from the hole on The Links', () => {
+    for (const hole of [...COURSE, ...RANGE.filter((h) => h.name !== 'Gusty')])
+      expect(hole.wind, hole.name).toBeUndefined();
+    expect(RANGE.find((h) => h.name === 'Gusty')!.wind, 'the one hole of The Range with a wind').toBe(8);
     const { game } = golfGame(RANGE[0]);
     expect(game.wind.speed).toBe(0);
     const links = golfHole({ ...LINKS_SPECS[0], wind: 7 });

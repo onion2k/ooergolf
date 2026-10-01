@@ -319,8 +319,9 @@ describe('The Range’s green, as it was', () => {
     expect(plan).toEqual(golfCandidates(game, game.world.x[game.ball], game.world.y[game.ball])[0]);
   });
 
-  it('plays the rounds it played: the card of each of the first three seeds is two, two and three', () => {
-    // as measured before stage 6, with the pace gate's player, shot for shot: the card of each seed
-    for (const seed of [1, 2, 3]) expect(paceRun(seed, 20, RANGE).card, `seed ${seed}`).toEqual([2, 2, 3]);
+  it('plays the rounds it played: the card of each of the first three seeds is two, two and three on the first three holes', () => {
+    // as measured before stage 6, with the pace gate's player, shot for shot: the card of each seed. The holes added to
+    // The Range after them come after them, so that chance, which runs on from hole to hole, reaches the first three as it did.
+    for (const seed of [1, 2, 3]) expect(paceRun(seed, 20, RANGE).card.slice(0, 3), `seed ${seed}`).toEqual([2, 2, 3]);
   });
 });

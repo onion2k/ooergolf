@@ -25,7 +25,8 @@ export const LINKS_SPECS: readonly GolfSpec[] = [
   {
     name: 'The Opener',
     par: 4,
-    length: 360,
+    // 400 and not 360: at 360 the driver and a chip took 96% of rounds under par and two in five holed it for an eagle
+    length: 400,
     bend: 0,
     width: 15,
     seed: 4,
@@ -44,10 +45,11 @@ export const LINKS_SPECS: readonly GolfSpec[] = [
     length: 165,
     bend: 0,
     width: 12,
-    seed: 7,
+    seed: 20,
     ...HILLS,
     bunkers: { fairway: 0, green: 3 },
-    ponds: [{ at: 0.72, side: -1, size: [3, 4] }],
+    // across the line, the carry: the pond that stood 23 yards off it was never in play (no ball lost in forty-eight rounds)
+    ponds: [{ at: 0.55, side: 0, size: [5, 6] }],
     trees: 20,
     wind: 6,
     // a short par three, whose green is a little quick and a little turned, so a ball that carries the water is not safe on it.
@@ -59,8 +61,10 @@ export const LINKS_SPECS: readonly GolfSpec[] = [
     par: 5,
     length: 520,
     bend: 30,
+    // the corner later (it was at 286 yards, the driver's own reach, and a ball out of bounds in one round in four)
+    corner: 0.64,
     width: 15,
-    seed: 15,
+    seed: 10,
     ...HILLS,
     bunkers: { fairway: 2, green: 2 },
     ponds: [{ at: 0.4, side: -1, size: [3, 4] }],
@@ -75,8 +79,10 @@ export const LINKS_SPECS: readonly GolfSpec[] = [
     par: 4,
     length: 410,
     bend: -35,
+    // the corner later, past the driver's reach from the tee: at 225 yards the driver was never used and the hole played as a five
+    corner: 0.66,
     width: 12,
-    seed: 3,
+    seed: 4,
     ...HILLS,
     bunkers: { fairway: 2, green: 2 },
     ponds: [],
@@ -92,10 +98,11 @@ export const LINKS_SPECS: readonly GolfSpec[] = [
     length: 195,
     bend: 0,
     width: 12,
-    seed: 2,
+    seed: 15,
     ...HILLS,
     bunkers: { fairway: 0, green: 3 },
-    ponds: [{ at: 0.86, side: 0, size: [3, 3.6] }],
+    // a carry to the green: the old pond was nineteen yards across in a fairway of thirty-two and a 3-wood landed beyond it
+    ponds: [{ at: 0.82, side: 0, size: [5.5, 6.5] }],
     trees: 24,
     wind: 5,
     // an island, where a ball that lands is held by a slow green with little on it: the water is the test, not the putt.
@@ -108,16 +115,14 @@ export const LINKS_SPECS: readonly GolfSpec[] = [
     length: 385,
     bend: 20,
     width: 13,
-    seed: 6,
+    seed: 9,
     ...HILLS,
     bunkers: { fairway: 1, green: 2 },
-    ponds: [
-      { at: 0.35, side: 1, size: [3, 4] },
-      { at: 0.65, side: 1, size: [3, 4] },
-    ],
+    // one pond across the second leg, where two stood twenty-seven yards to the side of the line and out of play
+    ponds: [{ at: 0.62, side: 0, size: [4.5, 5.5] }],
     trees: 50,
     wind: 8,
-    // two ponds along the side, and a green at the normal pace with a good deal of break to finish the hole's tests.
+    // water across the way, and a green at the normal pace with a good deal of break to finish the hole's tests.
     contour: 0.9,
     greens: 14,
   },
@@ -140,10 +145,11 @@ export const LINKS_SPECS: readonly GolfSpec[] = [
   {
     name: 'The Straight Mile',
     par: 4,
-    length: 440,
+    // 475 and not 440: at 441 the autopilot was under par in two rounds in three
+    length: 475,
     bend: 0,
     width: 13,
-    seed: 24,
+    seed: 1,
     ...HILLS,
     // the hills this hole was chosen with: a green that was not made level used to make the generator gentle them once (by
     // 0.93, from 0.75), and the levelled green of a contoured hole does not, so they are asked for as they were

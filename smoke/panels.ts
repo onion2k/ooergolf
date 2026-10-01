@@ -121,7 +121,7 @@ export function holeOut(page: Page) {
     const g = window.game!;
     for (let s = 0; s < 12 && g.state().phase === 'play'; s++) {
       const shot = g.suggest();
-      if (shot) g.shoot(shot.angle, shot.power);
+      if (shot) g.shoot(shot.angle, shot.power, shot.club);
       for (let f = 0; f < 900 && g.state().phase === 'play' && !g.state().ready; f++) g.step(1);
     }
     return g.state();
