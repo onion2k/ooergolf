@@ -943,6 +943,49 @@ test.describe('what it looks like', () => {
       expect(problems).toEqual([]);
     });
   });
+
+  // a phone on its side has no height to spare: the hole's words in two columns, the map and the help at the left foot,
+  // the bag in three short rows and the switch standing in a column at the right edge
+  test.describe('on a phone on its side', () => {
+    test.use({ viewport: { width: 812, height: 375 }, hasTouch: true, isMobile: true });
+
+    test('a hole of minigolf whose ground leans, on its side: the break in words and the switch in a column', async ({
+      page,
+    }) => {
+      const problems = watch(page);
+      await start(page, { seed: 11, paused: true, screen: true });
+      await page.evaluate(() => {
+        window.game!.chooseCourse('The Hills');
+        window.game!.startHole(0);
+        window.game!.step(75);
+      });
+      await expect(page).toHaveScreenshot('landscape-hills.png', TOLERANCE);
+      expect(problems).toEqual([]);
+    });
+
+    test('a full drive aimed on its side: the pin and the wind beside the strokes, the map above the help, the bag and the switch', async ({
+      page,
+    }) => {
+      const problems = watch(page);
+      await start(page, { seed: 11, paused: true });
+      await page.evaluate(() => {
+        window.game!.chooseCourse('The Links');
+        window.game!.startHole(2);
+        window.game!.step(300);
+      });
+      await pullDown(page, 1, 0, true);
+      expect((await page.evaluate(() => window.game!.motions().shot))?.end).toBe('landed');
+      await expect(page).toHaveScreenshot('landscape-links-aim.png', TOLERANCE);
+      expect(problems).toEqual([]);
+    });
+
+    test('the start screen, on its side', async ({ page }) => {
+      const problems = watch(page);
+      await start(page, { seed: 11, paused: true, screen: true });
+      await expect(page).toHaveScreenshot('landscape-start.png', TOLERANCE);
+      expect(problems).toEqual([]);
+    });
+  });
 });
 
 /**

@@ -564,6 +564,8 @@
       0 7px 0 var(--lip),
       0 18px 40px var(--shade);
     translate: -50% -50%;
+    /* over the bag and the rest of the chrome, which are later in the page and stood over the shop's button on a short phone */
+    z-index: 2;
   }
   #card h2,
   #shop h2 {
@@ -939,6 +941,10 @@
       0 0 0 var(--sky-deep);
   }
   @media (max-width: 600px) {
+    /* the map sits a little above the middle, so a short phone's bag, which is as tall as it ever is, stays a gap below it */
+    #holePanel {
+      top: 45%;
+    }
     /* the frame's cost is not shown on a phone, so the switch takes its place at the bottom */
     #viewMode {
       bottom: calc(16px + env(safe-area-inset-bottom, 0px));
@@ -1080,6 +1086,130 @@
     }
     #purse button {
       padding: 0 14px;
+    }
+  }
+  /*
+   * A phone on its side, or any window as short: under five hundred pixels high the panels are the whole of the height
+   * if they stand as they do upright, so each is given less. The hole's words go in two columns (the pin and the wind
+   * beside the strokes, the greens' speed dropped), the purse is the coins alone, the switch stands in a column at the
+   * right edge (it was a row at the bottom, where the bag has to go) and the frame's cost is away as on a phone upright,
+   * the help is a narrow chip at the left foot with the map above it, and the bag takes what is between that and the
+   * switch, in three short rows, the shape and spin a little below a thumb since they are touched once a shot and the
+   * clubs, which are touched for every one, are not. Last in the sheet, so it wins over the upright phone's rules where
+   * a landscape one is also narrow.
+   */
+  @media (max-height: 500px) {
+    #stats,
+    #purse em {
+      display: none;
+    }
+    #purse {
+      gap: 9px;
+      padding-left: 12px;
+    }
+    #purse button {
+      padding: 0 14px;
+    }
+    #strokes {
+      grid-template-columns: auto auto auto;
+      padding: 6px 14px 8px;
+    }
+    #holeName .of {
+      grid-area: 1 / 1 / 2 / 3;
+    }
+    #holeName .name {
+      grid-area: 2 / 1 / 3 / 3;
+      margin-bottom: 2px;
+    }
+    #pin {
+      grid-area: 2 / 3 / 3 / 4;
+      align-self: end;
+      margin: 0 0 2px 10px;
+    }
+    #wind {
+      grid-area: 3 / 3 / 4 / 4;
+      margin-left: 10px;
+    }
+    #greens {
+      display: none;
+    }
+    #viewMode {
+      right: calc(16px + env(safe-area-inset-right, 0px));
+      bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+      flex-direction: column;
+      border-radius: 28px;
+    }
+    /* 70 and its padding make the column 86 wide, which the bag's right edge leaves room for */
+    #viewMode button,
+    #viewMode #viewFlag {
+      min-width: 70px;
+    }
+    #help {
+      left: 16px;
+      max-width: 160px;
+      padding: 6px 12px;
+      line-height: 1.2;
+      border-radius: 20px;
+    }
+    #holePanel {
+      top: auto;
+      bottom: 84px;
+      translate: none;
+    }
+    #bag {
+      left: 184px;
+      right: calc(16px + 86px + 8px);
+      width: fit-content;
+      max-width: none;
+      margin: 0 auto;
+      translate: none;
+      gap: 3px;
+      padding: 3px 6px 5px;
+    }
+    #bagInfo {
+      font-size: 12px;
+      line-height: 1.2;
+      text-align: center;
+    }
+    #bag button {
+      min-width: 36px;
+      padding: 0 5px;
+      font-size: 14px;
+    }
+    #bagShaping button {
+      min-width: 0;
+      min-height: 36px;
+      font-size: 13px;
+    }
+    #card,
+    #shop,
+    #start {
+      padding: 12px 16px 16px;
+    }
+    #card h2,
+    #shop h2 {
+      margin-bottom: 4px;
+      font-size: 20px;
+    }
+    #card td {
+      padding: 1px 6px;
+    }
+    #start h1 {
+      font-size: 34px;
+      text-shadow: 0 3px 0 var(--sun);
+    }
+    #start p {
+      margin: 4px 0 10px;
+    }
+    #courses {
+      gap: 8px 12px;
+    }
+    #courses .course {
+      min-height: 68px;
+      padding: 8px 14px 10px;
+    }
+    .course b {
+      font-size: 20px;
     }
   }
   /* a player who has asked for less motion gets none: every panel and button is there, or gone, at once */

@@ -453,3 +453,180 @@ test.describe('motion', () => {
     expect(problems).toEqual([]);
   });
 });
+
+/**
+ * Every phone the game is held to, held upright and on its side: the panels over the course must each be whole on the
+ * screen and a few pixels from every other, on a golf hole (the most crowded: the bag with its shape and spin, the map, the
+ * pin, the wind, the greens and the switch), on a hole of minigolf whose ground leans (the break in words) and under the start
+ * screen, the card and the shop. A short screen asks for less of the playfield than a tall one has to spare.
+ */
+const PHONES = [
+  ['360 by 640', 360, 640],
+  ['375 by 667', 375, 667],
+  ['390 by 844', 390, 844],
+  ['430 by 932', 430, 932],
+  ['640 by 360', 640, 360],
+  ['740 by 360', 740, 360],
+  ['812 by 375', 812, 375],
+  ['932 by 430', 932, 430],
+] as const;
+
+/** The air between two panels, in pixels, that a thumb and an eye need to tell them apart. */
+const AIR = 4;
+
+/** What the shape and spin buttons may be on a screen too short for the bag's rows to be a thumb each. */
+const SHORT_THUMB = 36;
+
+interface Rect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** Each panel of the chrome that is up, with where it is; and the buttons and what reaches past the page. */
+async function chrome(page: Page) {
+  return page.evaluate(() => {
+    for (const a of document.getAnimations()) a.finish();
+    const ids = ['strokes', 'purse', 'holePanel', 'bag', 'viewMode', 'help', 'stats'];
+    const rects: Record<string, Rect> = {};
+    for (const id of ids) {
+      const el = document.getElementById(id)!;
+      if (!el.checkVisibility({ visibilityProperty: true })) continue;
+      const b = el.getBoundingClientRect();
+      rects[id] = { x: b.x, y: b.y, width: b.width, height: b.height };
+    }
+    return { rects, width: innerWidth, height: innerHeight };
+  });
+}
+
+/** The pairs of panels that overlap or stand closer than `AIR`, and the panels that are not wholly on the screen, in words. */
+function crowding(c: Awaited<ReturnType<typeof chrome>>): string[] {
+  const out: string[] = [];
+  const names = Object.keys(c.rects);
+  const at = (r: Rect) => `${Math.round(r.x)},${Math.round(r.y)} ${Math.round(r.width)}x${Math.round(r.height)}`;
+  for (const n of names) {
+    const r = c.rects[n];
+    if (r.x < 0 || r.y < 0 || r.x + r.width > c.width + 0.5 || r.y + r.height > c.height + 0.5)
+      out.push(`#${n} (${at(r)}) is not on the ${c.width}x${c.height} screen`);
+  }
+  for (let i = 0; i < names.length; i++)
+    for (let j = i + 1; j < names.length; j++) {
+      const a = c.rects[names[i]],
+        b = c.rects[names[j]];
+      const gapX = Math.max(b.x - (a.x + a.width), a.x - (b.x + b.width));
+      const gapY = Math.max(b.y - (a.y + a.height), a.y - (b.y + b.height));
+      if (Math.max(gapX, gapY) < AIR)
+        out.push(`#${names[i]} (${at(a)}) and #${names[j]} (${at(b)}) are less than ${AIR}px apart`);
+    }
+  return out;
+}
+
+for (const [label, width, height] of PHONES) {
+  test.describe(`on a ${label} phone`, () => {
+    test.use({ viewport: { width, height }, hasTouch: true, isMobile: true });
+    const short = height <= 500;
+    const thumbOf = (text: string) =>
+      (text.startsWith('Shape') || text.startsWith('Spin')) && short ? SHORT_THUMB : THUMB;
+
+    test('the panels are whole, apart and read well on a golf hole, on a hole of minigolf whose ground leans, and under the start screen, the card and the shop', async ({
+      page,
+    }) => {
+      const problems = watch(page);
+      await start(page, { seed: 11, paused: true, screen: true });
+      const fine = async (what: string) => {
+        const c = await chrome(page);
+        const r = await read(page);
+        expect.soft(crowding(c), `${what}: crowding`).toEqual([]);
+        expect.soft(r.outside, `${what}: past the screen`).toEqual([]);
+        expect(r.scrollWidth, `${what}: scrolls sideways`).toBeLessThanOrEqual(width);
+        expect(
+          r.texts.filter((t) => t.ratio < CONTRAST).map((t) => `"${t.text}" ${t.ratio}:1`),
+          `${what}: faint words`,
+        ).toEqual([]);
+        // a thumb high, but the shape and spin on a short screen, where three rows of thumbs are most of its height
+        expect
+          .soft(
+            r.buttons.filter((b) => b.height < thumbOf(b.text)),
+            `${what}: small buttons`,
+          )
+          .toEqual([]);
+        return c;
+      };
+      // the words and the buttons of a screen over the course, read: the start screen, the shop and the card
+      const readable = async (what: string) => {
+        const r = await read(page);
+        expect.soft(r.outside, `${what}: past the screen`).toEqual([]);
+        expect
+          .soft(
+            r.texts.filter((t) => t.ratio < CONTRAST).map((t) => `"${t.text}" ${t.ratio}:1`),
+            `${what}: faint words`,
+          )
+          .toEqual([]);
+        expect
+          .soft(
+            r.buttons.filter((b) => b.height < thumbOf(b.text)),
+            `${what}: small buttons`,
+          )
+          .toEqual([]);
+      };
+      // the start screen: whole on the screen, scrolling inside itself where it must
+      await readable('the start screen');
+      const rect = (sel: string) => page.locator(sel).evaluate((el) => el.getBoundingClientRect().toJSON() as Rect);
+      let box = await rect('#start');
+      expect(box.x, 'the start screen: left').toBeGreaterThanOrEqual(0);
+      expect(box.y, 'the start screen: top').toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width, 'the start screen: right').toBeLessThanOrEqual(width + 0.5);
+      expect(box.y + box.height, 'the start screen: bottom').toBeLessThanOrEqual(height + 0.5);
+      // minigolf on a slope: the break is drawn and told, the longest the strokes panel gets
+      await page.evaluate(() => {
+        window.game!.chooseCourse('The Hills');
+        window.game!.step(60);
+      });
+      await page.locator('#putt').evaluate((el: HTMLElement) => {
+        el.hidden = false;
+        el.textContent = 'breaks left, 14 ft uphill';
+      });
+      await fine('minigolf on a slope');
+      await page.evaluate(() => {
+        window.game!.chooseCourse('The Meadow');
+        window.game!.step(60);
+      });
+      await fine('minigolf');
+      // golf, with the longest of everything: a shape and a spin chosen, the longest words for a landing, the wind
+      await page.evaluate(() => {
+        window.game!.chooseCourse('The Links');
+        window.game!.startHole(2);
+        window.game!.step(300);
+      });
+      await page.locator('#shapeButton').click({ timeout: 5000 });
+      await page.locator('#spinButton').click({ timeout: 5000 });
+      await page
+        .locator('#bagInfo')
+        .evaluate(
+          (el: HTMLElement) => (el.textContent = 'Pitching wedge · hits a tree · lands 100 yd · putting green'),
+        );
+      const golf = await fine('golf');
+      expect(Object.keys(golf.rects), 'the golf hole shows the bag, the pin and the switch').toEqual(
+        expect.arrayContaining(['strokes', 'purse', 'bag', 'viewMode', 'help']),
+      );
+      // the shop and the card, from a hole finished
+      await page.locator('#shopOpen').click({ timeout: 5000 });
+      await readable('the shop');
+      box = await rect('#shop');
+      expect(box.x, 'the shop: left').toBeGreaterThanOrEqual(0);
+      expect(box.y, 'the shop: top').toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width, 'the shop: right').toBeLessThanOrEqual(width + 0.5);
+      expect(box.y + box.height, 'the shop: bottom').toBeLessThanOrEqual(height + 0.5);
+      await page.locator('#shopClose').click({ timeout: 5000 });
+      expect((await toCard(page)).phase, 'the round over').toBe('over');
+      await readable('the card');
+      box = await rect('#card');
+      expect(box.x, 'the card: left').toBeGreaterThanOrEqual(0);
+      expect(box.y, 'the card: top').toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width, 'the card: right').toBeLessThanOrEqual(width + 0.5);
+      expect(box.y + box.height, 'the card: bottom').toBeLessThanOrEqual(height + 0.5);
+      expect(problems).toEqual([]);
+    });
+  });
+}

@@ -201,7 +201,7 @@ async function main() {
   /** The camera's turn as the wind's arrow is worked out from it, written into each frame and never made. */
   const turnNow = { azimuth: 0, tilt: 0 };
   /** The hole's map as it was painted, and whether it was for a phone's box: painted again if the screen changes to the other. */
-  let mapped: { size: MapSize; small: boolean } | null = null;
+  let mapped: { size: MapSize; small: string } | null = null;
   /** Where the ball was when the pin was last read, so it is read again only when it has moved. */
   const pinned = { x: NaN, y: NaN };
   /** The preview the scene was last handed, a flight or a putt's roll, which the test API reads back with what was drawn of it. */
@@ -231,6 +231,17 @@ async function main() {
     aimedFor = `${inHand.id}|${lie}`;
     rig.aimAt(aimView(reach, aspect), now);
   };
+  /**
+   * The box the map is painted to, by the screen it is on: a phone on its side, which has no height to spare (the same
+   * five hundred pixels the stylesheet's compact rules begin at), a phone upright, or a desk. Its key says which, so the
+   * map is painted again when the screen turns from one to another.
+   */
+  const mapBoxOf = () =>
+    innerHeight <= 500
+      ? { key: 'short', width: 56, height: 116 }
+      : innerWidth <= 600
+        ? { key: 'phone', width: 64, height: 150 }
+        : { key: 'desk', width: 100, height: 230 };
   /** The hole's map painted for the screen it is on, or put away for a hole that is not golf. */
   const paintHoleMap = () => {
     if (!game?.layout.golf) {
@@ -238,11 +249,11 @@ async function main() {
       hud.setMap(null);
       return;
     }
-    const small = innerWidth <= 600;
-    const size = mapSize(game.layout, small ? 64 : 100, small ? 150 : 230);
+    const small = mapBoxOf();
+    const size = mapSize(game.layout, small.width, small.height);
     const pixels = new Uint8ClampedArray(size.width * size.height * 4);
     paintMap(game.layout, size, pixels);
-    mapped = { size, small };
+    mapped = { size, small: small.key };
     mapInto(size, game.layout.cup.x, game.layout.cup.y, hud.overlay.cup);
     hud.setMap({ width: size.width, height: size.height, pixels });
   };
@@ -399,7 +410,7 @@ async function main() {
     cam.aspect = aspect = width / height;
     // a screen of another shape stands the camera at another distance: the view is worked out again
     aimedFor = '';
-    if (mapped && mapped.small !== innerWidth <= 600) paintHoleMap();
+    if (mapped && mapped.small !== mapBoxOf().key) paintHoleMap();
     renderer.resize(width, height);
   };
   addEventListener('resize', resize);
