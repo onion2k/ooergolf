@@ -120,6 +120,12 @@ const BAG_IDS = new Map(BAG.map((c) => [c.id, c]));
 /** The most a ball is left to settle before it is played, in physics frames: far more than it takes. */
 const SETTLE_FRAMES = 600;
 
+/** How far below standing a ball in the cup's mouth must be to be on the lip and not at rest on the rim, in yards: the bug's was 0.07. */
+const LIP_SUNK = 0.02;
+
+/** How fast a ball woken from the lip of the cup is sent toward its middle, in yards a second: more than it sleeps at (2). */
+const LIP_PUSH = 3;
+
 export class Game {
   /** The holes a round is played over: the course, or a test's own. */
   course: readonly HoleDef[];
@@ -273,6 +279,19 @@ export class Game {
   /** The hardest the club in hand strikes: the bag's on a golf hole, and the shop's putter's on any other. */
   get hardest(): number {
     return this.layout.golf ? this.inHand.hardest : clubById(this.progress.save.club).hardest;
+  }
+
+  /**
+   * Whether the ball is sunk into the cup's mouth: its middle inside the hole and lower than a ball standing on the ground
+   * stands. A ball at rest on the rim stands as high as any (one rests there with its middle 1.4 from the cup's), and a
+   * ball that is in the mouth and not standing is hanging on the edge of the rim by one side, which it cannot do.
+   */
+  private onTheLip(): boolean {
+    const { world, ball, layout } = this;
+    const x = world.x[ball],
+      y = world.y[ball];
+    if (Math.hypot(x - layout.cup.x, y - layout.cup.y) >= CUP.radius) return false;
+    return world.z[ball] < heightAt(layout, x, y) + restingAbove(layout, x, y, world.r[ball]) - LIP_SUNK;
   }
 
   /**
@@ -460,6 +479,19 @@ export class Game {
     if (fell.holed) return this.done('holed');
     if (fell.wet) return this.putBack(fell.x, fell.y, (x, y) => this.events.splash?.(x, y));
     if (fell.out) return this.putBack(fell.x, fell.y, (x, y) => this.events.outOfBounds?.(x, y));
+    // asleep hanging on the lip, its middle in the mouth and lower than a ball stands, held by one side of the rim: the
+    // physics sleeps a slow ball where it is, and this one could never stay. It is woken and sent toward the middle at more than
+    // the speed it sleeps at, so that it falls, and holed by the steps that follow
+    if (this.moving && this.world.asleep[this.ball] === 1 && this.onTheLip()) {
+      const { world, ball, layout } = this;
+      const dx = layout.cup.x - world.x[ball],
+        dy = layout.cup.y - world.y[ball];
+      const away = Math.hypot(dx, dy) || 1;
+      world.wake(ball);
+      world.vx[ball] = (dx / away) * LIP_PUSH;
+      world.vy[ball] = (dy / away) * LIP_PUSH;
+      return;
+    }
     if (this.moving && this.ready) {
       this.moving = false;
       this.events.stopped?.(this.world.x[this.ball], this.world.y[this.ball]);
