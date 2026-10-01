@@ -26,7 +26,7 @@ import { daylight } from './look';
 import { Progress } from './progress';
 import { seeded } from './random';
 import { roll } from './roll';
-import { GRASS, fieldOf, windOf } from './turf';
+import { fieldOf, flattenFor, grassOptionsOf, windOf } from './turf';
 import { AIM_REACH, Scene, boxOf } from './scene';
 import { carryFrom } from './flight';
 import { clearings } from './scenery';
@@ -162,7 +162,19 @@ async function main() {
    * many glints of the gold were lit, and how many sparkles of the water, and
    * what the last stroke threw up.
    */
-  const drawn = { squash: 0, pulse: 0, glints: 0, sparkles: 0, puff: null as 'sand' | 'grass' | null };
+  const drawn = {
+    squash: 0,
+    pulse: 0,
+    glints: 0,
+    sparkles: 0,
+    puff: null as 'sand' | 'grass' | null,
+    // the grass pressed flat this frame round a ball lying in the rough, as it was asked of the renderer
+    press: null as { x: number; y: number; radius: number } | null,
+    // whether the renderer took it: it does not where the field has no trample, or off it
+    took: false,
+  };
+  /** The disc of grass pressed round a ball at rest in the rough, written each frame: nothing is made. */
+  const flatten = { x: 0, y: 0, radius: 0 };
   /** Whether the camera has been put on a hole yet: the first has nowhere to glide from. */
   let looked = false;
   /** The grass of the hole being grown, which the first frame waits for so it is never drawn bare. */
@@ -241,7 +253,9 @@ async function main() {
       renderer.setStatic(scene.static(layout, name, game.obstacles));
       renderer.setDynamic(scene.dynamic(game.obstacles, layout, name, wind));
       // the hole's rough, round the painted green
-      grown = renderer.setGrass(fieldOf(layout, name, clearings(layout, name)), GRASS);
+      grown = renderer.setGrass(fieldOf(layout, name, clearings(layout, name)), grassOptionsOf(layout));
+      // nothing is pressed on a new hole: the grass stands as it was grown
+      renderer.clearPresses();
       renderer.wind = wind;
       renderer.setSunShadow(boxOf(layout));
       // the camera glides to the tee from wherever it was looking, but for the first hole, with nowhere it was; and the
@@ -422,6 +436,14 @@ async function main() {
     const { world, ball, layout, inHand, shape, spin } = played;
     const x = world.x[ball],
       y = world.y[ball];
+    // a ball at rest in the rough is seen, and not lost among the blades: the grass is pressed flat in a disc round it, every
+    // frame it lies there (the press stands again a few seconds after, so it holds for as long as the ball is there and goes
+    // when it is struck)
+    const flat = flattenFor(layout, x, y, played.ready, flatten);
+    // pressed at the game's time as it is now, which the grass reads the press's age from, and not the last frame's
+    renderer.time = played.t;
+    drawn.took = flat ? renderer.press(flat.x, flat.y, flat.radius, windNow.x, windNow.y) : false;
+    drawn.press = flat;
     if (flying && previewer) {
       if (
         previewed.x !== x ||
@@ -779,6 +801,8 @@ async function main() {
       splash: scene.splashReach(played.t),
       puff: drawn.puff,
       landing: scene.landingMark(),
+      // the grass pressed flat round the ball this frame: where and how wide, or none
+      press: drawn.press ? { ...drawn.press, took: drawn.took } : null,
       // the preview of the shot in hand as the last frame placed it, and what it comes to
       shot: (() => {
         const m = scene.shotMarks();

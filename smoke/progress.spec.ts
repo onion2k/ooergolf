@@ -371,9 +371,13 @@ test('the round finished to the card, and begun again from its button', async ({
     sparklesAt: [],
     splash: 0,
     puff: null,
-    // no ball has come down on a hole of minigolf, which has no landing to mark, and no lofted shot to preview
+    // no ball has come down on a hole of minigolf, which has no landing to mark, and no lofted shot to preview, no wind to
+    // show, no grass pressed round a ball, and no shape or spin to choose
     landing: null,
     shot: null,
+    press: null,
+    wind: null,
+    controls: { shown: false, shape: 0, shapeText: 'Shape: Straight', spin: 0, spinText: 'Spin: Flat' },
   });
   expect(card.glints).toBeLessThanOrEqual(1);
   await page.locator('#again').click();
@@ -795,6 +799,10 @@ test.describe('aiming a golf shot', () => {
           expect(at.down, `${club}: up the screen, and on it`).toBeGreaterThan(0.03);
           expect(at.down).toBeLessThan(0.93);
           radii.push(shot!.ring!.radius);
+          // taken back to where it began, which is no shot (letting go of a full pull would strike the ball, and in a wind it
+          // would not be at rest for the next club)
+          const size = page.viewportSize()!;
+          await page.mouse.move(size.width / 2, size.height * 0.15);
           await page.mouse.up().catch(() => undefined);
           if (touch) await page.evaluate(() => window.game!.step(1));
           expect(await page.evaluate(() => window.game!.invariants())).toEqual([]);
@@ -1276,6 +1284,127 @@ test.describe('shape, spin and wind', () => {
     await expect(page.locator('#windText')).toHaveText('25 mph');
     await onHole(page, windHole('Calm', 0));
     await expect(page.locator('#windText')).toHaveText('calm');
+    expect(problems).toEqual([]);
+  });
+});
+
+// ---- the grass of a golf hole: the rough, and only the rough; and the ball in it seen ----
+
+/**
+ * A golf hole 61 tiles across and 130 long with every kind of ground in bands up it: a fairway down the middle, rough either
+ * side, out of bounds beyond that, and rock beyond that, inside the rail. Returns it with the middle of a tile of each kind, in
+ * world units (the hole is centred on nought).
+ */
+function bandsHole() {
+  const cols = 61,
+    rows = 130;
+  const map = Array.from({ length: rows }, (_, r) =>
+    Array.from({ length: cols }, (_, c) => {
+      if (r === 0 || r === rows - 1 || c === 0 || c === cols - 1) return '#';
+      if (c <= 5 || c >= cols - 6) return ' ';
+      if (c <= 11 || c >= cols - 12) return 'x';
+      if (r === rows - 4) return c === 30 ? 'T' : c === 29 || c === 31 ? 't' : 'f';
+      if (r === 2 && c === 30) return 'C';
+      if (c >= 25 && c <= 35) return 'f';
+      return 'r';
+    }).join(''),
+  );
+  const at = (r: number, c: number) => ({ x: -91.5 + (c + 0.5) * 3, y: -195 + (rows - 1 - r + 0.5) * 3 });
+  return {
+    hole: { name: 'Bands', par: 4, map },
+    rough: at(60, 18),
+    fairway: at(60, 30),
+    stakes: at(60, 8),
+    rock: at(60, 3),
+    beyond: { x: -91.5 - 40, y: 0 },
+  };
+}
+
+test.describe('the grass of a golf hole', () => {
+  test('grows in the rough and nowhere else: not on the fairway, past the stakes, on the rock beyond them, or beyond the hole', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 1, paused: true });
+    const b = bandsHole();
+    await page.evaluate((h) => {
+      window.game!.playCourse([h]);
+      window.game!.step(120);
+    }, b.hole);
+    const blades = (p: { x: number; y: number }) =>
+      page.evaluate(
+        async ([x, y]) => {
+          const g = window.game!;
+          g.look(x, y, 30);
+          g.step(2);
+          return g.bladesAround(x, y, 1.4);
+        },
+        [p.x, p.y] as const,
+      );
+    expect(await blades(b.rough), 'the rough, which is long grass').toBeGreaterThan(100);
+    for (const [what, p] of [
+      ['the fairway', b.fairway],
+      ['out of bounds, past the stakes', b.stakes],
+      ['the rock beyond it', b.rock],
+      ['beyond the hole', b.beyond],
+    ] as const)
+      expect(await blades(p), what).toBe(0);
+    expect(problems).toEqual([]);
+  });
+
+  test('is pressed flat round a ball lying in the rough, so it is seen, and not round one on the fairway, in the air, or struck away', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 1, paused: true });
+    const b = bandsHole();
+    await page.evaluate((h) => {
+      window.game!.playCourse([h]);
+      window.game!.step(120);
+    }, b.hole);
+    const press = () => page.evaluate(() => window.game!.motions().press);
+    // on the tee, which is the fairway: nothing is pressed, there being no blade to lose it in
+    expect(await press(), 'on the tee').toBeNull();
+    await page.evaluate((p) => {
+      window.game!.lay(p.x, p.y);
+      window.game!.step(90);
+    }, b.fairway);
+    expect(await press(), 'on the fairway').toBeNull();
+    // in the rough: a disc of grass round the ball, wide enough that it is seen, for as long as it lies there
+    await page.evaluate((p) => {
+      window.game!.lay(p.x, p.y);
+      window.game!.step(90);
+    }, b.rough);
+    const ball = await page.evaluate(() => window.game!.ball());
+    const lies = await press();
+    expect(lies, 'in the rough').not.toBeNull();
+    expect(Math.hypot(lies!.x - ball.x, lies!.y - ball.y), 'round the ball').toBeLessThan(0.05);
+    expect(lies!.radius, 'wide enough to see it in').toBeGreaterThan(2.5);
+    expect(lies!.took, 'the renderer took it, there being a trample for it to press in').toBe(true);
+    await page.evaluate(() => window.game!.step(240));
+    expect(await press(), 'and still, as long as it lies there').not.toBeNull();
+    // struck, it is in the air and rolling: nothing is pressed, and the grass is left to stand again
+    await page.evaluate(() => window.game!.shoot(Math.PI / 2, 0.5, '7-iron'));
+    await page.evaluate(() => window.game!.step(10));
+    expect(await press(), 'in the air').toBeNull();
+    expect(problems).toEqual([]);
+  });
+
+  test('is none under a hole of minigolf, which has never had its ball pressed into it, and the same blades as ever', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 1, paused: true });
+    await page.evaluate(() => window.game!.step(60));
+    expect(await page.evaluate(() => window.game!.motions().press)).toBeNull();
+    const rough = await page.evaluate(async () => {
+      const g = window.game!;
+      const { floor } = g.content();
+      g.look(floor.minX - 8, floor.minY - 8, 30);
+      g.step(2);
+      return g.bladesAround(floor.minX - 8, floor.minY - 8, 3);
+    });
+    expect(rough, 'the rough round a hole of minigolf').toBeGreaterThan(500);
     expect(problems).toEqual([]);
   });
 });

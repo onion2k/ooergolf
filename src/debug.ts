@@ -247,6 +247,8 @@ export interface Motions {
   puff: 'sand' | 'grass' | null;
   /** The ring marking where a lofted ball first came down: where, and how wide in world units; null when there is none to see. */
   landing: { x: number; y: number; radius: number } | null;
+  /** The grass pressed flat round the ball this frame, where and how wide in world units, which it is while the ball lies at rest in the rough, and whether the renderer took it; null otherwise. */
+  press: { x: number; y: number; radius: number; took: boolean } | null;
   /**
    * The preview of the shot being aimed, as the last frame placed it: how many dots of arc, where the ring is (and its
    * colour, which is another for water and out of bounds) and how big, the spread of a swing that is not true as the

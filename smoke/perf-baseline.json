@@ -1,9 +1,9 @@
 {
   "bootMs": 193,
   "frameMs": 2.63,
-  "bundleKb": 125.3,
+  "bundleKb": 128,
   "beginMs": 43,
   "bigFrameMs": 3.14,
   "linksBeginMs": 76,
-  "linksFrameMs": 3.77
+  "linksFrameMs": 2.87
 }

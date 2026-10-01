@@ -43,8 +43,9 @@ describe('the turf of a hole', () => {
     expect(KINDS[ROUGH].stripes, 'the rough is not mown').toBeUndefined();
   });
 
-  it('grows no blade on the course, on any hole of either course: the green is painted, and the rough frames it', () => {
-    for (const hole of SAMPLE_HOLES) {
+  it('grows no blade on the course, on any hole of minigolf: the green is painted, and the rough frames it', () => {
+    // a hole of golf grows its rough inside the stakes and nothing past them: `golf-turf.test.ts` holds that
+    for (const hole of SAMPLE_HOLES.filter((h) => !layoutOf(h.map, h.terrain).golf)) {
       const hl = layoutOf(hole.map, hole.terrain);
       const f = fieldOf(hl, hole.name);
       let rough = 0;

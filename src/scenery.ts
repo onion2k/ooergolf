@@ -180,7 +180,9 @@ export function dress(layout: Layout, name: string): Dressing {
     rocks.push(...cluster);
     clusters++;
   }
-  return { bunting, beds, rocks };
+  // a golf hole is dressed with its bunting alone, which marks where it ends: no bed of flowers or cluster of rock stands
+  // on the plain past the stakes, where nothing else does
+  return layout.golf ? { bunting, beds: [], rocks: [] } : { bunting, beds, rocks };
 }
 
 /** Whether a point is under one of the strings of bunting, or so near that a tree there would stand in it. */
@@ -208,8 +210,10 @@ function onRough(l: Layout, x: number, y: number): boolean {
   return t < 0 || (l.solid[t] === 1 && l.rail[t] === 0);
 }
 
-/** What stands round the hole laid out as `layout`, called `name`. */
+/** What stands round the hole laid out as `layout`, called `name`: on a hole of minigolf, none on one of golf. */
 export function scatter(layout: Layout, name: string): Piece[] {
+  // nothing stands past the stakes of a golf hole, where the course ends and nobody plays: its dressing is at the edge of it
+  if (layout.golf) return [];
   const random = seeded(seedOf(name));
   const dressed = dress(layout, name);
   const { originX, originY, cols, rows } = layout;

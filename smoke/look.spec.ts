@@ -644,6 +644,45 @@ test.describe('what it looks like', () => {
       expect(problems).toEqual([]);
     });
 
+    test('a ball lying in the rough: the grass pressed flat round it so it is seen, and standing tall beyond, the plain bare past the stakes', async ({
+      page,
+    }) => {
+      const problems = watch(page);
+      const cols = 61,
+        rows = 130;
+      // a fairway down the middle, rough either side, out of bounds beyond that, and rock beyond that, inside the rail
+      const map = Array.from({ length: rows }, (_, r) =>
+        Array.from({ length: cols }, (_, c) => {
+          if (r === 0 || r === rows - 1 || c === 0 || c === cols - 1) return '#';
+          if (c <= 5 || c >= cols - 6) return ' ';
+          if (c <= 11 || c >= cols - 12) return 'x';
+          if (r === rows - 4) return c === 30 ? 'T' : c === 29 || c === 31 ? 't' : 'f';
+          if (r === 2 && c === 30) return 'C';
+          return c >= 25 && c <= 35 ? 'f' : 'r';
+        }).join(''),
+      );
+      await start(page, { seed: 11, paused: true });
+      const lie = await page.evaluate((m) => {
+        const g = window.game!;
+        g.playCourse([{ name: 'A lie in the rough', par: 4, map: m }]);
+        g.step(120);
+        // the middle of the rough beside the fairway, thirty tiles up from the tee
+        const x = -91.5 + (22 + 0.5) * 3,
+          y = -195 + (130 - 1 - 90 + 0.5) * 3;
+        g.lay(x, y);
+        for (let k = 0; k < 10; k++) g.step(1);
+        // a few frames one at a time, so the press is the frame's own and the grass has bent to it
+        g.look(x, y - 6, 24);
+        for (let k = 0; k < 6; k++) g.step(1);
+        return { x, y };
+      }, map);
+      expect(await page.evaluate(() => window.game!.motions().press), 'pressed').not.toBeNull();
+      const clip = await around(page, lie.x, lie.y);
+      await hideStats(page);
+      await expect(page).toHaveScreenshot('rough-lie.png', { ...TOLERANCE, clip });
+      expect(problems).toEqual([]);
+    });
+
     test('the line of out of bounds, close to: white stakes on the ground’s edge, the dry grass beyond, the rough within', async ({
       page,
     }) => {

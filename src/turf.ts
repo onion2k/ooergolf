@@ -9,10 +9,11 @@
  * clean, by the scene. Content and the arithmetic of reading it: the renderer
  * grows and draws the blades, and the page hands it this.
  */
-import type { GrassField, GrassKind, GrassOptions, Wind } from 'artshape-render/game/grass';
-import { TILE, tileAt, type Layout } from './arena';
+import type { GrassField, GrassKind, GrassOptions, TrampleRect, Wind } from 'artshape-render/game/grass';
+import { TILE, heightAt, tileAt, type Layout } from './arena';
 import { seeded } from './random';
 import { nameSeed, windDirection } from './shaping';
+import { LIE } from './surfaces';
 
 /** How far below the green the rough lies: the scene's own, kept here too so the turf imports no drawing. */
 const ROUGH_DEPTH = 3;
@@ -112,6 +113,120 @@ export interface Clearing {
 }
 
 /**
+ * How a ball in the rough is seen: the grass is pressed flat in a disc of `radius` round it while it lies at rest, which
+ * the blades, 1.6 and a third tall and the ball two across, would otherwise hide it in, and stands again `recovery`
+ * seconds after the ball is struck from there.
+ */
+export const FLATTEN = { radius: 6, recovery: 6 } as const;
+
+/**
+ * The most texels a golf hole's trample has, the grid over the ground a ball can lie on that the grass is pressed
+ * in: sixteen bytes each, so about five megabytes at most, which the biggest hole of The Links is well under.
+ */
+const TRAMPLE_TEXELS = 320_000;
+
+/** Whether a tile of a golf hole is the rough a ball is played from, which is where the grass grows: not the fairway, green, tee, sand, water or out of bounds. */
+function playedRough(layout: Layout, t: number): boolean {
+  return layout.lie[t] === LIE.rough && !layout.oob[t] && !layout.sand[t] && !layout.water[t] && !layout.solid[t];
+}
+
+/**
+ * The grid the ball presses the grass in, on a golf hole: over the box round its ground, as fine as a quarter of
+ * the disc it presses (the finest of the cells a hole of its size allows) and no bigger than `TRAMPLE_TEXELS`; none
+ * for a hole of minigolf, whose ball leaves no track, or one too big to have it.
+ */
+export function trampleOf(layout: Layout): TrampleRect | undefined {
+  if (!layout.golf) return undefined;
+  const { minX, minY, maxX, maxY } = layout.bounds;
+  for (const cell of [0.5, 0.75, 1, FLATTEN.radius / 3]) {
+    const cols = Math.ceil((maxX - minX) / cell) + 1,
+      rows = Math.ceil((maxY - minY) / cell) + 1;
+    if (cols * rows <= TRAMPLE_TEXELS) return { origin: [minX, minY], cell, cols, rows, recovery: FLATTEN.recovery };
+  }
+  return undefined;
+}
+
+/** The options the renderer is given for a hole's grass: the game's own rings, and on a golf hole the grid to press it in. */
+export function grassOptionsOf(layout: Layout): GrassOptions {
+  const trample = trampleOf(layout);
+  return trample ? { ...GRASS, trample } : GRASS;
+}
+
+/**
+ * The disc of grass to press flat for a ball lying at (x, y): where it lies at rest on the rough of a golf hole, and
+ * nowhere else (a ball in flight, or on a fairway, a green or sand, has no blades round it to be lost in). Written into
+ * `out`, which is what a frame hands in so nothing is made, and returned; null for none.
+ */
+export function flattenFor(
+  layout: Layout,
+  x: number,
+  y: number,
+  ready: boolean,
+  out: { x: number; y: number; radius: number } = { x: 0, y: 0, radius: 0 },
+): { x: number; y: number; radius: number } | null {
+  if (!ready || !layout.golf) return null;
+  const t = tileAt(layout, x, y);
+  if (t < 0 || !playedRough(layout, t)) return null;
+  out.x = x;
+  out.y = y;
+  out.radius = FLATTEN.radius;
+  return out;
+}
+
+/**
+ * The field of grass for a golf hole: the rough a ball is played from, inside the stakes, standing on the ground it
+ * lies on, and nothing past them, where a ball is lost and nobody plays: not out of bounds, nor the rock beyond it,
+ * nor on to the horizon. The fairway, the green, the tee, sand and water are painted, as ever.
+ */
+function golfFieldOf(layout: Layout, name: string, bare: readonly Clearing[], cell: number): GrassField {
+  const reach = marginAt(cell);
+  const origin: [number, number] = [layout.originX - reach, layout.originY - reach];
+  const cols = sideAt(layout.cols, cell),
+    rows = sideAt(layout.rows, cell);
+  const mask = new Uint8Array(cols * rows),
+    heights = new Float32Array(cols * rows);
+  // a tile at a time, which a cell divides into whole (the field's edge is on a tile's, whatever the cell)
+  const per = Math.round(TILE / cell);
+  for (let t = 0; t < layout.cols * layout.rows; t++) {
+    if (!playedRough(layout, t)) continue;
+    const tx = t % layout.cols,
+      ty = Math.floor(t / layout.cols);
+    const x0 = Math.round((layout.originX + tx * TILE - origin[0]) / cell),
+      y0 = Math.round((layout.originY + ty * TILE - origin[1]) / cell);
+    for (let cy = y0; cy < y0 + per; cy++)
+      for (let cx = x0; cx < x0 + per; cx++) {
+        const i = cy * cols + cx;
+        mask[i] = ROUGH + 1;
+        heights[i] = heightAt(layout, origin[0] + (cx + 0.5) * cell, origin[1] + (cy + 0.5) * cell);
+      }
+  }
+  clearDiscs(mask, origin, cell, cols, rows, bare);
+  return { origin, cell, cols, rows, mask, heights, kinds: [...KINDS], seed: nameSeed(name) };
+}
+
+/** `mask` cleared in each of the `bare` discs: a cell when its middle is in the disc, and at a cell coarser than the finest, when any of it is. */
+function clearDiscs(
+  mask: Uint8Array,
+  origin: [number, number],
+  cell: number,
+  cols: number,
+  rows: number,
+  bare: readonly Clearing[],
+) {
+  const grow = cell > TURF.cell ? cell * Math.SQRT1_2 : 0;
+  for (const { x, y, r } of bare) {
+    const x0 = Math.max(0, Math.floor((x - r - grow - origin[0]) / cell)),
+      x1 = Math.min(cols - 1, Math.floor((x + r + grow - origin[0]) / cell)),
+      y0 = Math.max(0, Math.floor((y - r - grow - origin[1]) / cell)),
+      y1 = Math.min(rows - 1, Math.floor((y + r + grow - origin[1]) / cell));
+    for (let cy = y0; cy <= y1; cy++)
+      for (let cx = x0; cx <= x1; cx++)
+        if (Math.hypot(origin[0] + (cx + 0.5) * cell - x, origin[1] + (cy + 0.5) * cell - y) <= r + grow)
+          mask[cy * cols + cx] = 0;
+  }
+}
+
+/**
  * The field of grass for a hole laid out as `layout`, called `name`, with none in the `bare` discs, made of cells
  * of `cell`: the finest one that fits, unless it is told. A coarser cell clears every cell a disc touches, and not
  * only those whose middles it holds, so a rock is never left with a blade standing in it.
@@ -122,6 +237,7 @@ export function fieldOf(
   bare: readonly Clearing[] = [],
   cell = cellFor(layout),
 ): GrassField {
+  if (layout.golf) return golfFieldOf(layout, name, bare, cell);
   const reach = marginAt(cell);
   const origin: [number, number] = [layout.originX - reach, layout.originY - reach];
   const cols = sideAt(layout.cols, cell),
@@ -138,19 +254,7 @@ export function fieldOf(
         heights[i] = -ROUGH_DEPTH;
       }
     }
-  // a cell is cleared when its middle is in the disc; and, at a cell coarser than the finest, when any of it is: the
-  // half of its diagonal more
-  const grow = cell > TURF.cell ? cell * Math.SQRT1_2 : 0;
-  for (const { x, y, r } of bare) {
-    const x0 = Math.max(0, Math.floor((x - r - grow - origin[0]) / cell)),
-      x1 = Math.min(cols - 1, Math.floor((x + r + grow - origin[0]) / cell)),
-      y0 = Math.max(0, Math.floor((y - r - grow - origin[1]) / cell)),
-      y1 = Math.min(rows - 1, Math.floor((y + r + grow - origin[1]) / cell));
-    for (let cy = y0; cy <= y1; cy++)
-      for (let cx = x0; cx <= x1; cx++)
-        if (Math.hypot(origin[0] + (cx + 0.5) * cell - x, origin[1] + (cy + 0.5) * cell - y) <= r + grow)
-          mask[cy * cols + cx] = 0;
-  }
+  clearDiscs(mask, origin, cell, cols, rows, bare);
   return {
     origin,
     cell,

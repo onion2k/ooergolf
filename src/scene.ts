@@ -199,6 +199,12 @@ export function ringLift(
 }
 /** The rough, as one great square out past the fog. */
 const ROUGH_SIZE = 600;
+/**
+ * How far past a golf hole's edge its ground goes: a golf hole has no grass beyond its stakes to stand in for it, so it is
+ * the ground itself that must reach as far as the camera sees, which from 200 back is 800 on, and a square 600 across
+ * runs out on a hole 650 long and shows the sky.
+ */
+const GOLF_GROUND_REACH = 1100;
 const FLOWER_MODELS = FLOWER_COLOURS.slice(0, 3).map((c, k) => flowers(c, { seed: k + 1 }));
 
 /**
@@ -376,7 +382,15 @@ export class Scene {
       { ...group({ ...collarPart, material: stripe(cupTile) }, atCup) },
       { mesh: rails.sides, matrices: still, ...look(PALETTE.rail) },
       { mesh: rails.cap, matrices: still, ...look(PALETTE.railCap) },
-      { mesh: plane(ROUGH_SIZE), matrices: rough, ...look(PALETTE.rough) },
+      // under a hole of minigolf, the rough's own colour, which the grass on past it holds; under a hole of golf, the dry grass
+      // out of bounds is, out to the horizon, with nothing standing on it past the stakes
+      layout.golf
+        ? {
+            mesh: plane(Math.max(layout.cols, layout.rows) * TILE + 2 * GOLF_GROUND_REACH),
+            matrices: rough,
+            ...look(PALETTE.oobGround),
+          }
+        : { mesh: plane(ROUGH_SIZE), matrices: rough, ...look(PALETTE.rough) },
       ...groups(cup(CUP.radius, round), atCup),
       // the pin and its knob stand still; the flag's cloth swings in the breeze, and is among what moves
       ...groups({ parts: flag(FLAG_COLOURS.red).parts.filter((p) => p.name !== 'flag') } as Model, flagAt),

@@ -357,6 +357,18 @@ change meant to move it, and the commit says why. Look at every picture.
   pieces, tries and rock clusters again as it is bigger, and its bunting on
   each side in strings of at most `REFERENCE.string` (60) units, each between
   posts of its own.
+- **The grass of a golf hole** is the rough and only the rough (`turf.ts`, `golfFieldOf`): the long blades grow on the
+  tiles of rough a ball is played from, inside the stakes, standing on the ground (each cell's own height, since a golf
+  hole's ground rises and falls), and nowhere else: not on the fairway, green, tee, sand or water (painted, as ever), and
+  not past the stakes, on out of bounds, the rock beyond it or on to the horizon (`outside` is left out), so the plain
+  beyond is bare. Nothing is scattered there either (`scatter` is empty on a golf hole, and its dressing is the bunting
+  alone, which marks where it ends), and the ground under it reaches the horizon (`GOLF_GROUND_REACH` past the hole's edge, in
+  the dry colour of out of bounds), where a square 600 across ran out under a hole 650 long and showed the sky. A ball at
+  rest in the rough has the grass pressed flat in a disc round it (`FLATTEN`, 6 yards across the radius, standing again 6
+  seconds after the ball is struck), through the renderer's own trample (`renderer.press`, once a frame at the game's
+  time, in the wind's direction): the grid it presses in is `trampleOf`, over the box round the hole at a cell of 0.5 to 1
+  yard, at most 320,000 texels; `flattenFor` says when and where, and the page reads it back as `motions().press`. A
+  minigolf hole's grass, scatter and dressing are exactly what they were (held to a hash).
 - `src/turf.ts` is a hole's grass, as the renderer's GPU grass grows it: a
   field of cells saying where the rough grows (off the course,
   down where the rough lies, and on past the field as its `outside`), and
@@ -469,7 +481,7 @@ change meant to move it, and the commit says why. Look at every picture.
 - `src/range.ts` is The Range (`rangeHole`: tee box, fairway, rough, round
   green, bunker if asked): Pitch and Putt 105, Iron Alley 175, The Long Way 330. A `Course` has `golf`, held by a test to its holes' layouts. `ground.ts`
   draws each kind of golf ground as a mesh of its own colour; the rough is
-  painted, growing no blades inside the rail. `src/marker.ts` is the ring at a
+  painted under its blades (see the grass of a golf hole, in `turf.ts`'s bullet). `src/marker.ts` is the ring at a
   first landing, from game time; the camera follows a lofted ball up and
   catches up faster the faster it flies (`catchUp`).
 - Out of bounds is `x` in a golf map: rough to roll on and play from, and a ball on the ground on it is lost, as one
@@ -684,8 +696,9 @@ first landing and how wide, and `shot`: the preview of the shot being aimed, its
 colour and size, the spread's half axes, where a tree knocks it and what it comes to, null when none is drawn), read back
 from what the last frame placed; and `map()`, the hole's map over the course: its size and where the ball, the cup and the
 landing of the shot being aimed are on it. `state()` has the shape and the spin chosen and the hole's `wind` (x, y, speed);
-`motions()` has `wind` (the arrow's turn in degrees and its text, read back from the page), `controls` (the two buttons as drawn)
-and `shot.heading`. `?rung=N` on the page puts the picture
+`motions()` has `wind` (the arrow's turn in degrees and its text, read back from the page), `controls` (the two buttons as drawn),
+`shot.heading` and `press` (the grass pressed flat round a ball at rest in the rough this frame: where, how wide, and whether
+the renderer took it; null otherwise). `?rung=N` on the page puts the picture
 on a rung and holds it; paused, the governor never moves it, so pictures are
 always taken at the top rung unless a test asks. In unit tests, `game.place(x, y)` puts the
 ball down at a lie.
@@ -697,8 +710,7 @@ each step, and a gate handed what it needs in the same change:
 
 - The rest of golf, from `~/.claude/plans/ooergolf-proper-golf.md`: stage 6, putting greens with contour, a fringe and
   the break shown, which the planner leaves to the arithmetic putt. What stage 3 leaves as it found it: a golf hole's
-  rough is painted and grows no blades inside the rough's edge (its wild grass beyond the stakes does grow, which is the
-  turf's own), its green is round and stepped by the tile, so are its bunkers, there is no first cut, an invisible wall
+  its green is round and stepped by the tile, so are its bunkers, there is no first cut, an invisible wall
   stands beyond out of bounds, a ball landing on a post's top or a box is left as the physics has it, the club in hand is
   not saved, and the planner knows nothing of a green's contour (there is none) or a lay-up chosen for the next shot's
   sake. What stage 4 leaves: the preview is the true swing to the first landing (the run-out after it is not shown, nor
