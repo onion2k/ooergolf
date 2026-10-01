@@ -1650,7 +1650,7 @@ test.describe('putting on a golf hole whose greens have a speed and a contour', 
           (await box('#greens')).y + (await box('#greens')).height - 1,
         );
         void wind;
-        for (const other of ['#purse', '#holePanel', '#bag', '#viewMode', '#viewFlag', '#help'])
+        for (const other of ['#purse', '#holePanel', '#bag', '#viewMode', '#viewFlag', ...(touch ? [] : ['#help'])])
           expect(apart(strokes, await box(other)), `the strokes panel and ${other} do not overlap`).toBe(true);
         expect(problems).toEqual([]);
       });
@@ -1889,7 +1889,7 @@ test.describe('the flag button', () => {
     test.describe(`on ${label}`, () => {
       test.use({ viewport, hasTouch: touch, isMobile: touch });
 
-      test('the switch with its flag button is read well and touches nothing: not the help, the bag, the coins, the hole’s words or the map, on golf and on minigolf', async ({
+      test('the switch with its flag button is read well and touches nothing: not the help (a desk\u2019s), the bag, the coins, the hole’s words or the map, on golf and on minigolf', async ({
         page,
       }) => {
         const problems = watch(page);
@@ -1917,7 +1917,7 @@ test.describe('the flag button', () => {
           expect(flag.x).toBeGreaterThanOrEqual(panel.x);
           expect(flag.x + flag.width).toBeLessThanOrEqual(panel.x + panel.width);
           expect(apart(flag, await box('#modeLook')), 'beside Look, not on it').toBe(true);
-          const others = ['#help', '#strokes', '#purse', ...(golf ? ['#bag', '#holePanel'] : [])];
+          const others = [...(touch ? [] : ['#help']), '#strokes', '#purse', ...(golf ? ['#bag', '#holePanel'] : [])];
           for (const other of others) {
             const o = await box(other);
             expect(apart(panel, o), `the switch and ${other} do not overlap, golf ${golf}`).toBe(true);

@@ -101,13 +101,16 @@ for (const [where, device] of [
         window.game!.step(60);
       });
       await expect(page.locator('#bag')).toBeHidden();
-      await expect(page.locator('#help')).toContainText('putt');
+      // the instruction to drag back is for a desk: a phone is not given it
+      if (where === 'on a phone') await expect(page.locator('#help')).toBeHidden();
+      else await expect(page.locator('#help')).toContainText('putt');
       await page.evaluate(() => {
         window.game!.chooseCourse('The Range');
         window.game!.step(60);
       });
       await expect(page.locator('#bag')).toBeVisible();
-      await expect(page.locator('#help')).toContainText('swing');
+      if (where === 'on a phone') await expect(page.locator('#help')).toBeHidden();
+      else await expect(page.locator('#help')).toContainText('swing');
       const r = await read(page);
       expect(r.outside, 'nothing past the screen').toEqual([]);
       expect(r.scrollWidth, 'nothing scrolls sideways').toBeLessThanOrEqual(page.viewportSize()!.width);
@@ -121,7 +124,7 @@ for (const [where, device] of [
       // the bag does not sit on the switch, the help or the frame's cost, or the hole's words
       const box = async (sel: string) => (await page.locator(sel).boundingBox())!;
       const bag = await box('#bag');
-      for (const other of ['#viewMode', '#viewFlag', '#help', '#strokes']) {
+      for (const other of ['#viewMode', '#viewFlag', '#strokes', ...(where === 'on a phone' ? [] : ['#help'])]) {
         const o = await box(other);
         const apart =
           bag.x + bag.width <= o.x || o.x + o.width <= bag.x || bag.y + bag.height <= o.y || o.y + o.height <= bag.y;
@@ -173,7 +176,14 @@ for (const [where, device] of [
       const apart = (a: { x: number; y: number; width: number; height: number }, b: typeof a) =>
         a.x + a.width <= b.x || b.x + b.width <= a.x || a.y + a.height <= b.y || b.y + b.height <= a.y;
       const map = await box('#holePanel');
-      for (const other of ['#strokes', '#purse', '#bag', '#viewMode', '#viewFlag', '#help'])
+      for (const other of [
+        '#strokes',
+        '#purse',
+        '#bag',
+        '#viewMode',
+        '#viewFlag',
+        ...(where === 'on a phone' ? [] : ['#help']),
+      ])
         expect(apart(map, await box(other)), `the map and ${other} do not overlap`).toBe(true);
       expect(map.x).toBeGreaterThanOrEqual(0);
       expect(map.x + map.width).toBeLessThanOrEqual(page.viewportSize()!.width);
@@ -260,7 +270,14 @@ for (const [where, device] of [
       }
       // the bag, taller for them, is clear of the other panels, and does not reach up into them
       const bag = await box('#bag');
-      for (const other of ['#viewMode', '#viewFlag', '#help', '#strokes', '#holePanel', '#purse'])
+      for (const other of [
+        '#viewMode',
+        '#viewFlag',
+        '#strokes',
+        '#holePanel',
+        '#purse',
+        ...(where === 'on a phone' ? [] : ['#help']),
+      ])
         expect(apart(bag, await box(other)), `the bag and ${other} do not overlap`).toBe(true);
       expect(bag.y, 'the bag is on the screen').toBeGreaterThanOrEqual(0);
       // the wind line is in the strokes panel, under the pin, which is clear of the purse
@@ -535,6 +552,12 @@ for (const [label, width, height] of PHONES) {
       const problems = watch(page);
       await start(page, { seed: 11, paused: true, screen: true });
       const fine = async (what: string) => {
+        // the longest name any hole has, in the strokes panel, which is what stands nearest the switch on a narrow phone
+        await page.evaluate(() => {
+          const names = window.game!.content().holes.map((h) => h.name);
+          const longest = names.reduce((a, b) => (b.length > a.length ? b : a), '');
+          document.querySelector('#holeName .name')!.textContent = longest;
+        });
         const c = await chrome(page);
         const r = await read(page);
         expect.soft(crowding(c), `${what}: crowding`).toEqual([]);
@@ -608,7 +631,16 @@ for (const [label, width, height] of PHONES) {
         );
       const golf = await fine('golf');
       expect(Object.keys(golf.rects), 'the golf hole shows the bag, the pin and the switch').toEqual(
-        expect.arrayContaining(['strokes', 'purse', 'bag', 'viewMode', 'help']),
+        expect.arrayContaining(['strokes', 'purse', 'bag', 'viewMode']),
+      );
+      expect(Object.keys(golf.rects), 'a phone is not given the instruction to drag back').not.toContain('help');
+      // the switch stands under the coins and the shop, at the right edge, and at least a pillow of air from the purse
+      const sw = golf.rects.viewMode,
+        pu = golf.rects.purse;
+      expect(sw.y - (pu.y + pu.height), 'the switch under the purse').toBeGreaterThanOrEqual(AIR);
+      expect(width - (sw.x + sw.width), 'the switch and the purse share the right edge').toBeCloseTo(
+        width - (pu.x + pu.width),
+        0,
       );
       // the shop and the card, from a hole finished
       await page.locator('#shopOpen').click({ timeout: 5000 });

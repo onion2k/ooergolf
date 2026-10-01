@@ -944,7 +944,7 @@ test.describe('what it looks like', () => {
     });
   });
 
-  // a phone on its side has no height to spare: the hole's words in two columns, the map and the help at the left foot,
+  // a phone on its side has no height to spare: the hole's words in two columns, the map at the left foot,
   // the bag in three short rows and the switch standing in a column at the right edge
   test.describe('on a phone on its side', () => {
     test.use({ viewport: { width: 812, height: 375 }, hasTouch: true, isMobile: true });
@@ -963,7 +963,7 @@ test.describe('what it looks like', () => {
       expect(problems).toEqual([]);
     });
 
-    test('a full drive aimed on its side: the pin and the wind beside the strokes, the map above the help, the bag and the switch', async ({
+    test('a full drive aimed on its side: the pin and the wind beside the strokes, the map, the bag and the switch under the coins', async ({
       page,
     }) => {
       const problems = watch(page);
@@ -1176,15 +1176,21 @@ test.describe('the flag button', () => {
   test.describe('on a phone', () => {
     test.use({ viewport: { width: 400, height: 860 }, hasTouch: true, isMobile: true });
 
-    test('the switch with its flag icon and the help beside it, the foot of the screen', async ({ page }) => {
+    test('the switch with its flag icon, under the coins and the shop at the top right', async ({ page }) => {
       const problems = watch(page);
       await start(page, { seed: 11, paused: true });
       await page.evaluate(() => window.game!.step(60));
       await settled(page);
-      await expect(page).toHaveScreenshot('phone-flag-switch.png', {
-        ...SMALL_CLIP,
-        clip: { x: 0, y: 780, width: 400, height: 80 },
-      });
+      // the purse and the switch under it, the top right corner of the screen
+      const purse = (await page.locator('#purse').boundingBox())!;
+      const b = (await page.locator('#viewMode').boundingBox())!;
+      const clip = {
+        x: Math.round(b.x) - 12,
+        y: Math.round(purse.y) - 12,
+        width: Math.round(Math.max(b.width, purse.width)) + 24,
+        height: Math.round(b.y + b.height - purse.y) + 24,
+      };
+      await expect(page).toHaveScreenshot('phone-flag-switch.png', { ...SMALL_CLIP, clip });
       expect(problems).toEqual([]);
     });
   });

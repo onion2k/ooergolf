@@ -941,28 +941,32 @@
       0 0 0 var(--sky-deep);
   }
   @media (max-width: 600px) {
-    /* the map sits a little above the middle, so a short phone's bag, which is as tall as it ever is, stays a gap below it */
+    /*
+     * the map stands on the bag, at the left edge, and not at a share of the height: the hole's words above it grow a
+     * line for a long name, and the bag below is as tall as 150px (its words on two lines), so the map keeps a gap from
+     * the bag and leaves the rest to the words
+     */
     #holePanel {
-      top: 45%;
+      top: auto;
+      bottom: calc(16px + 150px + 24px + env(safe-area-inset-bottom, 0px));
+      translate: none;
     }
-    /* the frame's cost is not shown on a phone, so the switch takes its place at the bottom */
+    /* on a phone the switch sits under the coins and the shop, at the top right, which leaves the foot of the screen to the bag */
     #viewMode {
-      bottom: calc(16px + env(safe-area-inset-bottom, 0px));
-    }
-    /* the pills are no wider than their words need, so the three together are 186px and leave the help a column of its own */
-    #viewMode button {
-      min-width: 56px;
-      padding: 0 12px;
+      top: calc(16px + 64px + 10px + env(safe-area-inset-top, 0px));
+      bottom: auto;
     }
     /*
-     * the help wraps to two lines in what is left to its left of the switch (the screen less a margin each side, the switch's
-     * 186px and a gap), where one line of it ran under the switch on a phone, and is kept inside it as the screen narrows
+     * the pills are no wider than their words need, and a little narrower than that of the desk's, so the three together
+     * are 174px and stand 19px clear of the hole's panel on the narrowest phone, where they were 186 and 7
      */
+    #viewMode button {
+      min-width: 52px;
+      padding: 0 10px;
+    }
+    /* and the instruction to drag back is not wanted on a phone: a player finds it */
     #help {
-      max-width: calc(100vw - 16px - 16px - 186px - 8px);
-      padding: 6px 12px;
-      line-height: 1.2;
-      border-radius: 20px;
+      display: none;
     }
   }
 
@@ -1046,7 +1050,7 @@
   }
   @media (max-width: 600px) {
     #bag {
-      bottom: calc(16px + 60px + 8px + env(safe-area-inset-bottom, 0px));
+      bottom: calc(16px + env(safe-area-inset-bottom, 0px));
     }
     #bag button {
       min-width: 36px;
@@ -1133,32 +1137,32 @@
     #greens {
       display: none;
     }
+    /* the switch is a row under the coins and the shop, at the top right, and the help is away */
     #viewMode {
       right: calc(16px + env(safe-area-inset-right, 0px));
-      bottom: calc(16px + env(safe-area-inset-bottom, 0px));
-      flex-direction: column;
-      border-radius: 28px;
+      top: calc(16px + 64px + 10px + env(safe-area-inset-top, 0px));
+      bottom: auto;
+      flex-direction: row;
+      border-radius: 999px;
     }
-    /* 70 and its padding make the column 86 wide, which the bag's right edge leaves room for */
     #viewMode button,
     #viewMode #viewFlag {
-      min-width: 70px;
+      min-width: 56px;
+    }
+    #viewMode #viewFlag {
+      min-width: 44px;
     }
     #help {
-      left: 16px;
-      max-width: 160px;
-      padding: 6px 12px;
-      line-height: 1.2;
-      border-radius: 20px;
+      display: none;
     }
     #holePanel {
       top: auto;
-      bottom: 84px;
+      bottom: 16px;
       translate: none;
     }
     #bag {
-      left: 184px;
-      right: calc(16px + 86px + 8px);
+      left: calc(16px + 56px + 8px);
+      right: 16px;
       width: fit-content;
       max-width: none;
       margin: 0 auto;

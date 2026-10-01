@@ -1305,7 +1305,8 @@ test.describe('on a phone', () => {
       g.step(1);
     });
     await expect(page.locator('#strokes')).toBeVisible();
-    await expect(page.locator('#help')).toBeVisible();
+    // a phone is not given the instruction to drag back
+    await expect(page.locator('#help')).toBeHidden();
     await check('the course');
     const hole = (await page.locator('#strokes').boundingBox())!,
       purse = (await page.locator('#purse').boundingBox())!;
