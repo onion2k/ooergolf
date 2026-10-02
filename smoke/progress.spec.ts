@@ -1351,7 +1351,7 @@ function bandsHole() {
 }
 
 test.describe('the grass of a golf hole', () => {
-  test('grows in the rough and nowhere else: not on the fairway, past the stakes, on the rock beyond them, or beyond the hole', async ({
+  test('grows in the rough and on the fairway and nowhere else: not past the stakes, on the rock beyond them, or beyond the hole', async ({
     page,
   }) => {
     const problems = watch(page);
@@ -1372,8 +1372,8 @@ test.describe('the grass of a golf hole', () => {
         [p.x, p.y] as const,
       );
     expect(await blades(b.rough), 'the rough, which is long grass').toBeGreaterThan(100);
+    expect(await blades(b.fairway), 'the fairway, which is short grass of its own').toBeGreaterThan(100);
     for (const [what, p] of [
-      ['the fairway', b.fairway],
       ['out of bounds, past the stakes', b.stakes],
       ['the rock beyond it', b.rock],
       ['beyond the hole', b.beyond],
