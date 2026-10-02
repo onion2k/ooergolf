@@ -274,6 +274,9 @@
    * phone beside the purse
    */
   #strokes {
+    position: fixed;
+    top: calc(16px + env(safe-area-inset-top, 0px));
+    left: 16px;
     grid-template-columns: auto 1fr;
     column-gap: 8px;
     min-width: 0;
@@ -400,6 +403,12 @@
     white-space: normal;
     font-variant-numeric: tabular-nums;
   }
+  /* the drawer's parts are for a phone: a desk has the hole's panel as it always had, and none of these */
+  #holeChip,
+  #holeInfoClose,
+  #drawerScrim {
+    display: none;
+  }
   /*
    * the map of a golf hole, at the left edge halfway down where neither the words at the top nor the bag and switch
    * at the bottom are: a picture over the course, which a finger passes through to aim
@@ -436,6 +445,14 @@
   }
   #purse:not([hidden]) {
     display: flex;
+  }
+  /* golf pays no coins and no gems, so its purse is the button to the shop, which is for clubs to come, and nothing to count */
+  #purse[data-golf] {
+    padding: 6px;
+  }
+  #purse[data-golf] .coin,
+  #purse[data-golf] .gem {
+    display: none;
   }
   #purse .coin,
   #purse .gem {
@@ -950,14 +967,9 @@
       0 0 0 var(--sky-deep);
   }
   @media (max-width: 600px) {
-    /*
-     * the map stands on the bag, at the left edge, and not at a share of the height: the hole's words above it grow a
-     * line for a long name, and the bag below is as tall as 150px (its words on two lines), so the map keeps a gap from
-     * the bag and leaves the rest to the words
-     */
+    /* the map stands under the hole's chip at the left edge, as the switch stands under the shop at the right */
     #holePanel {
-      top: auto;
-      bottom: calc(16px + 150px + 24px + env(safe-area-inset-bottom, 0px));
+      top: calc(16px + 64px + 10px + env(safe-area-inset-top, 0px));
       translate: none;
     }
     /* on a phone the switch sits under the coins and the shop, at the top right, which leaves the foot of the screen to the bag */
@@ -1032,6 +1044,49 @@
     padding: 0 8px;
     font-size: 15px;
   }
+  /*
+   * a club is a round button, as wide as it is high: `--club` across, which is a thumb on a desk, and on a phone as much
+   * of the width as eight can have between them (set below)
+   */
+  #bag {
+    --club: 44px;
+  }
+  #bagClubs button {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: var(--club);
+    height: var(--club);
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    border-radius: 50%;
+    font-size: clamp(13px, calc(var(--club) * 0.36), 16px);
+  }
+  /*
+   * what a shape does, drawn: an arrow that goes the way the ball goes as seen from behind it, straight on, curving left
+   * for a draw and right for a fade, in the button's own colour, so a player who does not know the words can read it
+   */
+  #shapeButton::before {
+    content: '';
+    display: inline-block;
+    width: 18px;
+    height: 18px;
+    margin-right: 6px;
+    vertical-align: -4px;
+    background: currentColor;
+    -webkit-mask: var(--arrow) center / contain no-repeat;
+    mask: var(--arrow) center / contain no-repeat;
+  }
+  #shapeButton[data-shape='0'] {
+    --arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 21V4M5.5 10.5 12 4l6.5 6.5'/%3E%3C/svg%3E");
+  }
+  #shapeButton[data-shape='-1'] {
+    --arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 21C18 13 14 8 6 5M9.2 11.3 6 5l6.7-2'/%3E%3C/svg%3E");
+  }
+  #shapeButton[data-shape='1'] {
+    --arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 21C6 13 10 8 18 5M14.8 11.3 18 5l-6.7-2'/%3E%3C/svg%3E");
+  }
   /* straight and flat are the quiet buttons they were; a shape or a spin chosen stands up in the sun's yellow */
   #bagShaping button[data-shape='0'],
   #bagShaping button[data-spin='0'] {
@@ -1061,8 +1116,11 @@
     #bag {
       bottom: calc(16px + env(safe-area-inset-bottom, 0px));
     }
+    /* eight across what the bag has between the screen's margins, its padding and its borders, and the gaps between them */
+    #bag {
+      --club: min(44px, calc((100vw / var(--ui, 1) - 73px) / 8));
+    }
     #bag button {
-      min-width: 36px;
       padding: 0 5px;
       font-size: 14px;
     }
@@ -1103,8 +1161,7 @@
   }
   /*
    * A phone on its side, or any window as short: under five hundred pixels high the panels are the whole of the height
-   * if they stand as they do upright, so each is given less. The hole's words go in two columns (the pin and the wind
-   * beside the strokes, the greens' speed dropped), the purse is the coins alone, the switch stands in a column at the
+   * if they stand as they do upright, so each is given less. The hole's words are a drawer, as on a phone upright, the purse is the coins alone, the switch stands in a column at the
    * right edge (it was a row at the bottom, where the bag has to go) and the frame's cost is away as on a phone upright,
    * the help is a narrow chip at the left foot with the map above it, and the bag takes what is between that and the
    * switch, in three short rows, the shape and spin a little below a thumb since they are touched once a shot and the
@@ -1122,29 +1179,6 @@
     }
     #purse button {
       padding: 0 14px;
-    }
-    #strokes {
-      grid-template-columns: auto auto auto;
-      padding: 6px 14px 8px;
-    }
-    #holeName .of {
-      grid-area: 1 / 1 / 2 / 3;
-    }
-    #holeName .name {
-      grid-area: 2 / 1 / 3 / 3;
-      margin-bottom: 2px;
-    }
-    #pin {
-      grid-area: 2 / 3 / 3 / 4;
-      align-self: end;
-      margin: 0 0 2px 10px;
-    }
-    #wind {
-      grid-area: 3 / 3 / 4 / 4;
-      margin-left: 10px;
-    }
-    #greens {
-      display: none;
     }
     /* the switch is a row under the coins and the shop, at the top right, and the help is away */
     #viewMode {
@@ -1184,8 +1218,10 @@
       line-height: 1.2;
       text-align: center;
     }
+    #bag {
+      --club: 40px;
+    }
     #bag button {
-      min-width: 36px;
       padding: 0 5px;
       font-size: 14px;
     }
@@ -1225,6 +1261,166 @@
       font-size: 20px;
     }
   }
+  /*
+   * The hole's words on a phone, upright or on its side: a chip at the top left that says which hole and how many strokes,
+   * and under it, off the screen's edge, the hole's panel as a drawer that the chip pulls out (the name and par, the strokes,
+   * the pin, the wind, the greens' speed and the break of the putt, as high as its words and stood over a dimmed course),
+   * shut again by its own button, a tap on the course
+   * beside it or the escape key. The map stays where it is, since a player aims by it. Last but one in the sheet, to win over
+   * the rules above for a screen that is both narrow and short. The page keeps the drawer's state in `data-drawer` on the
+   * page's root, shut unless it says open, and never a drag on the course while it is open: the course beside it is its scrim.
+   */
+  @media (max-width: 600px), (max-height: 500px) {
+    #holeChip {
+      flex: none;
+      min-height: 64px;
+      padding: 0;
+    }
+    #holeChip:not([hidden]) {
+      display: block;
+      pointer-events: auto;
+    }
+    #holeChip button {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      min-height: 56px;
+      padding: 0 12px 0 14px;
+      text-align: left;
+      color: var(--ink);
+      background: none;
+      border-radius: 14px;
+      box-shadow: none;
+    }
+    #holeChip button:hover,
+    #holeChip button:active {
+      translate: none;
+      background: var(--sky-tint);
+      box-shadow: none;
+    }
+    #holeChip .chipText {
+      display: grid;
+      gap: 2px;
+    }
+    #chipHole {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      white-space: nowrap;
+      color: var(--ink-soft);
+    }
+    #holeChip .chipCount {
+      font-size: 14px;
+      font-weight: 700;
+      white-space: nowrap;
+      color: var(--ink-soft);
+    }
+    #holeChip b {
+      font-size: 26px;
+      font-weight: 900;
+      line-height: 1;
+      color: var(--ink);
+      font-variant-numeric: tabular-nums;
+    }
+    /* the chevron stands on the hole's line, so the chip is no wider than its two lines and a full purse beside it still fits */
+    #holeChip .chipTop {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+    }
+    #holeChip svg {
+      width: 14px;
+      height: 14px;
+      flex: none;
+      color: var(--sky-ink);
+    }
+    #drawerScrim {
+      position: fixed;
+      inset: 0;
+      z-index: 2;
+      background: rgba(20, 32, 72, 0.32);
+    }
+    html[data-drawer='open'] #drawerScrim:not([hidden]) {
+      display: block;
+    }
+    #strokes {
+      top: calc(16px + env(safe-area-inset-top, 0px));
+      left: 0;
+      z-index: 3;
+      max-height: calc(100% - 32px);
+      align-content: start;
+      grid-template-columns: auto 1fr;
+      width: min(300px, calc(100vw / var(--ui, 1) - 56px));
+      padding: 14px 20px 18px 22px;
+      border-left-width: 0;
+      border-radius: 0 26px 26px 0;
+      overflow: auto;
+      translate: calc(-100% - 24px) 0;
+      visibility: hidden;
+      /* a drawer slides and never springs, since a spring past its mark leaves a gap at the screen's edge */
+      transition:
+        translate 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
+        visibility 0s linear 260ms,
+        opacity 120ms linear;
+    }
+    html[data-drawer='open'] #strokes {
+      translate: 0 0;
+      visibility: visible;
+      pointer-events: auto;
+      transition:
+        translate 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
+        visibility 0s,
+        opacity 120ms linear;
+    }
+    #strokes #holeInfoClose {
+      display: grid;
+      place-items: center;
+      grid-area: 1 / 2 / 2 / 3;
+      justify-self: end;
+      width: 44px;
+      min-width: 44px;
+      padding: 0;
+      margin: -8px -8px 0 0;
+    }
+    #holeInfoClose svg {
+      width: 20px;
+      height: 20px;
+      pointer-events: none;
+    }
+    #holeName .of {
+      grid-area: 1 / 1 / 2 / 2;
+      align-self: center;
+    }
+    #holeName .name {
+      grid-area: 2 / 1 / 3 / -1;
+      margin-bottom: 8px;
+      font-size: 22px;
+    }
+    #strokes b {
+      grid-area: 3 / 1 / 5 / 2;
+    }
+    #pin {
+      grid-area: 5 / 1 / 6 / -1;
+      margin: 10px 0 0;
+      font-size: 15px;
+    }
+    #wind {
+      grid-area: 6 / 1 / 7 / -1;
+      font-size: 15px;
+    }
+    #greens {
+      font-size: 14px;
+    }
+    #greens:not([hidden]) {
+      display: block;
+    }
+    #putt {
+      font-size: 14px;
+    }
+  }
   /* a player who has asked for less motion gets none: every panel and button is there, or gone, at once */
   @media (prefers-reduced-motion: reduce) {
     .panel,
@@ -1235,24 +1431,50 @@
   }
 </style>
 <div id="stage"><canvas id="view"></canvas></div>
+<div id="drawerScrim" hidden></div>
 <div id="top">
-  <div class="panel" id="strokes" hidden>
-    <small id="holeName"><span class="of"></span> <span class="name"></span></small>
-    <span id="holePar"></span>
-    <p class="count"><b>0</b> <span class="unit">strokes</span></p>
-    <small id="pin" hidden></small>
-    <small id="wind" hidden
-      ><svg id="windArrow" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1 14 8H10.2V15H5.8V8H2Z" /></svg
-      ><span id="windText"></span
-    ></small>
-    <small id="greens" hidden></small>
-    <small id="putt" hidden></small>
+  <div class="panel" id="holeChip" hidden>
+    <button id="holeInfoOpen" type="button" aria-controls="strokes" aria-expanded="false" aria-label="Hole details">
+      <span class="chipText">
+        <span class="chipTop">
+          <span id="chipHole"></span>
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path
+              d="M9 5l7 7-7 7"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="3.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </span>
+        <span class="chipCount"><b id="chipStrokes">0</b> <span id="chipUnit">strokes</span></span>
+      </span>
+    </button>
   </div>
   <div class="panel" id="purse" hidden>
     <span class="coin"><b id="coins">0</b><em> coins</em></span
     ><span class="gem"><i id="gems">0</i><em> gems</em></span
     ><button id="shopOpen">Shop</button>
   </div>
+</div>
+<div class="panel" id="strokes" hidden>
+  <button id="holeInfoClose" class="quiet" type="button" aria-label="Close the hole details">
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" />
+    </svg>
+  </button>
+  <small id="holeName"><span class="of"></span> <span class="name"></span></small>
+  <span id="holePar"></span>
+  <p class="count"><b>0</b> <span class="unit">strokes</span></p>
+  <small id="pin" hidden></small>
+  <small id="wind" hidden
+    ><svg id="windArrow" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1 14 8H10.2V15H5.8V8H2Z" /></svg
+    ><span id="windText"></span
+  ></small>
+  <small id="greens" hidden></small>
+  <small id="putt" hidden></small>
 </div>
 <div class="panel" id="toast" hidden></div>
 <div class="panel" id="card" hidden>

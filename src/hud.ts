@@ -139,6 +139,12 @@ export class Hud {
   private readonly rows = document.getElementById('cardRows')!;
   private readonly total = document.getElementById('cardTotal')!;
   private readonly purse = document.getElementById('purse')!;
+  private readonly chip = document.getElementById('holeChip')!;
+  private readonly chipOpen = document.getElementById('holeInfoOpen')!;
+  private readonly chipHole = document.getElementById('chipHole')!;
+  private readonly chipStrokes = document.getElementById('chipStrokes')!;
+  private readonly chipUnit = document.getElementById('chipUnit')!;
+  private readonly scrim = document.getElementById('drawerScrim')!;
   private readonly coins = document.getElementById('coins')!;
   private readonly gems = document.getElementById('gems')!;
   private readonly shop = document.getElementById('shop')!;
@@ -207,6 +213,14 @@ export class Hud {
     document.getElementById('shopClose')!.addEventListener('click', () => {
       this.shop.hidden = true;
     });
+    // on a phone the hole's panel is a drawer off the screen's edge: the chip pulls it out, and it is shut by its button, a
+    // tap on the course beside it or the escape key (the stylesheet says where it stands; on a desk none of this is shown)
+    this.chipOpen.addEventListener('click', () => this.setDrawer(true));
+    document.getElementById('holeInfoClose')!.addEventListener('click', () => this.setDrawer(false));
+    this.scrim.addEventListener('click', () => this.setDrawer(false));
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') this.setDrawer(false);
+    });
     this.aimButton.addEventListener('click', () => handlers.mode('aim'));
     this.lookButton.addEventListener('click', () => handlers.mode('look'));
     this.flagButton.addEventListener('click', () => handlers.flag());
@@ -214,6 +228,21 @@ export class Hud {
     this.shapeButton.addEventListener('click', () => handlers.shape(this.next(SHAPES, this.shapeShown)));
     this.spinButton.addEventListener('click', () => handlers.spin(this.next(SPINS, this.spinShown)));
     this.setShaping(0, 0, true);
+  }
+
+  /**
+   * The hole's drawer open or shut, on a phone: the page's root says which (`data-drawer`, which the stylesheet moves the
+   * panel by), the chip says whether it is open to a screen reader, and the scrim over the course is up while it is.
+   */
+  setDrawer(open: boolean) {
+    document.documentElement.dataset.drawer = open ? 'open' : 'closed';
+    this.chipOpen.setAttribute('aria-expanded', String(open));
+    this.scrim.hidden = !open;
+  }
+
+  /** Whether the hole's drawer is open: for the test API. */
+  drawerOpen(): boolean {
+    return document.documentElement.dataset.drawer === 'open';
   }
 
   /** The value after `value` in a cycle of buttons: the first for one that is not in it. */
@@ -268,6 +297,8 @@ export class Hud {
    */
   setBag(clubs: readonly BagInfo[] | null, active = '') {
     this.bagList = clubs ?? [];
+    // golf pays nothing, so its purse is the shop's button alone, with no coins or gems to count
+    this.purse.toggleAttribute('data-golf', !!clubs);
     this.setMode(this.mode);
     if (!clubs) {
       this.bag.hidden = true;
@@ -477,6 +508,7 @@ export class Hud {
   show() {
     this.panel.hidden = false;
     this.purse.hidden = false;
+    this.chip.hidden = false;
     this.help.hidden = false;
     this.modes.hidden = false;
     this.bag.hidden = !this.bagList.length;
@@ -521,6 +553,7 @@ export class Hud {
     for (const el of [
       this.panel,
       this.purse,
+      this.chip,
       this.help,
       this.modes,
       this.bag,
@@ -531,6 +564,7 @@ export class Hud {
     ])
       el.hidden = true;
     this.start.hidden = false;
+    this.setDrawer(false);
   }
 
   /** The start screen put away, and the course's words shown. */
@@ -583,6 +617,9 @@ export class Hud {
   /** A hole begun: its number and name, its par, no strokes, and nothing else over the course. */
   started(info: HoleInfo) {
     this.holeOf.textContent = `Hole ${info.index + 1} of ${info.count}`;
+    this.chipHole.textContent = `Hole ${info.index + 1}`;
+    // a new hole is seen: the drawer of the last is shut
+    this.setDrawer(false);
     this.holeTitle.textContent = info.name;
     this.par.textContent = `par ${info.par}`;
     this.setStrokes(0);
@@ -597,6 +634,8 @@ export class Hud {
     if (this.strokes.textContent !== String(n) && loss) this.toast.hidden = true;
     this.strokes.textContent = String(n);
     this.unit.textContent = n === 1 ? 'stroke' : 'strokes';
+    this.chipStrokes.textContent = String(n);
+    this.chipUnit.textContent = this.unit.textContent;
   }
 
   /** The word over the course, of its kind, which the stylesheet colours and pops in. */

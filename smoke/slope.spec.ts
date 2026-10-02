@@ -10,7 +10,7 @@ import { breakOf } from '../src/green';
 import { puttText } from '../src/readout';
 import { bigHole } from './bighole';
 import { drag, start, watch } from './game';
-import { CONTRAST, read } from './panels';
+import { CONTRAST, openDrawer, read } from './panels';
 
 const TOLERANCE = { maxDiffPixelRatio: 0.002, threshold: 0.02 };
 const SIDE_HILL = COURSES.find((c) => c.name === 'The Hills')!.holes.find((h) => h.name === 'Side-hill')!;
@@ -164,12 +164,15 @@ test.describe('the break on a sloped hole of minigolf', () => {
       const problems = watch(page);
       await start(page, { seed: 11, paused: true });
       await onSideHill(page);
+      await hideStats(page);
+      await expect(page).toHaveScreenshot('phone-slope.png', TOLERANCE);
+      // the break is in the hole's drawer, which the chip pulls out
+      await openDrawer(page);
       const r = await read(page);
       expect(r.outside).toEqual([]);
       expect(r.texts.filter((t) => t.ratio < CONTRAST).map((t) => `"${t.text}" ${t.ratio}:1`)).toEqual([]);
       expect(r.texts.some((t) => t.text.startsWith('Putt:'))).toBe(true);
-      await hideStats(page);
-      await expect(page).toHaveScreenshot('phone-slope.png', TOLERANCE);
+      await expect(page).toHaveScreenshot('phone-slope-drawer.png', TOLERANCE);
       expect(problems).toEqual([]);
     });
   });

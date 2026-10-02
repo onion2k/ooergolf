@@ -15,6 +15,14 @@ import type { Page } from '@playwright/test';
 export const CONTRAST = 4.5;
 /** A thumb's height, in CSS pixels: the least a button may be. */
 export const THUMB = 44;
+/**
+ * The least a club's round button may be across on a phone, in the panel's own pixels. The bag's eight stand in a row
+ * across a screen of 360, which leaves 35.9 each between its margins, and a thumb is 44: they are a thumb wide on a desk
+ * and as wide as the row allows on a phone, where the row is as wide as the screen was laid out for.
+ */
+export const CLUB_LEAST = 35;
+/** The names of the eight clubs on the bag's buttons. */
+export const CLUBS = ['Dr', '3W', '5i', '7i', '9i', 'PW', 'SW', 'Pt'];
 
 export interface Reading {
   /** Each text that is up, with its contrast against what is behind it. */
@@ -116,6 +124,28 @@ export function read(page: Page): Promise<Reading> {
       }
     }
     return reading;
+  });
+}
+
+/**
+ * The hole's drawer pulled out by its chip, on a phone, with its motion finished: true if it did, and false on a screen
+ * with no chip, which is a desk, where the pin, the wind and the rest are in the hole's panel as they always were.
+ */
+export async function openDrawer(page: Page): Promise<boolean> {
+  const chip = page.locator('#holeInfoOpen');
+  if (!(await chip.isVisible())) return false;
+  await chip.click();
+  await page.evaluate(() => {
+    for (const a of document.getAnimations()) a.finish();
+  });
+  return true;
+}
+
+/** The drawer shut by its own button, and the motion finished. */
+export async function closeDrawer(page: Page) {
+  await page.locator('#holeInfoClose').click();
+  await page.evaluate(() => {
+    for (const a of document.getAnimations()) a.finish();
   });
 }
 

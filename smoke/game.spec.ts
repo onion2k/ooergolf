@@ -1574,13 +1574,15 @@ test.describe('on a phone', () => {
       g.startHole(holes.reduce((a, h, i) => (h.name.length > holes[a].name.length ? i : a), 0));
       g.step(1);
     });
-    await expect(page.locator('#strokes')).toBeVisible();
+    // on a phone the hole's words are a chip, with the panel a drawer out of sight
+    await expect(page.locator('#holeChip')).toBeVisible();
+    await expect(page.locator('#strokes')).toBeHidden();
     // a phone is not given the instruction to drag back
     await expect(page.locator('#help')).toBeHidden();
     await check('the course');
-    const hole = (await page.locator('#strokes').boundingBox())!,
+    const hole = (await page.locator('#holeChip').boundingBox())!,
       purse = (await page.locator('#purse').boundingBox())!;
-    expect(hole.x + hole.width, "the hole's words clear of the purse").toBeLessThanOrEqual(purse.x);
+    expect(hole.x + hole.width, "the hole's chip clear of the purse").toBeLessThanOrEqual(purse.x);
     await info.attach('phone', { body: await page.screenshot(), contentType: 'image/png' });
     await page.locator('#shopOpen').click();
     await check('the shop');

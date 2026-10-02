@@ -21,7 +21,7 @@ import { DRAG } from '../src/shot';
 import { scoreName } from '../src/score';
 import { LIE } from '../src/surfaces';
 import { drag, puttingHole, start, watch } from './game';
-import { CONTRAST, THUMB, read } from './panels';
+import { CONTRAST, THUMB, openDrawer, read } from './panels';
 
 /** Play `frames` frames, and check nothing that must hold has broken. */
 async function play(page: Page, frames: number, stage: string) {
@@ -1623,6 +1623,8 @@ test.describe('putting on a golf hole whose greens have a speed and a contour', 
         const problems = watch(page);
         await start(page, { seed: 5, paused: true });
         await puttingAt(page, middleOf(LIE.green, 8));
+        // on a phone the speed and the break are in the hole's drawer, pulled out by its chip
+        const drawer = await openDrawer(page);
         const r = await read(page);
         expect(r.outside, 'nothing past the screen').toEqual([]);
         expect(r.scrollWidth).toBeLessThanOrEqual(viewport.width);
@@ -1650,8 +1652,10 @@ test.describe('putting on a golf hole whose greens have a speed and a contour', 
           (await box('#greens')).y + (await box('#greens')).height - 1,
         );
         void wind;
-        for (const other of ['#purse', '#holePanel', '#bag', '#viewMode', '#viewFlag', ...(touch ? [] : ['#help'])])
-          expect(apart(strokes, await box(other)), `the strokes panel and ${other} do not overlap`).toBe(true);
+        // a drawer is over the other panels by design, so it is only on a desk that they are clear of it
+        if (!drawer)
+          for (const other of ['#purse', '#holePanel', '#bag', '#viewMode', '#viewFlag', ...(touch ? [] : ['#help'])])
+            expect(apart(strokes, await box(other)), `the strokes panel and ${other} do not overlap`).toBe(true);
         expect(problems).toEqual([]);
       });
     });

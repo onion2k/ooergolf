@@ -26,6 +26,7 @@ const MOORS = moors();
 import { glint } from '../src/glints';
 import { LIE } from '../src/surfaces';
 import { drag, puttingHole, start, watch } from './game';
+import { openDrawer } from './panels';
 
 /** How far the pictures may differ before it is a change and not the GPU: a fiftieth of the pixels, each well off. */
 const TOLERANCE = { maxDiffPixelRatio: 0.002, threshold: 0.02 };
@@ -907,7 +908,7 @@ test.describe('what it looks like', () => {
       expect(problems).toEqual([]);
     });
 
-    test('a full drive aimed on a phone: the flight to its ring, the pin under the strokes and the map at the side', async ({
+    test("a full drive aimed on a phone: the flight to its ring, the map at the side, and the hole's drawer pulled out with the pin and the wind", async ({
       page,
     }) => {
       const problems = watch(page);
@@ -920,6 +921,8 @@ test.describe('what it looks like', () => {
       await pullDown(page, 1, 0, true);
       expect((await page.evaluate(() => window.game!.motions().shot))?.end).toBe('landed');
       await expect(page).toHaveScreenshot('phone-links-aim.png', TOLERANCE);
+      await openDrawer(page);
+      await expect(page).toHaveScreenshot('phone-links-aim-drawer.png', TOLERANCE);
       expect(problems).toEqual([]);
     });
 
@@ -985,7 +988,7 @@ test.describe('what it looks like', () => {
       expect(problems).toEqual([]);
     });
 
-    test('a full drive aimed on its side: the pin and the wind beside the strokes, the map, the bag and the switch under the coins', async ({
+    test("a full drive aimed on its side: the chip, the map, the bag and the switch under the shop, and the hole's drawer pulled out", async ({
       page,
     }) => {
       const problems = watch(page);
@@ -998,6 +1001,8 @@ test.describe('what it looks like', () => {
       await pullDown(page, 1, 0, true);
       expect((await page.evaluate(() => window.game!.motions().shot))?.end).toBe('landed');
       await expect(page).toHaveScreenshot('landscape-links-aim.png', TOLERANCE);
+      await openDrawer(page);
+      await expect(page).toHaveScreenshot('landscape-links-aim-drawer.png', TOLERANCE);
       expect(problems).toEqual([]);
     });
 
@@ -1149,12 +1154,14 @@ test.describe('putting', () => {
   test.describe('on a phone', () => {
     test.use({ viewport: { width: 400, height: 860 }, hasTouch: true, isMobile: true });
 
-    test('the green with its arrows, and the speed and the break in the panel', async ({ page }) => {
+    test("the green with its arrows, and the speed and the break in the hole's drawer", async ({ page }) => {
       const problems = watch(page);
       await start(page, { seed: 11, paused: true });
       await onTheGreen(page, middleOf(LIE.green, 'far'));
       await hideStats(page);
       await expect(page).toHaveScreenshot('phone-putting.png', TOLERANCE);
+      await openDrawer(page);
+      await expect(page).toHaveScreenshot('phone-putting-drawer.png', TOLERANCE);
       expect(problems).toEqual([]);
     });
   });

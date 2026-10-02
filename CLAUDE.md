@@ -510,7 +510,7 @@ change meant to move it, and the commit says why. Look at every picture.
   (`Scene.setShot`, `shotMarks`), scaled for the camera's distance (`markScale`) and laid along the ground's slope and
   lifted clear of a hollow (`placeOnSlope`, `ringLift`: a flat ring over a hill is a crescent in the turf). The bag says
   where it comes down after the club ("Driver · lands 260 yd · fairway", "hits a tree · lands 67 yd · fairway"), the
-  strokes panel says the pin ("503 yd ▲ 1") and under it the wind (an arrow that points the way it blows on the screen,
+  hole's panel says the pin ("503 yd ▲ 1") and under it the wind (an arrow that points the way it blows on the screen,
   turned with the camera by `windArrow`, and "12 mph", or "calm"), and the map is shown on a golf hole and away on minigolf
   and under the start screen. In the bag, between the words and the clubs, two cycle buttons, **Shape: Straight / Draw /
   Fade** and **Spin: Flat / Back / Top**, shown with a lofted club in hand and put back to straight and flat by a
@@ -618,7 +618,15 @@ change meant to move it, and the commit says why. Look at every picture.
   ball (`faceFlag` in `main.ts`, through the hud's `flag` handler), eased and by the shortest way, in Aim and in Look and on
   minigolf as on golf, leaving the mode, the zoom, the tilt and an aim view as they are; it does nothing under the start
   screen, with the ball at the cup, or while a drag is held on the course (the aim is the ground under the finger through the
-  camera, and a camera turning under it would turn the shot), and a Look drag of the player's own takes the turn over.
+  camera, and a Look drag of the player's own takes the turn over. **On a phone** (under 600 wide or 500 high) the hole's
+  panel (`#strokes`: name, par, strokes, pin, wind, greens, break) is a drawer off the left edge, out of the page's flow,
+  pulled out by a chip at the top left (`#holeChip`: "Hole 3 · 0 strokes") and shut by its ✕, a tap on the dimmed course
+  (`#drawerScrim`, which is not the canvas, so a drag there is never a shot) or escape; a new hole or the start screen shuts
+  it, and `Hud.setDrawer` keeps its state as `data-drawer` on the page's root. The map stays out, under the chip. A desk
+  has no chip and the panel as it was. The bag's clubs are round (`--club` across, 44 on a desk and as many as eight
+  fit across a phone's width, 35.9 at 360, which is why `CLUB_LEAST` in `smoke/panels.ts` is not a thumb), the shape
+  button carries an arrow in the stylesheet (a mask, so `textContent` is still the words: up for straight, curving left
+  for a draw and right for a fade), and a golf hole's purse is the shop's button alone (`data-golf`: golf pays nothing).
 - `src/noise.ts` makes ground from noise: `gradientNoise(seed)` is Perlin's,
   and `noiseGround(layout, { seed, feel, steepness })` a hole's heights from
   it, the same for a seed every time, never below nought, with optional
