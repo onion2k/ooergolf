@@ -11,9 +11,12 @@ import { defineConfig } from 'vite';
 const at = (pkg: string) => dirname(createRequire(import.meta.url).resolve(`${pkg}/package.json`));
 const packages = ['artshape-render', 'artshape-physics'];
 
+/** The dev server's port: 5200, or `PORT` from the environment so a worktree built beside this one has a port of its own. */
+const port = Number(process.env.PORT) || 5200;
+
 export default defineConfig({
   server: {
-    port: 5200,
+    port,
     strictPort: true,
     watch: { ignored: packages.map((p) => `!**/node_modules/${p}/**`) },
     fs: { allow: ['.', ...packages.map(at)] },

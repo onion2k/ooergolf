@@ -187,7 +187,7 @@ today, and what the next features must hand it:
 
 ## Commands
 
-    npm run dev            the game at http://localhost:5200
+    npm run dev            the game at http://localhost:5200 (PORT=n for another port; the smoke tests take PORT too, 5201 by default)
     npm run check:quick    formatting, types, lint, unit tests (the pre-commit hook; ~10 s)
     npm run check          all of it: check:quick, fuzz, determinism, leaks, bench, smoke with perf and look (~20 s)
     npm test               unit tests (Vitest, test/)

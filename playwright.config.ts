@@ -5,7 +5,8 @@ import { defineConfig } from '@playwright/test';
  * Chromium's new headless mode (the `chromium` channel) has WebGPU on the real
  * adapter; the older headless shell has none, or only a software one.
  */
-const PORT = 5201;
+// 5201, or `PORT` from the environment, so a worktree's smoke run does not collide with another's on this machine
+const PORT = Number(process.env.PORT) || 5201;
 
 export default defineConfig({
   testDir: 'smoke',
