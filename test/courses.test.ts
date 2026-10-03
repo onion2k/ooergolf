@@ -14,6 +14,7 @@ describe('the courses', () => {
       'The Meadow',
       'The Pinball Shed',
       'The Fair',
+      'The Waterworks',
       'The Range',
       'The Links',
     ]);

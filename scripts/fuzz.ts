@@ -6,7 +6,8 @@
  *   npm run fuzz -- --seed 17            one seed again, with what was done before it went wrong
  *   npm run fuzz -- --seed 17 --on range the seed's run on The Range again, if that is where it went wrong (or `links`, or
  *                                        `windy`, the holes of The Range with a wind on them, or `contoured`, The Links' holes with the steepest greens at
- *                                        every speed, `shed`, The Pinball Shed's holes, or `fair`, The Fair's, each played once more as its own run)
+ *                                        every speed, `shed`, The Pinball Shed's holes, `fair`, The Fair's, or `waterworks`, The
+ *                                        Waterworks', each minigolf course played once more as its own run)
  *
  * Every seed is played five times: once as a player who chooses among the courses, and once each on The Range, on The
  * Links and on the holes of The Range with a wind on them (`WINDY`) and on The Links with the steepest greens at every speed
@@ -33,6 +34,7 @@ const GOLF = {
   // not golf, but courses of minigolf with something on every hole, each played alone as the golf courses are
   shed: 'The Pinball Shed',
   fair: 'The Fair',
+  waterworks: 'The Waterworks',
 } as const;
 type Golf = keyof typeof GOLF;
 
@@ -69,7 +71,7 @@ async function main() {
   // each seed as a player choosing among the courses, and on each course of golf alone; or only the one asked for, to play a failure again
   const on = value('on') as Golf | undefined;
   if (on !== undefined && !(on in GOLF))
-    throw new Error(`--on is range, links, windy, contoured, kickers, stream, shed or fair, not ${on}`);
+    throw new Error(`--on is range, links, windy, contoured, kickers, stream, shed, fair or waterworks, not ${on}`);
   const queue: { seed: number; on: Golf | undefined }[] = seeds.flatMap<{ seed: number; on: Golf | undefined }>(
     (seed) =>
       on
@@ -84,6 +86,7 @@ async function main() {
               { seed, on: 'contoured' as const },
               { seed, on: 'shed' as const },
               { seed, on: 'fair' as const },
+              { seed, on: 'waterworks' as const },
             ],
   );
   const results: (FuzzResult & { on: Golf | undefined })[] = [];

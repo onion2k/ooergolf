@@ -233,6 +233,26 @@ one), and carries a ball up it, but the scene draws every belt at the height of 
 buried; the belt is level and the step at its end is a map digit. Whack-a-mole was to have posts that rise and fall; the
 windmill's gate is a blade sweeping across a door, not a post, so it is a chain of barriers instead.
 
+### The Waterworks
+
+Water on every hole, and the ball always one slip from it: six of the nine holes are drawn (`src/waterworks.ts`), par 18
+so far, and the rest wait on a stream for the ball to cross, which is its own feature. A hole has one idea and
+something on it to time, use or fear, as The Meadow's have.
+
+| Hole | Par | Brings                                                                                                             |
+| ---- | --- | ------------------------------------------------------------------------------------------------------------------ |
+| 1    | 2   | The Causeway: a strip two tiles wide over a pond, eight tiles long, straight to the cup                            |
+| 2    | 3   | The Stepping Stones: a horseshoe of strips round a pond, stopped on at each corner stone and turned there          |
+| 3    | 3   | The Lock: a channel a tile wide between ponds, and a gate across it, open a little over half of every four seconds |
+| 4    | 3   | The Island Green: a green in a bowl, ringed with water, whose far rim is its edge: carry and die                   |
+| 5    | 3   | The Spillway: a lane along a pond's edge, the ground tilted to the water, every putt aimed up the slope            |
+| 6    | 4   | Mill Pond: a windmill on a causeway a tile wide: a ball met by a blade may be thrown off it                        |
+
+The sheet had a causeway three tiles wide and stones of two tiles by two a tile of water apart. Three tiles is nine
+units, which a slip of ten degrees still crosses, so it is two; and a ball rolls across a gap of one tile at speed,
+which the physics lets it, and the autopilot cannot play, so the stones are corners of a strip. The Island Green is
+`The Island Green` since `The Links` has an `Island Green` and a best score is kept by name.
+
 ## The upgrades
 
 Bought in the shop with what the holes pay. They change the physics, within

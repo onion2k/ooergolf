@@ -182,7 +182,7 @@ test.describe('the start screen', () => {
     const problems = watch(page);
     await start(page, { seed: 1, paused: true, screen: true });
     await expect(page.locator('#start')).toBeVisible();
-    await expect(page.locator('#start .course')).toHaveCount(5);
+    await expect(page.locator('#start .course')).toHaveCount(6);
     // the courses sit under two headings, minigolf then golf, the Meadow first of all
     await expect(page.locator('#start h2')).toHaveText(['Minigolf', 'Golf']);
     expect(
@@ -196,6 +196,7 @@ test.describe('the start screen', () => {
       'BUTTON:The Meadow',
       'BUTTON:The Pinball Shed',
       'BUTTON:The Fair',
+      'BUTTON:The Waterworks',
       'H2:Golf',
       'BUTTON:The Range',
       'BUTTON:The Links',
@@ -206,12 +207,15 @@ test.describe('the start screen', () => {
     await expect(page.locator('#start .course').nth(2)).toContainText('The Fair');
     await expect(page.locator('#start .course').nth(2)).toContainText('4 holes');
     await expect(page.locator('#start .course').nth(2)).toContainText('par 11');
-    await expect(page.locator('#start .course').nth(3)).toContainText('The Range');
-    await expect(page.locator('#start .course').nth(3)).toContainText('9 holes');
-    await expect(page.locator('#start .course').nth(3)).toContainText('par 32');
-    await expect(page.locator('#start .course').nth(4)).toContainText('The Links');
+    await expect(page.locator('#start .course').nth(3)).toContainText('The Waterworks');
+    await expect(page.locator('#start .course').nth(3)).toContainText('6 holes');
+    await expect(page.locator('#start .course').nth(3)).toContainText('par 18');
+    await expect(page.locator('#start .course').nth(4)).toContainText('The Range');
     await expect(page.locator('#start .course').nth(4)).toContainText('9 holes');
-    await expect(page.locator('#start .course').nth(4)).toContainText('par 36');
+    await expect(page.locator('#start .course').nth(4)).toContainText('par 32');
+    await expect(page.locator('#start .course').nth(5)).toContainText('The Links');
+    await expect(page.locator('#start .course').nth(5)).toContainText('9 holes');
+    await expect(page.locator('#start .course').nth(5)).toContainText('par 36');
     await expect(page.locator('#start .course').first()).toContainText('The Meadow');
     await expect(page.locator('#start .course').first()).toContainText('9 holes');
     expect(await page.evaluate(() => window.game!.state())).toMatchObject({ choosing: true, course: 'The Meadow' });

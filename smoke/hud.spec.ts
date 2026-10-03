@@ -36,7 +36,7 @@ for (const [where, device] of [
   test.describe(where, () => {
     test.use(device);
 
-    test('the start screen holds its three minigolf and two golf courses without scrolling, the colours going round the cards', async ({
+    test('the start screen holds its four minigolf and two golf courses without scrolling, the colours going round the cards', async ({
       page,
     }) => {
       const problems = watch(page);
@@ -50,7 +50,7 @@ for (const [where, device] of [
       });
       expect(r.fits, 'no scrolling in the start screen').toBe(true);
       // four cards, four colours: a heading among them must not shift the cycle
-      expect(new Set(r.faces).size, 'each card its own colour').toBe(5);
+      expect(new Set(r.faces).size, 'each card its own colour').toBe(6);
       expect(problems).toEqual([]);
     });
 
