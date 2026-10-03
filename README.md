@@ -50,14 +50,17 @@ machine that cannot keep up has the picture stepped down a rung at a time.
 The green is painted smooth in its mown stripes, and the rough round it is
 real blades, bending in each hole's own wind.
 
-Nine holes so far: a straight putt, a dog-leg, a bunker in front of the
-cup, a pond, sliding barriers, a field of pinball posts, a ramp up onto a
-plateau between ponds, a windmill whose blades sweep its door, and The Mill
-Race, with a barrier, the windmill and a conveyor to the cup, make The
-Meadow. Sand slows the ball hard, and water costs a stroke, the ball coming
-back to where it was struck from. A hole's ground may slope, and the break is
-shown over one that does: arrows, the putt's roll and the words. Three more
-courses of minigolf are planned, in `~/.claude/plans/ooergolf-three-courses.md`.
+Four courses of minigolf, nine holes each. The Meadow is the first: a straight putt, a dog-leg, a bunker in front of the
+cup, a pond, sliding barriers, a field of pinball posts, a ramp up onto a plateau between ponds, a windmill whose blades
+sweep its door, and The Mill Race, with a barrier, the windmill and a conveyor to the cup. Sand slows the ball hard, and
+water costs a stroke, the ball coming back to where it was struck from. The Pinball Shed is banks and bounces: the rail
+is a cushion, posts and round kickers throw the ball back harder than it came, a flipper swings up on its own beat and
+flings a ball timed to it, and the cup is often round a corner that only a bank gets to. The Fair is timing, with
+something that moves on every hole: windmills with two doors, barriers sliding across a lane, bumpers that slide and
+throw, and belts that carry the ball where they will. The Waterworks is water on every hole and the ball always one slip
+from it, on causeways, stones and an island green, and on the last three streams, belts drawn as running water, that carry
+a ball along and never sink it. A hole's ground may slope, and the break is shown over one that does: arrows, the putt's
+roll and the words. Two courses of golf follow, The Range and The Links.
 
 ## What is here
 
@@ -105,9 +108,12 @@ fixed, and no baseline is moved to make it green.
     src/debug.ts       window.game, the test API
     src/invariants.ts  what must always hold
     src/course.ts      the courses, and their holes: a map, a par, what moves on each, and its slopes
+    src/shed.ts        The Pinball Shed: nine hand-drawn holes of banks, kickers and a flipper
+    src/fair.ts        The Fair: nine hand-drawn holes with something that moves on each
+    src/waterworks.ts  The Waterworks: nine hand-drawn holes of water and streams
     src/open.ts        open holes made from a spec and a seed: ponds, bunkers and posts on noise ground
     src/noise.ts       ground made from Perlin noise: smooth, seeded, and legal to the physics
-    src/obstacles.ts   where a barrier, a windmill's gate and a belt are at any moment
+    src/obstacles.ts   where a barrier, a windmill's gate, a flipper's arm and a belt are at any moment
     src/arena.ts       a hole's map read into a layout; the kinds of body, the hardest shot
     src/surfaces.ts    what each kind of ground does: roll, landing, hop, a club's cost from it
     src/green.ts       a putting green's break and its arrows: which way the ground carries a putt

@@ -130,6 +130,52 @@ same seed and the same strokes give the same round.
 | Bumper          | A round post that bounces the ball harder than a wall |
 | Windmill        | Blades turning across a gap                           |
 | Conveyor        | Carries the ball along (the physics' belts)           |
+| Kicker          | A post that throws harder: a pinball's mushroom       |
+| Flipper         | An arm swung up about one end on its own beat         |
+| Moving bumper   | A sliding barrier that throws as a post does          |
+| Stream          | A conveyor drawn as running water                     |
+
+What each does, in figures:
+
+- **Sand** slows a ball steadily, at 60 a second a second where the green
+  is 16: a putt that reaches it at 20 dies three units in, and the hardest
+  shot ploughs thirteen. It is drawn as one bed over its tiles, with the
+  lip only where it meets the grass.
+- **A post** is a unit in radius and 1.6 high, and throws a ball back a
+  fifth faster than it met it, as a pinball post does. Between two facing
+  each other a ball would be thrown faster each time without end, so
+  nothing on the course throws a ball faster than half as fast again as
+  the hardest shot of the club that struck it.
+- **Water** costs a stroke, and the ball is put back where it was struck
+  from; at the limit the hole is picked up.
+- **A ball the course keeps moving,** a belt carrying it, may be struck
+  where it lies after ten seconds. A belt carries at its own speed: the
+  green's steady slowing is not on it. A barrier or a blade bounces a ball
+  off, and carries it no longer.
+
+Four kinds were added for The Pinball Shed, The Fair and The Waterworks, each to the same rule as the rest: where it is
+is a function of game time alone, and it is refused by name where it cannot stand.
+
+- **A kicker** (`k` on a map) is a post with a livelier bounce: the same radius of 1, a restitution of 1.8 against a
+  post's 1.2, and capped at the course's ceiling like everything else that throws. A post's fifth is hardly noticed, so
+  the kicker throws about 1.75 times as fast at the soft and middling shots a player makes most of (1.72 to 1.78 across
+  arrivals of 8 to 35 units a second), while the hardest shot is still held at the ceiling (59.7 against 60). It is drawn as
+  a pinball's mushroom, so a player knows which will kick before the ball gets there, and flashes when it is struck.
+  Minigolf grass only: a map with one on golf ground is refused.
+- **A flipper** is an arm turned about one end, with a length in tiles, a swing in radians, a period, a phase and a root on
+  the left or the right. Its angle is the sine of its time for the first half of its period, going up and coming back, and
+  nought for the second half, so it lies at rest long enough to be rolled onto. A ball met on the upswing is flung 4 units
+  further and 2.9 times as fast as one rolled onto the arm at rest, which is the whole of the hole it is on: the stroke
+  is timed to it. Its pose comes from time alone, so a flipper made new at a time is where one that has been playing is.
+  It is refused on ground that slopes anywhere it sweeps, as a barrier is, since a ball on a slope is rolled back against
+  a box for good.
+- **A moving bumper** is a barrier given a `bounce`: the same box sliding across the line, but throwing a ball as a post
+  does and not merely stopping it. A bounce from nought to twice a post's is allowed, and a barrier without one is what
+  it was.
+- **A stream** is a conveyor that looks like water: a belt to the ball, water to the eye, and the ball is never lost on it.
+  A belt pulls a ball's velocity toward its own by an eighth a step whatever its speed, and a belt is a tile deep, so a
+  ball struck across one at full power dies two and a third units in and is carried off. No stream can be crossed, which is
+  why the sheet's streams across the line were redrawn to run beside the line or along it.
 
 ### The first nine
 
@@ -176,14 +222,14 @@ on them. The break is shown on any hole that slopes: arrows over the green,
 the putt's roll drawn as it is aimed, and the break in words. Round each cup
 the ground is no steeper than the green holds a ball, 13 degrees, so a ball
 can come to rest beside it. Three new courses, each with one thing on every
-hole, are planned in `~/.claude/plans/ooergolf-three-courses.md`.
+hole, replaced them: The Pinball Shed, The Fair and The Waterworks, below, nine
+holes each and drawn by hand as The Meadow's are.
 
 ### The Pinball Shed
 
-Banks and bounces: the rail is a cushion, the posts throw, and the player's own
-line is the game. One idea a hole, and something on each that the player must
-use or fear. Nine are drawn, in `src/shed.ts`, par 25 (the plan said 27, but its
-nine pars add up to 25); the last four use the kicker and the flipper.
+Banks and bounces: the rail is a cushion, posts and kickers throw, and the player's own
+line is the game. Nothing here moves but the flipper, so the course is skill and not timing. Nine holes, in
+`src/shed.ts`, par 25 (the plan said 27, but its nine pars add up to 25); the last four use the kicker and the flipper.
 
 | Hole | Par | Brings                                                                                |
 | ---- | --- | ------------------------------------------------------------------------------------- |
@@ -200,29 +246,17 @@ nine pars add up to 25); the last four use the kicker and the flipper.
 The autopilot never banks, and plays each by the way round: its figures, which
 are a player's slips on that, are in the pace gate and not here.
 
-- **Sand** slows a ball steadily, at 60 a second a second where the green
-  is 16: a putt that reaches it at 20 dies three units in, and the hardest
-  shot ploughs thirteen. It is drawn as one bed over its tiles, with the
-  lip only where it meets the grass.
-- **A post** is a unit in radius and 1.6 high, and throws a ball back a
-  fifth faster than it met it, as a pinball post does. Between two facing
-  each other a ball would be thrown faster each time without end, so
-  nothing on the course throws a ball faster than half as fast again as
-  the hardest shot of the club that struck it.
-
-- **Water** costs a stroke, and the ball is put back where it was struck
-  from; at the limit the hole is picked up.
-- **A ball the course keeps moving,** a belt carrying it, may be struck
-  where it lies after ten seconds. A belt carries at its own speed: the
-  green's steady slowing is not on it. A barrier or a blade bounces a ball
-  off, and carries it no longer.
+Three holes differ from the sheet. The Kicker has the cup in a room through a door beside the kicker, not behind it, so no
+straight line sees the cup and the ace is a soft shot off the kicker's cheek, which throws the ball through the door.
+Flipper Alley is an L, a bay with the tee and a corridor with a row of sand and the flipper at its foot, since a bunker the
+width of the lane could not force the fling (a hard shot out-travels it); a mistimed ball is left short or in the sand.
+Multiball is a bank under a jut of rail, a funnel of posts, a kicker on the line and a flipper across the cup's mouth.
 
 ### The Fair
 
-The second minigolf course, after The Meadow, built from the plan in `~/.claude/plans/ooergolf-three-courses.md`: timing,
-with something that moves on every hole. Nine holes, par 28 (`src/fair.ts`): the first four need no new kind of obstacle,
-and the last five use the kicker and the moving bumper. A player who watches before striking takes about a stroke under
-par on each, as on The Meadow.
+Timing, with something that moves on every hole. Nine holes, par 28 (`src/fair.ts`): the first four need no new kind of
+obstacle, and the last five bring in the moving bumper and the kicker (Carousel, in between, is belts alone). A player who
+watches before striking takes about a stroke under par on each, as on The Meadow.
 
 | Hole | Par | Brings                                                                                                                                                                                              |
 | ---- | --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -248,23 +282,28 @@ clears even a single belt, and a ring lets nothing on to the island. So the ride
 belts carry a ball round it to the back, where it is set down short of the cup. Whatever the power, the ball ends in the
 same place, so the stroke's whole decision is to reach the belt.
 
+Dodgems' three bumpers beat on four seconds a phase of nought, a half and a quarter, not thirds: thirds never leave a
+moment when all three are off the line at the autopilot's margin, and the draft waited ten seconds and fired blind. The Big
+Wheel puts the windmill's door nearest the tee, since the forty-unit approach of The Mill Race's order was within a slip of
+aim, and the course's nine pars add up to 28, the sheet's own figure.
+
 ### The Waterworks
 
-Water on every hole, and the ball always one slip from it: all nine holes are drawn (`src/waterworks.ts`), par 28, the
-last three with a stream, a conveyor drawn as running water. A hole has one idea and something on it to time, use or fear,
+Water on every hole, and the ball always one slip from it. Nine holes (`src/waterworks.ts`), par 28, not the sheet's 29, since
+the sheet's own pars add to 28; the last three have a stream. A hole has one idea and something on it to time, use or fear,
 as The Meadow's have.
 
-| Hole | Par | Brings                                                                                                             |
-| ---- | --- | ------------------------------------------------------------------------------------------------------------------ |
-| 1    | 2   | The Causeway: a strip two tiles wide over a pond, eight tiles long, straight to the cup                            |
-| 2    | 3   | The Stepping Stones: a horseshoe of strips round a pond, stopped on at each corner stone and turned there          |
-| 3    | 3   | The Lock: a channel a tile wide between ponds, and a gate across it, open a little over half of every four seconds |
-| 4    | 3   | The Island Green: a green in a bowl, ringed with water, whose far rim is its edge: carry and die                   |
-| 5    | 3   | The Spillway: a lane along a pond's edge, the ground tilted to the water, every putt aimed up the slope            |
-| 6    | 4   | Mill Pond: a windmill on a causeway a tile wide: a ball met by a blade may be thrown off it                        |
-| 7    | 3   | The Weir: a river down the lane's east side into a pond beside the cup: keep off it, west of it                    |
-| 8    | 3   | The Rapids: a zigzag river of five runs of stream, north, east, north, west, north, that carries a ball to the cup |
-| 9    | 4   | The Flood: a lock's gate, a stone, a stream over the pond and the island green in its bowl, up one line            |
+| Hole | Par | Brings                                                                                                                      |
+| ---- | --- | --------------------------------------------------------------------------------------------------------------------------- |
+| 1    | 2   | The Causeway: a strip two tiles wide over a pond, eight tiles long, straight to the cup                                     |
+| 2    | 3   | The Stepping Stones: a horseshoe of strips round a pond, stopped on at each corner stone and turned there                   |
+| 3    | 3   | The Lock: a channel a tile wide between ponds, and a gate across it, open a little over half of every four seconds          |
+| 4    | 3   | The Island Green: a green in a bowl, ringed with water, whose far rim is its edge: carry and die                            |
+| 5    | 3   | The Spillway: a lane along a pond's edge, the ground tilted to the water, every putt aimed up the slope                     |
+| 6    | 4   | Mill Pond: a windmill on a causeway a tile wide: a ball met by a blade may be thrown off it                                 |
+| 7    | 3   | The Weir: a river down the lane's east side into a pond beside the cup: keep off it, west of it                             |
+| 8    | 3   | The Rapids: a zigzag river of belts at speed 9, five runs (north, east, north, west, north), that carries a ball to the cup |
+| 9    | 4   | The Flood: a lock's gate, a stone, a stream over the pond and the island green in its bowl, up one line                     |
 
 The sheet had a causeway three tiles wide and stones of two tiles by two a tile of water apart. Three tiles is nine
 units, which a slip of ten degrees still crosses, so it is two; and a ball rolls across a gap of one tile at speed,
@@ -401,3 +440,13 @@ Each line is a feature or more, through `/feature`, every gate green at each.
   still open in it.
 - Whether a hole's slope may carry a barrier or a windmill (a level plate
   under it, as a pond has, is the likely way).
+- Belts on a slope. The physics allows them, but the scene draws every belt at the height of the grass, so one on a slope
+  is buried, and no belt may stand on one in a picture until the scene lifts them. The Lift and The Flood are level for it.
+- The order the moving boxes are shoved in. `Obstacles.update` walks the barriers, then the windmills, over the boxes by
+  index, while they are made in the order a hole lists them, so a windmill listed before a barrier gets the wrong box
+  moved. A hole lists its barriers first (The Big Wheel does), and it is to be fixed in its own change.
+- The phone's drive picture: after a real drag on a phone, the shot preview is null in about one run in three. It was
+  there before the new courses.
+- Matters of taste, for the user to settle and not bugs: the flipper is a plain blue slab; a stream lies level with the
+  grass and reads as a painted lane; Three Cushion's pocket is the grass's own green and reads as a slab; Carousel is a mound
+  with belts round it and not a carousel; and The Rapids is busy.

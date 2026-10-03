@@ -11,14 +11,17 @@ made. The house
 rules in `~/.claude/CLAUDE.md` apply too. What is in `src/` is a round of
 a course, chosen on a start screen: holes drawn as maps, each played from
 its tee to its cup with a drag pulled back and let go, scored against par,
-and the card at the end. Three courses are here, on artshape-physics v0.8.0.
+and the card at the end. Six courses are here, on artshape-physics v0.8.0, four of minigolf and two of golf.
 The Meadow is nine holes of grass, rail, sand, water, raised grass, posts,
 sliding barriers, a windmill and a conveyor, with a green that lets a putt
 die, a rail and obstacles that bounce, posts that throw a ball back faster
-than it came, and a cup with a rim. (The Hills, The Downs and The Moors, three courses of sloping ground with little
-or nothing on it, were scrapped on 3 October 2026 as dull; four of The Hills stay as test holes in `test/hills.ts`,
-and the generator that made The Moors, `src/open.ts`, stays for the two test holes `smoke/bighole.ts` makes with it.
-Three new minigolf courses are planned in `~/.claude/plans/ooergolf-three-courses.md`.)
+than it came, and a cup with a rim. The Pinball Shed is nine holes of banks and bounces, where the rail is a
+cushion and kickers throw and a flipper is to be timed. The Fair is nine holes with something that moves on each,
+windmills, barriers, moving bumpers and belts. The Waterworks is nine holes of water, and of streams that carry a ball
+and never sink it. All three are drawn by hand. (The Hills, The Downs and The Moors, courses of sloping ground with little
+or nothing on it, were scrapped on 3 October 2026 as dull and these three replaced them; four of The Hills stay as test
+holes in `test/hills.ts`, and the generator that made The Moors, `src/open.ts`, stays for the two test holes
+`smoke/bighole.ts` makes with it.)
 The Range is the first of golf proper: nine flat holes at a yard a unit (three
 to learn the clubs on, six that each add a hazard), each a tee, a fairway, rough
 and a green, played with a bag of eight clubs that loft the ball into the air. The Links is nine holes of it, a par three to a par
@@ -123,12 +126,19 @@ today, and what the next features must hand it:
   they were) and, before an autopilot putt from a green, holds the putt to it (aimed the way the break says: `off`, counter-clockwise, and
   `across`, positive to the right, cancel, and on the same side only when the break is clearly past the cup's reach, `MISSES`, 2
   yards: the cup takes a ball within 1.45 of its line and one that curves from a little further).
-  `npm run fuzz` plays every seed five times, as a player who
+  On minigolf it also does what each of the newer kinds invites, each on a chance of its own so that every run
+  without that kind plays as it did: it strikes a moving bumper where the barrier is, strikes a kicker, strikes at
+  a flipper through every phase of its swing, and strikes onto a stream, where the ball must be carried and never told lost
+  (`lostOnStreamProblems`, checked as a loss is told).
+  `npm run fuzz` plays every seed eight times, as a player who
   chooses among the courses, on The Range and The Links alone, on the windy Range (`WINDY`: its nine holes
-  with winds of 12, 18 and 6 in turn), and on the contoured Links (`--on contoured`: its nine holes at contour 1 with greens at
-  12, 22, 12.96 and 14.4 by hole), since a monkey
-  choosing among six is on golf too seldom to hold it to anything; each landing
-  the game tells of is checked as it is told (`landingProblems`).
+  with winds of 12, 18 and 6 in turn), on the contoured Links (`--on contoured`: its nine holes at contour 1 with greens at
+  12, 22, 12.96 and 14.4 by hole), and on each of The Pinball Shed, The Fair and The Waterworks alone
+  (`--on shed`, `fair`, `waterworks`), since a monkey
+  choosing among six is on golf too seldom to hold it to anything and on a minigolf course's own kind not much oftener; each landing
+  the game tells of is checked as it is told (`landingProblems`). Two runs are for replays and are not in the queue:
+  `--on kickers`, `KICKER_HOLES` in `scripts/fuzzer.ts` (a kicker in the way of the cup, a pair facing each other, which
+  is the ceiling's hardest case, and a ring of four), and `--on stream`, `STREAM_HOLE` in `test/stream-hole.ts`.
 - **Invariants:** bodies are of a kind, are numbers and are out of the rock;
   the world's count is right; the time is a time; the ball is there while a
   hole is played, alone, never inside a post, and never faster along the
@@ -159,10 +169,19 @@ today, and what the next features must hand it:
   is on no sand, water, out of bounds, rock or rail, and there is none on minigolf; a ball at rest on a golf hole lies on
   a slope its lie holds, by the lie's own roll (the cut and the green's speed counted) over gravity and a quarter more;
   `breakOf` is a number and its `across` no further than the cup is; and the arrows are numbers, each on a tile of putting
-  green and no more than the green has.
+  green and no more than the green has. And the kinds that move or throw (all inside `checkInvariants`): the ball is never
+  inside a kicker and never going faster at a kicker's side than the course may throw it (`kickerProblems`); a barrier
+  that was given a `bounce` throws with it, which is from nought to twice a post's (`bumperProblems`); a flipper's pose is
+  the one its game time alone says, worked out afresh, its root has not moved and its box has no speed but its turn
+  (`flipperProblems`); every tile of a stream is a belt's and no water, rock or out of bounds (`streamProblems`); and the
+  ball is inside no moving box, which a flipper's turned frame is held to as a barrier's is.
 - **Determinism:** the autopilot plays, with a player's slips from its own
   chance, round after round, and the hash takes in the hole and the card.
-- **Pace:** the strokes a round of each course takes; see above (The Meadow 16.63, after the nine-hole rebuild). The
+- **Pace:** the strokes a round of each course takes; see above (the minigolf courses: The Meadow 16.63 for par 26, The
+  Pinball Shed 20.94 for 25, The Fair 19.38 for 28 and The Waterworks 18.94 for 28, which is what `scripts/pace-baseline.json`
+  holds). The pace player never banks and fires
+  blind after ten seconds without a timing window, so a bank hole's par is the human's intent, and a timed hole
+  needs a window at the autopilot's margin, the ball's radius and 0.6. The
   autopilot does not read a slope's break on minigolf, so on a hole that slopes it is a player
   who aims straight and is carried by the ground; on a golf green it does, by rehearsal. The golf courses are a player one under par on every hole: The Range 23.13 for
   par 32 (nine holes), and The Links 29.88 for 36 (the contoured greens did not move it: 30.19 over 48 seeds against 30.27
@@ -344,8 +363,8 @@ change meant to move it, and the commit says why. Look at every picture.
   on top and its cloth in soft folds, the tee's rounded markers, and the
   ball (`golfBall`, smooth, with its band), each rounded and smooth-shaded
   from `lathe` and the other shapes in `models/shapes.ts`; the obstacles at the sizes the physics will give them
-  (bumper, barrier, windmill with its turning blades, water, bunker,
-  conveyor). Water is a pond `WATER_LEVEL` (0.3) below the grass, in the
+  (bumper, kicker, barrier, windmill with its turning blades, flipper, water, bunker,
+  conveyor, stream). Water is a pond `WATER_LEVEL` (0.3) below the grass, in the
   earth `ground.ts` brings down to it from every edge of grass or sand that
   meets it, in a rim of foam, two bands of shallows and deep water veined
   in a lighter blue, filling its tiles exactly; its `moving` part is one
@@ -362,6 +381,33 @@ change meant to move it, and the commit says why. Look at every picture.
   material each, for `group` to turn into a renderer group; each has a
   triangle budget in `BUDGET`. `showcase.html` draws every one
   (`/showcase.html`, with `?model=name`), for building and looking at them.
+- **The kinds that throw or move** (the Pinball Shed's, the Fair's and the Waterworks'; each is held by an invariant and a
+  fuzzer action, above). A **kicker** is `KICKER` in `arena.ts` (`k` on a map, radius 1 and height 1.6 as a post's,
+  restitution 1.8 against a post's 1.2), handed to the physics as a bumper of its own. It throws about 1.75 times as fast
+  at the soft and middling shots (1.72 to 1.78 for arrivals of 8 to 35 units a second) and the course's ceiling still
+  holds it at the hardest shot (59.7 against 60), so it is felt where a post is not. It is drawn as a mushroom
+  (`models/kicker.ts`: an orange dome on a blue stem on a cream flange, to the physics' circle), kept out of the autopilot's route as
+  a post is, and lit by a warm flash for a third of a second when the ball knocks it (`kickFlash` in `glints.ts`, from game
+  time; `main.ts` keeps when each kicker was last hit, one slot a kicker, made with the hole, and draws the flash). A
+  **flipper** is an `ObstacleDef` in `obstacles.ts` (`at` the pivot's tile, `length` in tiles, `swing` in radians, `period`,
+  `phase`, `pivot` left or right). Its angle is a one-sided sine of game time (`flipperAngle`: up and back in the first half of
+  the period, at rest for the second, so a ball can be rolled under it), its yaw `flipperYaw`, and its pose from time alone,
+  never from where it was, so the physics is handed a box that turns about its root with a spin and no linear speed. A
+  ball met on the upswing is flung 4 units further and 2.9 times as fast as one rolled onto the arm at rest. Its pusher is
+  made last, so the barriers' and the windmills' keep their indices, and it is refused by name on a slope (the whole sweep
+  must be level) and for a length, period or swing it could not have. The autopilot's `inTheWay` and the invariants' box checks work in
+  the box's own frame, since an arm is turned where a barrier is not. A **moving bumper** is a `barrier` with `bounce`: the
+  physics box takes that restitution (refused by name past twice a post's or below nought), the scene draws it in the
+  bumper's red, and without it a barrier is what it was, held by a hash of five shots into The Meadow's Barriers. The speed cap
+  needed nothing new, since the game clamps every ball to its ceiling each step. A **stream** is a `conveyor` with `look: 'water'`:
+  a belt to the physics and the game (carried at the belt's speed, the same seeded trace as a plain conveyor) and
+  never lost on or splashed; water only to the eye and the map. It is drawn level with the grass (`models/obstacles.ts`
+  `stream`: a channel with a thin earth edge, foam, shallows and marbled deep water), its ripples carried along it at the belt's
+  speed from game time (`streamRipples` in `sway.ts`, a pool sized once), and its tiles painted as water on the hole map
+  (`Obstacles.streamed`, read by `holemap.ts`). **No stream can be crossed**: a belt pulls a ball's velocity toward its own by
+  an eighth a step whatever its speed, and a belt is a tile deep, so a full-power shot across one dies 2.3 units in and is
+  carried off, and a ball carried at 6 units a second is counted at rest while it rides, so a hole's streams run beside the
+  line or along it, and The Rapids' belts run at 9.
 - `src/scenery.ts` scatters the decoration round a hole, on the rough and
   clear of the course, from the hole's name and never the game's chance;
   and dresses the hole, with bunting on tall posts round three sides just
@@ -647,27 +693,26 @@ change meant to move it, and the commit says why. Look at every picture.
   hills are cut from them. `test/ground-metrics.ts` says what a
   feel is in figures (relief, steepest slope, bumpiness, detail, and how much
   of the ground a ball rests on), which the tests hold each hole to.
-- The courses are content in `course.ts`, `COURSES`, each a name and its
-  holes: The Meadow (`COURSE`), The Range and The Links. Each `Course` has a `summary` of its holes and par that the
+- The courses are content in `course.ts`, `COURSES`, each a name and its holes: The Meadow (`COURSE`), The Pinball Shed
+  (`SHED`, `src/shed.ts`), The Fair (`FAIR`, `src/fair.ts`), The Waterworks (`WATERWORKS`, `src/waterworks.ts`), The Range
+  and The Links. The three new courses are nine holes each, drawn by hand as The Meadow's are, with no generator, and
+  made as the page loads. Each hole has a comment saying its idea and why it is drawn as it is, since what the
+  autopilot would play decided the drawing: a ball's radius and three tenths of a unit clear of the water, a timing window at
+  the autopilot's margin, a cup on level grass with a tile of grass round it. The Pinball Shed (par 25) is banks and bounces:
+  the rail is a cushion, posts and kickers throw, and one hole has a flipper to time. The Fair (par 28) has something that
+  moves on every hole: windmills, barriers, moving bumpers and belts. The Waterworks (par 28) has water on every hole, and
+  on the last three a stream to ride. Each `Course` has a `summary` of its holes and par that the
   start screen reads without making it, so a course made by a generator is made when first asked for and not as the
   page loads. `openHole` in `src/open.ts` makes a hole of open country from a spec (a shape, a feel, a steepness, a seed
   and a list of `Feature`s: ponds, bunkers and stands of posts) and never by hand; no course uses it now, and the two
   test holes in `smoke/bighole.ts` (the biggest minigolf hole the perf gate holds, and a small one of fifty-one units)
-  are made by it. The generator places each feature clear of the
-  tee, the cup and the rail and a tile from the next, and never so that no
-  route three tiles wide is left from the tee to the cup; a pond is centred in
-  the lowest of the ground and levelled at nought, since the game's water is at
-  a fixed height under the ground and a pond on a hill would be a pit, and a
-  bunker is on a level bed, both through `noiseGround`'s level discs, whose
-  blend is a share of the feel's swell (`BLEND`): over the two tiles a disc
-  used to come back in, a pond's bed at nought under a bank several units high
-  was the steepest step in the hole, and the ground is scaled so that is what
-  was asked, which left the hills round a pond a third of their height. A spec
-  that cannot be made is refused by name. A hole's name draws its wind, which
-  must move the grass (`test/turf.test.ts`): two names were changed because
-  they did not. The cup stands at least two tiles in from the rail. A hole is a map drawn
+  are made by it. It places each feature clear of the tee, the cup and the rail and a tile from the next, never so that no
+  route three tiles wide is left from the tee to the cup, a pond in the lowest of the ground at nought and a bunker on a
+  level bed (`noiseGround`'s level discs, blended by `BLEND`), and refuses a spec that cannot be made by name. A hole's
+  name draws its wind, which must move the grass (`test/turf.test.ts`): names have been changed because they did not. The
+  cup stands at least two tiles in from the rail. A hole is a map drawn
   as seen from the tee (`#` rail, `.` grass, `T` tee, `C` cup, `~` water,
-  `s` sand, `o` a post on grass, a digit for grass raised that many steps of
+  `s` sand, `o` a post on grass, `k` a kicker on grass (refused on golf), a digit for grass raised that many steps of
   0.4, space for off the course),
   a par, what moves on it, by map tile, and its `terrain`; and the cup's
   size. Hole names are unique across the courses, since the save keeps a
@@ -676,7 +721,7 @@ change meant to move it, and the commit says why. Look at every picture.
   world's bottom: a ball in it is lost, a stroke is added, and it is put back
   where it was struck from; what is drawn is a surface at `WATER_LEVEL`,
   which the ball never meets. `src/obstacles.ts` says where a barrier, a
-  windmill's gate and a belt are at any moment of game time, as the physics'
+  windmill's gate, a flipper's arm and a belt are at any moment of game time, as the physics'
   boxes and belts. `arena.ts` reads a map into a layout, and holds
   the kinds of body, the hardest shot and how the ball rolls. Each hole is a
   world of its own, made when it begins: nothing may keep `game.world`.
@@ -721,7 +766,12 @@ What to copy the shape of, when building something new:
 - **What is drawn:** a model is a function of the sizes that matter to play,
   in `src/models/`, with unit tests of its size, its normals and its
   triangle budget in `test/models.test.ts`, a place in the showcase, and a
-  picture in `smoke/models.spec.ts`; the scene places it with `group`.
+  picture in `smoke/models.spec.ts`; the scene places it with `group`. The kicker (`models/kicker.ts`) and the flipper and
+  stream (`models/obstacles.ts`) are the latest, each drawn to the physics' footprint.
+- **What throws or moves:** a kind of obstacle is an `ObstacleDef` member in `obstacles.ts` (its pose from game time
+  alone, refused by name where it cannot stand), a model, a place in the scene, an invariant, a fuzzer action on a chance of its
+  own so no other run changes, and a test file of its own: the flipper (`test/flipper.test.ts`) is the whole of it, the kicker
+  (`test/kicker.test.ts`) is the same for a body kind of `arena.ts`.
 - **Tools:** the autopilot (`src/autopilot.ts`), and the gates built on it:
   pace (`scripts/pace.ts`), the fuzzer (`scripts/fuzzer.ts`) and the bench
   (`scripts/bench.ts`). Each has unit tests of its own working parts; the
@@ -747,7 +797,7 @@ What to copy the shape of, when building something new:
 it. Time: `pause`, `resume`, `step(frames)`, `seed(n)`, and `?seed=N` and
 `?paused=1` on the page. Reading: `state` (with `strokes` and `ready`),
 `ball`, `bodies`, `content` (the hole's grass, tee and cup, its sand and
-posts, trees, the hardest shot, and every hole's name and par), `events`,
+posts, kickers, trees, the hardest shot, and every hole's name and par), `events`,
 `invariants`, and `aiming`,
 the shot a drag under way would make. `state` has the hole, its par, the
 phase (`play`, `done`, `over`), the card, the coins and gems, the club in
@@ -779,7 +829,7 @@ the rung; `grass()` how many blades of the rough the last frame drew near
 and far, and the wind; `bladesAround(x, y, radius)` how many the GPU drew
 with roots there; `motions()` where each of
 the things that answer is (the ball's squash, the flag's waggle, the gold's
-flash and the glints the last frame lit, the camera's glide and the aim's
+flash and the glints the last frame lit, `kicks` (how many kickers the last frame lit with a flash; absent while none is), the camera's glide and the aim's
 pulse, the sparkles of the water and where on the page each was drawn, how
 wide the ring is where a ball went into the water, what the last stroke
 threw up, sand or grass, and where the ring is that marks a lofted ball's
@@ -840,7 +890,17 @@ each step, and a gate handed what it needs in the same change:
   it means on four shots across a hollow in five, and 2.4 long on a 21-unit
   climb, since the physics slows a ball along the slope. So a sloped hole's par
   is its intent. A barrier or a windmill on a slope is refused when a hole is
-  built, as the physics' fuzzer found one carrying a ball round for good.
+  built, as the physics' fuzzer found one carrying a ball round for good; a flipper is refused on a slope too.
+- Belts on a slope. The physics allows a conveyor on sloping ground and carries a ball up it, but the scene draws every
+  belt at ground level, so one on a slope is buried; The Lift is level with a step at its end, and The Flood's bowl of steps
+  stands on level ground. No belt may stand on a slope in a picture until the scene lifts them.
+- A stream that can be crossed, or a belt that lets a ball off it: see the kinds above. A ring of belts holds a ball for
+  good and a real turntable is a package change, so Carousel is a mound with belts round it, and the turntable was dropped.
+- `Obstacles.update` walks the barriers, then the windmills, over the pushers by index, while the constructor pushes
+  them in the order a hole lists them, so a windmill listed before a barrier gets the wrong pusher moved. A hole lists its
+  barriers first (The Big Wheel does) until this is fixed in its own change.
+- A phone drive's picture is flaky: the shot preview is null after a real drag in about one run in three of the smoke
+  test that drives it. It was there before the new courses, and is not understood.
 - The course a player is on, in the save: a reload opens the start screen.
 - Steps a ball meets as ledges. v0.8.0's `stepEdges` bounces a ball off a
   step's top edge and lets it climb a riser only with speed; tried on the
