@@ -32,6 +32,7 @@
  * Checked by the fuzzer after everything it does, by the test API on asking,
  * and by the unit tests. Each broken rule is a line saying what and where.
  */
+import { KICKER, fromKickers } from './arena';
 import {
   BUMPER,
   KINDS,
@@ -308,6 +309,7 @@ export function checkInvariants(game: Game): string[] {
     const into = -fromPosts(layout, world.x[ball], world.y[ball]) + world.r[ball];
     const postTop = heightAt(layout, world.x[ball], world.y[ball]) + BUMPER.height;
     if (into > 0.1 && world.z[ball] < postTop) out.push(`the ball is inside a post, ${into.toFixed(2)} into it`);
+    out.push(...kickerProblems(game));
     // a ball played never lies out of bounds: it is lost the moment it is on the ground there
     if (layout.golf && world.asleep[ball]) {
       const t = tileAt(layout, world.x[ball], world.y[ball]);
@@ -330,7 +332,9 @@ export function checkInvariants(game: Game): string[] {
       const x = world.x[ball],
         y = world.y[ball];
       const onFloor = Math.abs(world.z[ball] - heightAt(layout, x, y) - restingAbove(layout, x, y, r)) < 0.05;
-      const onPost = Math.abs(bottom - postTop) < 0.05 && fromPosts(layout, world.x[ball], world.y[ball]) < 0;
+      const onPost =
+        (Math.abs(bottom - postTop) < 0.05 && fromPosts(layout, world.x[ball], world.y[ball]) < 0) ||
+        (Math.abs(bottom - (heightAt(layout, x, y) + KICKER.height)) < 0.05 && fromKickers(layout, x, y) < 0);
       const onBox = game.obstacles.pushers.some(
         (p) =>
           Math.abs(bottom - (p.z + p.hz)) < 0.05 &&
@@ -501,5 +505,27 @@ export function bumperProblems(game: Game): string[] {
     if (said !== undefined && !(throws >= 0 && throws <= BUMPER.restitution * 2))
       out.push(`the barrier at column ${b.def.at[0]} throws with ${throws}, which no bumper may`);
   });
+  return out;
+}
+
+/**
+ * What is wrong with the ball against a kicker: it is never inside one (by more than the physics lets a ball sink into
+ * anything), and a ball at a kicker's side is never going faster than the course may throw it. A kicker throws harder
+ * than a post, so it is the likeliest thing on a hole to break the ceiling, and the ceiling is held where it is
+ * met and not only in the general rule. Nothing to be wrong on a hole with none.
+ */
+export function kickerProblems(game: Game): string[] {
+  const out: string[] = [];
+  const { world, ball, layout } = game;
+  if (!layout.kickers.length || !world.alive[ball]) return out;
+  const x = world.x[ball],
+    y = world.y[ball];
+  const side = fromKickers(layout, x, y);
+  const into = -side + world.r[ball];
+  if (into > 0.1 && world.z[ball] < heightAt(layout, x, y) + KICKER.height)
+    out.push(`the ball is inside a kicker, ${into.toFixed(2)} into it`);
+  const speed = Math.hypot(world.vx[ball], world.vy[ball]);
+  if (side < world.r[ball] + 0.5 && speed > fastest(game, x, y) * 1.001)
+    out.push(`the ball is going ${speed.toFixed(2)} at a kicker, faster than the course may throw it`);
   return out;
 }

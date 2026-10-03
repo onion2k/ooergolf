@@ -114,3 +114,13 @@ test.describe('the models', () => {
     });
   });
 });
+
+test.describe('the kicker', () => {
+  test('close: a mushroom bumper, wider at the cap than the foot, in colours of its own', async ({ page }) => {
+    const problems = watch(page);
+    await showcase(page);
+    await look(page, 'kicker');
+    await expect(page).toHaveScreenshot('kicker.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+});

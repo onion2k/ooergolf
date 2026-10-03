@@ -13,6 +13,7 @@
  * keep a note of it. Nothing here waits on anything there, so the same game
  * runs in the page and in Node, and what the tests try is what is played.
  */
+import { fromKickers } from './arena';
 import {
   BALL,
   FASTEST,
@@ -775,6 +776,7 @@ export class Game {
         throw new Error(`the ball cannot be put down at ${x},${y}: not on level grass`);
     }
     if (fromPosts(layout, x, y) < r + 0.1) throw new Error(`the ball cannot be put down at ${x},${y}: on a post`);
+    if (fromKickers(layout, x, y) < r + 0.1) throw new Error(`the ball cannot be put down at ${x},${y}: on a kicker`);
     if (layout.oob[tileAt(layout, x, y)]) throw new Error(`the ball cannot be put down at ${x},${y}: out of bounds`);
     if (fromTrees(layout, x, y) < r + 0.1)
       throw new Error(`the ball cannot be put down at ${x},${y}: on a tree's trunk`);

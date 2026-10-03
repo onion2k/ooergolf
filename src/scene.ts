@@ -18,7 +18,18 @@ import { STILL, type Wind } from 'artshape-render/game/grass';
 import type { GameGroup } from 'artshape-render/game/renderer';
 import { MATERIAL_STRIDE, PATTERN_STRIDE } from 'artshape-render/game/renderer';
 import type { Mesh } from 'artshape-render/mesh/types';
-import { BALL, BUMPER, KIND_RADIUS, TILE, WATER_LEVEL, heightAt, slopeInto, tileAt, type Layout } from './arena';
+import {
+  BALL,
+  BUMPER,
+  KICKER,
+  KIND_RADIUS,
+  TILE,
+  WATER_LEVEL,
+  heightAt,
+  slopeInto,
+  tileAt,
+  type Layout,
+} from './arena';
 import { CUP } from './course';
 import { GREEN, greenArrows, leansOnMinigolf } from './green';
 import { place, placeOnSlope } from './matrix';
@@ -49,6 +60,7 @@ import {
   type Model,
   type Pond,
   golfTree,
+  kicker,
   stake,
 } from './models';
 import { BARRIER, WINDMILL, type Obstacles } from './obstacles';
@@ -145,6 +157,8 @@ const SCENERY_MODELS: Record<Exclude<SceneryKind, 'flowers'>, Model> = {
 };
 /** A post, built once, to the physics' figures for one. */
 const POST = bumper(BUMPER.radius, { height: BUMPER.height });
+/** A kicker, built once, to the physics' figures for one. */
+const KICKER_MODEL = kicker(KICKER.radius, { height: KICKER.height });
 /** A golf tree, built once, to the figures the game tests a ball against: what is seen is what the ball meets. */
 const GOLF_TREE = golfTree(TREE);
 /** A stake that marks out of bounds, built once. */
@@ -450,6 +464,7 @@ export class Scene {
       ...this.posts(layout),
       ...this.trees(layout),
       ...this.stakes(layout),
+      ...this.kickers(layout),
     ];
     if (ground.banks.indices.length) out.push({ mesh: ground.banks, matrices: still, ...look(PALETTE.bank) });
     for (const w of obstacles?.windmills ?? []) {
@@ -512,6 +527,14 @@ export class Scene {
     const at = new Float32Array(layout.bumpers.length * 16);
     layout.bumpers.forEach((p, k) => place(at, k, p.x, p.y, heightAt(layout, p.x, p.y)));
     return groups(POST, at);
+  }
+
+  /** The kickers on a hole, all of one model, each where the physics has its kicker, on the ground there. */
+  private kickers(layout: Layout): GameGroup[] {
+    if (!layout.kickers.length) return [];
+    const at = new Float32Array(layout.kickers.length * 16);
+    layout.kickers.forEach((k, i) => place(at, i, k.x, k.y, heightAt(layout, k.x, k.y)));
+    return groups(KICKER_MODEL, at);
   }
 
   /**

@@ -8,7 +8,7 @@
 import { createContext } from 'artshape-render/gpu/context';
 import { LightPool } from 'artshape-render/game/lights';
 import { GameRenderer, antialiasFor } from 'artshape-render/game/renderer';
-import { BALL, HARDEST_SHOT, KIND_RADIUS, heightAt, lieAt, onSand, rollsFor } from './arena';
+import { BALL, HARDEST_SHOT, KICKER, KIND_RADIUS, heightAt, kickerAt, lieAt, onSand, rollsFor } from './arena';
 import { BAG, PUTTER, carryOf } from './bag';
 import { aimView, markScale } from './aimview';
 import { CameraRig, LEAD, TILT, catchUp, facing, standOf, tallOf } from './camera';
@@ -35,7 +35,7 @@ import { carryFrom } from './flight';
 import { clearings } from './scenery';
 import { cupBurst, splash, strikePuff } from './bursts';
 import { Input } from './input';
-import { SPARKLE, flash, glint } from './glints';
+import { SPARKLE, flash, glint, kickFlash } from './glints';
 import { Squash, squashInto, squashOf } from './squash';
 import { waggle } from './sway';
 import { EFFECT_STRIDE } from 'artshape-render/game/renderer';
@@ -174,12 +174,15 @@ async function main() {
     pulse: 0,
     glints: 0,
     sparkles: 0,
+    kicks: 0,
     puff: null as 'sand' | 'grass' | null,
     // the grass pressed flat this frame round a ball lying in the rough, as it was asked of the renderer
     press: null as { x: number; y: number; radius: number } | null,
     // whether the renderer took it: it does not where the field has no trample, or off it
     took: false,
   };
+  /** When each kicker of this hole was last hit, in game time: a kicker a hole, made as the hole begins, so never more than it has. */
+  let kickedAt: number[] = [];
   /** The disc of grass pressed round a ball at rest in the rough, written each frame: nothing is made. */
   const flatten = { x: 0, y: 0, radius: 0 };
   /** Whether the camera has been put on a hole yet: the first has nowhere to glide from. */
@@ -266,6 +269,7 @@ async function main() {
     started(index, par) {
       if (!game) return;
       const { layout } = game;
+      kickedAt = layout.kickers.map(() => -Infinity);
       const { name } = game.course[index];
       // the hole's wind, for the line under the pin and for how far the camera must stand back for a tailwind
       const blowing = game.wind;
@@ -342,8 +346,12 @@ async function main() {
       for (const e of strikePuff(x, y, Math.min(1, speed / 60), ground)) renderer.emit(e);
     },
     // knocked off the rail, a post or the ground it dropped onto: squashed along it, and sprung back
-    knocked(hard, _x, _y, dx, dy, dz) {
-      if (game) squash.knock(game.t, hard, dx, dy, dz);
+    knocked(hard, x, y, dx, dy, dz) {
+      if (!game) return;
+      squash.knock(game.t, hard, dx, dy, dz);
+      // a kicker that was hit lights up, and a hit on it again lights it anew
+      const k = kickerAt(game.layout, x, y, KIND_RADIUS[BALL] + 0.25);
+      if (k >= 0) kickedAt[k] = game.t;
     },
     // into the water: a splash where it went in, and a word, and the stroke it cost; the ball put back is round
     splash(x, y) {
@@ -688,6 +696,8 @@ async function main() {
       [cup.x, cup.y, on(cup.x, cup.y) + 8.75],
     ];
   };
+  /** The kicker's flash: warm, a little smaller than the gold's, and round. */
+  const KICK: Glow = { size: 0.05, power: 3, colour: [1, 0.78, 0.45], falloff: 2.6 };
   /** Room for a glint at every place the gold is, which a flash lights all at once, and the sparkles of the water after them. */
   const glintQuad = new Float32Array(EFFECT_STRIDE * EFFECT_CAPACITY);
   /** Where the water's sparkles are this frame, four numbers each: written into, never made. */
@@ -739,6 +749,14 @@ async function main() {
     for (; lit < sparks && used < EFFECT_CAPACITY; lit++)
       glow(used++, sparkQuads[lit * 4], sparkQuads[lit * 4 + 1], sparkQuads[lit * 4 + 2], sparkQuads[lit * 4 + 3], SUN);
     drawn.sparkles = lit;
+    // the kickers a ball has just hit, after all the rest, in what room is left
+    drawn.kicks = 0;
+    played.layout.kickers.forEach((k, i) => {
+      const lit = kickFlash(played.t - (kickedAt[i] ?? -Infinity));
+      if (lit <= 0 || used >= EFFECT_CAPACITY) return;
+      glow(used++, k.x, k.y, heightAt(played.layout, k.x, k.y) + KICKER.height + 0.2, lit, KICK);
+      drawn.kicks++;
+    });
     renderer.setEffects(glintQuad, used);
   }
 
@@ -937,6 +955,8 @@ async function main() {
       wind: hud.windDrawn(),
       controls: hud.controls(),
       arrows: scene.arrowsDrawn(),
+      // only while one is lit, so a hole with none, and every moment none is hit, reads as it always did
+      ...(drawn.kicks ? { kicks: drawn.kicks } : {}),
     }),
     course: () => courseName,
     choosing: () => choosing,

@@ -8,7 +8,19 @@
  */
 import { heightAt as terrainHeightAt, slopeAt as terrainSlopeAt, terrainProblem } from 'artshape-physics/terrain';
 import { World, type WorldOptions } from 'artshape-physics/world';
-import { BODY_CAPACITY, BOTTOM, BOUNCE, BUMPER, KIND_RADIUS, ROLL, SAND, TILE, heightAt, type Layout } from './arena';
+import {
+  BODY_CAPACITY,
+  BOTTOM,
+  BOUNCE,
+  BUMPER,
+  KICKER,
+  KIND_RADIUS,
+  ROLL,
+  SAND,
+  TILE,
+  heightAt,
+  type Layout,
+} from './arena';
 import type { Random } from './random';
 import { LIE, rollOf } from './surfaces';
 import { TREE } from './trees';
@@ -141,6 +153,16 @@ export function makeWorld(
       radius: TREE.trunk,
       top: heightAt(layout, t.x, t.y) + TREE.base,
       restitution: TREE.restitution,
+    })),
+  );
+  // and each kicker, a post as far as the physics knows, with a bounce of its own
+  world.bumpers.push(
+    ...layout.kickers.map((k) => ({
+      x: k.x,
+      y: k.y,
+      radius: KICKER.radius,
+      top: heightAt(layout, k.x, k.y) + KICKER.height,
+      restitution: KICKER.restitution,
     })),
   );
   return world;

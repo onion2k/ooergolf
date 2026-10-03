@@ -170,6 +170,8 @@ export interface Layout extends Ground {
   trees: { x: number; y: number }[];
   /** Where each post stands: in the middle of its tile, on grass. */
   bumpers: { x: number; y: number }[];
+  /** Where each kicker stands: in the middle of its tile, on grass. A post that throws harder; see `KICKER`. */
+  kickers: { x: number; y: number }[];
   /** How high the floor stands on each tile: nought for level grass, a step a digit, and far below for water. */
   floor: Float32Array;
   /** How high the ground slopes on each tile, at its middle, on top of its step: all nought on a hole that is flat. */
@@ -207,6 +209,7 @@ export function layoutOf(map: readonly string[], terrain?: readonly string[] | F
     oob = new Uint8Array(cols * rows),
     floor = new Float32Array(cols * rows);
   const bumpers: { x: number; y: number }[] = [];
+  const kickers: { x: number; y: number }[] = [];
   const trees: { x: number; y: number }[] = [];
   const treeTiles: number[] = [];
   const tees: [number, number][] = [],
@@ -247,6 +250,10 @@ export function layoutOf(map: readonly string[], terrain?: readonly string[] | F
       else if (c === 'o') {
         bumpers.push({ x, y });
         postTiles.push(t);
+      } else if (c === 'k') {
+        // a kicker stands on grass as a post does, and grass is minigolf's
+        minigolf = true;
+        kickers.push({ x, y });
       } else if (c === '^') {
         // a tree stands in the rough: a trunk and a canopy
         golf = true;
@@ -277,6 +284,10 @@ export function layoutOf(map: readonly string[], terrain?: readonly string[] | F
   if (cups.length !== 1) throw new Error(`a hole's map has ${cups.length} cups, not one`);
   const [[teeX, teeY]] = tees,
     [[cupX, cupY]] = cups;
+  if (golf && kickers.length)
+    throw new Error(
+      "a hole's map has a kicker (k) in it, which stands on minigolf's grass (.) and not on golf's ground",
+    );
   if (golf && minigolf)
     throw new Error("a hole's map mixes the minigolf's grass, or its raised steps, with golf's fairway and rough");
   if (golf) {
@@ -301,6 +312,7 @@ export function layoutOf(map: readonly string[], terrain?: readonly string[] | F
     oob,
     trees,
     bumpers,
+    kickers,
     floor,
     terrain: heights,
     tee: { x: teeX, y: teeY },
@@ -469,4 +481,34 @@ export function fromPosts(l: Layout, x: number, y: number): number {
   let near = Infinity;
   for (const p of l.bumpers) near = Math.min(near, Math.hypot(x - p.x, y - p.y) - BUMPER.radius);
   return near;
+}
+
+/**
+ * A kicker: a pinball's mushroom bumper, the post's livelier cousin. The same round footing as a post, so the autopilot
+ * and the rules that keep a ball out of a post treat it as one, and a restitution of its own, which throws a ball
+ * back harder than a post does. The course's ceiling (`FASTEST`) still holds it: a ball struck at the hardest shot
+ * leaves a kicker at the ceiling and no faster, so what a kicker adds is felt at the soft and middling shots a
+ * player makes most of, where a post's fifth is too little to notice.
+ */
+export const KICKER = { radius: 1, height: 1.6, restitution: 1.8 } as const;
+
+/** How far a point is from the side of the nearest kicker, or Infinity on a hole with none. */
+export function fromKickers(l: Layout, x: number, y: number): number {
+  let near = Infinity;
+  for (const k of l.kickers) near = Math.min(near, Math.hypot(x - k.x, y - k.y) - KICKER.radius);
+  return near;
+}
+
+/** The index of the kicker whose side is within `reach` of a point, the nearest if several, or -1 where none is. */
+export function kickerAt(l: Layout, x: number, y: number, reach: number): number {
+  let best = -1,
+    near = reach;
+  l.kickers.forEach((k, i) => {
+    const d = Math.hypot(x - k.x, y - k.y) - KICKER.radius;
+    if (d <= near) {
+      near = d;
+      best = i;
+    }
+  });
+  return best;
 }

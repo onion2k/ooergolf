@@ -31,6 +31,7 @@ import {
   arrowProblems,
   breakProblems,
   checkInvariants,
+  kickerProblems,
   knockProblems,
   landingProblems,
   planProblems,
@@ -645,6 +646,24 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
         busy = Math.floor(10 + bumped() * 80);
       }
     };
+    /**
+     * A player putting the ball straight into a kicker: aimed at its middle or a little off it, soft or as hard as it goes,
+     * from wherever the ball lies. Done on a chance of its own, as the flag button is, and only on a hole that has a kicker, so
+     * the monkey's own stream, and every run on holes without one, play as they did. What it throws the ball at is held to
+     * the ceiling every frame (`kickerProblems`), where it is met.
+     */
+    const striker = seeded(seed * 23 + 7);
+    const strike = () => {
+      const { world, ball, layout } = game;
+      if (!game.ready || !layout.kickers.length) return;
+      const k = layout.kickers[Math.floor(striker() * layout.kickers.length)];
+      const angle = Math.atan2(k.y - world.y[ball], k.x - world.x[ball]) + (striker() - 0.5) * 0.6;
+      const power = striker() < 0.3 ? 1 : 0.15 + 0.85 * striker();
+      if (game.shoot(angle, power)) {
+        did('strike a kicker');
+        busy = Math.floor(between(10, 40));
+      }
+    };
     const total = actions.reduce((n, [w]) => n + w, 0);
     const act = () => {
       let pick = random() * total;
@@ -662,7 +681,13 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
       // the button is there whatever the ball is doing, so it is pressed while it rolls and between holes too
       if (facer() < 0.008) face();
       if (bumped() < 0.03) bump();
+      if (game.layout.kickers.length && striker() < 0.03) strike();
       game.step(DT);
+      // a kicker throws the hardest of anything on a course, so what it does to the ball is checked in every frame
+      if (game.layout.kickers.length) {
+        const bad = kickerProblems(game);
+        if (bad.length) return fail(bad);
+      }
       // a knock told wrongly is told once, and waits for no check
       if (told.length) return fail(told.splice(0));
       if (frame % CHECK_EVERY === 0) {
@@ -675,3 +700,46 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
     return fail([`threw: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`]);
   }
 }
+
+/**
+ * Holes with kickers on them, which no course has yet: where the monkey strikes into a kicker, with one in the way of the
+ * cup, a pair facing each other (the ceiling's hardest case) and four in a ring round a gap. Under names of their own,
+ * since the save keeps a best score by name.
+ */
+export const KICKER_HOLES: readonly HoleDef[] = [
+  {
+    name: 'Fuzz kickers',
+    par: 3,
+    map: [
+      '#########',
+      '#...C...#',
+      '#.......#',
+      '#...k...#',
+      '#..k.k..#',
+      '#.......#',
+      '#.......#',
+      '#...T...#',
+      '#########',
+    ],
+  },
+  {
+    name: 'Fuzz kicker pair',
+    par: 3,
+    map: ['#######', '#C....#', '#..k..#', '#.....#', '#.....#', '#..k..#', '#.....#', '#..T..#', '#######'],
+  },
+  {
+    name: 'Fuzz kicker ring',
+    par: 4,
+    map: [
+      '#########',
+      '#C......#',
+      '#.k...k.#',
+      '#.......#',
+      '#...k...#',
+      '#.......#',
+      '#.k...k.#',
+      '#...T...#',
+      '#########',
+    ],
+  },
+];

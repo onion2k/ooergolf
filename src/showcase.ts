@@ -12,7 +12,7 @@
 import { LightPool } from 'artshape-render/game/lights';
 import { GameRenderer, type GameGroup } from 'artshape-render/game/renderer';
 import { createContext } from 'artshape-render/gpu/context';
-import { layoutOf } from './arena';
+import { KICKER, layoutOf } from './arena';
 import { frameCost } from './frame-cost';
 import { railsOf } from './ground';
 import { TREE } from './trees';
@@ -39,6 +39,7 @@ import {
   group,
   golfTree,
   hedge,
+  kicker,
   placeBlades,
   rock,
   stake,
@@ -181,6 +182,12 @@ function exhibits(seed: number): Exhibit[] {
         { model: bumper(1.2), x: -23, y: -5 },
         { model: bumper(2, { colour: PALETTE.plastic.blue }), x: -18, y: -6 },
       ],
+    },
+    {
+      name: 'kicker',
+      label: 'kicker',
+      row: 'obstacles',
+      items: [{ model: kicker(KICKER.radius, { height: KICKER.height }), x: -23, y: 1.5 }],
     },
     {
       name: 'barrier',

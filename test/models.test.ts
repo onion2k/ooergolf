@@ -1288,3 +1288,60 @@ describe('a part becomes a group the renderer draws', () => {
     expect(p[2]).not.toBe(p[PATTERN_STRIDE + 2]);
   });
 });
+
+import { KICKER } from '../src/arena';
+import { kicker } from '../src/models';
+
+describe('the kicker is drawn to exactly the footprint the physics gives it', () => {
+  const m = kicker(KICKER.radius, { height: KICKER.height });
+
+  it('is as wide as the kicker’s circle and as tall as it stands, and never wider', () => {
+    const b = bounds(m.parts);
+    near(b.min, [-KICKER.radius, -KICKER.radius, 0], 5);
+    near(b.max, [KICKER.radius, KICKER.radius, KICKER.height], 5);
+    for (const part of m.parts)
+      for (const [x, y] of points(part.mesh)) expect(Math.hypot(x, y)).toBeLessThan(KICKER.radius + NEAR);
+  });
+
+  it('meets the circle at the height of the ball’s middle, where the ball meets it', () => {
+    // the ball's middle is a ball's radius above the grass, and the widest of the cap is there or near it
+    const widest = points(partNamed(m, 'cap').mesh).filter(([x, y]) => Math.hypot(x, y) > KICKER.radius - 0.02);
+    expect(widest.length).toBeGreaterThan(0);
+    for (const [, , z] of widest) expect(Math.abs(z - KIND_RADIUS[BALL])).toBeLessThan(0.1);
+  });
+
+  it('has unit normals, faces wound the way they face, and a closed cap', () => {
+    for (const part of m.parts) {
+      const { positions: p, normals: n, indices: ix } = part.mesh;
+      for (let i = 0; i < n.length; i += 3)
+        expect(Math.abs(Math.hypot(n[i], n[i + 1], n[i + 2]) - 1), `${part.name}: unit normal`).toBeLessThan(1e-5);
+      for (let t = 0; t < ix.length; t += 3) {
+        const [a, b, c] = [ix[t] * 3, ix[t + 1] * 3, ix[t + 2] * 3];
+        const u = [p[b] - p[a], p[b + 1] - p[a + 1], p[b + 2] - p[a + 2]];
+        const v = [p[c] - p[a], p[c + 1] - p[a + 1], p[c + 2] - p[a + 2]];
+        const g = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+        const area = Math.hypot(g[0], g[1], g[2]);
+        expect(area, `${part.name}: triangle ${t / 3} has an area`).toBeGreaterThan(1e-9);
+        for (const k of [a, b, c])
+          expect(
+            (g[0] * n[k] + g[1] * n[k + 1] + g[2] * n[k + 2]) / area,
+            `${part.name}: wound as it faces`,
+          ).toBeGreaterThan(0.4);
+      }
+    }
+    expect(volume(partNamed(m, 'cap').mesh), 'closed and facing out').toBeGreaterThan(0);
+  });
+
+  it('is its own shape, three parts in three colours, not a post with another name', () => {
+    expect(m.parts.map((p) => p.name)).toEqual(['foot', 'stem', 'cap']);
+    const colours = new Set(m.parts.map((p) => p.material.join()));
+    expect(colours.size).toBe(3);
+    expect(partNamed(m, 'cap').material).not.toEqual(partNamed(bumper(1), 'post').material);
+  });
+
+  it('stays within its triangle budget, and at any size it is asked for', () => {
+    expect(triangles(m)).toBeLessThanOrEqual(BUDGET.kicker);
+    expect(triangles(kicker(2.5, { height: 2 }))).toBeLessThanOrEqual(BUDGET.kicker);
+    expect(BUDGET.kicker).toBeLessThanOrEqual(420);
+  });
+});

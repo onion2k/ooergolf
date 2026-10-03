@@ -103,6 +103,8 @@ export interface Content {
   sand: { x: number; y: number }[];
   /** Where each post on this hole stands. */
   posts: { x: number; y: number }[];
+  /** Where each kicker on this hole stands: a post that throws the ball harder. */
+  kickers: { x: number; y: number }[];
   /** Where each tree of a golf hole stands: its trunk, with its canopy over it. */
   trees: { x: number; y: number }[];
   /** How many arrows stand over the hole's putting green to show which way it leans: none on a green that is level. */
@@ -299,6 +301,8 @@ export interface Motions {
    * or the first cut) and how many are drawn; nought on a hole whose green is level.
    */
   arrows: { shown: boolean; count: number };
+  /** How many kickers the last frame lit with a flash, as a ball hit them; absent while none is lit, so the rest reads as it did. */
+  kicks?: number;
 }
 
 /** The grass a frame drew, and the wind it bent in. */
@@ -434,6 +438,7 @@ export function createApi(host: DebugHost): GameApi {
       holes: game.course.map((h) => ({ name: h.name, par: h.par })),
       sand: sandTiles(game.layout),
       posts: game.layout.bumpers.map((p) => ({ ...p })),
+      kickers: game.layout.kickers.map((p) => ({ ...p })),
       trees: game.layout.trees.map((t) => ({ ...t })),
       arrows: greenArrows(game.layout).length,
     }),

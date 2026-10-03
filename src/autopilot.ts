@@ -18,6 +18,7 @@
  *
  * It is handed the game, and knows nothing of the page.
  */
+import { fromKickers } from './arena';
 import {
   BALL,
   KIND_RADIUS,
@@ -550,7 +551,7 @@ function clear(l: Layout, x0: number, y0: number, x1: number, y1: number): boole
   for (let s = 0; s <= d; s += 0.25) {
     const px = x0 + ((x1 - x0) * s) / (d || 1),
       py = y0 + ((y1 - y0) * s) / (d || 1);
-    if (fromPosts(l, px, py) < reach) return false;
+    if (fromPosts(l, px, py) < reach || fromKickers(l, px, py) < reach) return false;
     for (const [k, side] of [-reach, 0, reach].entries()) {
       const sx = px + nx * side,
         sy = py + ny * side;
@@ -577,7 +578,8 @@ export function pathToCup(l: Layout, x: number, y: number): [number, number][] {
   const n = l.cols * l.rows;
   const tile = (px: number, py: number) =>
     Math.floor((py - l.originY) / TILE) * l.cols + Math.floor((px - l.originX) / TILE);
-  const posted = new Set(l.bumpers.map((p) => tile(p.x, p.y)));
+  // a kicker is a post to route round: it is in the way as one is
+  const posted = new Set([...l.bumpers, ...l.kickers].map((p) => tile(p.x, p.y)));
   // each tile's step, which is what makes a wall between two tiles
   const height = (t: number) =>
     stepAt(l, l.originX + ((t % l.cols) + 0.5) * TILE, l.originY + (Math.floor(t / l.cols) + 0.5) * TILE);

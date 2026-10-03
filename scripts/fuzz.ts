@@ -19,7 +19,7 @@
 import { availableParallelism } from 'node:os';
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
 import { COURSES } from '../src/course';
-import { WINDY, contoured, fuzz, type FuzzResult } from './fuzzer';
+import { KICKER_HOLES, WINDY, contoured, fuzz, type FuzzResult } from './fuzzer';
 
 /** The courses of golf a run may be played on alone, by the short name a replay asks for and the name a course has. */
 const GOLF = {
@@ -27,12 +27,19 @@ const GOLF = {
   links: 'The Links',
   windy: 'The Range with a wind',
   contoured: 'The Links, contoured',
+  kickers: 'the holes with kickers',
 } as const;
 type Golf = keyof typeof GOLF;
 
 /** The holes a run alone on a course of golf plays: a course's own, or the windy range or the contoured Links, which are no courses of the game's. */
 const holesOf = (on: Golf) =>
-  on === 'windy' ? WINDY : on === 'contoured' ? contoured() : COURSES.find((c) => c.name === GOLF[on])!.holes;
+  on === 'windy'
+    ? WINDY
+    : on === 'contoured'
+      ? contoured()
+      : on === 'kickers'
+        ? KICKER_HOLES
+        : COURSES.find((c) => c.name === GOLF[on])!.holes;
 
 if (!isMainThread) {
   const { seed, frames, on } = workerData as { seed: number; frames: number; on: Golf | undefined };
@@ -54,19 +61,21 @@ async function main() {
   const started = performance.now();
   // each seed as a player choosing among the courses, and on each course of golf alone; or only the one asked for, to play a failure again
   const on = value('on') as Golf | undefined;
-  if (on !== undefined && !(on in GOLF)) throw new Error(`--on is range, links, windy or contoured, not ${on}`);
-  const queue: { seed: number; on: Golf | undefined }[] = seeds.flatMap((seed) =>
-    on
-      ? [{ seed, on }]
-      : one !== undefined
-        ? [{ seed, on: undefined }]
-        : [
-            { seed, on: undefined },
-            { seed, on: 'range' as const },
-            { seed, on: 'links' as const },
-            { seed, on: 'windy' as const },
-            { seed, on: 'contoured' as const },
-          ],
+  if (on !== undefined && !(on in GOLF))
+    throw new Error(`--on is range, links, windy, contoured or kickers, not ${on}`);
+  const queue: { seed: number; on: Golf | undefined }[] = seeds.flatMap<{ seed: number; on: Golf | undefined }>(
+    (seed) =>
+      on
+        ? [{ seed, on }]
+        : one !== undefined
+          ? [{ seed, on: undefined }]
+          : [
+              { seed, on: undefined },
+              { seed, on: 'range' as const },
+              { seed, on: 'links' as const },
+              { seed, on: 'windy' as const },
+              { seed, on: 'contoured' as const },
+            ],
   );
   const results: (FuzzResult & { on: Golf | undefined })[] = [];
   await Promise.all(

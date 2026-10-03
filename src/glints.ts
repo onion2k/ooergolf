@@ -75,3 +75,18 @@ export function sparkles(ponds: number): number[] {
     extra = SPARKLE.most % ponds;
   return Array.from({ length: ponds }, (_, k) => base + (k < extra ? 1 : 0));
 }
+
+/**
+ * How long a kicker's flash lasts when a ball hits it, in seconds: quicker than the cup's, since a kicker is hit again
+ * and again, and the next must be seen to be a new one.
+ */
+export const KICK_FLASH = { lasts: 0.3 } as const;
+
+/**
+ * How brightly a kicker flashes, from 0 to 1, `since` seconds after a ball hit it: the cup's flash curve, run over the
+ * kicker's own shorter time, so one fade is said once and a hit and a hole are lit alike. Nought before it is hit.
+ */
+export function kickFlash(since: number): number {
+  if (!(since >= 0) || since >= KICK_FLASH.lasts) return 0;
+  return flash((since * FLASH.lasts) / KICK_FLASH.lasts);
+}
