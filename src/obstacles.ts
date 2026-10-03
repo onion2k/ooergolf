@@ -16,7 +16,7 @@
  * the slice of whichever blade is down through the door, at the height of the
  * ball, and nothing when none is.
  */
-import { BALL, BOUNCE, KIND_RADIUS, TILE, slopeAt, tileAt, type Layout } from './arena';
+import { BALL, BOUNCE, BUMPER, KIND_RADIUS, TILE, slopeAt, tileAt, type Layout } from './arena';
 import type { Pusher, Belt } from './physics';
 
 /** A tile of a hole's map, as the map is drawn: its column, and its row from the top. */
@@ -34,6 +34,8 @@ export type ObstacleDef =
       /** How long it takes to go and come back, in seconds, and how far through that it starts, from 0 to 1. */
       period: number;
       phase?: number;
+      /** How much of its speed a ball keeps off it: a post's `BUMPER.restitution` makes it a moving bumper. Plastic's `BOUNCE.box` without it. */
+      bounce?: number;
     }
   | {
       kind: 'windmill';
@@ -153,6 +155,13 @@ export class Obstacles {
         const x = tileX(def.at[0]),
           y = tileY(def.at[1]);
         const pusher = { ...box(), x, y, z: BARRIER.hz, hx: (def.length * TILE) / 2, hy: BARRIER.hy, hz: BARRIER.hz };
+        if (def.bounce !== undefined) {
+          if (!Number.isFinite(def.bounce) || def.bounce < 0 || def.bounce > BUMPER.restitution * 2)
+            throw new Error(
+              `a barrier at column ${def.at[0]}, row ${def.at[1]} has a bounce of ${def.bounce}: it must be from nought to ${BUMPER.restitution * 2}`,
+            );
+          pusher.restitution = def.bounce;
+        }
         this.pushers.push(pusher);
         this.barriers.push({ x, y, hx: pusher.hx, def });
       } else if (def.kind === 'windmill') {

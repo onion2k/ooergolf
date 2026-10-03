@@ -623,6 +623,28 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
       if (draws !== drawn) told.push(`facing the flag drew ${draws - drawn} numbers of the game's chance`);
       did('face the flag');
     };
+    /**
+     * A player sending the ball into a moving bumper: struck at the place a barrier that throws is at this moment, a little
+     * off its middle either way, at any power, the hardest often. Done only on a hole that has one, and on a chance of its
+     * own, as the flag button is, so the monkey's stream is as it was and no other hole plays differently. The ceiling on
+     * what the bumper throws is the invariants' to hold, as every ten frames.
+     */
+    const bumped = seeded(seed * 19 + 11);
+    const bump = () => {
+      if (!game.ready) return;
+      const { obstacles, world, ball } = game;
+      const bumpers = obstacles.barriers.filter((b) => b.def.bounce !== undefined);
+      if (!bumpers.length) return;
+      const pick = bumpers[Math.floor(bumped() * bumpers.length)];
+      const pusher = obstacles.pushers[obstacles.barriers.indexOf(pick)];
+      const aim = Math.atan2(pusher.y - world.y[ball], pusher.x + (bumped() - 0.5) * pick.hx - world.x[ball]);
+      const power = bumped() < 0.4 ? 1 : 0.2 + 0.8 * bumped();
+      if (game.shoot(aim, power)) {
+        spent();
+        did('strike a moving bumper');
+        busy = Math.floor(10 + bumped() * 80);
+      }
+    };
     const total = actions.reduce((n, [w]) => n + w, 0);
     const act = () => {
       let pick = random() * total;
@@ -639,6 +661,7 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
       }
       // the button is there whatever the ball is doing, so it is pressed while it rolls and between holes too
       if (facer() < 0.008) face();
+      if (bumped() < 0.03) bump();
       game.step(DT);
       // a knock told wrongly is told once, and waits for no check
       if (told.length) return fail(told.splice(0));

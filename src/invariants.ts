@@ -371,6 +371,7 @@ export function checkInvariants(game: Game): string[] {
   if (!save.owned.includes(save.club)) out.push(`the club in hand, ${save.club}, is not owned`);
   if (layout.golf && !BAG.includes(game.inHand))
     out.push(`the club in hand on a golf hole, ${game.inHand.id}, is not in the bag`);
+  out.push(...bumperProblems(game));
   return out;
 }
 
@@ -481,5 +482,24 @@ export function previewProblems(game: Game, from: { x: number; y: number }, club
   const { across, along: length } = p.footprint;
   if (!(across >= 0 && length >= 0 && length <= p.carry / 2 + 1e-6 && across <= p.carry))
     out.push(`the spread is ${across} across and ${length} along, for a carry of ${p.carry}`);
+  return out;
+}
+
+/**
+ * A moving bumper is a barrier that throws, and what it throws is held to the same ceiling as a post's (the ball's speed
+ * rule above, which needs nothing of it): here, that what it was given to throw with is a number the game could have meant,
+ * from nought to twice a post's, and that the box the physics shoves with keeps what its definition said.
+ */
+export function bumperProblems(game: Game): string[] {
+  const out: string[] = [];
+  const { obstacles } = game;
+  obstacles.barriers.forEach((b, k) => {
+    const throws = obstacles.pushers[k].restitution ?? Number.NaN;
+    const said = b.def.bounce;
+    if (said !== undefined && throws !== said)
+      out.push(`the barrier at column ${b.def.at[0]} was given a bounce of ${said} and throws with ${throws}`);
+    if (said !== undefined && !(throws >= 0 && throws <= BUMPER.restitution * 2))
+      out.push(`the barrier at column ${b.def.at[0]} throws with ${throws}, which no bumper may`);
+  });
   return out;
 }
