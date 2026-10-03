@@ -182,9 +182,8 @@ hole, are planned in `~/.claude/plans/ooergolf-three-courses.md`.
 
 Banks and bounces: the rail is a cushion, the posts throw, and the player's own
 line is the game. One idea a hole, and something on each that the player must
-use or fear. Nine are planned, par 27, in the plan above; the five that need
-nothing the engine lacks are drawn, in `src/shed.ts`, par 13, and the other four
-(The Kicker, Flipper Alley, The Bowl Pit and Multiball) come with the kinds they use.
+use or fear. Nine are drawn, in `src/shed.ts`, par 25 (the plan said 27, but its
+nine pars add up to 25); the last four use the kicker and the flipper.
 
 | Hole | Par | Brings                                                                                |
 | ---- | --- | ------------------------------------------------------------------------------------- |
@@ -193,6 +192,10 @@ nothing the engine lacks are drawn, in `src/shed.ts`, par 13, and the other four
 | 3    | 3   | Plinko: a short field of posts in staggered rows, and power the only choice           |
 | 4    | 3   | Half-pipe: both sides rise to a trough, and a ball struck up a side comes down across |
 | 5    | 3   | Three Cushion: the cup walled in on three sides, open toward the far rail             |
+| 6    | 2   | The Kicker: the cup in a room off a lane; a soft shot into the kicker's cheek gets in |
+| 7    | 3   | Flipper Alley: a ball timed to the flipper's upswing is flung past the bunker         |
+| 8    | 3   | The Bowl Pit: the cup at the foot of a bowl, kickers round the rim throw a ball back  |
+| 9    | 4   | Multiball: a bank, a funnel, a kicker on the line, a flipper at the cup's mouth       |
 
 The autopilot never banks, and plays each by the way round: its figures, which
 are a player's slips on that, are in the pace gate and not here.

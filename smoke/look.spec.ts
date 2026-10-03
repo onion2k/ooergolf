@@ -206,6 +206,10 @@ test.describe('what it looks like', () => {
     ['The Waterworks', 'The Island Green', 'waterworks-4.png'],
     ['The Waterworks', 'The Spillway', 'waterworks-5.png'],
     ['The Waterworks', 'Mill Pond', 'waterworks-6.png'],
+    ['The Pinball Shed', 'The Kicker', 'shed-6.png'],
+    ['The Pinball Shed', 'Flipper Alley', 'shed-7.png'],
+    ['The Pinball Shed', 'The Bowl Pit', 'shed-8.png'],
+    ['The Pinball Shed', 'Multiball', 'shed-9.png'],
   ] as const) {
     test(`${name}, from its tee`, async ({ page }) => {
       const problems = watch(page);

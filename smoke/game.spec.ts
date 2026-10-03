@@ -202,8 +202,8 @@ test.describe('the start screen', () => {
       'BUTTON:The Links',
     ]);
     await expect(page.locator('#start .course').nth(1)).toContainText('The Pinball Shed');
-    await expect(page.locator('#start .course').nth(1)).toContainText('5 holes');
-    await expect(page.locator('#start .course').nth(1)).toContainText('par 13');
+    await expect(page.locator('#start .course').nth(1)).toContainText('9 holes');
+    await expect(page.locator('#start .course').nth(1)).toContainText('par 25');
     await expect(page.locator('#start .course').nth(2)).toContainText('The Fair');
     await expect(page.locator('#start .course').nth(2)).toContainText('4 holes');
     await expect(page.locator('#start .course').nth(2)).toContainText('par 11');

@@ -287,7 +287,7 @@ describe('the autopilot’s route over the tiles', () => {
     const n = l.cols * l.rows;
     const tile = (px: number, py: number) =>
       Math.floor((py - l.originY) / TILE) * l.cols + Math.floor((px - l.originX) / TILE);
-    const posted = new Set(l.bumpers.map((p) => tile(p.x, p.y)));
+    const posted = new Set([...l.bumpers, ...l.kickers].map((p) => tile(p.x, p.y)));
     const height = (t: number) =>
       stepAt(l, l.originX + ((t % l.cols) + 0.5) * TILE, l.originY + (Math.floor(t / l.cols) + 0.5) * TILE);
     const cost = (t: number) => (l.sand[t] ? 3 : 1);
