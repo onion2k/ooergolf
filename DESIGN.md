@@ -178,6 +178,25 @@ the ground is no steeper than the green holds a ball, 13 degrees, so a ball
 can come to rest beside it. Three new courses, each with one thing on every
 hole, are planned in `~/.claude/plans/ooergolf-three-courses.md`.
 
+### The Pinball Shed
+
+Banks and bounces: the rail is a cushion, the posts throw, and the player's own
+line is the game. One idea a hole, and something on each that the player must
+use or fear. Nine are planned, par 27, in the plan above; the five that need
+nothing the engine lacks are drawn, in `src/shed.ts`, par 13, and the other four
+(The Kicker, Flipper Alley, The Bowl Pit and Multiball) come with the kinds they use.
+
+| Hole | Par | Brings                                                                                |
+| ---- | --- | ------------------------------------------------------------------------------------- |
+| 1    | 2   | Corner Pocket: a wall juts between the tee and the cup, and only a bank gets round    |
+| 2    | 2   | The Funnel: two lines of posts closing on the cup, which throw a ball back inward     |
+| 3    | 3   | Plinko: a short field of posts in staggered rows, and power the only choice           |
+| 4    | 3   | Half-pipe: both sides rise to a trough, and a ball struck up a side comes down across |
+| 5    | 3   | Three Cushion: the cup walled in on three sides, open toward the far rail             |
+
+The autopilot never banks, and plays each by the way round: its figures, which
+are a player's slips on that, are in the pace gate and not here.
+
 - **Sand** slows a ball steadily, at 60 a second a second where the green
   is 16: a putt that reaches it at 20 dies three units in, and the hardest
   shot ploughs thirteen. It is drawn as one bed over its tiles, with the

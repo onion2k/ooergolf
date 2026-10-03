@@ -10,7 +10,7 @@ import { HILLS } from './hills';
 
 describe('the courses', () => {
   it('are The Meadow, the first nine as they were, The Range, the first of golf, and The Links', () => {
-    expect(COURSES.map((c) => c.name)).toEqual(['The Meadow', 'The Range', 'The Links']);
+    expect(COURSES.map((c) => c.name)).toEqual(['The Meadow', 'The Pinball Shed', 'The Range', 'The Links']);
     expect(COURSES[0].holes).toBe(COURSE);
     expect(COURSE.length).toBe(9);
     expect(COURSES.filter((c) => c.golf).map((c) => c.name)).toEqual(['The Range', 'The Links']);

@@ -33,6 +33,7 @@
 import type { ObstacleDef } from './obstacles';
 import { LINKS_SUMMARY, links } from './links';
 import { RANGE } from './range';
+import { SHED } from './shed';
 
 /** A hole: what it is called, its par, its map, and what moves on it. */
 export interface HoleDef {
@@ -280,6 +281,7 @@ const summaryOf = (holes: readonly HoleDef[]) => ({ holes: holes.length, par: ho
 /** Every course, the first the one a new player meets first. */
 export const COURSES: readonly Course[] = [
   { name: 'The Meadow', holes: COURSE, summary: summaryOf(COURSE) },
+  { name: 'The Pinball Shed', holes: SHED, summary: summaryOf(SHED) },
   { name: 'The Range', holes: RANGE, summary: summaryOf(RANGE), golf: true },
   {
     name: 'The Links',
