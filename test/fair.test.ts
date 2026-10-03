@@ -12,6 +12,12 @@ import { FAIR } from '../src/fair';
 import { checkInvariants } from '../src/invariants';
 import { Obstacles, WINDMILL, type ObstacleDef } from '../src/obstacles';
 import { terrainRefusal } from '../src/physics';
+import { fuzz } from '../scripts/fuzzer';
+import { PLAYER } from '../scripts/pace';
+import { BUMPER } from '../src/arena';
+import { seeded } from '../src/random';
+import { Game } from '../src/game';
+import { Progress, memoryStore } from '../src/progress';
 import { DT, newGame, settle } from './helpers';
 
 const hole = (name: string): HoleDef => FAIR.find((h) => h.name === name)!;
@@ -24,16 +30,26 @@ const tileOf = (h: HoleDef, letter: string): [number, number] => {
 };
 
 describe('the course', () => {
-  it('is The Fair, among the minigolf courses after The Meadow, with the four holes that need nothing the engine lacks', () => {
+  it('is The Fair, among the minigolf courses after The Meadow, with its nine holes', () => {
     const names = COURSES.map((c) => c.name);
     expect(names.indexOf('The Fair')).toBeGreaterThan(names.indexOf('The Meadow'));
     expect(names.indexOf('The Fair')).toBeLessThan(names.indexOf('The Range'));
     const course = COURSES.find((c) => c.name === 'The Fair')!;
     expect(course.holes).toBe(FAIR);
     expect(course.golf).toBeUndefined();
-    expect(FAIR.map((h) => h.name)).toEqual(['Turnstile', 'Traffic', 'The Lift', 'Whack-a-mole']);
-    expect(FAIR.map((h) => h.par)).toEqual([2, 3, 3, 3]);
-    expect(course.summary).toEqual({ holes: 4, par: 11 });
+    expect(FAIR.map((h) => h.name)).toEqual([
+      'Turnstile',
+      'Traffic',
+      'The Lift',
+      'Whack-a-mole',
+      'Dodgems',
+      'Carousel',
+      'Ferris',
+      'Shooting Gallery',
+      'The Big Wheel',
+    ]);
+    expect(FAIR.map((h) => h.par)).toEqual([2, 3, 3, 3, 3, 3, 3, 4, 4]);
+    expect(course.summary).toEqual({ holes: 9, par: 28 });
   });
 
   it('puts something that moves on every hole', () => {
@@ -319,5 +335,377 @@ describe('Whack-a-mole', () => {
       for (let t = 0; t < beat; t += 0.01) if (!clear(t, k)) some = true;
       expect(some, `and is in the way some of the time`).toBe(true);
     }
+  });
+});
+
+/** A game on one hole of The Fair, from a seed, played by the autopilot with a player's slips. */
+function pilotOn(h: HoleDef, seed: number) {
+  const game = new Game(new Progress(memoryStore()), {}, { random: seeded(seed), course: [h] });
+  return { game, pilot: new Autopilot(game, { skill: PLAYER, random: seeded(seed * 31 + 7) }) };
+}
+
+/** The strokes the autopilot takes to hole `h` on each of `seeds`, with the invariants held every thirty frames, and every one holed before the limit. */
+function holed(h: HoleDef, seeds: number[]): number[] {
+  return seeds.map((seed) => {
+    const { game, pilot } = pilotOn(h, seed);
+    for (let f = 0; f < 60 * 60 * 3 && game.phase !== 'over'; f++) {
+      pilot.step(DT);
+      if (f % 30 === 0) expect(checkInvariants(game), `${h.name}, seed ${seed}, frame ${f}`).toEqual([]);
+    }
+    expect(game.phase, `${h.name}, seed ${seed}, finished`).toBe('over');
+    expect(game.total, `${h.name}, seed ${seed}, within the limit`).toBeLessThan(game.limit);
+    return game.total;
+  });
+}
+
+const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8];
+const middle = (xs: number[]) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
+
+/** The share of a barrier's beat that its whole body is clear of a ball's line up the middle by the autopilot's own margin, the ball's radius and 0.6. */
+function clearShare(h: HoleDef, k: number): number {
+  const layout = layoutOf(h.map, h.terrain);
+  const o = new Obstacles(h.obstacles!, layout);
+  const def = defs(h, 'barrier')[k];
+  const index = (h.obstacles ?? []).filter((d) => d.kind === 'barrier').indexOf(def);
+  const n = 400;
+  let clear = 0;
+  for (let i = 0; i < n; i++) {
+    o.update((i / n) * def.period, 0.01);
+    const p = o.pushers[index];
+    if (Math.abs(p.x - layout.tee.x) > p.hx + KIND_RADIUS[BALL] + 0.6) clear++;
+  }
+  return clear / n;
+}
+
+describe('the whole course, from a player’s seed', () => {
+  it('is holed round by the autopilot with a player’s slips, on a few seeds, every hole within its limit and no rule broken', () => {
+    for (const seed of [3, 9]) {
+      const game = new Game(new Progress(memoryStore()), {}, { random: seeded(seed), course: FAIR });
+      const pilot = new Autopilot(game, { skill: PLAYER, random: seeded(seed * 31 + 7) });
+      for (let f = 0; f < 60 * 60 * 20 && game.phase !== 'over'; f++) {
+        pilot.step(DT);
+        if (f % 30 === 0) expect(checkInvariants(game), `seed ${seed}, frame ${f}`).toEqual([]);
+      }
+      expect(game.phase, `seed ${seed}`).toBe('over');
+      expect(game.card.length).toBe(9);
+      game.card.forEach((score, i) => expect(score, `${FAIR[i].name}, seed ${seed}`).toBeLessThan(game.limit));
+    }
+  });
+
+  it('is played by the fuzzer, on a few seeds, with the bumpers and the kickers struck, and no rule broken', () => {
+    let bumpers = 0,
+      kickers = 0;
+    // the whole course, which the monkey's wandering does not often get past the fifth hole of, and the last four holes alone, which hold the kickers and a bumper again
+    for (const [seed, holes] of [
+      [1, FAIR],
+      [3, FAIR],
+      [1, FAIR.slice(5)],
+      [2, FAIR.slice(5)],
+      [3, FAIR.slice(5)],
+      [4, FAIR.slice(5)],
+    ] as const) {
+      const run = fuzz(seed, 24000, holes);
+      expect(run.failure, JSON.stringify(run.failure)).toBe(null);
+      bumpers += run.done['strike a moving bumper'] ?? 0;
+      kickers += run.done['strike a kicker'] ?? 0;
+    }
+    expect(bumpers, 'a moving bumper was struck').toBeGreaterThan(0);
+    expect(kickers, 'a kicker was struck').toBeGreaterThan(0);
+  });
+});
+
+describe('Dodgems', () => {
+  const h = hole('Dodgems');
+  const layout = layoutOf(h.map);
+  const bumpers = defs(h, 'barrier');
+  const tileY = (row: number) => layout.originY + (layout.rows - 1 - row + 0.5) * TILE;
+
+  it('is three bumpers, each a barrier with a post’s bounce, a tile apart, out of step by a half and a quarter of a beat', () => {
+    expect(bumpers.length).toBe(3);
+    for (const b of bumpers) expect(b.bounce, 'throws like a post').toBe(BUMPER.restitution);
+    const rows = bumpers.map((b) => b.at[1]);
+    expect(rows[1] - rows[0]).toBe(1);
+    expect(rows[2] - rows[1]).toBe(1);
+    expect(new Set(bumpers.map((b) => b.period)).size, 'one beat').toBe(1);
+    const phases = bumpers.map((b) => b.phase ?? 0);
+    expect(phases).toEqual([0, 0.5, 0.25]);
+  });
+
+  it('is longer than one stroke goes, so the first is struck short of the bumpers and the second goes between them', () => {
+    const [, cupRow] = tileOf(h, 'C');
+    const [, teeRow] = tileOf(h, 'T');
+    expect((teeRow - cupRow) * TILE).toBeGreaterThan(40 ** 2 / (2 * 16));
+    expect(bumpers[0].at[1]).toBeGreaterThan(cupRow);
+  });
+
+  it('gives the autopilot a window: from a ball short of the bumpers it strikes within a few seconds, whenever it begins to look, not after the ten it waits at most', () => {
+    for (let begin = 0; begin < 4; begin += 0.5) {
+      const { game } = newGame(1, null, [h]);
+      const pilot = new Autopilot(game);
+      game.place(layout.tee.x, tileY(bumpers[2].at[1]) - 4 * TILE);
+      settle(game, Math.round(begin * 60));
+      const t0 = game.t;
+      let waited = Infinity;
+      for (let f = 0; f < 60 * 12; f++) {
+        pilot.step(DT);
+        if (game.strokes > 0) {
+          waited = game.t - t0;
+          break;
+        }
+      }
+      expect(waited, `looking from ${begin} s`).toBeLessThan(5);
+    }
+  });
+
+  it('leaves each a moment clear of the line at the autopilot’s own margin, and is in the way some of the time', () => {
+    for (let k = 0; k < 3; k++) {
+      const share = clearShare(h, k);
+      expect(share, `bumper ${k} lets a ball by`).toBeGreaterThan(0.1);
+      expect(share, `and is in the way`).toBeLessThan(0.9);
+    }
+  });
+
+  it('throws a ball it meets back faster than a plain barrier would, not stops it', () => {
+    const struck = (bounce: number | undefined) => {
+      const bare: HoleDef = {
+        ...h,
+        obstacles: [{ ...bumpers[0], travel: 0, ...(bounce === undefined ? { bounce: undefined } : { bounce }) }],
+      };
+      const { game } = newGame(1, null, [bare]);
+      game.shoot(Math.PI / 2, 1);
+      let back = 0;
+      for (let f = 0; f < 400; f++) {
+        game.step(DT);
+        back = Math.max(back, -game.world.vy[game.ball]);
+      }
+      return back;
+    };
+    expect(struck(BUMPER.restitution)).toBeGreaterThan(struck(undefined) * 2);
+  });
+
+  it('is holed by the autopilot within its limit, not in one on the median', () => {
+    const strokes = holed(h, SEEDS);
+    expect(middle(strokes)).toBeGreaterThanOrEqual(2);
+    expect(middle(strokes)).toBeLessThanOrEqual(h.par);
+  });
+});
+
+describe('Carousel', () => {
+  const h = hole('Carousel');
+  const layout = layoutOf(h.map);
+  const belts = defs(h, 'conveyor');
+  const tileX = (col: number) => layout.originX + (col + 0.5) * TILE;
+  const tileY = (row: number) => layout.originY + (layout.rows - 1 - row + 0.5) * TILE;
+  const [cupCol, cupRow] = tileOf(h, 'C');
+  const mound = h.map.findIndex((r) => r.includes('3'));
+
+  it('has a mound of raised grass between the tee and the cup that is a wall to the ball, belts along its foot, its flank and its back, and no belt on it', () => {
+    expect(belts.length).toBe(3);
+    for (let row = mound; row < h.map.length && h.map[row].includes('3'); row++) {
+      for (const c of h.map[row].split('')) expect('#3.'.includes(c)).toBe(true);
+      expect(stepAt(layout, tileX(5), tileY(row)), `row ${row}`).toBeCloseTo(3 * STEP, 6);
+    }
+    expect(tileY(mound), 'the cup is behind it').toBeLessThan(tileY(cupRow) - 1);
+    for (const b of belts)
+      for (const [col, row] of [b.from, b.to]) expect(h.map[row][col], 'a belt on grass').toBe('.');
+  });
+
+  it('carries a slow ball put on the belt at its foot out to the flank, up it and along the back, and sets it down short of the cup, at rest, not holed', () => {
+    const { game, told } = newGame(1, null, [h]);
+    const foot = belts[0];
+    game.place(tileX(foot.from[0] - 3), tileY(foot.from[1]));
+    const [x0, y0] = [game.world.x[game.ball], game.world.y[game.ball]];
+    const path: [number, number][] = [];
+    for (let f = 0; f < 60 * 14; f++) {
+      game.step(DT);
+      if (f % 30 === 0) path.push([game.world.x[game.ball], game.world.y[game.ball]]);
+    }
+    const [x, y] = [game.world.x[game.ball], game.world.y[game.ball]];
+    expect(Math.min(...path.map((p) => p[0])), 'out to the flank').toBeLessThan(tileX(2));
+    expect(game.world.asleep[game.ball], 'at rest').toBe(1);
+    expect(y, 'behind the mound').toBeGreaterThan(tileY(mound) + TILE / 2 + KIND_RADIUS[BALL]);
+    expect(y).toBeGreaterThan(y0 + 10);
+    expect(x, 'short of the cup').toBeLessThan(tileX(cupCol) - TILE);
+    expect(told.some((t) => t.startsWith('holed'))).toBe(false);
+    expect(game.strokes).toBe(0);
+    expect(x0).toBeGreaterThan(x - 20);
+  });
+
+  it('lets no ball over the foot, however hard it is struck: even the hardest shot is stopped by the belt and is carried round to the back', () => {
+    for (const power of [0.3, 0.6, 1]) {
+      const { game } = newGame(1, null, [h]);
+      const { tee, cup } = game.layout;
+      game.shoot(Math.atan2(cup.y - 8 - tee.y, 0 - tee.x), power);
+      settle(game, 60 * 16);
+      const [x, y] = [game.world.x[game.ball], game.world.y[game.ball]];
+      expect(game.world.asleep[game.ball], `power ${power}: at rest`).toBe(1);
+      expect(stepAt(game.layout, x, y), `power ${power}: not up on the mound`).toBe(0);
+      expect(y, `power ${power}: carried to the back`).toBeGreaterThan(tileY(mound) + TILE / 2 + KIND_RADIUS[BALL]);
+    }
+  });
+
+  it('is not holed in one stroke, being behind a wall, and is holed by the autopilot within its limit in two or three', () => {
+    const strokes = holed(h, SEEDS);
+    expect(Math.min(...strokes)).toBeGreaterThanOrEqual(2);
+    expect(middle(strokes)).toBeLessThanOrEqual(h.par);
+  });
+});
+
+describe('Ferris', () => {
+  const h = hole('Ferris');
+  const layout = layoutOf(h.map);
+  const [mill] = defs(h, 'windmill');
+  const tileX = (col: number) => layout.originX + (col + 0.5) * TILE;
+  const tileY = (row: number) => layout.originY + (layout.rows - 1 - row + 0.5) * TILE;
+
+  it('has a wall of raised grass across the whole hole, closed but for the one door, which is the windmill’s', () => {
+    expect(defs(h, 'windmill').length).toBe(1);
+    const row = h.map[mill.at[1]];
+    expect(row[mill.at[0]], 'the door').toBe('.');
+    row.split('').forEach((c, col) => {
+      if (col !== mill.at[0]) expect('#3'.includes(c), `column ${col} of the wall`).toBe(true);
+    });
+    expect(row.split('').filter((c) => c === '3').length).toBeGreaterThan(6);
+    // and a ball cannot go over it anywhere but the door
+    for (let col = 1; col < row.length - 1; col++)
+      if (col !== mill.at[0])
+        expect(stepAt(layout, tileX(col), tileY(mill.at[1])), `column ${col}`).toBeGreaterThanOrEqual(3 * STEP - 1e-6);
+    expect(stepAt(layout, tileX(mill.at[0]), tileY(mill.at[1]))).toBe(0);
+  });
+
+  it('stands a kicker square behind the door, with the cup to one side, so no line through the door reaches the cup', () => {
+    expect(layout.kickers.length).toBe(1);
+    expect(layout.kickers[0].x).toBeCloseTo(tileX(mill.at[0]), 6);
+    expect(layout.kickers[0].y).toBeGreaterThan(tileY(mill.at[1]) + 3 * TILE);
+    // a line from the cup to the nearest edge of the door, and how far from the axis it leaves the door
+    const reach = Math.abs(layout.cup.x - tileX(mill.at[0])) / (layout.cup.y - tileY(mill.at[1]));
+    expect(reach, 'a ball would need to go through the door at more than a quarter turn').toBeGreaterThan(0.4);
+  });
+
+  it('throws a ball struck hard at the kicker back down the room, and not one struck soft, which dies short of it', () => {
+    const run = (power: number) => {
+      const { game } = newGame(1, null, [h]);
+      game.place(tileX(mill.at[0]), tileY(mill.at[1]) + 2 * TILE);
+      game.shoot(Math.PI / 2, power);
+      let back = 0,
+        far = 0;
+      for (let f = 0; f < 60 * 6; f++) {
+        game.step(DT);
+        far = Math.max(far, game.world.y[game.ball]);
+        back = Math.max(back, -game.world.vy[game.ball]);
+      }
+      return { back, far, kicker: game.layout.kickers[0].y };
+    };
+    const hard = run(0.9);
+    expect(hard.far, 'reached the kicker').toBeGreaterThan(hard.kicker - 2.5);
+    expect(hard.back, 'and was thrown back faster than a plain post gives').toBeGreaterThan(20);
+    const soft = run(0.12);
+    expect(soft.far, 'dies short of it').toBeLessThan(soft.kicker - 1.6);
+    expect(soft.back, 'and does not come back').toBeLessThan(1);
+  });
+
+  it('puts a ball struck hard through the door into the kicker and back toward the blades, at some moment of the windmill’s turn', () => {
+    let through = false;
+    for (let wait = 0; wait < 6 && !through; wait += 0.25) {
+      const { game } = newGame(1, null, [h]);
+      settle(game, Math.round(wait * 60));
+      game.shoot(Math.PI / 2, 1);
+      let past = false;
+      for (let f = 0; f < 60 * 5; f++) {
+        game.step(DT);
+        if (game.world.y[game.ball] > tileY(mill.at[1]) + 2.5) past = true;
+        if (past && game.world.vy[game.ball] < -10) through = true;
+      }
+    }
+    expect(through).toBe(true);
+  });
+
+  it('is holed by the autopilot within its limit, in two or three', () => {
+    const strokes = holed(h, SEEDS);
+    expect(Math.min(...strokes)).toBeGreaterThanOrEqual(2);
+    expect(middle(strokes)).toBeLessThanOrEqual(h.par);
+  });
+});
+
+describe('Shooting Gallery', () => {
+  const h = hole('Shooting Gallery');
+  const layout = layoutOf(h.map);
+  const [barrier] = defs(h, 'barrier');
+  const [, cupRow] = tileOf(h, 'C');
+  const [, teeRow] = tileOf(h, 'T');
+
+  it('has three kickers standing in the field before the cup, off the line from the tee, and a barrier across the mouth of the bay the cup is in', () => {
+    expect(defs(h, 'barrier').length).toBe(1);
+    expect(layout.kickers.length).toBe(3);
+    expect(barrier.at[1], 'between the cup and the field').toBeGreaterThan(cupRow);
+    for (const k of layout.kickers) {
+      expect(k.y, 'in the field, short of the bay').toBeLessThan(
+        layout.originY + (layout.rows - 1 - barrier.at[1]) * TILE - 6,
+      );
+      expect(Math.abs(k.x - layout.tee.x), 'off the line').toBeGreaterThan(KIND_RADIUS[BALL] + 2);
+    }
+    // the bay is a room of its own: rail beside the barrier’s row either side of its mouth
+    const row = h.map[barrier.at[1]];
+    expect(row.startsWith('###') && row.endsWith('###')).toBe(true);
+  });
+
+  it('is longer than any one stroke goes, and its barrier leaves a moment clear of the line at the autopilot’s margin', () => {
+    expect((teeRow - cupRow) * TILE).toBeGreaterThan(40 ** 2 / (2 * 16));
+    const share = clearShare(h, 0);
+    expect(share).toBeGreaterThan(0.1);
+    expect(share).toBeLessThan(0.9);
+  });
+
+  it('is holed by the autopilot within its limit, not in one', () => {
+    const strokes = holed(h, SEEDS);
+    expect(Math.min(...strokes)).toBeGreaterThanOrEqual(2);
+    expect(middle(strokes)).toBeLessThanOrEqual(h.par);
+  });
+});
+
+describe('The Big Wheel', () => {
+  const h = hole('The Big Wheel');
+  const barriers = defs(h, 'barrier');
+  const plain = barriers.filter((b) => b.bounce === undefined);
+  const bumpers = barriers.filter((b) => b.bounce !== undefined);
+  const [belt] = defs(h, 'conveyor');
+  const [, cupRow] = tileOf(h, 'C');
+
+  it('has a windmill’s door, two crossing barriers, a moving bumper and a belt, as The Mill Race has three', () => {
+    expect(defs(h, 'windmill').length).toBe(1);
+    expect(plain.length).toBe(2);
+    expect(bumpers.length).toBe(1);
+    expect(bumpers[0].bounce).toBe(BUMPER.restitution);
+    expect(defs(h, 'conveyor').length).toBe(1);
+    // crossing: side by side along the hole, going opposite ways
+    expect(Math.abs(plain[0].at[1] - plain[1].at[1])).toBe(1);
+    expect((((plain[1].phase ?? 0) - (plain[0].phase ?? 0)) % 1) + 1).toBeCloseTo(1.5, 9);
+  });
+
+  it('puts the belt’s end at the cup, and the movers in order up the hole: the windmill nearest the tee, then the barriers, then the bumper, then the belt', () => {
+    expect(belt.to[1]).toBe(cupRow + 1);
+    expect(belt.to[0]).toBe(tileOf(h, 'C')[0]);
+    const mill = defs(h, 'windmill')[0];
+    expect(mill.at[1], 'the windmill, nearest the tee').toBeGreaterThan(Math.max(...plain.map((b) => b.at[1])));
+    expect(Math.min(...plain.map((b) => b.at[1]))).toBeGreaterThan(bumpers[0].at[1]);
+    expect(bumpers[0].at[1]).toBeGreaterThan(belt.from[1]);
+    // and the windmill is the first thing the ball meets: close enough to the tee that a slip of aim does not miss its door
+    expect((tileOf(h, 'T')[1] - mill.at[1]) * TILE).toBeLessThanOrEqual(15);
+  });
+
+  it('leaves every barrier and the bumper a moment clear of the line at the autopilot’s margin', () => {
+    for (let k = 0; k < 3; k++) {
+      const share = clearShare(h, k);
+      expect(share, `barrier ${k}`).toBeGreaterThan(0.1);
+      expect(share, `barrier ${k} is in the way`).toBeLessThan(0.9);
+    }
+  });
+
+  it('is longer than any one stroke goes, and is holed by the autopilot within its limit', () => {
+    const [, teeRow] = tileOf(h, 'T');
+    expect((teeRow - cupRow) * TILE).toBeGreaterThan(40 ** 2 / (2 * 16));
+    const strokes = holed(h, SEEDS);
+    expect(Math.min(...strokes)).toBeGreaterThanOrEqual(2);
+    expect(middle(strokes)).toBeLessThanOrEqual(h.par);
   });
 });

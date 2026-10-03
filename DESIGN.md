@@ -220,9 +220,9 @@ are a player's slips on that, are in the pace gate and not here.
 ### The Fair
 
 The second minigolf course, after The Meadow, built from the plan in `~/.claude/plans/ooergolf-three-courses.md`: timing,
-with something that moves on every hole. Nine are planned, par 28; four are drawn so far (`src/fair.ts`), the ones that
-need no new kind of obstacle, and the rest come as the kinds they use are built. A player who watches before striking
-takes about a stroke under par on each, as on The Meadow.
+with something that moves on every hole. Nine holes, par 28 (`src/fair.ts`): the first four need no new kind of obstacle,
+and the last five use the kicker and the moving bumper. A player who watches before striking takes about a stroke under
+par on each, as on The Meadow.
 
 | Hole | Par | Brings                                                                                                                                                                                              |
 | ---- | --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -230,11 +230,23 @@ takes about a stroke under par on each, as on The Meadow.
 | 2    | 3   | Traffic: a long lane with two barriers sliding opposite ways across it, a tile of grass between; both are clear of the line once in a beat, so no one stroke reaches the cup and the first is timed |
 | 3    | 3   | The Lift: a belt up a causeway between ponds and onto a raised step, with the cup on the grass beyond; the belt takes the speed off any ball it carries, so the stroke is the aim at its foot       |
 | 4    | 3   | Whack-a-mole: a chain of three barriers a third of a beat apart across the lane, clearing the line one after the next                                                                               |
+| 5    | 3   | Dodgems: three moving bumpers (barriers that throw like a post) across a wide green, out of step; a ball that meets one is thrown, not stopped                                                      |
+| 6    | 3   | Carousel: a mound of raised grass between the tee and the cup, and belts along its foot, up its flank and across its back: the only way to the cup is the ride round it                             |
+| 7    | 3   | Ferris: a windmill's door the only way through a wall of raised grass, a kicker square behind it that throws a hard ball back into the blades, and the cup tucked to one side                       |
+| 8    | 4   | Shooting Gallery: a long hole, three kickers standing in the field like targets, and a barrier sliding across the mouth of the bay the cup is in                                                    |
+| 9    | 4   | The Big Wheel: the finale, a windmill's door, two barriers crossing, a moving bumper and a belt that carries the ball to the cup                                                                    |
 
 The Lift was to be a ramp. The physics allows a conveyor on sloping ground (only a barrier and a windmill are refused
 one), and carries a ball up it, but the scene draws every belt at the height of the grass, so a belt on a slope would be
 buried; the belt is level and the step at its end is a map digit. Whack-a-mole was to have posts that rise and fall; the
 windmill's gate is a blade sweeping across a door, not a post, so it is a chain of barriers instead.
+
+Carousel was to be a ring of belts round a raised island with the cup on it, reached by clearing the ring in one shot.
+That cannot be played: a belt takes the speed off any ball that meets it and carries it at its own, and a ball struck at
+the hardest power across a belt of one tile is stopped on it, a few tenths of a unit short of the far side, so no shot
+clears even a single belt, and a ring lets nothing on to the island. So the ride is the way: the mound is a wall, and the
+belts carry a ball round it to the back, where it is set down short of the cup. Whatever the power, the ball ends in the
+same place, so the stroke's whole decision is to reach the belt.
 
 ### The Waterworks
 
