@@ -31,6 +31,7 @@
  */
 
 import type { ObstacleDef } from './obstacles';
+import { FAIR } from './fair';
 import { LINKS_SUMMARY, links } from './links';
 import { RANGE } from './range';
 import { SHED } from './shed';
@@ -282,6 +283,7 @@ const summaryOf = (holes: readonly HoleDef[]) => ({ holes: holes.length, par: ho
 export const COURSES: readonly Course[] = [
   { name: 'The Meadow', holes: COURSE, summary: summaryOf(COURSE) },
   { name: 'The Pinball Shed', holes: SHED, summary: summaryOf(SHED) },
+  { name: 'The Fair', holes: FAIR, summary: summaryOf(FAIR) },
   { name: 'The Range', holes: RANGE, summary: summaryOf(RANGE), golf: true },
   {
     name: 'The Links',

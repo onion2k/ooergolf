@@ -214,6 +214,25 @@ are a player's slips on that, are in the pace gate and not here.
   green's steady slowing is not on it. A barrier or a blade bounces a ball
   off, and carries it no longer.
 
+### The Fair
+
+The second minigolf course, after The Meadow, built from the plan in `~/.claude/plans/ooergolf-three-courses.md`: timing,
+with something that moves on every hole. Nine are planned, par 28; four are drawn so far (`src/fair.ts`), the ones that
+need no new kind of obstacle, and the rest come as the kinds they use are built. A player who watches before striking
+takes about a stroke under par on each, as on The Meadow.
+
+| Hole | Par | Brings                                                                                                                                                                                              |
+| ---- | --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | 2   | Turnstile: two windmills in two doors of one wall, half a blade out of step, so one door is open as the other is swept                                                                              |
+| 2    | 3   | Traffic: a long lane with two barriers sliding opposite ways across it, a tile of grass between; both are clear of the line once in a beat, so no one stroke reaches the cup and the first is timed |
+| 3    | 3   | The Lift: a belt up a causeway between ponds and onto a raised step, with the cup on the grass beyond; the belt takes the speed off any ball it carries, so the stroke is the aim at its foot       |
+| 4    | 3   | Whack-a-mole: a chain of three barriers a third of a beat apart across the lane, clearing the line one after the next                                                                               |
+
+The Lift was to be a ramp. The physics allows a conveyor on sloping ground (only a barrier and a windmill are refused
+one), and carries a ball up it, but the scene draws every belt at the height of the grass, so a belt on a slope would be
+buried; the belt is level and the step at its end is a map digit. Whack-a-mole was to have posts that rise and fall; the
+windmill's gate is a blade sweeping across a door, not a post, so it is a chain of barriers instead.
+
 ## The upgrades
 
 Bought in the shop with what the holes pay. They change the physics, within
