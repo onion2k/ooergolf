@@ -25,6 +25,7 @@ import { breakOf } from '../src/green';
 import { glint } from '../src/glints';
 import { LIE } from '../src/surfaces';
 import { BOWL, SIDE_HILL } from '../test/hills';
+import { STREAM_HOLE } from '../test/stream-hole';
 import { drag, puttingHole, start, watch } from './game';
 import { openDrawer } from './panels';
 
@@ -1205,6 +1206,29 @@ test.describe('the flag button', () => {
     await page.evaluate(() => window.game!.step(180));
     expect((await page.evaluate(() => window.game!.view())).turning).toBe(false);
     await expect(page).toHaveScreenshot('flag-after.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+});
+
+test.describe('a stream', () => {
+  test('running water in a channel, close to: foam at its edges, ripples on it, level with the grass', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true });
+    await page.evaluate((hole) => {
+      const g = window.game!;
+      g.playCourse([hole]);
+      g.step(1);
+      const { tee } = g.content();
+      // the middle of the belt, which runs across the hole four rows north of the tee
+      g.look(tee.x + 1.5, tee.y + 7, 20);
+      g.step(90);
+    }, STREAM_HOLE);
+    await hideStats(page);
+    await expect(page.locator('#view')).toHaveScreenshot('stream.png', TOLERANCE);
+    const ms = await page.evaluate(() => window.game!.measureFrame(30));
+    console.log(`a frame of the stream scene: ${ms.toFixed(2)} ms`);
     expect(problems).toEqual([]);
   });
 });

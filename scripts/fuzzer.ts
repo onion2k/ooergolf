@@ -20,7 +20,7 @@
  */
 import { Camera } from 'artshape-render/gpu/camera';
 import { aimView } from '../src/aimview';
-import { heightAt, strikeSpeed } from '../src/arena';
+import { ROLL, heightAt, powerFor, strikeSpeed } from '../src/arena';
 import { Autopilot, timeAlong } from '../src/autopilot';
 import { CameraRig, facing } from '../src/camera';
 import { CLUBS } from '../src/clubs';
@@ -34,6 +34,7 @@ import {
   kickerProblems,
   knockProblems,
   landingProblems,
+  lostOnStreamProblems,
   planProblems,
   previewProblems,
   viewProblems,
@@ -156,6 +157,9 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
           count(happened, name);
           if (name === 'started' && playing) count(visited, playing.def.name);
           if (name === 'knocked' && playing) told.push(...knockProblems(playing, ...(args as Knock)));
+          // a stream is a belt: the ball is carried on it, and never lost
+          if ((name === 'splash' || name === 'outOfBounds') && playing)
+            told.push(...lostOnStreamProblems(playing, name, args[0], args[1]));
           if (name === 'landed' && playing) {
             const [x, y, speed, first] = args as unknown as Landing;
             told.push(...landingProblems(playing, speed, x, y));
@@ -712,6 +716,35 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
         busy = Math.floor(between(10, 40));
       }
     };
+    /**
+     * A player striking the ball at a stream: aimed at a point of its belt from where the ball lies, at the power that rolls
+     * it there on the level, between any slip a player has. Done on a chance of its own, as reading a green is, and only on
+     * a hole that has a stream, so every other run plays as it did. Whatever comes of it, the game's rules hold: the ball is
+     * carried, and is never told lost on the stream.
+     */
+    const streamer = seeded(seed * 19 + 7);
+    const strikeOntoStream = () => {
+      if (!game.ready || input.aim !== null || game.phase !== 'play') return;
+      const streams = game.obstacles.conveyors.filter((c) => c.look === 'water');
+      if (!streams.length) return;
+      const c = streams[Math.floor(streamer() * streams.length)];
+      const along = (streamer() - 0.5) * c.length,
+        across = (streamer() - 0.5) * 2;
+      const px = c.x + Math.cos(c.angle) * along - Math.sin(c.angle) * across,
+        py = c.y + Math.sin(c.angle) * along + Math.cos(c.angle) * across;
+      const { world, ball } = game;
+      const dx = px - world.x[ball],
+        dy = py - world.y[ball];
+      const power = Math.min(
+        1,
+        powerFor(Math.sqrt(2 * ROLL.roll * Math.hypot(dx, dy)), game.hardest) * (0.8 + 0.4 * streamer()),
+      );
+      if (game.shoot(Math.atan2(dy, dx) + (streamer() - 0.5) * 0.1, power)) {
+        spent();
+        did('strike onto the stream');
+      }
+      busy = Math.floor(between(10, 90));
+    };
     const total = actions.reduce((n, [w]) => n + w, 0);
     const act = () => {
       let pick = random() * total;
@@ -730,6 +763,7 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
       if (facer() < 0.008) face();
       if (bumped() < 0.03) bump();
       if (game.layout.kickers.length && striker() < 0.03) strike();
+      if (game.obstacles.streamed.size && streamer() < 0.03) strikeOntoStream();
       game.step(DT);
       // a kicker throws the hardest of anything on a course, so what it does to the ball is checked in every frame
       if (game.layout.kickers.length) {

@@ -52,6 +52,11 @@ export type ObstacleDef =
       to: MapTile;
       /** How fast it carries, in units a second. */
       speed: number;
+      /**
+       * How it is drawn: `water` is a stream, running water in a channel level with the grass. Only the picture and
+       * the map change: to the physics and the game it is a belt, which carries a ball and never loses one.
+       */
+      look?: 'water';
     }
   | {
       kind: 'flipper';
@@ -141,7 +146,15 @@ export class Obstacles {
   /** Where each windmill's door is, and how far its blades have turned, for drawing. */
   readonly windmills: { x: number; y: number; turn: number; def: Extract<ObstacleDef, { kind: 'windmill' }> }[] = [];
   /** Where each conveyor lies, which way it carries, how long it is, and how far it has carried, for drawing. */
-  readonly conveyors: { x: number; y: number; angle: number; length: number; travel: number; speed: number }[] = [];
+  readonly conveyors: {
+    x: number;
+    y: number;
+    angle: number;
+    length: number;
+    travel: number;
+    speed: number;
+    look?: 'water';
+  }[] = [];
   /** The tiles a belt lies on: not grass, so nothing grows there, and nothing slows a ball the belt carries. */
   readonly belted = new Set<number>();
   /** Where each flipper turns, how long its arm is, and the box the physics has of it, for drawing. */
@@ -155,6 +168,8 @@ export class Obstacles {
   }[] = [];
   /** The game time everything was last put where it is for, so that a rule can ask where a flipper ought to be. */
   time = 0;
+  /** The tiles a stream lies on, which are belted too: the hole map paints them as water. */
+  readonly streamed = new Set<number>();
 
   constructor(defs: readonly ObstacleDef[], layout: Layout) {
     const tileX = (col: number) => layout.originX + (col + 0.5) * TILE;
@@ -222,9 +237,13 @@ export class Obstacles {
           length,
           travel: 0,
           speed: def.speed,
+          ...(def.look ? { look: def.look } : {}),
         });
-        for (let k = 0; k * TILE < length; k++)
-          this.belted.add(tileAt(layout, x0 + ((x1 - x0) / d) * k * TILE, y0 + ((y1 - y0) / d) * k * TILE));
+        for (let k = 0; k * TILE < length; k++) {
+          const t = tileAt(layout, x0 + ((x1 - x0) / d) * k * TILE, y0 + ((y1 - y0) / d) * k * TILE);
+          this.belted.add(t);
+          if (def.look === 'water') this.streamed.add(t);
+        }
       }
     }
     // the flippers' boxes come last among the pushers, whatever order they were given in, so the barriers' and the windmills'

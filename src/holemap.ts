@@ -88,9 +88,9 @@ export function mapPoint(_layout: Layout, size: MapSize, x: number, y: number): 
 }
 
 /** The colour of the ground at a tile, or none for ground that is off the course. */
-function kindOf(layout: Layout, t: number): Rgb | null {
+function kindOf(layout: Layout, t: number, streams?: ReadonlySet<number>): Rgb | null {
   if (t < 0 || layout.solid[t]) return null;
-  if (layout.water[t]) return COLOUR.water;
+  if (layout.water[t] || streams?.has(t)) return COLOUR.water;
   if (layout.sand[t]) return COLOUR.sand;
   if (layout.oob[t]) return COLOUR.out;
   switch (layout.lie[t]) {
@@ -113,11 +113,21 @@ function kindOf(layout: Layout, t: number): Rgb | null {
  * The hole painted into `out`, which has `size.width * size.height` pixels of four bytes, red to alpha: the ground in
  * its kinds, each tree as a dot over it, and nothing (alpha nought) where the hole has no ground.
  */
-export function paintMap(layout: Layout, size: MapSize, out: Uint8ClampedArray): void {
+export function paintMap(
+  layout: Layout,
+  size: MapSize,
+  out: Uint8ClampedArray,
+  /** The tiles a stream runs over (`Obstacles.streamed`), which are water to the eye though a belt to the ball. */
+  streams?: ReadonlySet<number>,
+): void {
   const { width, height, scale } = size;
   for (let py = 0; py < height; py++) {
     for (let px = 0; px < width; px++) {
-      const colour = kindOf(layout, tileAt(layout, size.west + (px + 0.5) / scale, size.north - (py + 0.5) / scale));
+      const colour = kindOf(
+        layout,
+        tileAt(layout, size.west + (px + 0.5) / scale, size.north - (py + 0.5) / scale),
+        streams,
+      );
       const o = (py * width + px) * 4;
       if (colour) out.set([colour[0], colour[1], colour[2], 255], o);
       else out.set([0, 0, 0, 0], o);

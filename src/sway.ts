@@ -118,3 +118,45 @@ export function splashRing(since: number, out: { grow: number; fade: number } = 
   out.fade = (1 - life) ** 1.5;
   return out;
 }
+
+/**
+ * The ripples on a stream: carried along it in the belt's direction at the belt's speed, as the water is, and so a
+ * ripple's place is its start plus the speed times the time, round the stream's length and back to its start. `each`
+ * is how many a stream of this length has: about one in every unit and six tenths, and never fewer than four.
+ */
+export const STREAM_RIPPLES = {
+  each: (length: number) => Math.max(4, Math.round(length / 1.6)),
+  /** How far in from either end a ripple is faded out over, as a share of the half length, so it is never seen to start or stop. */
+  edge: 0.3,
+} as const;
+
+/** A ripple of a stream: across the channel and along it, each from minus one to one, and how much of its brightness shows. */
+export interface StreamRipple {
+  u: number;
+  v: number;
+  fade: number;
+}
+
+/**
+ * Ripple `k` of the stream called `seed`, `length` long and carrying `speed` units a second, at time `t`: where it is,
+ * from game time alone. Along (`v`) it has gone `speed * t` further than it started, modulo the length, so at any two
+ * moments it has moved by the belt's speed; across (`u`) it is in a lane of its own for each lap, which it changes at the
+ * far end only, where it is faded out and unseen. Writes into `out` when given one, so a frame makes nothing.
+ */
+export function streamRipples(
+  t: number,
+  seed: number,
+  k: number,
+  length: number,
+  speed: number,
+  out: StreamRipple = { u: 0, v: 0, fade: 0 },
+): StreamRipple {
+  const lap = (k / STREAM_RIPPLES.each(length)) * length + speed * t;
+  const turns = Math.floor(lap / length);
+  const along = lap - turns * length;
+  out.u = unit(seed, k, speed < 0 ? -turns : turns) * 2 - 1;
+  out.v = (along / length) * 2 - 1;
+  const edge = Math.min(1, (1 - Math.abs(out.v)) / STREAM_RIPPLES.edge);
+  out.fade = edge * edge * edge;
+  return out;
+}

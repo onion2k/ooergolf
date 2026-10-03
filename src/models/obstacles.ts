@@ -625,3 +625,46 @@ export function flipper(
     moving: [],
   };
 }
+
+/** How a stream lies: a hair above the grass, level with it, the width of the foam at its edge and of its one band of shallows. */
+export const STREAM = { lift: 0.03, bank: 0.1, foam: 0.1, band: 0.35 } as const;
+
+/** The earth along a stream's edge: the colour the scene gives the sides of raised grass, which is what a bank is. */
+const STREAM_BANK: Colour = [0.2, 0.3, 0.08];
+
+/**
+ * A stream of `w` across X by `h` along Y, its origin the middle of it at grass level: the pond's water in a channel the
+ * belt's tiles make, level with the grass and not sunk into it (the ball is carried over the grass's own height, and a
+ * channel with banks would need the ground to come down to it, which only water tiles have), with the pond's rim of
+ * foam where it meets the grass, a band of shallows inside that, and deep water veined in a lighter blue along it. The
+ * ripples are in `moving`, one long diamond of streak that the game carries down the stream.
+ */
+export function stream(w: number, h: number, { seed = 1 } = {}): Model {
+  const z = STREAM.lift;
+  const bank = Math.min(STREAM.bank, w / 12, h / 12);
+  const foam = Math.min(STREAM.foam, w / 10, h / 10);
+  const band = Math.min(STREAM.band, w / 6, h / 6);
+  const sw = bank + foam + band;
+  const [x0, y0, x1, y1] = [-w / 2, -h / 2, w / 2, h / 2];
+  const framed = (from: number, width: number) => built((b) => frame(b, w - 2 * from, h - 2 * from, width, z));
+  const surface = built((b) =>
+    face(b, [x0 + sw, y0 + sw, z], [x1 - sw, y0 + sw, z], [x1 - sw, y1 - sw, z], [x0 + sw, y1 - sw, z]),
+  );
+  // a streak of light on the water: a long diamond, pointed along the stream, which is what a ripple is when it is carried
+  const streak = built((b) => face(b, [0, -1, z], [0.25, 0, z], [0, 1, z], [-0.25, 0, z]));
+  return {
+    name: 'stream',
+    parts: [
+      { name: 'bank', mesh: framed(0, bank), material: matte(STREAM_BANK, ROUGH.rubber) },
+      { name: 'foam', mesh: framed(bank, foam), material: matte(PALETTE.waterFoam, ROUGH.water) },
+      { name: 'shallows', mesh: framed(bank + foam, band), material: matte(PALETTE.waterShallow, ROUGH.water) },
+      {
+        name: 'surface',
+        mesh: surface,
+        material: matte(PALETTE.water, ROUGH.water),
+        pattern: { kind: PATTERN.marbling, scale: 0.5, seed: (seed * 0.29) % 1, second: PALETTE.waterVein },
+      },
+    ],
+    moving: [{ name: 'streak', mesh: streak, material: matte(PALETTE.ripple, ROUGH.water) }],
+  };
+}

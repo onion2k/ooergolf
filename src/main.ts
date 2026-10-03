@@ -256,7 +256,7 @@ async function main() {
     const small = mapBoxOf();
     const size = mapSize(game.layout, small.width, small.height);
     const pixels = new Uint8ClampedArray(size.width * size.height * 4);
-    paintMap(game.layout, size, pixels);
+    paintMap(game.layout, size, pixels, game.obstacles.streamed);
     mapped = { size, small: small.key };
     mapInto(size, game.layout.cup.x, game.layout.cup.y, hud.overlay.cup);
     hud.setMap({ width: size.width, height: size.height, pixels });

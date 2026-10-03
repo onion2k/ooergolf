@@ -57,7 +57,9 @@ import {
   tree,
   water,
   windmill,
+  stream,
   type Model,
+  STREAM,
   type Pond,
   golfTree,
   kicker,
@@ -71,7 +73,18 @@ import { placeRolling } from './roll';
 import { ROCK_SIZE, dress, scatter, type Piece, type SceneryKind } from './scenery';
 import { GROUND, cupGround, groundOf, railsOf, stakesOf } from './ground';
 import { TREE } from './trees';
-import { RIPPLES, SPLASH_RING, flagTurn, lean, ringPlace, ripples, splashRing, waggle } from './sway';
+import {
+  RIPPLES,
+  SPLASH_RING,
+  STREAM_RIPPLES,
+  flagTurn,
+  lean,
+  ringPlace,
+  ripples,
+  splashRing,
+  streamRipples,
+  waggle,
+} from './sway';
 import { SPARKLE, sparkle, sparkles as sparkleShares } from './glints';
 import { MARK, markSize } from './marker';
 import type { Preview } from './preview';
@@ -372,6 +385,7 @@ export class Scene {
     place: { x: 0, y: 0, radius: 0 },
     ring: { grow: 0, fade: 0 },
     spark: { u: 0, v: 0, brightness: 0 },
+    streak: { u: 0, v: 0, fade: 0 },
   };
 
   /** The hole being drawn, for the height of the ground under what moves on it. */
@@ -478,7 +492,13 @@ export class Scene {
       const at = new Float32Array(16);
       // the model carries toward +Y: turned to carry the way the belt does
       place(at, 0, c.x, c.y, 0, c.angle - Math.PI / 2);
-      out.push(...groups(conveyor(TILE, c.length), at));
+      // a stream is water in a channel, level with the grass, and has none of the belt's steel
+      out.push(
+        ...groups(
+          c.look === 'water' ? stream(TILE, c.length, { seed: Math.round(c.x * 7 + c.y) }) : conveyor(TILE, c.length),
+          at,
+        ),
+      );
     }
     return out;
   }
@@ -607,6 +627,54 @@ export class Scene {
     out.push({ mesh, matrices, count: 0, materials: looks });
   }
 
+  /**
+   * The ripples carried down a stream: one pool sized once for the stream's length, each ripple the pond's ring
+   * stretched along the stream and placed, and coloured from its fade, from game time alone (`streamRipples`).
+   */
+  private streamRipples(c: Obstacles['conveyors'][number], yaw: number, out: GameGroup[]) {
+    const count = STREAM_RIPPLES.each(c.length);
+    const mesh = stream(TILE, c.length).moving[0].mesh;
+    const matrices = new Float32Array(16 * count),
+      looks = new Float32Array(MATERIAL_STRIDE * count);
+    const seed = Math.round(c.x * 7 + c.y);
+    const [dr, dg, db] = COLOURS.water,
+      [pr, pg, pb] = COLOURS.ripple;
+    const cos = Math.cos(c.angle),
+      sin = Math.sin(c.angle);
+    // in from the foam and the shallows, so a streak is on the deep water
+    const hx = TILE / 2 - 0.7,
+      hy = c.length / 2;
+    this.moving.push({
+      matrices,
+      count,
+      looks,
+      write: (m, t) => {
+        for (let i = 0; i < count; i++) {
+          const r = streamRipples(t, seed, i, c.length, c.speed, this.scratch.streak);
+          const across = r.u * hx,
+            along = r.v * hy;
+          // a streak, long with the stream and narrow across it
+          place(
+            m,
+            i,
+            c.x + cos * along - sin * across,
+            c.y + sin * along + cos * across,
+            STREAM.lift + 0.02,
+            yaw,
+            1,
+            r.fade < 0.01 ? 0 : 0.9,
+            1,
+          );
+          looks.set(
+            [dr + (pr - dr) * r.fade, dg + (pg - dg) * r.fade, db + (pb - db) * r.fade, ROUGH.water],
+            i * MATERIAL_STRIDE,
+          );
+        }
+      },
+    });
+    out.push({ mesh, matrices, count, materials: looks });
+  }
+
   /** The ponds of a hole: each the largest rectangle of water tiles from the first not yet in one. */
   private eachPond(
     layout: Layout,
@@ -732,8 +800,12 @@ export class Scene {
       pool({ parts: blades.moving }, (m) => placeBlades(m, 0, w.x, w.y, 0, w.turn, blades.hub));
     }
     for (const c of obstacles?.conveyors ?? []) {
-      const belt = conveyor(TILE, c.length);
       const yaw = c.angle - Math.PI / 2;
+      if (c.look === 'water') {
+        this.streamRipples(c, yaw, out);
+        continue;
+      }
+      const belt = conveyor(TILE, c.length);
       pool({ parts: belt.moving }, (m) => {
         // the chevrons run along the belt, a spacing at a time, so they seem to go on for ever
         const along = c.travel % belt.spacing;

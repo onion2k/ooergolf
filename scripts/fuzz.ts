@@ -20,6 +20,7 @@ import { availableParallelism } from 'node:os';
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
 import { COURSES } from '../src/course';
 import { KICKER_HOLES, WINDY, contoured, fuzz, type FuzzResult } from './fuzzer';
+import { STREAM_HOLE } from '../test/stream-hole';
 
 /** The courses of golf a run may be played on alone, by the short name a replay asks for and the name a course has. */
 const GOLF = {
@@ -28,6 +29,7 @@ const GOLF = {
   windy: 'The Range with a wind',
   contoured: 'The Links, contoured',
   kickers: 'the holes with kickers',
+  stream: 'a hole with a stream',
 } as const;
 type Golf = keyof typeof GOLF;
 
@@ -39,7 +41,9 @@ const holesOf = (on: Golf) =>
       ? contoured()
       : on === 'kickers'
         ? KICKER_HOLES
-        : COURSES.find((c) => c.name === GOLF[on])!.holes;
+        : on === 'stream'
+          ? [STREAM_HOLE]
+          : COURSES.find((c) => c.name === GOLF[on])!.holes;
 
 if (!isMainThread) {
   const { seed, frames, on } = workerData as { seed: number; frames: number; on: Golf | undefined };
@@ -62,7 +66,7 @@ async function main() {
   // each seed as a player choosing among the courses, and on each course of golf alone; or only the one asked for, to play a failure again
   const on = value('on') as Golf | undefined;
   if (on !== undefined && !(on in GOLF))
-    throw new Error(`--on is range, links, windy, contoured or kickers, not ${on}`);
+    throw new Error(`--on is range, links, windy, contoured, kickers or stream, not ${on}`);
   const queue: { seed: number; on: Golf | undefined }[] = seeds.flatMap<{ seed: number; on: Golf | undefined }>(
     (seed) =>
       on

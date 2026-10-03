@@ -351,6 +351,7 @@ export function checkInvariants(game: Game): string[] {
       if (inside) out.push(`the ball is inside a moving box at ${p.x.toFixed(1)},${p.y.toFixed(1)}`);
     }
   }
+  report('stream', streamProblems(game));
   if (live > 1) out.push(`${live} bodies on the course, and only the ball should be`);
   if (!Number.isInteger(strokes) || strokes < 0) out.push(`the strokes are ${strokes}`);
   else if (hole < course.length && strokes > course[hole].par + LIMIT_OVER_PAR)
@@ -561,4 +562,31 @@ export function flipperProblems(obstacles: Obstacles): string[] {
     if (!Number.isFinite(p.spin)) out.push(`${what} is turning at ${p.spin}`);
   }
   return out;
+}
+
+/**
+ * What is wrong with the streams of a hole: a stream is a belt drawn as water, so every tile it lies on is a belt's, and
+ * is not water, rock or out of bounds, where the ball would be lost or never could be. The ball on a stream is carried.
+ */
+export function streamProblems(game: Game): string[] {
+  const out: string[] = [];
+  const { layout, obstacles } = game;
+  for (const t of obstacles.streamed) {
+    const where = `tile ${t % layout.cols},${Math.floor(t / layout.cols)}`;
+    if (!obstacles.belted.has(t)) out.push(`a stream on ${where}, which is no belt's`);
+    if (layout.water[t]) out.push(`a stream on ${where}, which is water: the ball would be lost on a belt`);
+    if (layout.solid[t]) out.push(`a stream on ${where}, which is rock or rail`);
+    if (layout.oob[t]) out.push(`a stream on ${where}, which is out of bounds`);
+  }
+  return out;
+}
+
+/**
+ * What is wrong with a ball told lost (`what`, in the water or out of bounds) at (x, y): on a stream it is never lost,
+ * since a stream is a belt and carries a ball. Checked as the loss is told.
+ */
+export function lostOnStreamProblems(game: Game, what: string, x: number, y: number): string[] {
+  return game.obstacles.streamed.has(tileAt(game.layout, x, y))
+    ? [`the ball was lost (${what}) on a stream at ${x},${y}`]
+    : [];
 }
