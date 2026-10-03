@@ -20,8 +20,7 @@ import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
 import { expect, test } from '@playwright/test';
-import { moors } from '../src/course';
-import { bigHole, plain } from './bighole';
+import { bigHole, smallHole } from './bighole';
 import { start, watch } from './game';
 
 const BASELINE = 'smoke/perf-baseline.json';
@@ -96,11 +95,11 @@ test('boots, draws and downloads within budget, and as it did before', async ({ 
     // a GPU idle while the page booted runs slow for a while: warmed first, or the figure is two figures
     return g.measureFrame(300);
   });
-  // the biggest hole that is not golf (`BIG`, in `bighole.ts`, a test hole of the test's own: The Moors are tight now), many times the size of
+  // the biggest hole that is not golf (`BIG`, in `bighole.ts`, a test hole of the test's own), many times the size of
   // any on a course: what it costs to begin, and to draw. A hole is
   // begun and its readback awaited with nothing stepped between, since a frame stepped and not yet drawn is queued, and the
   // begin after it would wait on that as well; the biggest is begun in turn with the smallest, so each begin is a new hole
-  const holes = [plain(moors()[0]), bigHole()];
+  const holes = [smallHole(), bigHole()];
   const big = await page.evaluate(async (holes) => {
     const g = window.game!;
     g.playCourse(holes.map((h) => ({ ...h, terrain: Float32Array.from(h.terrain) }) as never));

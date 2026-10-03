@@ -20,6 +20,7 @@ import { puttText } from '../src/readout';
 import { DRAG } from '../src/shot';
 import { scoreName } from '../src/score';
 import { LIE } from '../src/surfaces';
+import { smallHole } from './bighole';
 import { drag, puttingHole, start, watch } from './game';
 import { CONTRAST, THUMB, openDrawer, read } from './panels';
 
@@ -172,18 +173,17 @@ test('a hole played out to the cup by drags, its score shown, and the next hole 
   expect(problems).toEqual([]);
 });
 
-test('a hole of The Moors, fifty-one units from tee to cup, played out by drags, the camera following the ball the whole way', async ({
+test('a hole of open country, fifty-one units from tee to cup, played out by drags, the camera following the ball the whole way', async ({
   page,
 }) => {
   const problems = watch(page);
   await start(page, { seed: 1, paused: true });
-  await page.evaluate(() => {
-    window.game!.chooseCourse('The Moors');
-    window.game!.startHole(0);
+  await page.evaluate((hole) => {
+    window.game!.playCourse([{ ...hole, terrain: Float32Array.from(hole.terrain) }]);
     window.game!.step(75);
-  });
+  }, smallHole());
   const { holes } = await page.evaluate(() => window.game!.content());
-  expect(holes.length, 'nine holes').toBe(9);
+  expect(holes.length, 'the one hole').toBe(1);
   let strokes = 0;
   for (let stroke = 1; stroke <= 9; stroke++) {
     await puttAsSuggested(page);
@@ -205,7 +205,6 @@ test('a hole of The Moors, fifty-one units from tee to cup, played out by drags,
   }
   const done = await page.evaluate(() => window.game!.state());
   expect(done.phase, 'holed').toBe('done');
-  expect(done.course).toBe('The Moors');
   expect(done.card.length).toBe(1);
   // fifty-one units at the putter's fifty a stroke: two at the least, and a hole of its own par or so
   expect(strokes, 'not in one').toBeGreaterThanOrEqual(2);

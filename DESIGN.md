@@ -165,39 +165,18 @@ up before the door, and the race's barrier opens a quarter of a cycle late so
 that its window is 0.84 s of every 2. The Mill Race does not yet have
 everything, as the ninth is to: it has no sand and no post. The Bunker is par 2.
 
-The Hills is a second course, of nine holes whose ground slopes, each
-bringing one thing a slope does, chosen on the start screen beside The
-Meadow, in this order, easy to hard (par 24 in all; the names are the save's
-keys, so the order is free):
-
-- **The Bowl,** par 2: the cup in the bottom of a bowl, which brings
-  everything to it; a hole to breathe on.
-- **The Hollow,** par 2: from a raised tee down into a dip and up a steep
-  bank to the cup's plateau. Short, and it rolls back into the dip.
-- **The Sink,** par 3: a shallow dish a tile to the left of the line pulls
-  every putt toward it, so the putt is aimed to the right of the cup.
-- **The Volcano,** par 2: the cup on the top of a mound, whose flanks a
-  ball too soft rolls back down and one too hard runs over.
-- **The Sunken Lane,** par 3: a lane worn a yard and a half into a plateau
-  runs north from the tee, bends east and ends at the cup; the way to play it
-  cuts the bend, and the lane's far wall brings the ball to the cup.
-- **The Hump,** par 3: a low hill to the right of the line pushes every putt
-  away from it, so the putt is aimed over its shoulder.
-- **Side-hill,** par 3: a green tilted across, so every putt breaks and has
-  to be aimed above the cup.
-- **The Shelf,** par 3: a ramp up to a table that leans to the right, and a
-  steep drop to the cup.
-- **Hill and Dale,** par 3: a long climb of two units past a dish on the left
-  and a hill on the right: two putts, the first to lay up and the second read
-  across the same ground.
-
-The break is shown on every one: arrows over the green, the putt's roll drawn
-as it is aimed, and the break in words.
-
-Round each cup the ground is no steeper than the green holds a ball, 13
-degrees, so a ball can come to rest beside it. The autopilot does not read
-break: it aims straight and is carried by the ground, and takes one or two
-on each on the median, so the pars are each hole's intent.
+A hole's ground may slope, drawn as heights beside its map. The Hills, nine
+holes whose ground was the only obstacle, were the second course, and The
+Downs and The Moors, nine of noise and nine of open country made by a
+generator, the third and fourth: all three were scrapped on 3 October 2026 as
+dull, since a slope with nothing on it leaves a player one decision, how hard,
+and nothing that answers. Four of The Hills stay as test holes (The Bowl, The
+Hollow, The Volcano and Side-hill, in `test/hills.ts`) because the gates lean
+on them. The break is shown on any hole that slopes: arrows over the green,
+the putt's roll drawn as it is aimed, and the break in words. Round each cup
+the ground is no steeper than the green holds a ball, 13 degrees, so a ball
+can come to rest beside it. Three new courses, each with one thing on every
+hole, are planned in `~/.claude/plans/ooergolf-three-courses.md`.
 
 - **Sand** slows a ball steadily, at 60 a second a second where the green
   is 16: a putt that reaches it at 20 dies three units in, and the hardest
@@ -336,5 +315,5 @@ Each line is a feature or more, through `/feature`, every gate green at each.
 - Sound. None is designed.
 - The look: `LOOK.md` has its direction and its stages, and the decisions
   still open in it.
-- The courses after The Hills, and whether a hole's slope may carry a
-  barrier or a windmill.
+- Whether a hole's slope may carry a barrier or a windmill (a level plate
+  under it, as a pond has, is the likely way).

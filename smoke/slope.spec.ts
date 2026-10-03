@@ -1,28 +1,26 @@
 /**
  * The break shown on a hole of minigolf whose ground leans, in a real browser: the arrows over its floor while the ball
  * rests, the roll of the putt a drag would make, and the break in words; and a level hole, which shows none of it. The new
- * pictures are of The Hills' Side-hill, written for these scenes alone.
+ * pictures are of Side-hill, a slope hole the tests keep (`test/hills.ts`), written for these scenes alone.
  */
 import { expect, test, type Page } from '@playwright/test';
 import { layoutOf } from '../src/arena';
-import { COURSES } from '../src/course';
 import { breakOf } from '../src/green';
 import { puttText } from '../src/readout';
+import { SIDE_HILL } from '../test/hills';
 import { bigHole } from './bighole';
 import { drag, start, watch } from './game';
 import { CONTRAST, openDrawer, read } from './panels';
 
 const TOLERANCE = { maxDiffPixelRatio: 0.002, threshold: 0.02 };
-const SIDE_HILL = COURSES.find((c) => c.name === 'The Hills')!.holes.find((h) => h.name === 'Side-hill')!;
 const LAYOUT = layoutOf(SIDE_HILL.map, SIDE_HILL.terrain);
 
 async function onSideHill(page: Page) {
-  await page.evaluate(() => {
+  await page.evaluate((hole) => {
     const g = window.game!;
-    g.chooseCourse('The Hills');
-    g.startHole(g.content().holes.findIndex((h) => h.name === 'Side-hill'));
+    g.playCourse([hole]);
     for (let f = 0; f < 120; f++) g.step(1);
-  });
+  }, SIDE_HILL);
 }
 const hideStats = (page: Page) => page.locator('#stats').evaluate((el: HTMLElement) => (el.hidden = true));
 

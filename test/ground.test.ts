@@ -8,6 +8,7 @@ import type { Mesh } from 'artshape-render/mesh/types';
 import { BALL, KIND_RADIUS, STEP, TILE, WATER_LEVEL, heightAt, layoutOf, terrainAt, type Layout } from '../src/arena';
 import { COURSES, CUP } from '../src/course';
 import { SAMPLE_HOLES } from './helpers';
+import { HILLS } from './hills';
 import { GROUND, RAIL, cupGround, groundOf, railsOf, type Rails } from '../src/ground';
 import { BUDGET, collar, type V3 } from '../src/models';
 import { PALETTE as MODELS } from '../src/models/palette';
@@ -510,7 +511,7 @@ describe('the grass round the cup', () => {
   it('meets the ground without a seam, level or on a slope: the same corners, heights and normals', () => {
     for (const [name, l] of [
       ['Straight', layoutOf(COURSES[0].holes[0].map)],
-      ...COURSES[1].holes.map((h) => [h.name, layoutOf(h.map, h.terrain)] as const),
+      ...HILLS.map((h) => [h.name, layoutOf(h.map, h.terrain)] as const),
     ] as const) {
       const { z, height } = cupGround(l);
       expect(z, name).toBeCloseTo(heightAt(l, l.cup.x, l.cup.y), 9);

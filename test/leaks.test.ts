@@ -24,7 +24,7 @@ describe('what must stay bounded', () => {
     progress.save.gems = 999;
     const holes = COURSES.flatMap((c) => c.holes);
     for (const hole of holes) progress.save.best[hole.name] = { strokes: 10, club: CLUBS[CLUBS.length - 1].id };
-    expect(holes.length, 'a hole of each').toBeGreaterThanOrEqual(31);
+    expect(holes.length, 'a hole of each').toBeGreaterThanOrEqual(27);
     const bytes = JSON.stringify(progress.save).length;
     expect(bytes, `${bytes} bytes for ${holes.length} holes`).toBeLessThan(WATCH['save bytes']!.ceiling);
   });

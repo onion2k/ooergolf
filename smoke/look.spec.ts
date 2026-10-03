@@ -18,13 +18,13 @@
  */
 import { expect, test, type Page } from '@playwright/test';
 import { layoutOf } from '../src/arena';
-import { COURSE, DOWNS, moors, type HoleDef } from '../src/course';
+import { COURSE, type HoleDef } from '../src/course';
 import { LINKS_SPECS, links as linksHoles } from '../src/links';
 import { breakOf } from '../src/green';
 
-const MOORS = moors();
 import { glint } from '../src/glints';
 import { LIE } from '../src/surfaces';
+import { BOWL, SIDE_HILL } from '../test/hills';
 import { drag, puttingHole, start, watch } from './game';
 import { openDrawer } from './panels';
 
@@ -190,15 +190,6 @@ test.describe('what it looks like', () => {
     ['The Meadow', 'Up and Over', 'up-and-over.png'],
     ['The Meadow', 'Windmill', 'windmill.png'],
     ['The Meadow', 'The Mill Race', 'mill-race.png'],
-    ['The Hills', 'The Hollow', 'hollow.png'],
-    ['The Hills', 'The Volcano', 'volcano.png'],
-    ['The Hills', 'The Bowl', 'bowl.png'],
-    ['The Hills', 'Side-hill', 'side-hill.png'],
-    ['The Hills', 'The Sink', 'sink.png'],
-    ['The Hills', 'The Sunken Lane', 'sunken-lane.png'],
-    ['The Hills', 'The Hump', 'hump.png'],
-    ['The Hills', 'The Shelf', 'shelf.png'],
-    ['The Hills', 'Hill and Dale', 'hill-and-dale.png'],
   ] as const) {
     test(`${name}, from its tee`, async ({ page }) => {
       const problems = watch(page);
@@ -217,61 +208,6 @@ test.describe('what it looks like', () => {
       );
       await hideStats(page);
       await expect(page.locator('#view')).toHaveScreenshot(file, TOLERANCE);
-      expect(problems).toEqual([]);
-    });
-  }
-
-  // The Moors, a hole each from the middle of the way from its tee to its cup: tight holes, fifty to eighty units long, and
-  // the middle is where their hazards are
-  for (const [i, hole] of MOORS.entries()) {
-    test(`${hole.name}, hole ${i + 1} of The Moors, from the middle of the way`, async ({ page }) => {
-      const problems = watch(page);
-      await start(page, { seed: 11, paused: true });
-      await page.evaluate((k) => {
-        window.game!.chooseCourse('The Moors');
-        window.game!.startHole(k);
-        window.game!.step(75);
-        const { tee, cup } = window.game!.content();
-        window.game!.look((tee.x + cup.x) / 2, (tee.y + cup.y) / 2 - 12, 100);
-        window.game!.step(1);
-      }, i);
-      await hideStats(page);
-      await expect(page.locator('#view')).toHaveScreenshot(`moors-${i + 1}.png`, TOLERANCE);
-      expect(problems).toEqual([]);
-    });
-  }
-
-  // and the first and the last from their tees, as a player begins them: the cup in view, from the shortest and the longest
-  for (const i of [0, 8]) {
-    test(`${MOORS[i].name}, hole ${i + 1} of The Moors, from its tee`, async ({ page }) => {
-      const problems = watch(page);
-      await start(page, { seed: 11, paused: true });
-      await page.evaluate((k) => {
-        window.game!.chooseCourse('The Moors');
-        window.game!.startHole(k);
-        window.game!.step(75);
-      }, i);
-      await hideStats(page);
-      await expect(page.locator('#view')).toHaveScreenshot(`moors-tee-${i + 1}.png`, TOLERANCE);
-      expect(problems).toEqual([]);
-    });
-  }
-
-  // The Downs, a hole each from the middle of it: forty to ninety units long, so the whole of the longest is in view only from far back
-  for (const [i, hole] of DOWNS.entries()) {
-    test(`${hole.name}, hole ${i + 1} of The Downs, from its tee`, async ({ page }) => {
-      const problems = watch(page);
-      await start(page, { seed: 11, paused: true });
-      await page.evaluate((k) => {
-        window.game!.chooseCourse('The Downs');
-        window.game!.startHole(k);
-        window.game!.step(75);
-        const { floor } = window.game!.content();
-        window.game!.look((floor.minX + floor.maxX) / 2, (floor.minY + floor.maxY) / 2 - 12, 100);
-        window.game!.step(1);
-      }, i);
-      await hideStats(page);
-      await expect(page.locator('#view')).toHaveScreenshot(`downs-${i + 1}.png`, TOLERANCE);
       expect(problems).toEqual([]);
     });
   }
@@ -426,15 +362,14 @@ test.describe('what it looks like', () => {
   test('a cup on a side-hill, close to: its collar and rim lying on the slope, its floor level', async ({ page }) => {
     const problems = watch(page);
     await start(page, { seed: 11, paused: true });
-    await page.evaluate(() => {
+    await page.evaluate((hole) => {
       const g = window.game!;
-      g.chooseCourse('The Hills');
-      g.startHole(g.content().holes.findIndex((h) => h.name === 'Side-hill'));
+      g.playCourse([hole]);
       g.step(1);
       const { cup } = g.content();
       g.look(cup.x, cup.y - 10, 22);
       g.step(1);
-    });
+    }, SIDE_HILL);
     await hideStats(page);
     await expect(page.locator('#view')).toHaveScreenshot('side-hill-cup.png', TOLERANCE);
     expect(problems).toEqual([]);
@@ -948,18 +883,6 @@ test.describe('what it looks like', () => {
       expect(problems).toEqual([]);
     });
 
-    test('the longest hole of The Moors, from its tee, on a phone', async ({ page }) => {
-      const problems = watch(page);
-      await start(page, { seed: 11, paused: true });
-      await page.evaluate(() => {
-        window.game!.chooseCourse('The Moors');
-        window.game!.startHole(8);
-        window.game!.step(75);
-      });
-      await expect(page).toHaveScreenshot('phone-moors.png', TOLERANCE);
-      expect(problems).toEqual([]);
-    });
-
     test('the card, on a phone', async ({ page }) => {
       const problems = watch(page);
       await start(page, { seed: 11, paused: true });
@@ -978,13 +901,12 @@ test.describe('what it looks like', () => {
       page,
     }) => {
       const problems = watch(page);
-      await start(page, { seed: 11, paused: true, screen: true });
-      await page.evaluate(() => {
-        window.game!.chooseCourse('The Hills');
-        window.game!.startHole(0);
+      await start(page, { seed: 11, paused: true });
+      await page.evaluate((hole) => {
+        window.game!.playCourse([hole]);
         window.game!.step(75);
-      });
-      await expect(page).toHaveScreenshot('landscape-hills.png', TOLERANCE);
+      }, BOWL);
+      await expect(page).toHaveScreenshot('landscape-slope.png', TOLERANCE);
       expect(problems).toEqual([]);
     });
 

@@ -9,8 +9,7 @@ import { seeded } from '../src/random';
 export const DT = 1 / 60;
 
 /**
- * The holes the slow tests that try every tile of every hole are run on: every hole of the courses drawn by hand or
- * made small, The Moors' nine among them (a few hundred tiles each, since they were made tight). Of The Links, whose holes are
+ * The holes the slow tests that try every tile of every hole are run on: every hole of The Meadow and The Range. Of The Links, whose holes are
  * twenty thousand tiles of map and eight thousand of ground each: three, the shortest, a par four and the longest, made
  * singly so that importing this does not make all nine.
  */

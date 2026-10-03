@@ -10,6 +10,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { CALLOUTS } from '../src/hud';
 import { scoreKind, scoreName } from '../src/score';
+import { SIDE_HILL } from '../test/hills';
 import { drag, start, watch } from './game';
 import { CLUBS, CLUB_LEAST, CONTRAST, THUMB, closeDrawer, holeOut, openDrawer, read, toCard } from './panels';
 
@@ -35,7 +36,7 @@ for (const [where, device] of [
   test.describe(where, () => {
     test.use(device);
 
-    test('the start screen holds its four minigolf and two golf courses without scrolling, the colours going round the cards', async ({
+    test('the start screen holds its one minigolf and two golf courses without scrolling, the colours going round the cards', async ({
       page,
     }) => {
       const problems = watch(page);
@@ -48,8 +49,8 @@ for (const [where, device] of [
         return { fits: panel.scrollHeight <= panel.clientHeight, faces };
       });
       expect(r.fits, 'no scrolling in the start screen').toBe(true);
-      // six cards, six colours: a heading among them must not shift the cycle
-      expect(new Set(r.faces).size, 'each card its own colour').toBe(6);
+      // three cards, three colours: a heading among them must not shift the cycle
+      expect(new Set(r.faces).size, 'each card its own colour').toBe(3);
       expect(problems).toEqual([]);
     });
 
@@ -297,7 +298,7 @@ for (const [where, device] of [
       await page.locator('#shopClose').click();
       // and the next minigolf course has the coins and gems back
       await page.evaluate(() => {
-        window.game!.chooseCourse('The Hills');
+        window.game!.chooseCourse('The Meadow');
         window.game!.step(60);
       });
       await settle();
@@ -803,10 +804,11 @@ for (const [label, width, height] of PHONES) {
       expect(box.x + box.width, 'the start screen: right').toBeLessThanOrEqual(width + 0.5);
       expect(box.y + box.height, 'the start screen: bottom').toBeLessThanOrEqual(height + 0.5);
       // minigolf on a slope: the break is drawn and told, the longest the strokes panel gets
-      await page.evaluate(() => {
-        window.game!.chooseCourse('The Hills');
+      await page.evaluate((hole) => {
+        window.game!.chooseCourse('The Meadow');
+        window.game!.playCourse([hole]);
         window.game!.step(60);
-      });
+      }, SIDE_HILL);
       await page.locator('#putt').evaluate((el: HTMLElement) => {
         el.hidden = false;
         el.textContent = 'breaks left, 14 ft uphill';

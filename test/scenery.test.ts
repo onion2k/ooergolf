@@ -2,7 +2,8 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { TILE, layoutOf, tileAt } from '../src/arena';
-import { COURSE, DOWNS, HILLS } from '../src/course';
+import { COURSE } from '../src/course';
+import { HILLS } from './hills';
 import { DRESSING, REFERENCE, ROCK_SIZE, SCENERY, SCALE, bigness, clearings, dress, scatter } from '../src/scenery';
 
 describe('the scenery', () => {
@@ -161,51 +162,34 @@ describe('the scenery of a big hole', () => {
   /** Every hole that exists: its scatter, its dressing and its clearings, hashed, written before any of it grew. */
   const GOLDEN = '79bc75c85fe56b7ccbc4ccaf640b47c7accf5015a328c9f104d9d2e5eb6254ee';
   /**
-   * The five Downs that were kept when the course was made to climb (Easy Does It, Cobbles, Long Swell, Sea Legs and The
-   * Roll, the first five of the nine now), hashed apart. The hash of the nine was retired with the four that were replaced:
-   * this one was written again from the code of f25a448 for those five, in the order they stand in now, and it is
-   * the same from the code as it is now. The four made since are held as the others added are.
-   */
-  const GOLDEN_DOWNS = '6fa6ac4301694bb1d5fe51bd110fa6cdd9e5576b597d534fedcf2a9fc6c71a51';
-
-  /**
    * The holes the golden was written from, in the order it was: the Meadow but for the windmill and the mill race, which
-   * were drawn again so that the cup shows, the four Hills there were (now the Hills' second, fourth, first and seventh)
-   * and five of the nine Downs there were (the first five of those now). Sixteen of the twenty-two there were.
+   * were drawn again so that the cup shows, and the four slope holes the tests keep (the four The Hills had first, which
+   * were on the course until it was scrapped). The five Downs that were hashed beside them went with their course.
    */
   const ORIGINAL = [
     ...COURSE.filter((h) => !['Windmill', 'The Mill Race'].includes(h.name)),
     ...['The Hollow', 'The Volcano', 'The Bowl', 'Side-hill'].map((n) => HILLS.find((h) => h.name === n)!),
-    ...DOWNS.slice(0, 5),
   ];
   /** Every hand-drawn hole added since, each held to the same rules but not to a hash, so adding one moves nothing above. */
-  const ADDED = [...COURSE, ...HILLS, ...DOWNS].filter((h) => !ORIGINAL.includes(h));
+  const ADDED = [...COURSE, ...HILLS].filter((h) => !ORIGINAL.includes(h));
 
   it('is what every hole that existed had, piece for piece, none of them being bigger than the biggest', () => {
     const all = createHash('sha256');
-    const downs = createHash('sha256');
     let holes = 0;
     for (const hole of ORIGINAL) {
       const l = layoutOf(hole.map, hole.terrain);
       expect(bigness(l), hole.name).toBe(1);
-      (DOWNS.includes(hole) ? downs : all).update(
-        JSON.stringify([scatter(l, hole.name), dress(l, hole.name), clearings(l, hole.name)]),
-      );
+      all.update(JSON.stringify([scatter(l, hole.name), dress(l, hole.name), clearings(l, hole.name)]));
       holes++;
     }
-    expect(holes).toBe(16);
+    expect(holes).toBe(11);
     expect(all.digest('hex'), 'the hand-drawn holes').toBe(GOLDEN);
-    expect(downs.digest('hex'), 'the Downs').toBe(GOLDEN_DOWNS);
   });
 
-  /** The two Downs made long (seventy and ninety units tee to cup), whose perimeter is past the biggest drawn by hand. */
-  const LONG_DOWNS = ['Two Shots', 'The Big Dipper'];
-
-  it('gives every hole added since the same scenery twice, and none of them bigger than the biggest drawn by hand but the two long Downs', () => {
+  it('gives every hole added since the same scenery twice, and none of them bigger than the biggest drawn by hand', () => {
     for (const hole of ADDED) {
       const l = layoutOf(hole.map, hole.terrain);
-      if (LONG_DOWNS.includes(hole.name)) expect(bigness(l), hole.name).toBeGreaterThan(1);
-      else expect(bigness(l), hole.name).toBe(1);
+      expect(bigness(l), hole.name).toBe(1);
       const once = JSON.stringify([scatter(l, hole.name), dress(l, hole.name), clearings(l, hole.name)]);
       expect(once, `${hole.name} is made the same each time`).toBe(
         JSON.stringify([scatter(l, hole.name), dress(l, hole.name), clearings(l, hole.name)]),
@@ -286,14 +270,14 @@ describe('the scenery of a big hole', () => {
   }
 
   it('strings one string a side on every hole that exists, and more on a hole whose sides are longer than sixty units', () => {
-    for (const hole of [...COURSE, ...HILLS, ...DOWNS]) {
+    for (const hole of [...COURSE, ...HILLS]) {
       const l = layoutOf(hole.map, hole.terrain);
       const out = 2 * (TILE + DRESSING.buntingOut);
       const strings =
         Math.ceil((l.bounds.maxX - l.bounds.minX + out) / REFERENCE.string) +
         2 * Math.ceil((l.bounds.maxY - l.bounds.minY + out) / REFERENCE.string);
       expect(dress(l, hole.name).bunting.length, hole.name).toBe(strings);
-      if (!LONG_DOWNS.includes(hole.name)) expect(strings, `${hole.name}: one a side`).toBe(3);
+      expect(strings, `${hole.name}: one a side`).toBe(3);
     }
     expect(dress(open(45, 51), 'big').bunting.length).toBeGreaterThan(3);
   });

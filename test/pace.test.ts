@@ -27,9 +27,9 @@ describe('the pace gate', () => {
   });
 
   it('plays a round of any course, each held to its own figure', () => {
-    const hills = COURSES.find((c) => c.name === 'The Hills')!;
-    const run = paceRun(2, undefined, hills.holes);
+    const range = COURSES.find((c) => c.name === 'The Range')!;
+    const run = paceRun(2, undefined, range.holes);
     expect(run.finished).toBe(true);
-    expect(run.card.length).toBe(hills.holes.length);
+    expect(run.card.length).toBe(range.holes.length);
   });
 });

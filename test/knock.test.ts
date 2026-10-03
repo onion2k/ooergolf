@@ -7,7 +7,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import { BALL, HARDEST_SHOT, KNOCK, ROLL, TILE, powerFor, stepAt } from '../src/arena';
-import { COURSE, HILLS, type HoleDef } from '../src/course';
+import { COURSE, type HoleDef } from '../src/course';
+import { SIDE_HILL } from './hills';
 import { CLEAR_OF_CUP, Game } from '../src/game';
 import { checkInvariants, knockProblems } from '../src/invariants';
 import { THE_CUP } from '../src/physics';
@@ -186,8 +187,7 @@ describe('a knock', () => {
   it('is not told of a ball struck across a slope, which the physics fits to the ground in the first step', () => {
     // the gold putter, the hardest there is, straight up the tilt of Side-hill: struck along the level, the ball is
     // turned up the slope in the physics' first step by as much as a knock, and that is the strike's, not a knock
-    const side = HILLS.find((h) => h.name === 'Side-hill')!;
-    const { game, told } = newGame(1, JSON.stringify({ owned: ['putter', 'gold'], club: 'gold' }), [side]);
+    const { game, told } = newGame(1, JSON.stringify({ owned: ['putter', 'gold'], club: 'gold' }), [SIDE_HILL]);
     expect(game.hardest).toBe(48);
     game.shoot(0, 1);
     for (let f = 0; f < 6; f++) game.step(DT);

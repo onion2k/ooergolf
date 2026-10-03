@@ -6,11 +6,10 @@
  */
 import { describe, expect, it } from 'vitest';
 import { ROLL, TERRAIN, TILE, layoutOf, slopeAt } from '../src/arena';
-import { CUP, DOWNS } from '../src/course';
+import { CUP } from '../src/course';
 import { FEELS, FLATS, gradientNoise, noiseGround, type Feel } from '../src/noise';
 import { PHYSICS, terrainRefusal } from '../src/physics';
 import { groundFigures } from './ground-metrics';
-import { createHash } from 'node:crypto';
 
 /** A green thirteen tiles across and seventeen long, rail round it, the tee at the south end and the cup at the north. */
 const MAP = [
@@ -229,22 +228,6 @@ describe('ground with level discs in it', () => {
   it('is what it was without discs, bit for bit, whether none are given or an empty list is', () => {
     const plain = noiseGround(flat, spec);
     expect(noiseGround(flat, { ...spec, flats: [] })).toEqual(plain);
-    // and the Downs are the very ground they were before discs were possible. Nine holes were held by one hash; four of
-    // them were replaced when the course was made to climb, so the five that were kept are held by the hash of their
-    // ground alone (written from the code of f25a448, where the nine's was b429f5ea..., and it matches), and the four
-    // that were made since, a long hill, a stand of posts and two long holes, by one written when they were made
-    const ground = (names: string[]) => {
-      const all = createHash('sha256');
-      for (const name of names)
-        all.update(Buffer.from((DOWNS.find((h) => h.name === name)!.terrain as Float32Array).buffer));
-      return all.digest('hex');
-    };
-    expect(ground(['Easy Does It', 'Cobbles', 'Long Swell', 'Sea Legs', 'The Roll'])).toBe(
-      'c61f4991bbe302bea9d20377dd8ff178420b58acaa82386a068790eb22f12516',
-    );
-    expect(ground(['Long Hill', 'Post Office', 'Two Shots', 'The Big Dipper'])).toBe(
-      'a0e9f885050efe911717fbecebdb1728f6afd16d3834fc0bf377f873179d5c51',
-    );
   });
 
   it('is level over a disc, at the height the ground had at its middle, and the steepest step is still as asked', () => {

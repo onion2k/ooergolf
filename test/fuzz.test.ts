@@ -5,11 +5,9 @@ import { WINDS, WINDY, contoured, fuzz } from '../scripts/fuzzer';
 import { GREEN, greenArrows } from '../src/green';
 import { GREENS } from '../src/surfaces';
 import { LINKS_SPECS } from '../src/links';
-import { DOWNS, moors } from '../src/course';
 import { COURSES } from '../src/course';
 import { RANGE } from '../src/range';
 
-const MOORS = moors();
 const LINKS = COURSES.find((c) => c.name === 'The Links')!.holes;
 
 describe('the fuzzer', () => {
@@ -182,54 +180,6 @@ describe('the fuzzer', () => {
     expect(read, 'breaks read, each held to the rules and the game left as it was').toBeGreaterThan(20);
     expect(putted, 'putts the autopilot took, each held to the break').toBeGreaterThan(5);
     expect(holed, 'and holed out').toBeGreaterThan(0);
-  });
-
-  it('plays The Downs at random from start to finish, every seed clean, holing out and getting round all nine', () => {
-    // the whole of the run on the course, not a share of it: nine long holes of noise, struck any way at any power
-    let holed = 0,
-      finished = 0,
-      knocked = 0;
-    const visited = new Set<string>();
-    for (const seed of [17, 40, 3, 8]) {
-      const r = fuzz(seed, 12000, DOWNS);
-      expect(r.failure, `seed ${seed}: ${JSON.stringify(r.failure)}`).toBe(null);
-      holed += r.happened.holed || 0;
-      finished += r.happened.finished || 0;
-      knocked += r.happened.knocked || 0;
-      for (const name of Object.keys(r.visited)) visited.add(name);
-    }
-    const names = DOWNS.map((h) => h.name);
-    expect(visited.size, 'a good many of its holes played').toBeGreaterThanOrEqual(5);
-    for (const name of visited) expect(names, `${name} is not a hole of The Downs`).toContain(name);
-    expect(holed, 'holed out').toBeGreaterThan(0);
-    expect(finished, 'round the whole course').toBeGreaterThan(0);
-    expect(knocked, 'and knocked about, on ground that rises and falls').toBeGreaterThan(0);
-  });
-
-  it('plays The Moors at random from start to finish, every seed clean, holing out and getting round all nine', () => {
-    // holes fifty to eighty units from tee to cup, with water, sand and posts on the line, where a monkey striking any way at
-    // any power is many strokes from the cup and the limit takes it up often: a longer run, and seeds that go the whole way round
-    let holed = 0,
-      finished = 0,
-      knocked = 0,
-      pickedUp = 0;
-    const visited = new Set<string>();
-    for (const seed of [25, 26, 17, 40]) {
-      const r = fuzz(seed, 20000, MOORS);
-      expect(r.failure, `seed ${seed}: ${JSON.stringify(r.failure)}`).toBe(null);
-      holed += r.happened.holed || 0;
-      finished += r.happened.finished || 0;
-      knocked += r.happened.knocked || 0;
-      pickedUp += r.happened.pickedUp || 0;
-      for (const name of Object.keys(r.visited)) visited.add(name);
-    }
-    const names = MOORS.map((h) => h.name);
-    expect(visited.size, 'a good many of its holes played').toBeGreaterThanOrEqual(5);
-    for (const name of visited) expect(names, `${name} is not a hole of The Moors`).toContain(name);
-    expect(holed, 'holed out').toBeGreaterThan(0);
-    expect(pickedUp, 'and picked up at the limit, as a long hole often takes a monkey').toBeGreaterThan(0);
-    expect(finished, 'round the whole course').toBeGreaterThan(0);
-    expect(knocked, 'and knocked about').toBeGreaterThan(0);
   });
 
   it('plays the same way twice from a seed', () => {

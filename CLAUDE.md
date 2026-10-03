@@ -11,15 +11,14 @@ made. The house
 rules in `~/.claude/CLAUDE.md` apply too. What is in `src/` is a round of
 a course, chosen on a start screen: holes drawn as maps, each played from
 its tee to its cup with a drag pulled back and let go, scored against par,
-and the card at the end. Six courses are here, on artshape-physics v0.8.0.
+and the card at the end. Three courses are here, on artshape-physics v0.8.0.
 The Meadow is nine holes of grass, rail, sand, water, raised grass, posts,
 sliding barriers, a windmill and a conveyor, with a green that lets a putt
 die, a rail and obstacles that bounce, posts that throw a ball back faster
-than it came, and a cup with a rim. The Hills is nine whose ground slopes,
-easy to hard, each cup on the slope with its rim following the ground. The Downs is nine
-holes that climb from thirty-nine units tee to cup to ninety, whose ground is a smooth surface of Perlin noise
-and, but for one stand of posts, nothing else. The Moors is nine tight open holes, fifty to eighty units tee to cup,
-made by a generator, with a pond, bunkers or posts on the line, on rolling hills.
+than it came, and a cup with a rim. (The Hills, The Downs and The Moors, three courses of sloping ground with little
+or nothing on it, were scrapped on 3 October 2026 as dull; four of The Hills stay as test holes in `test/hills.ts`,
+and the generator that made The Moors, `src/open.ts`, stays for the two test holes `smoke/bighole.ts` makes with it.
+Three new minigolf courses are planned in `~/.claude/plans/ooergolf-three-courses.md`.)
 The Range is the first of golf proper: nine flat holes at a yard a unit (three
 to learn the clubs on, six that each add a hazard), each a tee, a fairway, rough
 and a green, played with a bag of eight clubs that loft the ball into the air. The Links is nine holes of it, a par three to a par
@@ -94,7 +93,7 @@ today, and what the next features must hand it:
   feature's tests do.
 - **Look metrics:** a close view of the first hole's right-hand rail,
   sampled at points on the green, the rough, the rail's sunlit top and its
-  shaded inner face; and The Volcano from its tee, sampled on each row at
+  shaded inner face; and The Volcano (a test hole) from its tee, sampled on each row at
   the point of its green that takes the most sun and the one that takes the
   least. `smoke/metrics.ts` reads them into five figures, each held to a
   floor: the green's saturation, how much brighter the course is than the
@@ -163,8 +162,8 @@ today, and what the next features must hand it:
   green and no more than the green has.
 - **Determinism:** the autopilot plays, with a player's slips from its own
   chance, round after round, and the hash takes in the hole and the card.
-- **Pace:** the strokes a round of each course takes; see above (the minigolf courses, after the nine-hole rebuild: The Meadow 16.63, The Hills 17.88, The Downs 20.88, The Moors 25.56). The
-  autopilot does not read a slope's break on minigolf, so on The Hills it is a player
+- **Pace:** the strokes a round of each course takes; see above (The Meadow 16.63, after the nine-hole rebuild). The
+  autopilot does not read a slope's break on minigolf, so on a hole that slopes it is a player
   who aims straight and is carried by the ground; on a golf green it does, by rehearsal. The golf courses are a player one under par on every hole: The Range 23.13 for
   par 32 (nine holes), and The Links 29.88 for 36 (the contoured greens did not move it: 30.19 over 48 seeds against 30.27
   before them; the livelier ball moved The Range and the respecified holes The Links to 30.33 over 48),
@@ -279,7 +278,7 @@ change meant to move it, and the commit says why. Look at every picture.
   and a bounce off the grass from below, the form light, which keeps some
   of the sun's fall-off in the top band so a slope turned from the sun is
   darker than the flat and one facing it brighter (without it every slope
-  a ball can roll on was drawn as bright as the flat, and the Hills had no
+  a ball can roll on was drawn as bright as the flat, and a hill had no
   shape), the toy finish the renderer gives every toon look (a highlight on
   what is smooth, the sky in a clear coat, one smooth ramp of light, shade
   toward the shade colour in a crease) and its soft tone, the renderer's screen-space
@@ -315,8 +314,8 @@ change meant to move it, and the commit says why. Look at every picture.
   and square in, drawn on its own tiles and no further so what is seen is
   what the ball meets, and sloping with the ground; `cupGround` is the
   cup's own step and slope, which the collar is cut to. The cup, flag, tee, sand, posts,
-  aim, camera and glints all stand on it. The Hills are the holes that
-  slope; `playCourse` in the test API plays one of a test's own.
+  aim, camera and glints all stand on it. No course's hole slopes now; the
+  test holes in `test/hills.ts` do, and `playCourse` in the test API plays one of a test's own.
   `src/glints.ts` says when the gold of the cup and the pin twinkles, from
   game time, and the page draws it as one of the renderer's glow quads.
 - What moves only to be seen, all from game time so a picture is the same
@@ -644,32 +643,17 @@ change meant to move it, and the commit says why. Look at every picture.
   swell's height is about its width times the slope over six, so the small
   feels, whose swells are eighteen to twenty-four units, are a ripple a ball's
   width high on a hole of a hundred and fifty units at any steepness, and hills
-  stand four to five times as high at the same one, and are smooth: The Moors
-  are cut from them, and a test holds each to its relief, its smoothness and
-  the share of it a ball rests on. `test/ground-metrics.ts` says what a
+  stand four to five times as high at the same one, and are smooth: The Links'
+  hills are cut from them. `test/ground-metrics.ts` says what a
   feel is in figures (relief, steepest slope, bumpiness, detail, and how much
   of the ground a ball rests on), which the tests hold each hole to.
 - The courses are content in `course.ts`, `COURSES`, each a name and its
-  holes: The Meadow (`COURSE`), The Hills (`HILLS`: nine, par 24, in the order Bowl, Hollow, Sink, Volcano, Sunken Lane,
-  Hump, Side-hill, Shelf, Hill and Dale; the names are the save's keys, so the order is free, and the scenery and
-  turf goldens name the four there were by name), The Downs (`DOWNS`,
-  built from `DOWNS_SPECS`: a shape, a feel, a steepness and a seed a hole,
-  and nothing on it but the ground, which is the obstacle, but for Post Office, which is made by `openHole` with a stand of
-  posts across the line, as the only one that is made as the module loads). The Downs climb, par 30 (3 for the first
-  six, 4 for the last three) and the autopilot's 2.37 strokes a hole: Easy Does It, Cobbles, Long Swell, Sea Legs and
-  The Roll (the five of the first nine that were not twins of another, 37.9 to 43 units, their ground and scenery held
-  to the hashes they had), Long Hill 47, Post Office 43, Two Shots 71 and The Big Dipper 89 units. The length rule the
-  first nine were held to (half as long again as the thirteen minigolf holes before) holds the first five alone, and a
-  test holds the rest to the ramp of length and strokes. The Moors (`moors()`, from `MOORS_SPECS`, made
-  when first asked for and not as the page loads, which cost the boot some
-  thirty milliseconds; each `Course` has a `summary` of its holes and par that
-  the start screen reads without making it) are nine tight holes of 2,300 to 5,600 square units, fifty-one to eighty-two units from
-  tee to cup, so the cup is on screen from the tee at the widest zoom, par 34 and 2.8 strokes a hole by the pace
-  player, each hazard on the line, in the landing zone or at the cup (they were nine holes of 8,000 to 19,000 square
-  units, a hundred to a hundred and fifty from tee to cup, three to five strokes a hole with the hazards beside the
-  line; the perf gate's biggest hole is now a test hole of that size, `smoke/bighole.ts`), made by `openHole` in `src/open.ts` from a spec (a shape, a feel,
-  a steepness, a seed and a list of `Feature`s: ponds, bunkers and stands of
-  posts) and never by hand. The generator places each feature clear of the
+  holes: The Meadow (`COURSE`), The Range and The Links. Each `Course` has a `summary` of its holes and par that the
+  start screen reads without making it, so a course made by a generator is made when first asked for and not as the
+  page loads. `openHole` in `src/open.ts` makes a hole of open country from a spec (a shape, a feel, a steepness, a seed
+  and a list of `Feature`s: ponds, bunkers and stands of posts) and never by hand; no course uses it now, and the two
+  test holes in `smoke/bighole.ts` (the biggest minigolf hole the perf gate holds, and a small one of fifty-one units)
+  are made by it. The generator places each feature clear of the
   tee, the cup and the rail and a tile from the next, and never so that no
   route three tiles wide is left from the tee to the cup; a pond is centred in
   the lowest of the ground and levelled at nought, since the game's water is at
@@ -679,9 +663,7 @@ change meant to move it, and the commit says why. Look at every picture.
   used to come back in, a pond's bed at nought under a bank several units high
   was the steepest step in the hole, and the ground is scaled so that is what
   was asked, which left the hills round a pond a third of their height. A spec
-  that cannot be made is refused by name. Each Moors seed was chosen by playing
-  forty with the pace gate's player (Long Roll's and The Far Pin's twice, the first picks losing a first shot in eleven
-  and in fifty to the water), and a hole's name draws its wind, which
+  that cannot be made is refused by name. A hole's name draws its wind, which
   must move the grass (`test/turf.test.ts`): two names were changed because
   they did not. The cup stands at least two tiles in from the rail. A hole is a map drawn
   as seen from the tee (`#` rail, `.` grass, `T` tee, `C` cup, `~` water,
@@ -852,13 +834,12 @@ each step, and a gate handed what it needs in the same change:
   tiles is 4.7 ms of the 5, since a bigger hole draws more ground; and some
   holes of 200 tiles a side and more show rough blades pale and frosty near
   the camera, which was not the shadow's fit or the cell and is not
-  understood. Nothing of The Moors is near them.
+  understood. No hole there is comes near them.
 - An autopilot that reads a slope's break on minigolf (on a golf green it does, by rehearsal). It aims straight at the cup and
   judges the distance along the level: it stops within 0.6 units of where
   it means on four shots across a hollow in five, and 2.4 long on a 21-unit
-  climb, since the physics slows a ball along the slope. So The Hills' pars
-  are each hole's intent, and the autopilot takes one or two on each on the
-  median. A barrier or a windmill on a slope is refused when a hole is
+  climb, since the physics slows a ball along the slope. So a sloped hole's par
+  is its intent. A barrier or a windmill on a slope is refused when a hole is
   built, as the physics' fuzzer found one carrying a ball round for good.
 - The course a player is on, in the save: a reload opens the start screen.
 - Steps a ball meets as ledges. v0.8.0's `stepEdges` bounces a ball off a

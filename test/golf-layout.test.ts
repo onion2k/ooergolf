@@ -5,7 +5,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import { TILE, layoutOf, lieAt, tileAt } from '../src/arena';
-import { COURSE, HILLS, DOWNS } from '../src/course';
+import { COURSE } from '../src/course';
+import { HILLS } from './hills';
 import { LIE, SURFACES } from '../src/surfaces';
 
 const at = (l: ReturnType<typeof layoutOf>, col: number, rowFromTop: number) => ({
@@ -93,7 +94,7 @@ describe('a golf hole’s map', () => {
 
 describe('a minigolf hole’s map', () => {
   it('is not golf, and names no surface anywhere on it', () => {
-    for (const hole of [...COURSE, ...HILLS, ...DOWNS]) {
+    for (const hole of [...COURSE, ...HILLS]) {
       const l = layoutOf(hole.map, hole.terrain);
       expect(l.golf, hole.name).toBe(false);
       expect(

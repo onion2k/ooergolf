@@ -55,12 +55,9 @@ cup, a pond, sliding barriers, a field of pinball posts, a ramp up onto a
 plateau between ponds, a windmill whose blades sweep its door, and The Mill
 Race, with a barrier, the windmill and a conveyor to the cup, make The
 Meadow. Sand slows the ball hard, and water costs a stroke, the ball coming
-back to where it was struck from. The Hills is nine more whose ground
-slopes, easy to hard: a bowl, a hollow to carry, a dish that pulls a putt in, a
-volcano to stop on top of, a lane worn into a plateau, a hill that pushes a putt
-away, a side-hill that breaks every putt, a shelf that leans, and a long climb
-that takes two putts. The break is shown over each: arrows, the putt's roll and
-the words.
+back to where it was struck from. A hole's ground may slope, and the break is
+shown over one that does: arrows, the putt's roll and the words. Three more
+courses of minigolf are planned, in `~/.claude/plans/ooergolf-three-courses.md`.
 
 ## What is here
 

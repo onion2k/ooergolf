@@ -8,6 +8,9 @@ import type { Wind } from 'artshape-render/game/grass';
 import { layoutOf, powerFor, slopeAt, tileAt } from '../src/arena';
 import { PUTTER } from '../src/bag';
 import { COURSES, type HoleDef } from '../src/course';
+import { BOWL, HOLLOW, SIDE_HILL } from './hills';
+import { BIG } from '../smoke/bighole';
+import { openHole } from '../src/open';
 import { Game } from '../src/game';
 import { arrowProblems, breakProblems, checkInvariants } from '../src/invariants';
 import { breakOf, greenArrows, puttFrom } from '../src/green';
@@ -17,8 +20,8 @@ import { Scene, arrowMarks } from '../src/scene';
 import { DT, newGame } from './helpers';
 
 const WIND: Wind = { direction: [1, 0], strength: 0.5, gustSize: 8, gustSpeed: 5 };
-const hole = (name: string): HoleDef => COURSES.flatMap((c) => c.holes).find((h) => h.name === name)!;
-const SLOPED = ['The Hollow', 'The Bowl', 'Side-hill', 'Easy Does It', 'Wide Open'].map(hole);
+const SLOPED = [HOLLOW, BOWL, SIDE_HILL];
+const hole = (name: string): HoleDef => SLOPED.find((h) => h.name === name)!;
 const LEVEL = COURSES.find((c) => c.name === 'The Meadow')!.holes;
 
 /** A game of the one hole, with the putter `club` in the shop's hand. */
@@ -150,7 +153,8 @@ describe('the roll of a putt on minigolf', () => {
   });
 
   it('is struck with the shop’s putter and not the starting one: a gold putt goes further than a starting one', () => {
-    const h = hole('Wide Open');
+    // a long putt wants room: the big test hole of the perf gate, open country with the cup clear of the rail
+    const h = openHole(BIG);
     const far = (club: string) => {
       const g = gameOn(h, club);
       const [x, y] = spots(g, 40, 1)[0];

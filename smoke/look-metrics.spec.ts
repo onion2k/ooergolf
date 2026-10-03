@@ -19,7 +19,7 @@
  */
 import { expect, test, type Page } from '@playwright/test';
 import { TILE, heightAt, layoutOf, slopeAt, tileAt } from '../src/arena';
-import { HILLS } from '../src/course';
+import { VOLCANO } from '../test/hills';
 import { SUN } from '../src/sun';
 import { start, watch } from './game';
 import { figuresOf, type Figures, type Rgb, type Samples } from './metrics';
@@ -57,8 +57,7 @@ type Point = { x: number; y: number };
  * stripe more often on one flank, and read a hill drawn flat as 1.26.
  */
 function flanks(): { sunward: { x: number; y: number; z: number }[]; away: { x: number; y: number; z: number }[] } {
-  const hole = HILLS.find((h) => h.name === 'The Volcano')!;
-  const l = layoutOf(hole.map, hole.terrain);
+  const l = layoutOf(VOLCANO.map, VOLCANO.terrain);
   const k = Math.hypot(...SUN),
     [sx0, sy0, sz0] = SUN.map((c) => c / k);
   type Took = { x: number; y: number; z: number; by: number };
@@ -152,21 +151,23 @@ test('the look holds its colour, the course stands out, the sun is told from the
   const rail = await colours(page, points);
   // The Volcano from its tee, and its flanks
   const flank = flanks();
-  const onFlanks = await page.evaluate((flank) => {
-    const g = window.game!;
-    g.chooseCourse('The Hills');
-    g.startHole(g.content().holes.findIndex((h) => h.name === 'The Volcano'));
-    g.step(75);
-    const { floor } = g.content();
-    g.look((floor.minX + floor.maxX) / 2, (floor.minY + floor.maxY) / 2 - 14, 70);
-    g.step(2);
-    for (const el of Array.from(document.querySelectorAll<HTMLElement>('.panel, #boot, #stats')))
-      el.style.visibility = 'hidden';
-    return {
-      sunward: flank.sunward.map((p) => g.project(p.x, p.y, p.z)),
-      away: flank.away.map((p) => g.project(p.x, p.y, p.z)),
-    };
-  }, flank);
+  const onFlanks = await page.evaluate(
+    ([flank, hole]) => {
+      const g = window.game!;
+      g.playCourse([hole]);
+      g.step(75);
+      const { floor } = g.content();
+      g.look((floor.minX + floor.maxX) / 2, (floor.minY + floor.maxY) / 2 - 14, 70);
+      g.step(2);
+      for (const el of Array.from(document.querySelectorAll<HTMLElement>('.panel, #boot, #stats')))
+        el.style.visibility = 'hidden';
+      return {
+        sunward: flank.sunward.map((p) => g.project(p.x, p.y, p.z)),
+        away: flank.away.map((p) => g.project(p.x, p.y, p.z)),
+      };
+    },
+    [flank, VOLCANO] as const,
+  );
   const samples: Samples = { ...rail, ...(await colours(page, onFlanks)) };
   for (const [kind, list] of Object.entries(samples) as [keyof Samples, unknown[]][])
     expect(list.length, `${kind} in view`).toBeGreaterThanOrEqual(5);

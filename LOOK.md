@@ -226,7 +226,7 @@ of each close, in the showcase and on the course.
 
 **Edge cases:**
 
-- **Slopes:** the rail on the Hills, and the cup on Side-hill.
+- **Slopes:** the rail on a hole that slopes, and the cup on Side-hill (a test hole since The Hills were scrapped).
 - **Rock:** the rail at every corner and T the maps make.
 - **The camera:** the rail's cap seen from above and from the tee.
 
@@ -305,7 +305,7 @@ and a ball holed at the moment of a knock.
 
 ## After the stages: the shape of the ground
 
-The Hills could not be read: every slope a ball can roll on takes more of
+The Hills (the sloped course there was) could not be read: every slope a ball can roll on takes more of
 the high sun than the top toon band's edge, so a hill was drawn exactly as
 bright as the flat, and only the stripes bending hinted at its shape. The
 renderer's form light, v0.21.0's `form`, keeps some of the sun's fall-off
