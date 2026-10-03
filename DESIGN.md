@@ -250,9 +250,9 @@ same place, so the stroke's whole decision is to reach the belt.
 
 ### The Waterworks
 
-Water on every hole, and the ball always one slip from it: six of the nine holes are drawn (`src/waterworks.ts`), par 18
-so far, and the rest wait on a stream for the ball to cross, which is its own feature. A hole has one idea and
-something on it to time, use or fear, as The Meadow's have.
+Water on every hole, and the ball always one slip from it: all nine holes are drawn (`src/waterworks.ts`), par 28, the
+last three with a stream, a conveyor drawn as running water. A hole has one idea and something on it to time, use or fear,
+as The Meadow's have.
 
 | Hole | Par | Brings                                                                                                             |
 | ---- | --- | ------------------------------------------------------------------------------------------------------------------ |
@@ -262,11 +262,22 @@ something on it to time, use or fear, as The Meadow's have.
 | 4    | 3   | The Island Green: a green in a bowl, ringed with water, whose far rim is its edge: carry and die                   |
 | 5    | 3   | The Spillway: a lane along a pond's edge, the ground tilted to the water, every putt aimed up the slope            |
 | 6    | 4   | Mill Pond: a windmill on a causeway a tile wide: a ball met by a blade may be thrown off it                        |
+| 7    | 3   | The Weir: a river down the lane's east side into a pond beside the cup: keep off it, west of it                    |
+| 8    | 3   | The Rapids: a zigzag river of five runs of stream, north, east, north, west, north, that carries a ball to the cup |
+| 9    | 4   | The Flood: a lock's gate, a stone, a stream over the pond and the island green in its bowl, up one line            |
 
 The sheet had a causeway three tiles wide and stones of two tiles by two a tile of water apart. Three tiles is nine
 units, which a slip of ten degrees still crosses, so it is two; and a ball rolls across a gap of one tile at speed,
 which the physics lets it, and the autopilot cannot play, so the stones are corners of a strip. The Island Green is
 `The Island Green` since `The Links` has an `Island Green` and a best score is kept by name.
+
+A stream is a belt, and a belt pulls a ball's velocity toward its own at an eighth a step, whatever its speed: measured on a
+stream a tile deep, a ball struck across it at full power dies two and a third units in, so no stream is crossed, and a
+ball on one is carried to its end. The sheet's streams across the line (a slow ball carried over the edge, a fast one
+crossing; four across the lane to be aimed against) cannot be played, so the streams lie beside the line (The Weir, where
+one that is strayed onto ends in the pond) or along it (The Rapids and The Flood, where a stream is how the ball gets there,
+and the belts of a river hand the ball on to each other end to end). A ball carried at six units a second is counted at rest by the game while it rides (seen, and not
+looked into further), so The Rapids' belts run at nine and the ride is one stroke, not two.
 
 ## The upgrades
 

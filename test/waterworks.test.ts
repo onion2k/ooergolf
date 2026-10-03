@@ -14,6 +14,7 @@ import { WATERWORKS } from '../src/waterworks';
 import { DT, newGame } from './helpers';
 import { PLAYER } from '../scripts/pace';
 import { seeded } from '../src/random';
+import { fuzz } from '../scripts/fuzzer';
 
 const hole = (name: string) => WATERWORKS.find((h) => h.name === name)!;
 const CAUSEWAY = hole('The Causeway'),
@@ -21,7 +22,10 @@ const CAUSEWAY = hole('The Causeway'),
   LOCK = hole('The Lock'),
   ISLAND = hole('The Island Green'),
   SPILLWAY = hole('The Spillway'),
-  MILL = hole('Mill Pond');
+  MILL = hole('Mill Pond'),
+  WEIR = hole('The Weir'),
+  RAPIDS = hole('The Rapids'),
+  FLOOD = hole('The Flood');
 
 /** A game of the one hole, which says what it was told (`told`), at rest on its tee. */
 const gameOn = (h: (typeof WATERWORKS)[number], seed = 1) => newGame(seed, null, [h]);
@@ -31,6 +35,13 @@ function settleOut(game: Game, seconds = 40) {
   // not ready for the first few frames: the ball is struck, and the physics has yet to put it to sleep
   for (let f = 0; f < seconds * 60 && game.phase === 'play' && !(f > 5 && game.ready); f++) game.step(DT);
 }
+/**
+ * The game stepped for `seconds` whatever the ball is doing: a ball carried along a stream is put to sleep by the physics
+ * while it is carried (its speed is under what it sleeps at), so `ready` is no sign that it has come to rest there.
+ */
+const run = (game: Game, seconds: number) => {
+  for (let f = 0; f < seconds * 60 && game.phase === 'play'; f++) game.step(DT);
+};
 /** The angle from the ball to the cup. */
 const toCup = (g: Game) => Math.atan2(g.layout.cup.y - g.world.y[g.ball], g.layout.cup.x - g.world.x[g.ball]);
 /** The power the autopilot would strike the ball with from where it lies, which is the right one for the cup. */
@@ -45,14 +56,14 @@ const standsAt = (h: (typeof WATERWORKS)[number]) =>
   (h.obstacles![0] as Extract<ObstacleDef, { kind: 'barrier' | 'windmill' }>).at;
 
 describe('the course', () => {
-  it('is registered among the minigolf courses after The Meadow, six holes so far, each with water on it and a map drawn square', () => {
+  it('is registered among the minigolf courses after The Meadow, nine holes, each with water on it and a map drawn square', () => {
     const names = COURSES.map((c) => c.name);
     expect(names.indexOf('The Waterworks')).toBeGreaterThan(names.indexOf('The Meadow'));
     expect(names.indexOf('The Waterworks')).toBeLessThan(names.indexOf('The Range'));
     const course = COURSES.find((c) => c.name === 'The Waterworks')!;
     expect(course.holes).toBe(WATERWORKS);
     expect(course.golf).toBeFalsy();
-    expect(course.summary).toEqual({ holes: 6, par: 18 });
+    expect(course.summary).toEqual({ holes: 9, par: 28 });
     expect(WATERWORKS.map((h) => h.name)).toEqual([
       'The Causeway',
       'The Stepping Stones',
@@ -60,6 +71,9 @@ describe('the course', () => {
       'The Island Green',
       'The Spillway',
       'Mill Pond',
+      'The Weir',
+      'The Rapids',
+      'The Flood',
     ]);
     for (const h of WATERWORKS) {
       expect(new Set(h.map.map((r) => r.length)).size, `${h.name}: every row as wide as the rest`).toBe(1);
@@ -307,6 +321,198 @@ describe('Mill Pond', () => {
     expect(MILL.map[row][col]).toBe('.');
     expect(MILL.map[row].replace('.', '')).toMatch(/^#+$/);
     expect(new Obstacles(MILL.obstacles!, l).windmills.length).toBe(1);
+  });
+});
+
+/** The tile column and the row from the top of the map that a point stands on. */
+const cellOf = (g: Game, x: number, y: number): [number, number] => {
+  const t = tileAt(g.layout, x, y);
+  return [t % g.layout.cols, g.layout.rows - 1 - Math.floor(t / g.layout.cols)];
+};
+/** Every tile of a hole's conveyors, as `col,row` from the top, one set for each conveyor in the order they are given. */
+const streamTiles = (h: (typeof WATERWORKS)[number]) =>
+  (h.obstacles ?? [])
+    .filter((o): o is Extract<ObstacleDef, { kind: 'conveyor' }> => o.kind === 'conveyor')
+    .map((o) => {
+      const out = new Set<string>();
+      const n = Math.max(Math.abs(o.to[0] - o.from[0]), Math.abs(o.to[1] - o.from[1]));
+      for (let k = 0; k <= n; k++)
+        out.add(`${o.from[0] + Math.sign(o.to[0] - o.from[0]) * k},${o.from[1] + Math.sign(o.to[1] - o.from[1]) * k}`);
+      return out;
+    });
+
+describe('the streams of the last three holes', () => {
+  it('are on grass, are drawn as water, and each belt runs where its map says, with a pond or the rail at its end', () => {
+    for (const h of [WEIR, RAPIDS, FLOOD]) {
+      const g = gameOn(h).game;
+      const l = g.layout;
+      const belts = (h.obstacles ?? []).filter((o) => o.kind === 'conveyor');
+      expect(belts.length, `${h.name}: streams`).toBeGreaterThan(0);
+      for (const o of belts) expect((o as { look?: string }).look, `${h.name}: drawn as water`).toBe('water');
+      expect(g.obstacles.streamed.size, h.name).toBe(g.obstacles.belted.size);
+      for (const t of g.obstacles.streamed) {
+        expect(l.water[t] || l.solid[t], `${h.name}: tile ${t} is grass`).toBeFalsy();
+        expect(h.map[l.rows - 1 - Math.floor(t / l.cols)][t % l.cols], `${h.name}: tile ${t} is '.' on the map`).toBe(
+          '.',
+        );
+      }
+    }
+  });
+});
+
+describe('The Weir', () => {
+  it('is not crossed by a ball struck onto the stream, at any power: the belt takes the ball’s speed and carries it down to the pond', () => {
+    // from the grass beside the stream, struck east across it at every power from a roll to the hardest there is: the
+    // stream pulls a ball's velocity toward its own at an eighth a step, so none gets across, however hard
+    for (const power of [0.2, 0.5, 1]) {
+      const g = gameOn(WEIR);
+      const l = g.game.layout;
+      g.game.place(l.originX + 3.5 * TILE, l.originY + (l.rows - 1 - 11 + 0.5) * TILE);
+      g.game.shoot(0, power);
+      run(g.game, 30);
+      expect(splashes(g.told), `power ${power}: carried into the pond`).toBeGreaterThanOrEqual(1);
+      expect(g.game.strokes, `power ${power}: a stroke for the splash`).toBe(2);
+      expect(g.told.filter((t) => t.startsWith('outOfBounds'))).toEqual([]);
+    }
+  });
+
+  it('is not a danger to a ball struck down the west side: the autopilot holes it in a stroke or two with the pond untouched', () => {
+    for (const seed of [1, 2, 3, 4, 5, 6]) {
+      const g = gameOn(WEIR, seed);
+      const pilot = new Autopilot(g.game, { skill: PLAYER, random: seeded(seed * 31 + 7) });
+      for (let f = 0; f < 60 * 120 && g.game.phase === 'play'; f++) pilot.step(DT);
+      expect(g.game.phase, `seed ${seed}`).not.toBe('play');
+      expect(g.game.strokes, `seed ${seed}`).toBeLessThanOrEqual(WEIR.par + 1);
+      expect(splashes(g.told), `seed ${seed}`).toBe(0);
+    }
+  });
+
+  it('has its stream beside the line to the cup, which keeps clear of it, and its pond at the stream’s end', () => {
+    const l = layoutOf(WEIR.map);
+    const [cupCol] = cellOf(gameOn(WEIR).game, l.cup.x, l.cup.y);
+    const tiles = new Set(streamTiles(WEIR).flatMap((s) => [...s].map((c) => Number(c.split(',')[0]))));
+    expect(
+      Math.min(...tiles) - cupCol,
+      'a tile of grass at least between the line and the stream',
+    ).toBeGreaterThanOrEqual(1);
+    expect(WEIR.map[1].includes('~') && WEIR.map[2].includes('~'), 'pond where the stream ends').toBe(true);
+  });
+});
+
+describe('The Rapids', () => {
+  /** A ball struck from the tee straight at the river's mouth, with its tile (col,row) noted every frame until it is at rest. */
+  const ride = (power = 0.3) => {
+    const g = gameOn(RAPIDS);
+    const l = g.game.layout;
+    g.game.shoot(Math.PI / 2, power);
+    const cells: string[] = [];
+    let farEast = -Infinity;
+    for (let f = 0; f < 60 * 30 && g.game.phase === 'play'; f++) {
+      g.game.step(DT);
+      cells.push(cellOf(g.game, g.game.world.x[g.game.ball], g.game.world.y[g.game.ball]).join(','));
+      farEast = Math.max(farEast, g.game.world.x[g.game.ball] - l.tee.x);
+    }
+    return { ...g, cells, farEast };
+  };
+
+  it('carries a ball struck at its mouth through each of its five runs of stream in turn, which swing it right across the lane and back, and does not lose it', () => {
+    const streams = streamTiles(RAPIDS);
+    // the belts come in pairs, two tiles wide: north, east, north, west, north is five runs of them and the river's four
+    // streams are the pairs that carry it sideways and the stretches between
+    expect(streams.length).toBe(10);
+    const r = ride();
+    expect(splashes(r.told)).toBe(0);
+    const runs = [0, 2, 4, 6, 8].map((k) => new Set([...streams[k], ...streams[k + 1]]));
+    const order = runs.map((set) => r.cells.findIndex((c) => set.has(c)));
+    expect(
+      order.every((at) => at >= 0),
+      `every stream was ridden: ${order.join(',')}`,
+    ).toBe(true);
+    expect(order, 'in the order the river runs').toEqual([...order].sort((a, b) => a - b));
+    // swung across: the river's first corner is a tile and a half either side of the middle, and the next goes six tiles east
+    expect(r.farEast, 'carried across the lane').toBeGreaterThan(12);
+    // and out at the top, on the cup's platform side of the pond
+    const [, row] = cellOf(r.game, r.game.world.x[r.game.ball], r.game.world.y[r.game.ball]);
+    expect(row, 'at the river’s end').toBeLessThanOrEqual(4);
+  });
+
+  it('is the only way: a ball struck off the tee’s pad toward the pond, rather than at the river’s mouth, is lost', () => {
+    const g = gameOn(RAPIDS);
+    g.game.shoot(Math.PI / 4, 0.3);
+    run(g.game, 30);
+    expect(splashes(g.told)).toBeGreaterThanOrEqual(1);
+    expect(g.game.phase, 'put back on the tee, not holed').toBe('play');
+  });
+
+  it('is holed by the autopilot in a stroke or two over the ride, with no splash on a few seeds', () => {
+    for (const seed of [1, 2, 3, 4]) {
+      const g = gameOn(RAPIDS, seed);
+      const pilot = new Autopilot(g.game, { skill: PLAYER, random: seeded(seed * 31 + 7) });
+      for (let f = 0; f < 60 * 120 && g.game.phase === 'play'; f++) pilot.step(DT);
+      expect(g.game.phase, `seed ${seed}`).not.toBe('play');
+      expect(g.game.strokes, `seed ${seed}`).toBeLessThanOrEqual(RAPIDS.par + 2);
+    }
+  });
+});
+
+describe('The Flood', () => {
+  it('has a stream, a lock’s gate, water and ground that rises and falls, on one line from the tee to the cup', () => {
+    const l = layoutOf(FLOOD.map, FLOOD.terrain);
+    expect(FLOOD.obstacles!.map((o) => o.kind).sort()).toEqual(['barrier', 'conveyor']);
+    expect(l.water.some((w) => w === 1)).toBe(true);
+    expect(FLOOD.terrain, 'a bowl').toBeDefined();
+    const heights = new Set<number>();
+    for (let x = l.originX; x < l.originX + l.cols * TILE; x += 1.5)
+      for (let y = l.originY; y < l.originY + l.rows * TILE; y += 1.5) heights.add(terrainAt(l, x, y));
+    expect(heights.size, 'more than one height').toBeGreaterThan(3);
+    expect(l.tee.x).toBeCloseTo(l.cup.x, 6);
+    const g = gameOn(FLOOD).game;
+    expect(g.obstacles.pushers.length, 'one gate').toBe(1);
+    expect(g.obstacles.streamed.size, 'a stream of five tiles').toBe(5);
+  });
+
+  it('is crossed by the stream: a ball struck from the stone onto it is carried to the neck and not lost', () => {
+    const g = gameOn(FLOOD);
+    const l = g.game.layout;
+    // on the stone, just before the stream, struck north at the island
+    g.game.place(l.originX + (6 + 0.5) * TILE, l.originY + (l.rows - 1 - 15 + 0.5) * TILE);
+    g.game.shoot(Math.PI / 2, 0.3);
+    settleOut(g.game);
+    expect(splashes(g.told)).toBe(0);
+    const [col, row] = cellOf(g.game, g.game.world.x[g.game.ball], g.game.world.y[g.game.ball]);
+    expect(col).toBe(6);
+    expect(row, 'carried up the stream to the island’s end').toBeLessThan(14);
+  });
+
+  it('is holed by the autopilot within its limit on a few seeds, with every rule held on the way', () => {
+    for (const seed of [1, 2, 3, 4]) {
+      const g = gameOn(FLOOD, seed);
+      const pilot = new Autopilot(g.game, { skill: PLAYER, random: seeded(seed * 31 + 7) });
+      for (let f = 0; f < 60 * 240 && g.game.phase === 'play'; f++) {
+        pilot.step(DT);
+        if (f % 30 === 0) expect(checkInvariants(g.game), `seed ${seed} frame ${f}`).toEqual([]);
+      }
+      expect(g.game.phase, `seed ${seed}`).not.toBe('play');
+      expect(g.game.strokes, `seed ${seed}`).toBeLessThanOrEqual(FLOOD.par + 3);
+    }
+  });
+});
+
+describe('the fuzzer on The Waterworks', () => {
+  it('plays the whole course at random with the stream struck onto, and finds nothing wrong, over a few seeds', () => {
+    for (const seed of [1, 2, 3]) {
+      const r = fuzz(seed, 4000, WATERWORKS);
+      expect(r.failure, `seed ${seed}`).toBeNull();
+    }
+  });
+
+  it('strikes the ball onto the stream of each of the three holes that have one, and finds nothing wrong', () => {
+    for (const h of [WEIR, RAPIDS, FLOOD])
+      for (const seed of [1, 2]) {
+        const r = fuzz(seed, 3000, [h]);
+        expect(r.failure, `${h.name} seed ${seed}`).toBeNull();
+        expect(r.done['strike onto the stream'] ?? 0, `${h.name} seed ${seed} struck onto it`).toBeGreaterThan(0);
+      }
   });
 });
 

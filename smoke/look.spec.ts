@@ -215,6 +215,9 @@ test.describe('what it looks like', () => {
     ['The Fair', 'Ferris', 'fair-7.png'],
     ['The Fair', 'Shooting Gallery', 'fair-8.png'],
     ['The Fair', 'The Big Wheel', 'fair-9.png'],
+    ['The Waterworks', 'The Weir', 'waterworks-7.png'],
+    ['The Waterworks', 'The Rapids', 'waterworks-8.png'],
+    ['The Waterworks', 'The Flood', 'waterworks-9.png'],
   ] as const) {
     test(`${name}, from its tee`, async ({ page }) => {
       const problems = watch(page);

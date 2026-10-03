@@ -208,8 +208,8 @@ test.describe('the start screen', () => {
     await expect(page.locator('#start .course').nth(2)).toContainText('9 holes');
     await expect(page.locator('#start .course').nth(2)).toContainText('par 28');
     await expect(page.locator('#start .course').nth(3)).toContainText('The Waterworks');
-    await expect(page.locator('#start .course').nth(3)).toContainText('6 holes');
-    await expect(page.locator('#start .course').nth(3)).toContainText('par 18');
+    await expect(page.locator('#start .course').nth(3)).toContainText('9 holes');
+    await expect(page.locator('#start .course').nth(3)).toContainText('par 28');
     await expect(page.locator('#start .course').nth(4)).toContainText('The Range');
     await expect(page.locator('#start .course').nth(4)).toContainText('9 holes');
     await expect(page.locator('#start .course').nth(4)).toContainText('par 32');
