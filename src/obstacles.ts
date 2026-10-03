@@ -16,7 +16,7 @@
  * the slice of whichever blade is down through the door, at the height of the
  * ball, and nothing when none is.
  */
-import { BALL, BOUNCE, BUMPER, KIND_RADIUS, TILE, slopeAt, tileAt, type Layout } from './arena';
+import { BALL, BOUNCE, BUMPER, KIND_RADIUS, PHYSICS, TILE, slopeAt, tileAt, type Layout } from './arena';
 import type { Pusher, Belt } from './physics';
 
 /** A tile of a hole's map, as the map is drawn: its column, and its row from the top. */
@@ -52,6 +52,21 @@ export type ObstacleDef =
       to: MapTile;
       /** How fast it carries, in units a second. */
       speed: number;
+    }
+  | {
+      kind: 'flipper';
+      /** The tile of the end it turns on. */
+      at: MapTile;
+      /** How long the arm is, in tiles, from that end. */
+      length: number;
+      /** How far it swings up from lying at rest, in radians. */
+      swing: number;
+      /** How long it takes to go and come back, in seconds, which is the first half of it: it lies at rest for the rest. */
+      period: number;
+      /** How far through the period it starts, from 0 to 1. */
+      phase?: number;
+      /** Which end is fixed, as seen from the tee: the arm lies at rest along the way across, away from it, and rises up the hole. */
+      pivot: 'left' | 'right';
     };
 
 /** A barrier's size other than its length: how deep along the hole, and how tall, as halves. */
@@ -129,6 +144,17 @@ export class Obstacles {
   readonly conveyors: { x: number; y: number; angle: number; length: number; travel: number; speed: number }[] = [];
   /** The tiles a belt lies on: not grass, so nothing grows there, and nothing slows a ball the belt carries. */
   readonly belted = new Set<number>();
+  /** Where each flipper turns, how long its arm is, and the box the physics has of it, for drawing. */
+  readonly flippers: {
+    x: number;
+    y: number;
+    length: number;
+    yaw: number;
+    pusher: Pusher;
+    def: Extract<ObstacleDef, { kind: 'flipper' }>;
+  }[] = [];
+  /** The game time everything was last put where it is for, so that a rule can ask where a flipper ought to be. */
+  time = 0;
 
   constructor(defs: readonly ObstacleDef[], layout: Layout) {
     const tileX = (col: number) => layout.originX + (col + 0.5) * TILE;
@@ -169,6 +195,9 @@ export class Obstacles {
           y = tileY(def.at[1]);
         this.pushers.push({ ...box(), x, y: y + WINDMILL.hub[1], hy: WINDMILL.bladeThickness / 2, z: PARKED });
         this.windmills.push({ x, y, turn: 0, def });
+      } else if (def.kind === 'flipper') {
+        // made after the rest, below
+        continue;
       } else {
         const x0 = tileX(def.from[0]),
           y0 = tileY(def.from[1]),
@@ -197,6 +226,36 @@ export class Obstacles {
         for (let k = 0; k * TILE < length; k++)
           this.belted.add(tileAt(layout, x0 + ((x1 - x0) / d) * k * TILE, y0 + ((y1 - y0) / d) * k * TILE));
       }
+    }
+    // the flippers' boxes come last among the pushers, whatever order they were given in, so the barriers' and the windmills'
+    // places in the list are what they were without them
+    for (const def of defs) {
+      if (def.kind !== 'flipper') continue;
+      const x = tileX(def.at[0]),
+        y = tileY(def.at[1]);
+      const what = `a flipper at column ${def.at[0]}, row ${def.at[1]}`;
+      if (!(def.length > 0)) throw new Error(`${what} has a length of ${def.length}: it must be more than nought`);
+      if (!(def.period > 0)) throw new Error(`${what} has a period of ${def.period}: it must be more than nought`);
+      if (!(def.swing > 0 && def.swing < Math.PI))
+        throw new Error(`${what} has a swing of ${def.swing}: it must be more than nought and less than half a turn`);
+      const hx = (def.length * TILE) / 2;
+      // a box must move less in a step than its half thickness and the ball's radius, or the ball could be passed by it
+      const fastest = ((def.swing * Math.PI * 2) / def.period) * def.length * TILE * PHYSICS.step;
+      if (fastest >= FLIPPER.hy + KIND_RADIUS[BALL])
+        throw new Error(
+          `${what} swings too fast: its end moves ${fastest.toFixed(2)} a step, and a ball would be passed by it`,
+        );
+      const pusher = { ...box(), x, y, z: FLIPPER.hz, hx, hy: FLIPPER.hy, hz: FLIPPER.hz, px: x, py: y };
+      this.pushers.push(pusher);
+      this.flippers.push({ x, y, length: hx * 2, yaw: 0, pusher, def });
+      sweepIsLevel(
+        layout,
+        x,
+        y,
+        def.length * TILE + FLIPPER.hy + KIND_RADIUS[BALL],
+        def.pivot === 'left' ? 1 : -1,
+        what,
+      );
     }
     // what moves stands on level ground: on a slope a ball is rolled back against a box for good, as the physics'
     // fuzzer found under a windmill's sweep
@@ -243,6 +302,17 @@ export class Obstacles {
       pusher.vx = was ? (g.x - was.x) / dt : 0;
     }
     for (const c of this.conveyors) c.travel = c.speed * t;
+    // each flipper turned to where it is at `t` about its root, which stands still, and turning as fast as it did over the `dt` before
+    for (const f of this.flippers) {
+      const yaw = flipperYaw(f.def, t);
+      const { pusher } = f;
+      pusher.yaw = f.yaw = yaw;
+      pusher.x = f.x + Math.cos(yaw) * pusher.hx;
+      pusher.y = f.y + Math.sin(yaw) * pusher.hx;
+      pusher.vx = pusher.vy = 0;
+      pusher.spin = dt > 0 ? (yaw - flipperYaw(f.def, t - dt)) / dt : 0;
+    }
+    this.time = t;
   }
 }
 
@@ -251,6 +321,38 @@ function level(l: Layout, x: number, y: number, hx: number, hy: number, what: st
   for (let dx = -hx; dx <= hx + 1e-9; dx += 0.5)
     for (let dy = -hy; dy <= hy + 1e-9; dy += 0.5) {
       const [sx, sy] = slopeAt(l, x + dx, y + dy);
+      if (Math.abs(sx) + Math.abs(sy) > 1e-9) throw new Error(`${what} stands on ground that slopes: it must be level`);
+    }
+}
+
+/** A flipper's size other than its length: how deep along the arm's width, and how tall, as halves. */
+export const FLIPPER = { hy: 0.6, hz: 0.8 } as const;
+
+/**
+ * How far a flipper is up from lying at rest at time `t`, in radians: the sine of its time, as a barrier's slide is, for the
+ * half of its period it is going up and coming back, and none for the other half, so it lies at rest long enough to be
+ * rolled under. From the time alone, never from where it was.
+ */
+export function flipperAngle(def: Extract<ObstacleDef, { kind: 'flipper' }>, t: number): number {
+  return def.swing * Math.max(0, Math.sin(Math.PI * 2 * (t / def.period + (def.phase ?? 0))));
+}
+
+/** The way the arm points from its root at time `t`, as the physics' box is turned: toward the right at rest from a left root, and the left from a right one, rising up the hole. */
+export function flipperYaw(def: Extract<ObstacleDef, { kind: 'flipper' }>, t: number): number {
+  const up = flipperAngle(def, t);
+  return def.pivot === 'left' ? up : Math.PI - up;
+}
+
+/**
+ * Refused, naming `what`, if the ground slopes anywhere an arm sweeps: the ground within `reach` of its root on its side of
+ * it (`side` 1 to the right, -1 to the left) and up the hole, which is every place it can be, and a ball's width the other way.
+ */
+function sweepIsLevel(l: Layout, x: number, y: number, reach: number, side: number, what: string) {
+  const back = FLIPPER.hy + KIND_RADIUS[BALL];
+  for (let dx = -back; dx <= reach + 1e-9; dx += 0.5)
+    for (let dy = -reach; dy <= reach + 1e-9; dy += 0.5) {
+      if (dx * dx + dy * dy > (reach + 0.5) ** 2 || (dy < -back && dx > 0)) continue;
+      const [sx, sy] = slopeAt(l, x + side * dx, y + dy);
       if (Math.abs(sx) + Math.abs(sy) > 1e-9) throw new Error(`${what} stands on ground that slopes: it must be level`);
     }
 }

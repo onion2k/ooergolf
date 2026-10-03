@@ -32,6 +32,7 @@ export {
 } from './models/obstacles';
 export { bunting, fence, flowers, golfTree, hedge, rock, stake, tree } from './models/decor';
 export { kicker } from './models/kicker';
+export { flipper } from './models/obstacles';
 
 /**
  * How many triangles each model may have at the largest the game will ask
@@ -73,4 +74,5 @@ export const BUDGET = {
   hole: 20000,
   golfHole: 60000,
   kicker: 420,
+  flipper: 120,
 } as const;

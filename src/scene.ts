@@ -64,6 +64,8 @@ import {
   stake,
 } from './models';
 import { BARRIER, WINDMILL, type Obstacles } from './obstacles';
+import { flipper } from './models';
+import { FLIPPER } from './obstacles';
 import type { World } from './physics';
 import { placeRolling } from './roll';
 import { ROCK_SIZE, dress, scatter, type Piece, type SceneryKind } from './scenery';
@@ -738,6 +740,9 @@ export class Scene {
         place(m, 0, c.x + Math.cos(c.angle) * along, c.y + Math.sin(c.angle) * along, 0, yaw);
       });
     }
+    // a flipper's arm, turned about its root by the yaw the obstacles put it at each step
+    for (const f of obstacles?.flippers ?? [])
+      pool(flipper(f.length, FLIPPER.hy, FLIPPER.hz), (m) => place(m, 0, f.x, f.y, FLIPPER.hz, f.yaw));
     // where a lofted ball came down: the last of what moves, and only on a golf hole, so a hole of minigolf has the
     // groups it always had
     if (layout?.golf) {

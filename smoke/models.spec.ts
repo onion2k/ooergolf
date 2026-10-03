@@ -124,3 +124,13 @@ test.describe('the kicker', () => {
     expect(problems).toEqual([]);
   });
 });
+
+test.describe('the flipper', () => {
+  test('the flipper, close, turned a little up its swing', async ({ page }) => {
+    const problems = watch(page);
+    await showcase(page);
+    await look(page, 'flipper');
+    await expect(page).toHaveScreenshot('flipper.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+});

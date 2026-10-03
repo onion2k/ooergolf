@@ -523,9 +523,12 @@ export class Autopilot {
       const when = timeAlong(game.layout, world.x[ball], world.y[ball], x, y, v0);
       if (when === Infinity) break;
       ahead.update(game.t + when, 1 / 120);
-      for (const p of ahead.pushers)
-        if (p.z - p.hz < KIND_RADIUS[BALL] * 2 && Math.abs(x - p.x) < p.hx + r && Math.abs(y - p.y) < p.hy + r)
-          return true;
+      for (const p of ahead.pushers) {
+        // in the box's own frame, since a flipper's arm is turned; a barrier's and a gate's are not, and are as they were
+        const lx = Math.cos(p.yaw) * (x - p.x) + Math.sin(p.yaw) * (y - p.y),
+          ly = -Math.sin(p.yaw) * (x - p.x) + Math.cos(p.yaw) * (y - p.y);
+        if (p.z - p.hz < KIND_RADIUS[BALL] * 2 && Math.abs(lx) < p.hx + r && Math.abs(ly) < p.hy + r) return true;
+      }
     }
     return false;
   }

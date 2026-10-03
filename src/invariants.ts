@@ -59,6 +59,7 @@ import { LIMIT_OVER_PAR, fastest, type Game } from './game';
 import type { Preview } from './preview';
 import { GREEN, breakOf, greenArrows, leansOnMinigolf, type Arrow, type Break } from './green';
 import { GREENS, LANDING, LIE, SURFACES } from './surfaces';
+import { flipperYaw, type Obstacles } from './obstacles';
 import { WIND, windPush, windReach } from './shaping';
 import { TREE, insideCanopy } from './trees';
 
@@ -335,20 +336,18 @@ export function checkInvariants(game: Game): string[] {
       const onPost =
         (Math.abs(bottom - postTop) < 0.05 && fromPosts(layout, world.x[ball], world.y[ball]) < 0) ||
         (Math.abs(bottom - (heightAt(layout, x, y) + KICKER.height)) < 0.05 && fromKickers(layout, x, y) < 0);
-      const onBox = game.obstacles.pushers.some(
-        (p) =>
-          Math.abs(bottom - (p.z + p.hz)) < 0.05 &&
-          Math.abs(world.x[ball] - p.x) < p.hx &&
-          Math.abs(world.y[ball] - p.y) < p.hy,
-      );
+      const onBox = game.obstacles.pushers.some((p) => {
+        // in the box's own frame: a flipper's is turned, a barrier's is not
+        const [lx, ly] = inBox(p, world.x[ball], world.y[ball]);
+        return Math.abs(bottom - (p.z + p.hz)) < 0.05 && Math.abs(lx) < p.hx && Math.abs(ly) < p.hy;
+      });
       if (!onFloor && !onBox && !onPost) out.push(`at rest in the air: ${at(ball)}`);
     }
     // inside a barrier's or a gate's box by more than the physics lets a ball sink into one
     for (const p of game.obstacles.pushers) {
+      const [lx, ly] = inBox(p, world.x[ball], world.y[ball]);
       const inside =
-        Math.abs(world.x[ball] - p.x) < p.hx - 0.3 &&
-        Math.abs(world.y[ball] - p.y) < p.hy - 0.3 &&
-        Math.abs(world.z[ball] - p.z) < p.hz - 0.3;
+        Math.abs(lx) < p.hx - 0.3 && Math.abs(ly) < p.hy - 0.3 && Math.abs(world.z[ball] - p.z) < p.hz - 0.3;
       if (inside) out.push(`the ball is inside a moving box at ${p.x.toFixed(1)},${p.y.toFixed(1)}`);
     }
   }
@@ -376,6 +375,7 @@ export function checkInvariants(game: Game): string[] {
   if (layout.golf && !BAG.includes(game.inHand))
     out.push(`the club in hand on a golf hole, ${game.inHand.id}, is not in the bag`);
   out.push(...bumperProblems(game));
+  report('a flipper', flipperProblems(game.obstacles));
   return out;
 }
 
@@ -527,5 +527,38 @@ export function kickerProblems(game: Game): string[] {
   const speed = Math.hypot(world.vx[ball], world.vy[ball]);
   if (side < world.r[ball] + 0.5 && speed > fastest(game, x, y) * 1.001)
     out.push(`the ball is going ${speed.toFixed(2)} at a kicker, faster than the course may throw it`);
+  return out;
+}
+
+/** A point in a moving box's own frame: along it and across it from its middle, as the box is turned (a barrier is not, and a flipper is). */
+function inBox(p: { x: number; y: number; yaw: number }, x: number, y: number): [number, number] {
+  const c = Math.cos(p.yaw),
+    s = Math.sin(p.yaw);
+  return [c * (x - p.x) + s * (y - p.y), -s * (x - p.x) + c * (y - p.y)];
+}
+
+/**
+ * What is wrong with a flipper's pose: it comes from game time alone, so the box the physics holds is what a flipper made
+ * new would be at the same time (the arm turned as the clock says, whatever it was doing before), its root is where
+ * it was put and has not moved, its length is its own, and it turns only about the root, so its box has no speed but
+ * the turn. Checked against the pose worked out afresh, never against the code that moved it.
+ */
+export function flipperProblems(obstacles: Obstacles): string[] {
+  const out: string[] = [];
+  for (const f of obstacles.flippers) {
+    const { pusher: p, def } = f;
+    const what = `the flipper at column ${def.at[0]}, row ${def.at[1]}`;
+    const yaw = flipperYaw(def, obstacles.time);
+    if (!(Math.abs(p.yaw - yaw) < 1e-9))
+      out.push(`${what} points ${p.yaw}, and its time of ${obstacles.time} says ${yaw}`);
+    const rootX = p.x - Math.cos(p.yaw) * p.hx,
+      rootY = p.y - Math.sin(p.yaw) * p.hx;
+    if (!(Math.hypot(rootX - f.x, rootY - f.y) < 1e-6 && p.px === f.x && p.py === f.y))
+      out.push(`${what} has come off its root: its arm starts ${rootX},${rootY}, and its root is ${f.x},${f.y}`);
+    if (!(Math.abs(p.hx * 2 - f.length) < 1e-9)) out.push(`${what} is ${p.hx * 2} long, and was made ${f.length}`);
+    if (p.vx !== 0 || p.vy !== 0)
+      out.push(`${what} is going ${p.vx},${p.vy} but for its turn, and its root stands still`);
+    if (!Number.isFinite(p.spin)) out.push(`${what} is turning at ${p.spin}`);
+  }
   return out;
 }

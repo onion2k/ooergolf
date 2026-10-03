@@ -592,3 +592,36 @@ export function conveyor(w: number, h: number, { spacing = 2 } = {}): Conveyor {
     spacing,
   };
 }
+
+/**
+ * A flipper: an arm of half extents `hy` and `hz` across and up and `length` long, rounded at every edge as the barrier is,
+ * in the arcade's blue plastic, with a cream hub on top at the end it turns on. Its origin is the middle of that end, the
+ * arm lies along +X from it, and it is centred up and down as the barrier is; the game turns it about that end by the
+ * arm's yaw. The hub stands inside the arm's width and a hair over its top, so it is never wider than the box the physics
+ * has, and seen from above it says where the arm turns.
+ */
+export function flipper(
+  length: number,
+  hy: number,
+  hz: number,
+  { colour = PALETTE.plastic.blue, hub = PALETTE.cream } = {},
+): Model {
+  const e = Math.min(0.22, 0.35 * Math.min(length / 2, hy, hz));
+  const lift = 0.12;
+  return {
+    name: 'flipper',
+    parts: [
+      {
+        name: 'arm',
+        material: matte(colour, ROUGH.plastic),
+        mesh: built((b) => roundedBox(b, at(length / 2, 0, 0), length / 2, hy, hz, e)),
+      },
+      {
+        name: 'hub',
+        material: matte(hub, ROUGH.plastic),
+        mesh: built((b) => frustum(b, at(hy * 1.2, 0, 0), 12, hy * 0.7, hy * 0.6, hz - 0.02, hz + lift)),
+      },
+    ],
+    moving: [],
+  };
+}

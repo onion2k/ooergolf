@@ -52,6 +52,7 @@ import {
   type V3,
   type Windmill,
 } from './models';
+import { flipper } from './models';
 
 declare global {
   interface Window {
@@ -199,6 +200,12 @@ function exhibits(seed: number): Exhibit[] {
     { name: 'water', label: 'water', row: 'obstacles', items: [{ model: water(6, 9, { seed }), x: -3, y: 1.5 }] },
     { name: 'bunker', label: 'bunker', row: 'obstacles', items: [{ model: bunker(9, 6, { seed }), x: 7.5, y: 3 }] },
     { name: 'conveyor', label: 'conveyor', row: 'obstacles', items: [{ model: conveyor(6, 9), x: 19.5, y: 1.5 }] },
+    {
+      name: 'flipper',
+      label: 'flipper',
+      row: 'obstacles',
+      items: [{ model: flipper(6, 0.6, 0.8), x: 4, y: -9, z: 0.8, yaw: 0.35 }],
+    },
     {
       name: 'round-tree',
       label: 'round tree',

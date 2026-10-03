@@ -50,6 +50,7 @@ import {
   type Model,
   type Part,
 } from '../src/models';
+import { flipper } from '../src/models';
 import { BALL, KIND_RADIUS, WATER_LEVEL } from '../src/arena';
 import { TREE, insideCanopy, treeCone } from '../src/trees';
 import { SCALE } from '../src/scenery';
@@ -1343,5 +1344,36 @@ describe('the kicker is drawn to exactly the footprint the physics gives it', ()
     expect(triangles(m)).toBeLessThanOrEqual(BUDGET.kicker);
     expect(triangles(kicker(2.5, { height: 2 }))).toBeLessThanOrEqual(BUDGET.kicker);
     expect(BUDGET.kicker).toBeLessThanOrEqual(420);
+  });
+});
+
+describe('a flipper', () => {
+  for (const [length, hy, hz] of [
+    [6, 0.6, 0.8],
+    [3, 0.6, 0.8],
+    [9, 0.6, 0.8],
+  ]) {
+    it(`an arm ${length} long of half extents ${hy} and ${hz}, from the end it turns on, no wider than the physics' box`, () => {
+      const m = flipper(length, hy, hz);
+      const arm = bounds([partNamed(m, 'arm')]);
+      near(arm.min, [0, -hy, -hz], 5);
+      near(arm.max, [length, hy, hz], 5);
+      // the hub is inside the arm's width and along it, and stands a hair over its top
+      const hub = bounds([partNamed(m, 'hub')]);
+      expect(hub.min[0]).toBeGreaterThanOrEqual(0);
+      expect(hub.max[0]).toBeLessThanOrEqual(length);
+      expect(Math.max(-hub.min[1], hub.max[1])).toBeLessThanOrEqual(hy + 1e-6);
+      expect(hub.max[2]).toBeGreaterThan(hz);
+      expect(hub.max[2]).toBeLessThan(hz + 0.3);
+    });
+  }
+
+  it('is in two parts in two colours, inside its triangle budget, and its faces are whole', () => {
+    const m = flipper(6, 0.6, 0.8);
+    expect(m.parts.map((p) => p.name)).toEqual(['arm', 'hub']);
+    expect(partNamed(m, 'arm').material).not.toEqual(partNamed(m, 'hub').material);
+    expect(triangles(m)).toBeGreaterThan(0);
+    expect(triangles(m)).toBeLessThanOrEqual(BUDGET.flipper);
+    expect(triangles(flipper(9, 1, 1))).toBeLessThanOrEqual(BUDGET.flipper);
   });
 });

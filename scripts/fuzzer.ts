@@ -20,8 +20,8 @@
  */
 import { Camera } from 'artshape-render/gpu/camera';
 import { aimView } from '../src/aimview';
-import { heightAt } from '../src/arena';
-import { Autopilot } from '../src/autopilot';
+import { heightAt, strikeSpeed } from '../src/arena';
+import { Autopilot, timeAlong } from '../src/autopilot';
 import { CameraRig, facing } from '../src/camera';
 import { CLUBS } from '../src/clubs';
 import { COURSES, type HoleDef } from '../src/course';
@@ -42,6 +42,7 @@ import {
 import { breakOf, greenArrows, leansOnMinigolf } from '../src/green';
 import { golfHole } from '../src/golf';
 import { LINKS_SPECS } from '../src/links';
+import { flipperYaw } from '../src/obstacles';
 import { Previewer } from '../src/preview';
 import { RANGE } from '../src/range';
 import { BAG } from '../src/bag';
@@ -573,6 +574,53 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
         for (const problem of viewProblems(rig)) told.push(problem);
       },
     ]);
+    // a course with a flipper on it gets one more thing the monkey does, and a course without leaves the monkey exactly as it
+    // was, since the action is not in the list and the weights are the same
+    if (game.course.some((h) => h.obstacles?.some((o) => o.kind === 'flipper'))) {
+      /** The monkey's chance for the flipper, apart from its own, and the next phase of the swing to strike it at. */
+      const striker = seeded(seed * 19 + 7);
+      let wanted = striker();
+      actions.push([
+        3,
+        () => {
+          // a player timing a shot at the arm: strikes at a point along it at the moment it will be at the next phase of its
+          // swing, round the whole of the swing in turn (the golden ratio's steps never repeat), with the power that takes
+          // about as long as that to get there. The ball may well not get there then, and it is struck all the same
+          const flipper = game.obstacles.flippers.at(Math.floor(striker() * game.obstacles.flippers.length));
+          if (!flipper || !game.ready) return;
+          wanted = (wanted + 0.618034) % 1;
+          const { def } = flipper;
+          const { world, ball, layout } = game;
+          const along = 0.15 + 0.8 * striker();
+          // the next moment the swing is at the phase wanted, at least a third of a second on
+          const phase = (game.t / def.period + (def.phase ?? 0)) % 1;
+          const arrive = game.t + 0.3 + ((((wanted - phase) % 1) + 1) % 1) * def.period;
+          const aim = (t: number) => ({
+            x: flipper.x + Math.cos(flipperYaw(def, t)) * along * flipper.length,
+            y: flipper.y + Math.sin(flipperYaw(def, t)) * along * flipper.length,
+          });
+          const target = aim(arrive);
+          let best = { power: 1, off: Infinity };
+          for (let power = 0.05; power <= 1.0001; power += 0.05) {
+            const time = timeAlong(
+              layout,
+              world.x[ball],
+              world.y[ball],
+              target.x,
+              target.y,
+              strikeSpeed(power, game.hardest),
+            );
+            if (Math.abs(time - (arrive - game.t)) < best.off)
+              best = { power, off: Math.abs(time - (arrive - game.t)) };
+          }
+          const angle = Math.atan2(target.y - world.y[ball], target.x - world.x[ball]);
+          if (game.shoot(angle, best.power)) {
+            did('strike at the flipper');
+          }
+          busy = Math.floor(between(10, 90));
+        },
+      ]);
+    }
     /**
      * A player pressing the flag button: the camera turned to face the cup from the ball, in either mode, while the ball
      * rolls or between holes, from any lie. Done on a chance of its own, as reading a green is, so the monkey's own stream
