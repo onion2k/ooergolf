@@ -98,17 +98,17 @@ describe('the turf of a hole', () => {
   });
 });
 
-describe('the rough as lush, long grass', () => {
+describe('the rough as turf, short and dense', () => {
   const rough = KINDS[ROUGH];
 
-  it('has blades at least a unit and a half tall, at the tallest still lower than the green they frame', () => {
-    expect(rough.height).toBeGreaterThanOrEqual(1.5);
+  it('has blades at least a unit tall, at the tallest still lower than the green they frame', () => {
+    expect(rough.height).toBeGreaterThanOrEqual(1.0);
     // a blade stands from the rough's floor, ROUGH_DEPTH below the green: it must not reach up over the course's level
     expect(rough.height * (1 + (rough.heightSpread ?? 0.3))).toBeLessThan(ROUGH_DEPTH);
   });
 
-  it('has thirty-six blades or more to the square unit, as many as a chunk of the field can hold', () => {
-    expect(rough.density).toBeGreaterThanOrEqual(36);
+  it('has seventy-two blades or more to the square unit, as many as a chunk of the field can hold', () => {
+    expect(rough.density).toBeGreaterThanOrEqual(72);
     expect(() => checkField(fieldOf(layoutOf(HOLE.map), HOLE.name), GRASS)).not.toThrow();
   });
 

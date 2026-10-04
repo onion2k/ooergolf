@@ -273,9 +273,9 @@ change meant to move it, and the commit says why. Look at every picture.
   moved during a drag would turn it. The view is sent at a hole's tee (the
   driver), on a club chosen, and when the ball is ready on another lie
   (`aimedFor` in `main.ts`). A driver's aim view is 192 back at the lowest tilt, which
-  costs 2.6 ms a frame on a quiet machine (up to 3.5 on a busy one), the worst of all
+  costs 2.8 ms a frame on a quiet machine (up to 3.9 on a busy one), the worst of all
   the clubs on the two longest holes facing either way, and each rung of the ladder
-  less (2.6, 1.6, 1.3, 0.9, measured 4 October 2026, load average 3.6 to 4), held under the 6 ms budget by `smoke/game.spec.ts`.
+  less (2.8, 1.6, 1.3, 1.0, measured 4 October 2026 with the turf's grass, load average 2 to 3), held under the 6 ms budget by `smoke/game.spec.ts`.
   `src/quality.ts` is the ladder the picture steps down on a slow machine,
   and the governor that chooses the rung from the time between frames and
   how much of it the drawing takes: frames that come slowly but
@@ -439,16 +439,17 @@ change meant to move it, and the commit says why. Look at every picture.
   and nowhere else: not on the green, tee, first cut, sand or water (painted, as ever: the green and its fringe are mown
   flat, and a bare cut keeps the putting surface and its edge one thing), and not past the stakes, on out of bounds, the
   rock beyond it or on to the horizon (`outside` is left out), so the plain beyond is bare. The rough is the minigolf
-  rough at `GOLF_ROUGH_DENSITY` (60 a square unit, not 40); the fairway (`FAIRWAY`, `GOLF_FAIRWAY_DENSITY` 72) is 0.38
-  tall (a quarter of the rough's, 0.5 at the tallest, under the ball's middle, so a ball on it is seen and is not
-  pressed), in the painted fairway's green (`FAIRWAY_GREEN`, equal to `models/palette.ts` by a test: the blades average
+  rough, turf and not meadow since 4 October 2026 (`GOLF_ROUGH_DENSITY` 80 a square unit, as minigolf's); the fairway
+  (`FAIRWAY`, `GOLF_FAIRWAY_DENSITY` 100) is 0.3 tall, leaning 0.35 with its clumps at 0.2 (a quarter of the rough's
+  height, 0.39 at the tallest, under the ball's middle, so a ball on it is seen and is not pressed), in the painted fairway's green (`FAIRWAY_GREEN`, equal to `models/palette.ts` by a test: the blades average
   to it by `grassGround`, so they read as the turf under them), stiff in the wind, and mown in the renderer's stripes,
   two tiles across, the lighter on the rows the painted ones are, as strong (`FAIRWAY_STRIPE_ROWS`, held to
-  `ground.ts`'s). More was tried and cost for nothing: 160 a unit on the fairway, with the rough at 64, made a hole of
-  The Range's whole at 110 back 5.3 ms against 2.3 before, and looked the same as 72, since the ground under the blades
+  `ground.ts`'s). More was tried before and cost for nothing: 160 a unit on the fairway, with the rough at 64, made a hole of
+  The Range's whole at 110 back 5.3 ms against 2.3 then, and looked the same as 72, since the ground under the blades
   is their colour and the renderer thins them with the square of the distance; the cost of a view follows the blades it
-  draws (about 0.02 ms a thousand), and the rings (`GRASS`, shared with minigolf) are left as they were. A golf hole's
-  densest view draws 162,000 blades of the 262,144 there is room for (`BLADE_ROOM`), held by `smoke/game.spec.ts`.
+  draws (about 0.02 ms a thousand), and the rings (`GRASS`, shared with minigolf) have `near` 36, down from 45, for the turf (see `turf.ts`). A golf hole's
+  densest view draws 139,000 blades of the 262,144 there is room for (`BLADE_ROOM`), and minigolf's 122,000, held by
+  `smoke/game.spec.ts` (4 October 2026).
   Nothing is scattered there either (`scatter` is empty on a golf hole, and its dressing is the bunting
   alone, which marks where it ends), and the ground under it reaches the horizon (`GOLF_GROUND_REACH` past the hole's edge, in
   the dry colour of out of bounds), where a square 600 across ran out under a hole 650 long and showed the sky. A ball at
@@ -457,12 +458,14 @@ change meant to move it, and the commit says why. Look at every picture.
   time, in the wind's direction): the grid it presses in is `trampleOf`, over the box round the hole at a cell of 0.5 to 1
   yard, at most 320,000 texels; `flattenFor` says when and where (the rough only), and the page reads it back as
   `motions().press`. A minigolf hole's grass, scatter and dressing are exactly what they were (held to a hash, and its
-  one kind of forty blades to a literal).
+  one kind of eighty blades, 1.2 tall, to a literal).
 - `src/turf.ts` is a hole's grass, as the renderer's GPU grass grows it: a
   field of cells saying where the rough grows (off the course,
   down where the rough lies, and on past the field as its `outside`), and
-  the hole's own wind from its name. The rough is long, lush grass: forty
-  blades a square unit (sixty on a golf hole, which also grows its fairway), 1.6 tall and a third more or less, its tallest still
+  the hole's own wind from its name. The rough is turf, not a hayfield
+  (candidate B of a sheet, chosen 4 October 2026, so a ball sits down in it): eighty blades a square unit on every
+  course (a golf hole also grows its fairway, at a hundred), 1.2 tall and half again more or less, in clumps (the
+  renderer's three-unit patchiness, `variation` 0.45) and leaning (0.45), its tallest, 1.8, still well
   under the level of the course; the blades sway in a wind that bends them
   about 30 degrees across the ground at one moment, in gusts eight units
   across that the renderer carries downwind at five units a second, which
@@ -471,9 +474,10 @@ change meant to move it, and the commit says why. Look at every picture.
   `mid` and `far` are the game's own, since the renderer's scale with the
   blade's height and would keep every blade for eighty units, and `BLADE_ROOM`
   is its room for blades in a frame, which the smoke test holds every hole
-  at every zoom well short of. The standard view costs 2.5 ms of the 6, and
-  the ladder's rungs 1.3, 1.0 and 0.7 at the home view (measured 4 October 2026, load average 3.6 to 6: 2.5 to 2.7, 1.3,
-  1.0 to 1.03, 0.69 to 0.73 over two runs). No blade grows on the course:
+  at every zoom well short of. The standard view costs 3.2 ms of the 6 (`perf`: 3.15 to 3.25 over six runs; the worst view the camera can be
+  orbited to 3.9 to 4.9), and the ladder's rungs 1.3, 1.0 and 0.7 at the home view (measured alone on 4 October 2026,
+  load average 1 to 2: 3.1, 1.3 to 1.4, 1.0, 0.70 over two runs). At `near` 45 the turf's worst orbited view drew all
+  262,144 blades and cost 7.2 ms, which is why `near` is 36: that view draws 160,000. No blade grows on the course:
   the green is painted, in its two stripes, by the scene (`PALETTE` in
   `scene.ts`), as `LOOK.md`'s clean look has it, and the ball leaves no
   track. The page hands the field to the renderer when a hole begins, and

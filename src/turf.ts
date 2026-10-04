@@ -65,40 +65,43 @@ export const ROUGH = 0;
 export const FAIRWAY = 1;
 
 /**
- * The rough: long, dense blades that the wind moves, deep for toon light, and
- * a good deal darker than the painted green, so the course is framed by what
- * lies round it. It stands from `ROUGH_DEPTH` below the green and the tallest
- * blade, 1.6 and a third, still ends under the level of the course, so the
- * grass is a meadow the course is set in and never a hedge across it.
+ * The rough, as turf and not a hayfield: eighty short blades to the square unit, 1.2 tall and as much as half again
+ * either way, so a ball sits down in it and is never lost to it, and a darker green than the painted course so the
+ * course is framed by what lies round it. The tallest blade, 1.8, still ends well under `ROUGH_DEPTH`, so the grass is
+ * a lawn the course is set in and never a hedge across it. `variation` is how strongly the renderer's three-unit
+ * patchiness shows (0.45, where it was 0.25), which is what turns an even field of blades into clumps, and
+ * `lean` how far a blade leans over from the upright, so the turf lies as though walked on. These are candidate B of the
+ * sheet the figures were chosen from, on 4 October 2026, and a test holds them, so a retune is a decision.
  */
 export const KINDS: readonly GrassKind[] = [
   {
-    density: 40,
-    height: 1.6,
-    heightSpread: 0.35,
+    density: 80,
+    height: 1.2,
+    heightSpread: 0.5,
     width: 0.11,
     base: [0.025, 0.1, 0.04],
     tip: [0.06, 0.24, 0.09],
-    variation: 0.25,
+    variation: 0.45,
     roughness: 0.9,
-    lean: 0.3,
+    lean: 0.45,
     give: 1,
   },
 ];
 
 /**
- * The rough and the fairway of a golf hole, denser than the rough of minigolf was (a hole of minigolf keeps its own
- * kind, which a golden hash and a test hold). The rough is the same grass at sixty to the square unit instead of forty,
- * a lawn and not a meadow of single stalks; the fairway is a quarter of its height, in the green the fairway is
- * painted (`FAIRWAY_GREEN`), stiff in the wind, and mown in the stripes it is painted in: two tiles a stripe, the lighter
- * on the same rows, and the same strength. Its tallest blade, 0.5, stands under the ball's middle, so a ball on the
- * fairway sits on grass that comes up to its equator and no further, and is seen. The fairway is a little the denser,
- * since a short blade covers little; more was tried (a hundred and sixty a unit) and cost a frame of the whole of a
- * hole of The Range 2 ms for nothing to be seen, since the ground under it is painted its colour and the renderer thins
- * the blades with the square of the distance: the blades a frame draws, and so its cost, grow with both densities.
+ * The rough and the fairway of a golf hole. The rough is minigolf's own turf, the same eighty to the square unit (it
+ * was once denser on golf, and is now the one figure, `GOLF_ROUGH_DENSITY`, held equal to it by a test). The fairway is
+ * a quarter of the rough's height, in the green the fairway is painted (`FAIRWAY_GREEN`), stiff in the wind, and mown in
+ * the stripes it is painted in: two tiles a stripe, the lighter on the same rows, and the same strength. Its tallest
+ * blade, 0.39, stands under the ball's middle, so a ball on the fairway sits on grass that comes up short of its equator,
+ * and is seen. It is the denser, at a hundred, since a short blade covers little, and it leans a little, as mown turf
+ * does, its clumps a touch stronger than they were. More was tried (a hundred and sixty a unit) and cost a frame of the
+ * whole of a hole of The Range 2 ms for nothing to be seen, since the ground under it is painted its colour and the
+ * renderer thins the blades with the square of the distance: the blades a frame draws, and so its cost, grow with both
+ * densities.
  */
-export const GOLF_ROUGH_DENSITY = 60;
-export const GOLF_FAIRWAY_DENSITY = 72;
+export const GOLF_ROUGH_DENSITY = 80;
+export const GOLF_FAIRWAY_DENSITY = 100;
 /**
  * The painted fairway's green, already linear, and how much lighter and darker its two mown stripes are than its
  * middle: `models/palette.ts`'s own, kept here too so the turf imports no models, and held equal to them by a test.
@@ -126,14 +129,14 @@ export const FAIRWAY_STRIPE_ROWS = 2;
 function golfKinds(layout: Layout): GrassKind[] {
   const fairway: GrassKind = {
     density: GOLF_FAIRWAY_DENSITY,
-    height: 0.38,
+    height: 0.3,
     heightSpread: 0.3,
     width: 0.07,
     base: FAIRWAY_BASE,
     tip: FAIRWAY_TIP,
-    variation: 0.12,
+    variation: 0.2,
     roughness: 0.9,
-    lean: 0.2,
+    lean: 0.35,
     give: 0.3,
     stripes: {
       width: FAIRWAY_STRIPE_ROWS * TILE,
@@ -162,9 +165,13 @@ export const BLADE_ROOM = 262_144;
  * the share kept falls with the square of the distance, the kept blades drawn
  * wider so the colour of the field holds, so each ring out from the camera
  * costs about what the one before did. The camera stands 30 to 110 units back:
- * `near` reaches the ground under the closest, and the far rough is thin.
+ * `near` reaches the ground under the closest, and the far rough is thin. With the turf at eighty a unit `near` was 45, and
+ * the worst view the camera can be orbited to (from behind at the lowest tilt) drew all 262,144 blades there is room
+ * for, so the far rough was bare, and cost 7.2 ms; at 40 it drew 210,000 and cost 5.5, and at 36 it draws 160,000 and
+ * costs 5.0 against the meadow's 3.8 for 129,000 (4 October 2026, read alone on the machine). The turf's extra density
+ * is seen close to, where the eye is, and the standard view's blades are 80,000 where the meadow's were 64,000.
  */
-export const GRASS: GrassOptions = { near: 45, mid: 110, far: 300, capacity: BLADE_ROOM };
+export const GRASS: GrassOptions = { near: 36, mid: 110, far: 300, capacity: BLADE_ROOM };
 
 /** A disc of the rough where no blade grows: a rock stands there, and would be lost in the grass. */
 export interface Clearing {
@@ -175,7 +182,7 @@ export interface Clearing {
 
 /**
  * How a ball in the rough is seen: the grass is pressed flat in a disc of `radius` round it while it lies at rest, which
- * the blades, 1.6 and a third tall and the ball two across, would otherwise hide it in, and stands again `recovery`
+ * the blades, 1.2 and half again tall and the ball two across, would otherwise hide it in, and stands again `recovery`
  * seconds after the ball is struck from there.
  */
 export const FLATTEN = { radius: 6, recovery: 6 } as const;

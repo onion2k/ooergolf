@@ -1,9 +1,9 @@
 {
-  "bootMs": 193,
-  "frameMs": 2.63,
-  "bundleKb": 136.4,
-  "beginMs": 43,
-  "bigFrameMs": 3.14,
-  "linksBeginMs": 76,
-  "linksFrameMs": 4.1
+  "bootMs": 218,
+  "frameMs": 2.99,
+  "bundleKb": 143.7,
+  "beginMs": 42,
+  "bigFrameMs": 3.21,
+  "linksBeginMs": 75,
+  "linksFrameMs": 3.56
 }

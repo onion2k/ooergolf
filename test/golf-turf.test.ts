@@ -370,9 +370,9 @@ describe('the kinds of grass of a golf hole', () => {
     );
   });
 
-  it('is denser, in the rough and in the fairway, than the rough was: sixty blades a square unit or more, and the fairway the denser', () => {
-    expect(rough.density).toBeGreaterThanOrEqual(60);
-    expect(rough.density, 'denser than the rough that was').toBeGreaterThan(KINDS[ROUGH].density);
+  it('is dense, in the rough and in the fairway: eighty blades a square unit or more, the rough the one minigolf has, and the fairway the denser', () => {
+    expect(rough.density).toBeGreaterThanOrEqual(80);
+    expect(rough.density, 'one rough on every course').toBe(KINDS[ROUGH].density);
     expect(fairway.density, 'a short blade needs more of them to cover the ground').toBeGreaterThan(rough.density);
   });
 
@@ -431,12 +431,39 @@ describe('the kinds of grass of a golf hole', () => {
     expect(f.kinds[FAIRWAY].stripes!.offset).toBeCloseTo(-big.originY, 5);
   });
 
-  it('is the grass minigolf has had on a hole of minigolf: one kind, forty blades, long, and the rings are the same', () => {
+  it('is the turf minigolf has on a hole of minigolf: one kind, eighty blades, 1.2 tall, and the rings are the same', () => {
     const mini = layoutOf(COURSES[0].holes[0].map);
     const f = fieldOf(mini, COURSES[0].holes[0].name);
     expect(f.kinds).toEqual([KINDS[ROUGH]]);
-    expect(KINDS[ROUGH].density).toBe(40);
-    expect(KINDS[ROUGH].height).toBe(1.6);
+    expect(KINDS[ROUGH].density).toBe(80);
+    expect(KINDS[ROUGH].height).toBe(1.2);
     expect(grassOptionsOf(mini)).toEqual(GRASS);
+  });
+});
+
+describe('the turf figures chosen on 4 October 2026 (candidate B of the sheet)', () => {
+  it('holds both kinds to them, so a retune is a deliberate change and not a drift', () => {
+    const pick = (k: {
+      density: number;
+      height: number;
+      heightSpread?: number;
+      variation?: number;
+      lean?: number;
+    }) => ({
+      density: k.density,
+      height: k.height,
+      heightSpread: k.heightSpread,
+      variation: k.variation,
+      lean: k.lean,
+    });
+    expect(pick(KINDS[ROUGH])).toEqual({ density: 80, height: 1.2, heightSpread: 0.5, variation: 0.45, lean: 0.45 });
+    expect(pick(field.kinds[ROUGH])).toEqual(pick(KINDS[ROUGH]));
+    expect(pick(field.kinds[FAIRWAY])).toEqual({
+      density: 100,
+      height: 0.3,
+      heightSpread: 0.3,
+      variation: 0.2,
+      lean: 0.35,
+    });
   });
 });
