@@ -1,7 +1,11 @@
 /** The moving things on a hole, where each is at any moment of game time: the barrier, the windmill's gate, and the belt. */
 import { describe, expect, it } from 'vitest';
 import { BALL, KIND_RADIUS, TILE, layoutOf } from '../src/arena';
+import { COURSE } from '../src/course';
 import { Obstacles, WINDMILL, type ObstacleDef } from '../src/obstacles';
+import { Autopilot } from '../src/autopilot';
+import { checkInvariants } from '../src/invariants';
+import { DT, newGame } from './helpers';
 
 const MAP = ['#########', '#...C...#', '#.......#', '###.#####', '#.......#', '#.......#', '#...T...#', '#########'];
 const layout = layoutOf(MAP);
@@ -104,5 +108,51 @@ describe('a conveyor', () => {
     expect(belt.half).toBeCloseTo(TILE, 6);
     expect(belt.width, 'the full width of a tile').toBeCloseTo(TILE, 6);
     expect(o.pushers).toEqual([]);
+  });
+});
+
+describe('the order the things are listed in', () => {
+  // The Mill Race lists its barrier before its windmill; the same hole with the two swapped must move the same boxes
+  const race = COURSE.find((h) => h.name === 'The Mill Race')!;
+  const layout = layoutOf(race.map);
+  const swapped = [...race.obstacles!].sort((a, b) => (a.kind === 'windmill' ? -1 : b.kind === 'windmill' ? 1 : 0));
+
+  it('moves each barrier’s own box and each windmill’s own gate, whichever is listed first', () => {
+    expect(swapped[0].kind).toBe('windmill');
+    const given = new Obstacles(race.obstacles!, layout);
+    const other = new Obstacles(swapped, layout);
+    for (const t of [0.3, 1.7, 2.9, 5.2]) {
+      given.update(t, DT);
+      other.update(t, DT);
+      // a barrier's box is a tile along its slide from its middle, never parked in the sky; a windmill's gate is at its door
+      for (const o of [given, other]) {
+        for (const b of o.barriers) {
+          const p = b.pusher;
+          expect(o.pushers, `t ${t}: the barrier's box is one the physics has`).toContain(p);
+          expect(Math.abs(p.x - b.x), `t ${t}: the barrier's box within its travel`).toBeLessThanOrEqual(
+            b.def.travel + 1e-9,
+          );
+          expect(p.z, `t ${t}: the barrier's box on the ground`).toBeLessThan(10);
+        }
+        for (const w of o.windmills)
+          expect(o.pushers, `t ${t}: the windmill's gate is one the physics has`).toContain(w.pusher);
+      }
+      // and the two holes agree, box for box, by what each box is
+      const boxes = (o: Obstacles) =>
+        [...o.barriers.map((b) => b.pusher), ...o.windmills.map((w) => w.pusher)].map((p) =>
+          [p.x, p.y, p.z, p.hx, p.vx].map((n) => n.toFixed(6)).join(),
+        );
+      expect(boxes(other), `t ${t}`).toEqual(boxes(given));
+    }
+  });
+
+  it('keeps the rule that each box is its own thing’s, through a round on the swapped hole', () => {
+    const { game } = newGame(1, null, [{ ...race, obstacles: swapped }]);
+    const pilot = new Autopilot(game);
+    for (let f = 0; f < 60 * 30 && game.phase !== 'over'; f++) {
+      pilot.step(DT);
+      if (f % 10 === 0) expect(checkInvariants(game), `frame ${f}`).toEqual([]);
+    }
+    expect(game.phase).toBe('over');
   });
 });

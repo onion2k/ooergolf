@@ -1,8 +1,7 @@
 /**
  * The Fair: a course of timing, where every hole has something that moves. The first four holes need nothing the engine
  * does not already have (the windmill, the sliding barrier and the conveyor), and the last five use the kicker and the
- * moving bumper (a barrier with a post's bounce) too. A barrier's box is the pusher of its own number only while no
- * windmill is listed before it, so a hole lists its barriers first. Content only, drawn as `course.ts` explains.
+ * moving bumper (a barrier with a post's bounce) too. Content only, drawn as `course.ts` explains.
  */
 import { BUMPER } from './arena';
 import type { HoleDef } from './course';

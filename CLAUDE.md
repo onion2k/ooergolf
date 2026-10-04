@@ -171,7 +171,7 @@ today, and what the next features must hand it:
   `breakOf` is a number and its `across` no further than the cup is; and the arrows are numbers, each on a tile of putting
   green and no more than the green has. And the kinds that move or throw (all inside `checkInvariants`): the ball is never
   inside a kicker and never going faster at a kicker's side than the course may throw it (`kickerProblems`); a barrier
-  that was given a `bounce` throws with it, which is from nought to twice a post's (`bumperProblems`); a flipper's pose is
+  that was given a `bounce` throws with it, which is from nought to twice a post's (`bumperProblems`); each barrier's box is on its own slide and each windmill's gate at its own door, since the boxes are listed in the order the things were given and each thing keeps its own (`boxProblems`); a flipper's pose is
   the one its game time alone says, worked out afresh, its root has not moved and its box has no speed but its turn
   (`flipperProblems`); every tile of a stream is a belt's and no water, rock or out of bounds (`streamProblems`); and the
   ball is inside no moving box, which a flipper's turned frame is held to as a barrier's is.
@@ -896,9 +896,6 @@ each step, and a gate handed what it needs in the same change:
   stands on level ground. No belt may stand on a slope in a picture until the scene lifts them.
 - A stream that can be crossed, or a belt that lets a ball off it: see the kinds above. A ring of belts holds a ball for
   good and a real turntable is a package change, so Carousel is a mound with belts round it, and the turntable was dropped.
-- `Obstacles.update` walks the barriers, then the windmills, over the pushers by index, while the constructor pushes
-  them in the order a hole lists them, so a windmill listed before a barrier gets the wrong pusher moved. A hole lists its
-  barriers first (The Big Wheel does) until this is fixed in its own change.
 - A phone drive's picture is flaky: the shot preview is null after a real drag in about one run in three of the smoke
   test that drives it. It was there before the new courses, and is not understood.
 - The course a player is on, in the save: a reload opens the start screen.

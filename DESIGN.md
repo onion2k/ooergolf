@@ -442,9 +442,6 @@ Each line is a feature or more, through `/feature`, every gate green at each.
   under it, as a pond has, is the likely way).
 - Belts on a slope. The physics allows them, but the scene draws every belt at the height of the grass, so one on a slope
   is buried, and no belt may stand on one in a picture until the scene lifts them. The Lift and The Flood are level for it.
-- The order the moving boxes are shoved in. `Obstacles.update` walks the barriers, then the windmills, over the boxes by
-  index, while they are made in the order a hole lists them, so a windmill listed before a barrier gets the wrong box
-  moved. A hole lists its barriers first (The Big Wheel does), and it is to be fixed in its own change.
 - The phone's drive picture: after a real drag on a phone, the shot preview is null in about one run in three. It was
   there before the new courses.
 - Matters of taste, for the user to settle and not bugs: the flipper is a plain blue slab; a stream lies level with the

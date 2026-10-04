@@ -788,8 +788,8 @@ export class Scene {
       }
       this.rings(layout, out);
     }
-    obstacles?.barriers.forEach((b, k) => {
-      const pusher = obstacles.pushers[k];
+    obstacles?.barriers.forEach((b) => {
+      const { pusher } = b;
       pool(
         barrier(b.hx, BARRIER.hy, BARRIER.hz, b.def.bounce === undefined ? {} : { colour: COLOURS.plastic.red }),
         (m) => place(m, 0, pusher.x, pusher.y, BARRIER.hz),

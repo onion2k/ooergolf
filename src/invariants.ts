@@ -59,7 +59,7 @@ import { LIMIT_OVER_PAR, fastest, type Game } from './game';
 import type { Preview } from './preview';
 import { GREEN, breakOf, greenArrows, leansOnMinigolf, type Arrow, type Break } from './green';
 import { GREENS, LANDING, LIE, SURFACES } from './surfaces';
-import { flipperYaw, type Obstacles } from './obstacles';
+import { BARRIER, WINDMILL, flipperYaw, type Obstacles } from './obstacles';
 import { WIND, windPush, windReach } from './shaping';
 import { TREE, insideCanopy } from './trees';
 
@@ -376,6 +376,7 @@ export function checkInvariants(game: Game): string[] {
   if (layout.golf && !BAG.includes(game.inHand))
     out.push(`the club in hand on a golf hole, ${game.inHand.id}, is not in the bag`);
   out.push(...bumperProblems(game));
+  out.push(...boxProblems(game));
   report('a flipper', flipperProblems(game.obstacles));
   return out;
 }
@@ -498,8 +499,8 @@ export function previewProblems(game: Game, from: { x: number; y: number }, club
 export function bumperProblems(game: Game): string[] {
   const out: string[] = [];
   const { obstacles } = game;
-  obstacles.barriers.forEach((b, k) => {
-    const throws = obstacles.pushers[k].restitution ?? Number.NaN;
+  obstacles.barriers.forEach((b) => {
+    const throws = b.pusher.restitution ?? Number.NaN;
     const said = b.def.bounce;
     if (said !== undefined && throws !== said)
       out.push(`the barrier at column ${b.def.at[0]} was given a bounce of ${said} and throws with ${throws}`);
@@ -589,4 +590,33 @@ export function lostOnStreamProblems(game: Game, what: string, x: number, y: num
   return game.obstacles.streamed.has(tileAt(game.layout, x, y))
     ? [`the ball was lost (${what}) on a stream at ${x},${y}`]
     : [];
+}
+
+/**
+ * What is wrong with the boxes the physics shoves with: each barrier's box is on its own slide (within its travel of its
+ * middle, at its own row and on the ground), and each windmill's gate is at its own door, parked far above or in the door
+ * and no wider than a blade. The boxes are listed in the order the things were given, whatever their kinds, so a reader
+ * that takes a barrier's box to be the box of its own number moves a windmill's gate when one is listed first: each
+ * thing keeps its own, and this is the rule that it is the right one.
+ */
+export function boxProblems(game: Game): string[] {
+  const out: string[] = [];
+  const { obstacles } = game;
+  for (const b of obstacles.barriers) {
+    const p = b.pusher;
+    const what = `the barrier at column ${b.def.at[0]}, row ${b.def.at[1]}`;
+    if (!obstacles.pushers.includes(p)) out.push(`${what} has a box the physics does not have`);
+    if (!(Math.abs(p.x - b.x) <= b.def.travel + 1e-9))
+      out.push(`${what} has its box ${(p.x - b.x).toFixed(2)} from its middle, past its travel of ${b.def.travel}`);
+    if (p.y !== b.y || p.z !== BARRIER.hz) out.push(`${what} has its box at ${p.y},${p.z}, off its row or the ground`);
+  }
+  for (const w of obstacles.windmills) {
+    const p = w.pusher;
+    const what = `the windmill at column ${w.def.at[0]}, row ${w.def.at[1]}`;
+    if (!obstacles.pushers.includes(p)) out.push(`${what} has a gate the physics does not have`);
+    if (!(Math.abs(p.x - w.x) <= WINDMILL.gap / 2 + WINDMILL.bladeLength + 1e-9))
+      out.push(`${what} has its gate ${(p.x - w.x).toFixed(2)} from its door`);
+    if (p.y !== w.y + WINDMILL.hub[1]) out.push(`${what} has its gate at row ${p.y}, not its blades' plane`);
+  }
+  return out;
 }

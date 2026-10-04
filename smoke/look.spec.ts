@@ -1259,3 +1259,27 @@ test.describe('a stream', () => {
     expect(problems).toEqual([]);
   });
 });
+
+// The Mill Race with its windmill listed before its barrier: the barrier's box once took the windmill's gate for its own and
+// stood parked in the sky, so a hole listed its barriers first; now each thing keeps its own box, whatever the order
+test('The Mill Race with its windmill listed first, from its tee: the barrier on the ground, the gate in the door', async ({
+  page,
+}) => {
+  const problems = watch(page);
+  await start(page, { seed: 11, paused: true });
+  const race = COURSE.find((h) => h.name === 'The Mill Race')!;
+  const swapped = {
+    ...race,
+    obstacles: [...race.obstacles!].sort((a, b) => (a.kind === 'windmill' ? -1 : b.kind === 'windmill' ? 1 : 0)),
+  };
+  await page.evaluate((hole) => {
+    window.game!.playCourse([hole]);
+    window.game!.step(75);
+    const { floor } = window.game!.content();
+    window.game!.look((floor.minX + floor.maxX) / 2, (floor.minY + floor.maxY) / 2 - 14, 70);
+    window.game!.step(1);
+  }, swapped);
+  await hideStats(page);
+  await expect(page.locator('#view')).toHaveScreenshot('mill-race-swapped.png', TOLERANCE);
+  expect(problems).toEqual([]);
+});

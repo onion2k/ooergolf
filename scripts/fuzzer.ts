@@ -689,7 +689,7 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
       const bumpers = obstacles.barriers.filter((b) => b.def.bounce !== undefined);
       if (!bumpers.length) return;
       const pick = bumpers[Math.floor(bumped() * bumpers.length)];
-      const pusher = obstacles.pushers[obstacles.barriers.indexOf(pick)];
+      const { pusher } = pick;
       const aim = Math.atan2(pusher.y - world.y[ball], pusher.x + (bumped() - 0.5) * pick.hx - world.x[ball]);
       const power = bumped() < 0.4 ? 1 : 0.2 + 0.8 * bumped();
       if (game.shoot(aim, power)) {

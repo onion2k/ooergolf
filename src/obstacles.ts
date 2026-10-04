@@ -141,10 +141,26 @@ export class Obstacles {
   /** The boxes the physics shoves with: a barrier's own, and each windmill's gate. */
   readonly pushers: Pusher[] = [];
   readonly belts: Belt[] = [];
-  /** Where each barrier's middle is, for drawing. */
-  readonly barriers: { x: number; y: number; hx: number; def: Extract<ObstacleDef, { kind: 'barrier' }> }[] = [];
-  /** Where each windmill's door is, and how far its blades have turned, for drawing. */
-  readonly windmills: { x: number; y: number; turn: number; def: Extract<ObstacleDef, { kind: 'windmill' }> }[] = [];
+  /**
+   * Where each barrier's middle is, for drawing, and the box the physics has of it. Each thing keeps its own box, since
+   * the boxes are listed in the order the things were given, whatever their kinds: a barrier's was once taken to be the
+   * box of its own number, and a windmill listed before it moved the wrong one.
+   */
+  readonly barriers: {
+    x: number;
+    y: number;
+    hx: number;
+    pusher: Pusher;
+    def: Extract<ObstacleDef, { kind: 'barrier' }>;
+  }[] = [];
+  /** Where each windmill's door is, how far its blades have turned, for drawing, and the gate the physics has of it. */
+  readonly windmills: {
+    x: number;
+    y: number;
+    turn: number;
+    pusher: Pusher;
+    def: Extract<ObstacleDef, { kind: 'windmill' }>;
+  }[] = [];
   /** Where each conveyor lies, which way it carries, how long it is, and how far it has carried, for drawing. */
   readonly conveyors: {
     x: number;
@@ -204,12 +220,13 @@ export class Obstacles {
           pusher.restitution = def.bounce;
         }
         this.pushers.push(pusher);
-        this.barriers.push({ x, y, hx: pusher.hx, def });
+        this.barriers.push({ x, y, hx: pusher.hx, pusher, def });
       } else if (def.kind === 'windmill') {
         const x = tileX(def.at[0]),
           y = tileY(def.at[1]);
-        this.pushers.push({ ...box(), x, y: y + WINDMILL.hub[1], hy: WINDMILL.bladeThickness / 2, z: PARKED });
-        this.windmills.push({ x, y, turn: 0, def });
+        const pusher = { ...box(), x, y: y + WINDMILL.hub[1], hy: WINDMILL.bladeThickness / 2, z: PARKED };
+        this.pushers.push(pusher);
+        this.windmills.push({ x, y, turn: 0, pusher, def });
       } else if (def.kind === 'flipper') {
         // made after the rest, below
         continue;
@@ -294,16 +311,15 @@ export class Obstacles {
 
   /** Everything where it is at game time `t`, and going as fast as it went over the `dt` before it. */
   update(t: number, dt: number) {
-    let p = 0;
     for (const b of this.barriers) {
-      const pusher = this.pushers[p++];
+      const { pusher } = b;
       const now = slide(b.def, t);
       pusher.x = b.x + now;
       pusher.px = pusher.x;
       pusher.vx = dt > 0 ? (now - slide(b.def, t - dt)) / dt : 0;
     }
     for (const w of this.windmills) {
-      const pusher = this.pushers[p++];
+      const { pusher } = w;
       w.turn = turnAt(w.def, t);
       const g = gate(w.turn);
       if (!g) {
