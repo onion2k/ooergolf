@@ -1377,3 +1377,155 @@ describe('a flipper', () => {
     expect(triangles(flipper(9, 1, 1))).toBeLessThanOrEqual(BUDGET.flipper);
   });
 });
+
+import { waterBed, water as pondOf, WATER as WATER_BANDS } from '../src/models/obstacles';
+import { Scene } from '../src/scene';
+import { layoutOf as layoutFrom } from '../src/arena';
+import { PALETTE as WATER_PALETTE } from '../src/models/palette';
+
+describe('a water bed is one sheet over tiles of any shape, banded only where it meets the grass', () => {
+  // an L of five tiles: three across the south and one more above the west end, plus one above that
+  const L: [number, number][] = [
+    [0, 0],
+    [1, 0],
+    [2, 0],
+    [0, 1],
+    [0, 2],
+  ];
+  const tile = 3;
+
+  it('fills exactly its tiles at the water’s level, in the pond’s four bands', () => {
+    const m = waterBed(L, tile);
+    expect(m.parts.map((p) => p.name)).toEqual(['foam', 'shallows', 'mid', 'surface']);
+    const b = bounds(m.parts);
+    near(b.min, [0, 0, WATER_LEVEL], 5);
+    near(b.max, [3 * tile, 3 * tile, WATER_LEVEL], 5);
+    let area = 0;
+    for (const part of m.parts) area += areaOf(part.mesh);
+    expect(area).toBeCloseTo(L.length * tile * tile, 4);
+    for (const part of m.parts)
+      for (let i = 0; i < part.mesh.normals.length; i += 3) expect(part.mesh.normals[i + 2]).toBeCloseTo(1, 6);
+  });
+
+  it('has foam along its outside edges only, turned round the corners, and none across a join', () => {
+    const m = waterBed(L, tile);
+    const foam = partNamed(m, 'foam').mesh;
+    // one quad a tile side that meets grass: the L, three tiles each way, has twelve such sides
+    expect(foam.indices.length / 6).toBe(12);
+    // the band is a frame of its width along the whole outside, mitred at its five convex corners, where the two sides'
+    // bands share a square, and square at the concave one, where they only meet
+    const f = WATER_BANDS.foam;
+    expect(areaOf(foam)).toBeCloseTo(f * 12 * tile - 5 * f * f, 4);
+    // the deep water is one piece that reaches into every tile: at least one of its corners lies in each
+    const deep = points(partNamed(m, 'surface').mesh);
+    for (const [c, r] of L)
+      expect(
+        deep.some(
+          ([x, y]) =>
+            x >= c * tile - 1e-9 && x <= (c + 1) * tile + 1e-9 && y >= r * tile - 1e-9 && y <= (r + 1) * tile + 1e-9,
+        ),
+        `tile ${c},${r} has deep water`,
+      ).toBe(true);
+  });
+
+  it('is the pond model, band for band, on one tile, so a lone tile looks as it did', () => {
+    const bed = waterBed([[0, 0]], tile);
+    const pond = pondOf(tile, tile);
+    for (const name of ['foam', 'shallows', 'mid', 'surface'])
+      expect(areaOf(partNamed(bed, name).mesh), name).toBeCloseTo(areaOf(partNamed(pond, name).mesh), 5);
+  });
+
+  it('stays within its triangle budget', () => {
+    expect(triangles(waterBed(L, tile))).toBeLessThanOrEqual(BUDGET['water bed']);
+  });
+
+  it('is what the scene draws for a hole’s water: one bed, however many rectangles the water is', () => {
+    const map = ['#######', '#.....#', '#.~~~.#', '#.~...#', '#.~.C.#', '#..T..#', '#######'];
+    const groups = new Scene().static(layoutFrom(map), 'bed test');
+    const [fr, fg, fb] = WATER_PALETTE.waterFoam;
+    const foams = groups.filter((g) => {
+      const a = (g as { albedo?: number[] }).albedo;
+      return a && Math.abs(a[0] - fr) < 1e-6 && Math.abs(a[1] - fg) < 1e-6 && Math.abs(a[2] - fb) < 1e-6;
+    });
+    expect(foams.length).toBe(1);
+  });
+});
+
+import { STREAM, streamBed, stream as streamOf } from '../src/models/obstacles';
+import { Obstacles } from '../src/obstacles';
+
+describe('a stream bed is one channel over the tiles of every belt drawn as water, banded only where it meets the grass', () => {
+  // two belts side by side, three tiles long
+  const pair: [number, number][] = [
+    [0, 0],
+    [1, 0],
+    [0, 1],
+    [1, 1],
+    [0, 2],
+    [1, 2],
+  ];
+  const tile = 3;
+
+  it('fills exactly its tiles a hair above the grass, in the stream’s four bands', () => {
+    const m = streamBed(pair, tile);
+    expect(m.parts.map((p) => p.name)).toEqual(['bank', 'foam', 'shallows', 'surface']);
+    const b = bounds(m.parts);
+    near(b.min, [0, 0, STREAM.lift], 5);
+    near(b.max, [2 * tile, 3 * tile, STREAM.lift], 5);
+    let area = 0;
+    for (const part of m.parts) area += areaOf(part.mesh);
+    expect(area).toBeCloseTo(pair.length * tile * tile, 4);
+  });
+
+  it('has its bank along the outside only: one quad a side that meets grass, and none down the join between the belts', () => {
+    const m = streamBed(pair, tile);
+    expect(partNamed(m, 'bank').mesh.indices.length / 6).toBe(10);
+  });
+
+  it('is the stream model, band for band, on one belt, so a lone stream looks as it did', () => {
+    const bed = streamBed(
+      [
+        [0, 0],
+        [0, 1],
+        [0, 2],
+        [0, 3],
+      ],
+      tile,
+    );
+    const one = streamOf(tile, 4 * tile);
+    for (const name of ['bank', 'foam', 'shallows', 'surface'])
+      expect(areaOf(partNamed(bed, name).mesh), name).toBeCloseTo(areaOf(partNamed(one, name).mesh), 5);
+  });
+
+  it('stays within its triangle budget', () => {
+    expect(triangles(streamBed(pair, tile))).toBeLessThanOrEqual(BUDGET['stream bed']);
+  });
+
+  it('is what the scene draws for a hole’s streams: one bed for belts that touch', () => {
+    const map = ['#######', '#.....#', '#.....#', '#.....#', '#.C...#', '#..T..#', '#######'];
+    const obstacles = [
+      {
+        kind: 'conveyor' as const,
+        from: [3, 4] as [number, number],
+        to: [3, 1] as [number, number],
+        speed: 5,
+        look: 'water' as const,
+      },
+      {
+        kind: 'conveyor' as const,
+        from: [4, 4] as [number, number],
+        to: [4, 1] as [number, number],
+        speed: 5,
+        look: 'water' as const,
+      },
+    ];
+    const layout = layoutFrom(map);
+    const groups = new Scene().static(layout, 'stream bed test', new Obstacles(obstacles, layout));
+    const [fr, fg, fb] = WATER_PALETTE.waterFoam;
+    const foams = groups.filter((g) => {
+      const a = (g as { albedo?: number[] }).albedo;
+      return a && Math.abs(a[0] - fr) < 1e-6 && Math.abs(a[1] - fg) < 1e-6 && Math.abs(a[2] - fb) < 1e-6;
+    });
+    expect(foams.length).toBe(1);
+  });
+});

@@ -364,10 +364,17 @@ change meant to move it, and the commit says why. Look at every picture.
   ball (`golfBall`, smooth, with its band), each rounded and smooth-shaded
   from `lathe` and the other shapes in `models/shapes.ts`; the obstacles at the sizes the physics will give them
   (bumper, kicker, barrier, windmill with its turning blades, flipper, water, bunker,
-  conveyor, stream). Water is a pond `WATER_LEVEL` (0.3) below the grass, in the
+  conveyor, stream). Water lies `WATER_LEVEL` (0.3) below the grass, in the
   earth `ground.ts` brings down to it from every edge of grass or sand that
   meets it, in a rim of foam, two bands of shallows and deep water veined
-  in a lighter blue, filling its tiles exactly; its `moving` part is one
+  in a lighter blue, filling its tiles exactly. The scene draws a hole's
+  water as one bed over all its tiles (`waterBed`, built as `sandBed` is:
+  the bands only along sides that meet what is not water, mitred at the
+  corners), so a pond of any shape has one edge and a channel between
+  ponds is one water; it was the largest rectangles to be had, each rimmed
+  on its own, and a pond that was not a rectangle showed the seams. `water`
+  is a pond as a rectangle, the showcase's, and still what the ripples and
+  sparkles find their room on; its `moving` part is one
   fat ring of unit size, which the scene places as three ripples a pond
   and one where a ball went in, each coloured from its fade by a tint
   written every frame. `sandBed` is a hole's sand of any shape, raked in
@@ -401,8 +408,10 @@ change meant to move it, and the commit says why. Look at every picture.
   bumper's red, and without it a barrier is what it was, held by a hash of five shots into The Meadow's Barriers. The speed cap
   needed nothing new, since the game clamps every ball to its ceiling each step. A **stream** is a `conveyor` with `look: 'water'`:
   a belt to the physics and the game (carried at the belt's speed, the same seeded trace as a plain conveyor) and
-  never lost on or splashed; water only to the eye and the map. It is drawn level with the grass (`models/obstacles.ts`
-  `stream`: a channel with a thin earth edge, foam, shallows and marbled deep water), its ripples carried along it at the belt's
+  never lost on or splashed; water only to the eye and the map. It is drawn level with the grass, every stream of a hole as one bed over
+  the tiles of its belts (`models/obstacles.ts` `streamBed`, built as `waterBed` and `sandBed` are: a thin earth edge, foam
+  and shallows only along the sides that meet what is not a stream, so belts that touch are one channel; `stream` is the
+  one-belt model, which the ripples' streak is taken from), its ripples carried along it at the belt's
   speed from game time (`streamRipples` in `sway.ts`, a pool sized once), and its tiles painted as water on the hole map
   (`Obstacles.streamed`, read by `holemap.ts`). **No stream can be crossed**: a belt pulls a ball's velocity toward its own by
   an eighth a step whatever its speed, and a belt is a tile deep, so a full-power shot across one dies 2.3 units in and is

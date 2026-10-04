@@ -56,8 +56,10 @@ import {
   teeMarkers,
   tree,
   water,
-  windmill,
+  waterBed,
   stream,
+  streamBed,
+  windmill,
   type Model,
   STREAM,
   type Pond,
@@ -483,6 +485,7 @@ export class Scene {
       ...this.kickers(layout),
     ];
     if (ground.banks.indices.length) out.push({ mesh: ground.banks, matrices: still, ...look(PALETTE.bank) });
+    out.push(...this.streamSheets(layout, obstacles));
     for (const w of obstacles?.windmills ?? []) {
       const at = new Float32Array(16);
       place(at, 0, w.x, w.y, 0);
@@ -492,24 +495,46 @@ export class Scene {
       const at = new Float32Array(16);
       // the model carries toward +Y: turned to carry the way the belt does
       place(at, 0, c.x, c.y, 0, c.angle - Math.PI / 2);
-      // a stream is water in a channel, level with the grass, and has none of the belt's steel
-      out.push(
-        ...groups(
-          c.look === 'water' ? stream(TILE, c.length, { seed: Math.round(c.x * 7 + c.y) }) : conveyor(TILE, c.length),
-          at,
-        ),
-      );
+      // a stream is water in a channel, level with the grass, and has none of the belt's steel: it is drawn as one bed
+      // with every other stream of the hole (`streamSheets`), so belts that touch are one water
+      if (c.look === 'water') continue;
+      out.push(...groups(conveyor(TILE, c.length), at));
     }
     return out;
   }
 
   /**
-   * The water on a hole, as ponds: each the largest rectangle of water tiles
-   * to be had from the first not yet in one, so a pond is one sheet with its
-   * shallows round its own edge, and not a grid of puddles.
+   * The water on a hole, as one bed over all its tiles: the foam and the shallows only where water meets what is not,
+   * so a pond of any shape has one edge and a channel between ponds is one water, where it was the largest rectangles
+   * to be had, each rimmed on its own, and a pond that was not a rectangle showed the seams. The rectangles are still
+   * what the ripples and the sparkles find their room on (`eachPond`), which is inside the water either way.
    */
   private pondSheets(layout: Layout): GameGroup[] {
-    return this.eachPond(layout).flatMap(({ model, at }) => groups(model, at));
+    const cells: [number, number][] = [];
+    let first = -1;
+    for (let t = 0; t < layout.cols * layout.rows; t++)
+      if (layout.water[t]) {
+        if (first < 0) first = t;
+        cells.push([t % layout.cols, Math.floor(t / layout.cols)]);
+      }
+    if (!cells.length) return [];
+    const at = new Float32Array(16);
+    place(at, 0, layout.originX, layout.originY, 0);
+    return groups(waterBed(cells, TILE, { seed: first + 1 }), at);
+  }
+
+  /**
+   * The streams of a hole, as one bed over the tiles of every belt drawn as water, its bank only where a stream meets
+   * what is not one, so belts that touch are one channel; each was a channel of its own, a gap of bank between.
+   */
+  private streamSheets(layout: Layout, obstacles?: Obstacles): GameGroup[] {
+    if (!obstacles?.streamed.size) return [];
+    const cells = [...obstacles.streamed]
+      .sort((a, b) => a - b)
+      .map((t): [number, number] => [t % layout.cols, Math.floor(t / layout.cols)]);
+    const at = new Float32Array(16);
+    place(at, 0, layout.originX, layout.originY, 0);
+    return groups(streamBed(cells, TILE, { seed: cells[0][0] * 7 + cells[0][1] + 1 }), at);
   }
 
   /** The sand on a hole, as one bed over all its tiles, with the lip only where it meets the grass. */

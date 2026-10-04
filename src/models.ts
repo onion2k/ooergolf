@@ -28,6 +28,8 @@ export {
   conveyor,
   placeBlades,
   water,
+  waterBed,
+  streamBed,
   windmill,
 } from './models/obstacles';
 export { bunting, fence, flowers, golfTree, hedge, rock, stake, tree } from './models/decor';
@@ -62,6 +64,8 @@ export const BUDGET = {
   water: 160,
   bunker: 300,
   'sand bed': 140,
+  'water bed': 90,
+  'stream bed': 80,
   conveyor: 120,
   tree: 860,
   golfTree: 320,

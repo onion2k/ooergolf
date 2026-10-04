@@ -578,6 +578,34 @@ test.describe('looking round', () => {
   });
 });
 
+test.describe('water', () => {
+  test('costs a frame inside the budget on the hole with the most water, The Rapids: from its tee, and the whole of it in view', async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true });
+    const cost = await page.evaluate(async () => {
+      const g = window.game!;
+      g.chooseCourse('The Waterworks');
+      g.startHole(7);
+      g.step(120);
+      const tee = await g.measureFrame(100);
+      const { floor } = g.content();
+      g.look((floor.minX + floor.maxX) / 2, (floor.minY + floor.maxY) / 2, 110);
+      g.step(2);
+      const whole = await g.measureFrame(100);
+      return { tee, whole };
+    });
+    console.log(
+      `the water: The Rapids from its tee ${cost.tee.toFixed(2)} ms, the whole hole ${cost.whole.toFixed(2)} ms a frame`,
+    );
+    expect(cost.tee, 'the tee inside the 5 ms budget').toBeLessThan(5);
+    expect(cost.whole, 'the whole hole inside the 5 ms budget').toBeLessThan(5);
+    expect(problems).toEqual([]);
+  });
+});
+
 test.describe('golf', () => {
   test('costs a frame inside the budget on the longest hole of the range, The Long Road: from its tee, in the air, and at the worst view', async ({
     page,

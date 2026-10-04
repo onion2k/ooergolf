@@ -10,7 +10,7 @@ import { MeshBuilder, type Mesh } from 'artshape-render/mesh/types';
 import { WATER_LEVEL } from '../arena';
 import { face } from '../meshes';
 import { PALETTE, ROUGH } from './palette';
-import { PATTERN, matte, type Colour, type Model, type V3 } from './part';
+import { PATTERN, matte, type Colour, type Material, type Model, type Part, type V3 } from './part';
 import { annulus, at, block, built, faceOut, facingSouth, frustum, roundedBox } from './shapes';
 
 /**
@@ -367,6 +367,123 @@ export function water(w: number, h: number, { seed = 1 } = {}): Pond {
     free,
     reach: Math.min(1.1, free.hx, free.hy),
   };
+}
+
+/**
+ * A bed over the tiles `cells`, each `tile` across, given as its column and row from the bed's origin, which is the
+ * south-west corner of tile (0, 0): one flat sheet at height `z`, however the tiles are shaped, rimmed in `bands`
+ * from the outside in, each a part of its own name and width, only along the sides where a tile meets a tile that is
+ * not in the bed, mitred round the corners as a pond's frames are; and the last part filling everything inside the
+ * rim. A lone tile is the rectangle model, band for band. What the pond and the stream share, and not rectangles
+ * pushed together each with a rim of its own.
+ */
+function bed(
+  cells: readonly (readonly [number, number])[],
+  tile: number,
+  z: number,
+  bands: readonly { name: string; width: number; material: Material; pattern?: Part['pattern'] }[],
+  inside: { name: string; material: Material; pattern?: Part['pattern'] },
+): Model {
+  const depth = bands.reduce((d, b) => d + b.width, 0);
+  const has = new Set(cells.map(([c, r]) => `${c},${r}`));
+  const inBed = (c: number, r: number) => has.has(`${c},${r}`);
+  const meshes = bands.map(() => new MeshBuilder());
+  const surface = new MeshBuilder();
+  // each band's reach in from the edge, as a share of the whole rim's depth
+  const reaches = [0];
+  for (const b of bands) reaches.push(reaches[reaches.length - 1] + b.width / depth);
+  for (const [c, r] of cells) {
+    const x0 = c * tile,
+      y0 = r * tile,
+      x1 = x0 + tile,
+      y1 = y0 + tile;
+    // which sides meet what is not in the bed, going round from the south as the corners do
+    const rimmed = [!inBed(c, r - 1), !inBed(c + 1, r), !inBed(c, r + 1), !inBed(c - 1, r)];
+    const [inS, inE, inN, inW] = rimmed.map((e) => (e ? depth : 0));
+    // the tile's corners `f` of the rim's depth in from each side that has a rim: a corner between two rimmed sides
+    // moves in on both, so the bands are mitred there as a pond's frames are
+    const loop = (f: number): V3[] => [
+      [x0 + f * inW, y0 + f * inS, z],
+      [x1 - f * inE, y0 + f * inS, z],
+      [x1 - f * inE, y1 - f * inN, z],
+      [x0 + f * inW, y1 - f * inN, z],
+    ];
+    for (let k = 0; k < 4; k++) {
+      if (!rimmed[k]) continue;
+      const m = (k + 1) % 4;
+      for (let j = 0; j < bands.length; j++) {
+        const outer = loop(reaches[j]),
+          inner = loop(reaches[j + 1]);
+        face(meshes[j], outer[k], outer[m], inner[m], inner[k]);
+      }
+    }
+    const [a, b2, c2, d] = loop(1);
+    face(surface, a, b2, c2, d);
+  }
+  return {
+    name: inside.name,
+    parts: [
+      ...bands.map((b, j) => ({ name: b.name, mesh: meshes[j].build(), material: b.material, pattern: b.pattern })),
+      { name: 'surface', mesh: surface.build(), material: inside.material, pattern: inside.pattern },
+    ],
+    moving: [],
+  };
+}
+
+/**
+ * A bed of water over the tiles `cells`, each `tile` across: the pond's bands, the foam, the shallows and the mid water,
+ * only along the sides where a tile meets what is not water, and the deep veined water filling everything inside them,
+ * so a channel between two ponds is one water and a pond of any shape has one edge. The surface lies at the game's
+ * `WATER_LEVEL`, as a pond's does.
+ */
+export function waterBed(cells: readonly (readonly [number, number])[], tile: number, { seed = 1 } = {}): Model {
+  const { foam } = WATER;
+  const band = Math.min(WATER.band, (tile - 2 * foam) / 8);
+  const water = (c: Colour) => matte(c, ROUGH.water);
+  return {
+    ...bed(
+      cells,
+      tile,
+      WATER_LEVEL,
+      [
+        { name: 'foam', width: foam, material: water(PALETTE.waterFoam) },
+        { name: 'shallows', width: band, material: water(PALETTE.waterShallow) },
+        { name: 'mid', width: band, material: water(PALETTE.waterMid) },
+      ],
+      {
+        name: 'water bed',
+        material: water(PALETTE.water),
+        pattern: { kind: PATTERN.marbling, scale: 0.5, seed: (seed * 0.29) % 1, second: PALETTE.waterVein },
+      },
+    ),
+  };
+}
+
+/**
+ * A bed of running water over the tiles `cells` of every belt drawn as water, each `tile` across: the stream's bank,
+ * foam and shallows only along the sides where a tile meets what is not a stream, so belts that touch are one channel
+ * and not a channel each with a gap of bank between. A hair above the grass, as a stream lies.
+ */
+export function streamBed(cells: readonly (readonly [number, number])[], tile: number, { seed = 1 } = {}): Model {
+  const bank = Math.min(STREAM.bank, tile / 12);
+  const foam = Math.min(STREAM.foam, tile / 10);
+  const band = Math.min(STREAM.band, tile / 6);
+  const water = (c: Colour) => matte(c, ROUGH.water);
+  return bed(
+    cells,
+    tile,
+    STREAM.lift,
+    [
+      { name: 'bank', width: bank, material: matte(STREAM_BANK, ROUGH.rubber) },
+      { name: 'foam', width: foam, material: water(PALETTE.waterFoam) },
+      { name: 'shallows', width: band, material: water(PALETTE.waterShallow) },
+    ],
+    {
+      name: 'stream bed',
+      material: water(PALETTE.water),
+      pattern: { kind: PATTERN.marbling, scale: 0.5, seed: (seed * 0.29) % 1, second: PALETTE.waterVein },
+    },
+  );
 }
 
 /** A flat frame facing up at height `z`, `width` wide inside a rectangle of `w` by `h` about the origin. */
