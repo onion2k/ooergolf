@@ -17,6 +17,7 @@
 import { STILL, type Wind } from 'artshape-render/game/grass';
 import type { GameGroup } from 'artshape-render/game/renderer';
 import { MATERIAL_STRIDE, PATTERN_STRIDE } from 'artshape-render/game/renderer';
+import { TEXTURE_STRIDE, packTexture } from 'artshape-render/game/texture';
 import type { Mesh } from 'artshape-render/mesh/types';
 import {
   BALL,
@@ -107,13 +108,27 @@ const TEE_SPACING = 5;
  * The green's grain: a fine speckle of darker turf, drawn in world units by
  * the renderer's pattern, so it is the same size everywhere on every hole.
  * Close enough to the green that, where it is finer than a pixel at the far
- * end of the zoom and blends, the green is the same green.
+ * end of the zoom and blends, the green is the same green. The mown ground wears the turf texture
+ * instead (`TURF`): both together read as noise, and the texture alone is the cleaner of the two.
  */
 const GRAIN = { scale: 1.4, darker: 0.94 } as const;
 function grain(c: readonly number[], seed: number): Float32Array {
   const p = new Float32Array(PATTERN_STRIDE);
   p.set([4, GRAIN.scale, seed, 0, c[0] * GRAIN.darker, c[1] * GRAIN.darker, c[2] * GRAIN.darker, 0]);
   return p;
+}
+/**
+ * The turf the mown ground wears: the layer of the renderer's ground texture (`turfTexture.ts`, made at boot, the first
+ * and only layer), how many times it tiles across a world unit (about the scale the old speckle had, 1.4 units a tile), and
+ * how much of its colour and its height show on the ground, 0 to 1. Colour is a few per cent of the green's, enough to read
+ * as grain close to and nothing at a distance, where the renderer fades it to the flat colour; the height shades the sun's
+ * light before the toon bands are cut, so a clump is a faint change in where a band begins. Chosen by the user from a sheet
+ * of three on 4 October 2026: at 0.35 and 0.3 the shade's steps through the toon ramp came out square-edged, the value
+ * noise's grid showing as pixel camouflage, and stronger still more so; at 0.2 and 0.15 it reads as soft turf.
+ */
+export const TURF = { layer: 1, repeat: 1 / 1.4, albedo: 0.2, shade: 0.15 } as const;
+function turf(): Float32Array {
+  return packTexture(new Float32Array(TEXTURE_STRIDE), 0, TURF);
 }
 /**
  * The colours, and how rough each is. Deeper than they look written down:
@@ -442,23 +457,30 @@ export class Scene {
     });
     // the ground in its colours: the grass in its two stripes, and on a golf hole the rest of its grounds, of which a hole
     // may have none of a kind, and an empty mesh is not drawn
-    const laid: [Mesh, readonly number[], number][] = [
-      [ground.green, PALETTE.grass, 0.2],
-      [ground.mown, PALETTE.grassMown, 0.7],
+    // the mown kinds are textured; the rough painted under its blades and out of bounds are left to their colour
+    const laid: [Mesh, readonly number[], number, boolean][] = [
+      [ground.green, PALETTE.grass, 0.2, true],
+      [ground.mown, PALETTE.grassMown, 0.7, true],
     ];
     if (ground.golf)
       laid.push(
-        [ground.golf.rough, PALETTE.playRough, 0.4],
-        [ground.golf.putting, PALETTE.puttingGreen, 0.3],
-        [ground.golf.puttingMown, PALETTE.puttingGreenMown, 0.8],
-        [ground.golf.cut, PALETTE.firstCut, 0.35],
-        [ground.golf.tee, PALETTE.teeBox, 0.5],
-        [ground.golf.oob, PALETTE.oobGround, 0.6],
+        [ground.golf.rough, PALETTE.playRough, 0.4, false],
+        [ground.golf.putting, PALETTE.puttingGreen, 0.3, true],
+        [ground.golf.puttingMown, PALETTE.puttingGreenMown, 0.8, true],
+        [ground.golf.cut, PALETTE.firstCut, 0.35, true],
+        [ground.golf.tee, PALETTE.teeBox, 0.5, true],
+        [ground.golf.oob, PALETTE.oobGround, 0.6, false],
       );
     const out: GameGroup[] = [
       ...laid
         .filter(([mesh]) => !ground.golf || mesh.indices.length)
-        .map(([mesh, c, seed]) => ({ mesh, matrices: still, ...look(c), patterns: grain(c, seed) })),
+        .map(([mesh, c, seed, textured]) => ({
+          mesh,
+          matrices: still,
+          ...look(c),
+          ...(textured ? {} : { patterns: grain(c, seed) }),
+          ...(textured ? { texture: turf() } : {}),
+        })),
       { ...group({ ...collarPart, material: stripe(cupTile) }, atCup) },
       { mesh: rails.sides, matrices: still, ...look(PALETTE.rail) },
       { mesh: rails.cap, matrices: still, ...look(PALETTE.railCap) },

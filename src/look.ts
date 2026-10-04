@@ -7,9 +7,14 @@
 import { PATTERN_STRIDE, type GameRenderer } from 'artshape-render/game/renderer';
 import { FLOW_RIPPLE, packFlow } from 'artshape-render/game/flow';
 import type { Gpu } from 'artshape-render/gpu/context';
+import { TEXTURE_STRIDE, packTexture } from 'artshape-render/game/texture';
 import { noFog } from 'artshape-render/game/fog';
 import { bakeEnvironment } from 'artshape-render/render/env';
 import { SUN } from './sun';
+import { TURF_SIDE, turfTexels } from './turfTexture';
+
+/** The seed of the turf's texels: one, since the turf is the same on every hole and the same on every page. */
+const TURF_SEED = 1;
 
 /** How many millimetres a world unit is: the fog's lengths are the world's own, and its density per one of them. */
 const MM_PER_UNIT = 100;
@@ -73,7 +78,23 @@ function flowing(renderer: GameRenderer) {
   packFlow(patterns, 0, { kind: FLOW_RIPPLE, scale: 1, speed: 0, second: [1, 1, 1] });
   const matrices = new Float32Array(16);
   matrices.set([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
-  renderer.setDynamic([{ mesh: triangle, matrices, count: 0, patterns }]);
+  // the same for the textured build, which the mown ground wears: asked for now, so the first picture of a hole is textured
+  const texture = packTexture(new Float32Array(TEXTURE_STRIDE), 0, { layer: 1, repeat: 1, albedo: 0, shade: 0 });
+  renderer.setDynamic([
+    { mesh: triangle, matrices, count: 0, patterns },
+    { mesh: triangle, matrices, count: 0, texture },
+  ]);
+}
+
+/**
+ * Gives the renderer the turf the mown ground is laid on, made here from arithmetic and handed over as one layer: premultiplied
+ * alpha and colour conversion are off, since the colour is a modulation about mid-grey and the alpha a height, both data.
+ */
+async function turfed(renderer: GameRenderer): Promise<void> {
+  const texels = turfTexels(TURF_SIDE, TURF_SEED, 'mown');
+  const image = new ImageData(new Uint8ClampedArray(texels), TURF_SIDE, TURF_SIDE);
+  const layer = await createImageBitmap(image, { premultiplyAlpha: 'none', colorSpaceConversion: 'none' });
+  renderer.setGroundTexture([layer]);
 }
 
 /**
@@ -113,6 +134,7 @@ export async function daylight(renderer: GameRenderer, ctx: Gpu): Promise<void> 
   renderer.post = { ...renderer.post, vignette: 0, grain: 0, tone: 'soft' };
   const env = bakeEnvironment(ctx, 'daylight', { size: 128, mips: 6 });
   renderer.setEnvironment(env.specular, env.brdf, env.mips);
+  await turfed(renderer);
   flowing(renderer);
   await renderer.prepare();
 }

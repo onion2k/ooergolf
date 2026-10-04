@@ -305,7 +305,11 @@ change meant to move it, and the commit says why. Look at every picture.
   occlusion where things meet, no film grain, and a haze so thin it only
   pales the far rough. The colours are named in `src/models/palette.ts`,
   the green, rough and rail among them, so the scene and the showcase are
-  one green; the green has a fine grain of darker turf. `look:metrics`
+  one green; the mown ground (green, fairway stripes, putting green, first cut, tee) wears a turf texture, made at boot by
+  `src/turfTexture.ts` (256 square, tileable, mid-grey on average, from seed 1) and handed to the renderer's `setGroundTexture` in
+  `look.ts` (which also compiles the textured build at boot): `TURF` in `scene.ts` is layer 1 at 1/1.4 tiles a unit, 0.2 of its
+  colour and 0.15 of its height (stronger, the shade's steps through the toon ramp show the noise's square grid), and the old speckle is dropped from those groups; the rough painted under the blades and out of
+  bounds stay plain. `look:metrics`
   holds the look to its floors.
 - The ground is read in one place. `heightAt(layout, x, y)` in `arena.ts`
   is how high the ground stands, the tile's step and the terrain smoothed
