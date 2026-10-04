@@ -339,20 +339,19 @@ limits, so a score is a score with a given club and ball.
 ## The look
 
 Miner's way of making things, in daylight: low-poly, flat-shaded, faces
-sharing no vertices, every colour given by placement and none by texture,
+sharing no vertices, every colour given by placement and, but for a soft turf grain under the mown ground, none by texture,
 and all the words in the page, not the picture.
 
-- **The renderer** is `artshape-render` v0.18.0, on the game path, with
-  `shading: 'toon'` and the `clamp` tone map, as bearing has it. v0.18.0
-  also brings patterns by placement and sprites. The game is on v0.16.0 now
-  and moves up in the first feature that draws something of the golf.
+- **The renderer** is `artshape-render`, on the game path, with
+  `shading: 'toon'`, as bearing has it; the version it is on is in `package.json`
+  (v0.26.0), and `LOOK.md` says what each release brought the look.
 - **Light.** The `daylight` environment, a sun with a shadow, and ambient
   light on. Lamps only where a hole wants one. The shade where things meet
   from screen-space occlusion, a thin haze that pales the far rough, and a
   glint now and then on the gold of the cup and the pin.
 - **Grass** is real blades in the rough, grown on the GPU by the renderer,
-  long and sparse, and darker so the course stands out from it. The green
-  itself is painted, smooth and clean, in its mown stripes: it had short
+  short and dense, turf a ball sits down in, and darker so the course stands out from it. The green
+  itself is painted, clean, in its mown stripes under a soft turf texture: it had short
   dense blades of its own, and a track the ball laid in them, until the
   look of `LOOK.md` took them away. Each hole has a gentle wind of its own
   that the rough bends in, in gusts that cross the course, and the flag and
@@ -364,8 +363,8 @@ and all the words in the page, not the picture.
 - **Precious things** are gold, enamel and gems, with the measured colours
   the renderer has for its metals: the rim of the cup, the trophies, the
   clubs and the balls.
-- **Water** is opaque, blue and glossy, with a splash of particles, the
-  game path having no transparency.
+- **Water** is opaque, blue and glossy, its pond's surface rippling on the
+  game's clock, with a splash of particles, the game path having no transparency.
 - **Movement** that is only to be seen: the ball turns as it rolls, with a
   red band round it to show it; the flag swings, the trees lean and the
   ripples swell in the hole's wind; a puff of grass at a stroke, confetti and
@@ -374,7 +373,7 @@ and all the words in the page, not the picture.
   hedges, flowers, bunting, a flag in every cup. Each hole has its own
   scatter of it on the rough, the same every time, and is dressed: bunting
   strung round three sides above the rail, beds of flowers at its foot, and
-  rocks in clusters, on the long grass of the rough.
+  rocks in clusters, on the grass of the rough.
 - **The green is raised.** Each hole stands on the rough on timber sides,
   the rough below the bottom of the cup, so the cup is a hole seen into.
 - **The cup** is 1.45 across its middle, a little wider than the ball, so

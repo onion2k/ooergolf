@@ -339,6 +339,83 @@ with it, and are a shade greyer in the knock's picture. Rounded rails are the
 renderer's `roundedBox` and `roundCorners`, and remodelling the rail with
 them is left for a feature of its own.
 
+## After the stages: the course as a place
+
+On 4 October 2026 the user asked what a realistic course would take. An
+experiment answered the first half: the renderer's physically based shading
+was switched on over the same scene and four views were sampled, and the
+two shadings differed by a few percent, since the toon look already asks
+for most of what physically based shading gives (form light, sky and ground
+light, occlusion, a finish). The shading is not the thing. What the course
+lacked was surface: every face a flat colour, the rough a long meadow the
+course was set in, the water a still marbled sheet. The user chose to keep
+the clean toy of the direction above and to make the course more of a place,
+and raised the frame's budget to spend on it (decision 1). Four things were
+done, each its own piece of work and commit.
+
+**The budget, 970fb98.** From 5 ms at the standard view to 6, through
+`/gate-moved`, said once in `smoke/budget.ts` for the perf gate and the
+thirteen frame gates. Nothing drawn moved: the standard view cost about 2.6
+ms, and the ladder's rungs, measured again, were 2.5, 1.3, 1.0 and 0.7 at
+the home view and 2.6, 1.6, 1.3 and 0.9 at a driver's aim view.
+
+**The grass as turf, 7827c89.** The rough was forty blades a square unit
+(sixty on golf), 1.6 tall, and read as a hayfield. A sheet of four candidates
+in two views was put to the user, who chose B: the rough at eighty a unit
+everywhere, 1.2 tall with a spread of 0.5, more varied blade to blade
+(`variation` 0.45, which also makes the renderer's three-unit patchiness
+clump) and leaning (0.45); the fairway at a hundred a unit, 0.3 tall, where
+it was seventy-two at 0.38. One figure is not the sheet's. At the near ring's
+45 units the worst orbited view, behind and tilted lowest, drew all 262,144
+blades there is room for, at 7.2 ms; the ring comes in to 36, where that
+view draws 160,000 at 4.9 ms, and the standard view cost 3.0 ms where the
+sheet had read 4.6. The perf baseline moved with it, 2.63 to 2.99 ms. The
+densest views draw 139,000 blades on golf and 122,000 on minigolf, where
+golf drew 162,000. A hundred and twenty-three pictures moved, each looked
+at, and the look metrics' floors held (framing 2.39, from 2.42).
+
+**The water moves, 1052936.** The pin first moved to v0.25.0 (24d6f2f), which
+has the renderer's "surface that flows". A pond's surface carries its ripple
+kind now: a height field travelling along the mesh's east at 1.5 units a
+second, half a cell of pattern to the unit, turning the normal so the sun's
+gloss and the sky's sheen move across it. It is driven by `renderer.time`,
+which the game sets from its stepped time, so a paused game is still and a
+picture is the same every run; a smoke test holds two frames at one time to
+the same bytes over the water, and a second apart to differ there and
+nowhere on the grass. Only ponds ripple. A stream keeps its marbling and
+its streaks, since a bed's pattern runs east whichever way the belt runs. The rim,
+foam and bands are geometry and are as they were. The look compiles the
+flowing build at boot, so the first picture of a hole is the ripple and not
+the still speckle drawn until it is built. It costs 0.4 to 0.6 ms a frame on
+The Rapids and under 0.3 on The Meadow's Pond. Twenty-eight pictures moved.
+A package release of the game's own for the same thing was built and
+dropped for the upstream kind, which is the same thing already released.
+
+**The turf texture, 451d660.** The pin moved to v0.26.0 (f5d4b35), which can
+lay a texture under the ground: up to eight square images, sampled by world
+position on the placements that opt in, its alpha a shade applied before
+the toon ramp, compiled only when asked for. `src/turfTexture.ts` makes a 256
+square tileable turf at boot from the game's seeded chance, a fine grain of
+blade tips over soft clumps, so nothing is downloaded and every run draws the
+same. The green, the fairway's stripes, the putting green, the first cut
+and the tee wear it, at 1.4 units a tile; the rough painted under the blades
+and out of bounds stay plain, and the old speckle is gone from the groups
+that wear it. Its strength was chosen from a sheet of three. At 0.35 of its
+colour and 0.3 of its height the shade's steps through the toon ramp came out
+square-edged, the value noise's grid showing as pixel camouflage; the user
+chose 0.2 and 0.15, which reads as soft turf. Seventy-two pictures moved,
+each looked at, and the metrics held their floors (framing 2.32, from 2.39).
+
+**What it costs, and what was not measured.** The standard view cost 2.99 ms
+at the grass's commit, inside the 6. The v0.26.0 move and the texture were
+committed at the user's word without the full check, the fuzzer,
+determinism, leaks, perf or bench, so their cost was not measured then; the check at the end of the plan measured it on 4 October 2026: the standard view costs 3.36 ms with all four parts in, against 2.99 at the grass's commit, the biggest hole 3.53 and The Links 4.06, each within the perf gate's tolerance of its baseline, read at a load average of about 4. The full check was green, and the fuzzer clean over 24 seeds.
+
+**What is left open.** A stronger grain wants the noise reworked so that it
+has no square grid, since the grid is what showed at the stronger
+strengths. A stream's surface would need a pattern that follows its belt
+before it can ripple. The turntable was dropped.
+
 ## Across every stage
 
 - **The frame:** measured before and after at the standard view and the

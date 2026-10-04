@@ -312,8 +312,8 @@ change meant to move it, and the commit says why. Look at every picture.
   on the rough as a raised green: the rough lies `ROUGH_DEPTH` below the
   grass, under the bottom of the cup, so the cup is seen into, and the rail
   comes down to meet it. The look is `LOOK.md`'s clean toy, toon daylight
-  on artshape-render v0.25.0 (0.23.0 brought the surface that flows, which the water
-  uses; 0.24.0 and 0.25.0 particles blown by a wash of air, which the game does not yet), in `src/look.ts`, shared by the game and the
+  on artshape-render v0.26.0 (0.23.0 brought the surface that flows, which the ponds
+  use; 0.24.0 and 0.25.0 particles blown by a wash of air, which the game does not yet use; 0.26.0 the ground texture), in `src/look.ts`, shared by the game and the
   showcase: edges drawn at four samples a pixel (the post pass one rung
   down the ladder, and none on the last), the toon bands eased at their
   edges, a cool blue-violet shade, a warm rim, the sky's light from above
@@ -400,8 +400,7 @@ change meant to move it, and the commit says why. Look at every picture.
   `main.ts` already sets from game time, so a paused game is still and a picture is
   the same every run) at `RIPPLE.speed` 1.5 units a second, in cells of `RIPPLE.scale`
   0.5 a unit (two tiles across a cell), the crests in `PALETTE.waterVein`, the normal
-  turned by the slope so the sun glints on it; it costs a frame about 0.1 to 0.5 ms
-  (Rapids 2.5 to 3.2 tight, Pond 3.4 to 3.5 at the tee). A stream's surface keeps its
+  turned by the slope so the sun glints on it; it costs a frame 0.4 to 0.6 ms on The Rapids and under 0.3 on The Meadow's Pond. A stream's surface keeps its
   marbling, since a pattern runs east and a stream may run any way, and its streaks
   already move along it. A part's pattern with a flow kind has a `speed` where the old
   kinds have a seed (`group` writes it with the renderer's `packFlow`); `look.ts`
@@ -484,9 +483,7 @@ change meant to move it, and the commit says why. Look at every picture.
   height, 0.39 at the tallest, under the ball's middle, so a ball on it is seen and is not pressed), in the painted fairway's green (`FAIRWAY_GREEN`, equal to `models/palette.ts` by a test: the blades average
   to it by `grassGround`, so they read as the turf under them), stiff in the wind, and mown in the renderer's stripes,
   two tiles across, the lighter on the rows the painted ones are, as strong (`FAIRWAY_STRIPE_ROWS`, held to
-  `ground.ts`'s). More was tried before and cost for nothing: 160 a unit on the fairway, with the rough at 64, made a hole of
-  The Range's whole at 110 back 5.3 ms against 2.3 then, and looked the same as 72, since the ground under the blades
-  is their colour and the renderer thins them with the square of the distance; the cost of a view follows the blades it
+  `ground.ts`'s). The cost of a view follows the blades it
   draws (about 0.02 ms a thousand), and the rings (`GRASS`, shared with minigolf) have `near` 36, down from 45, for the turf (see `turf.ts`). A golf hole's
   densest view draws 139,000 blades of the 262,144 there is room for (`BLADE_ROOM`), and minigolf's 122,000, held by
   `smoke/game.spec.ts` (4 October 2026).
@@ -514,9 +511,9 @@ change meant to move it, and the commit says why. Look at every picture.
   `mid` and `far` are the game's own, since the renderer's scale with the
   blade's height and would keep every blade for eighty units, and `BLADE_ROOM`
   is its room for blades in a frame, which the smoke test holds every hole
-  at every zoom well short of. The standard view costs 3.2 ms of the 6 (`perf`: 3.15 to 3.25 over six runs; the worst view the camera can be
-  orbited to 3.9 to 4.9), and the ladder's rungs 1.3, 1.0 and 0.7 at the home view (measured alone on 4 October 2026,
-  load average 1 to 2: 3.1, 1.3 to 1.4, 1.0, 0.70 over two runs). At `near` 45 the turf's worst orbited view drew all
+  at every zoom well short of. The standard view cost 3.0 ms of the 6 when the turf landed (the `perf` baseline 2.99; the worst view the camera can be
+  orbited to 3.9 to 4.9), and the ladder's rungs 1.3, 1.0 and 0.7 below it at the home view (4 October 2026); the water's ripple and the
+  ground texture came after, and the figure to hold is the baseline `perf` has now. At `near` 45 the turf's worst orbited view drew all
   262,144 blades and cost 7.2 ms, which is why `near` is 36: that view draws 160,000. No blade grows on the course:
   the green is painted, in its two stripes, by the scene (`PALETTE` in
   `scene.ts`), as `LOOK.md`'s clean look has it, and the ball leaves no
@@ -935,7 +932,7 @@ each step, and a gate handed what it needs in the same change:
   a margin that grows would move the pace of the courses there are.
 - Holes past what the grass field, the frame and the look allow. A cell of
   1.5 lifts the field's limit to 489 tiles a side; a frame at 400 by 400
-  tiles is 4.7 ms of the 5, since a bigger hole draws more ground; and some
+  tiles was 4.7 ms when the budget was 5 (it is 6 now), since a bigger hole draws more ground; and some
   holes of 200 tiles a side and more show rough blades pale and frosty near
   the camera, which was not the shadow's fit or the cell and is not
   understood. No hole there is comes near them.
