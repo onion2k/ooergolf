@@ -16,6 +16,7 @@ import { links } from '../src/links';
 import { noiseGround } from '../src/noise';
 import { clearings } from '../src/scenery';
 import { BLADE_ROOM, GOLF_FAIRWAY_DENSITY, GOLF_ROUGH_DENSITY, cellFor } from '../src/turf';
+import { BUDGET } from './budget';
 import { drag, start, touches, watch } from './game';
 import { holeOut, read, toCard } from './panels';
 
@@ -573,7 +574,7 @@ test.describe('looking round', () => {
       return g.measureFrame(200);
     });
     console.log(`orbit: the worst view, ${cost.toFixed(2)} ms a frame`);
-    expect(cost, 'inside the 5 ms budget').toBeLessThan(5);
+    expect(cost, `inside the ${BUDGET.frameMs} ms budget`).toBeLessThan(BUDGET.frameMs);
     expect(problems).toEqual([]);
   });
 });
@@ -600,8 +601,8 @@ test.describe('water', () => {
     console.log(
       `the water: The Rapids from its tee ${cost.tee.toFixed(2)} ms, the whole hole ${cost.whole.toFixed(2)} ms a frame`,
     );
-    expect(cost.tee, 'the tee inside the 5 ms budget').toBeLessThan(5);
-    expect(cost.whole, 'the whole hole inside the 5 ms budget').toBeLessThan(5);
+    expect(cost.tee, `the tee inside the ${BUDGET.frameMs} ms budget`).toBeLessThan(BUDGET.frameMs);
+    expect(cost.whole, `the whole hole inside the ${BUDGET.frameMs} ms budget`).toBeLessThan(BUDGET.frameMs);
     expect(problems).toEqual([]);
   });
 });
@@ -639,7 +640,8 @@ test.describe('golf', () => {
     console.log(
       `the range, The Long Road: tee ${cost.tee.toFixed(2)} ms, in the air ${cost.air.toFixed(2)} ms, the worst view ${cost.worst.toFixed(2)} ms, the whole hole ${cost.whole.toFixed(2)} ms a frame`,
     );
-    for (const [where, ms] of Object.entries(cost)) expect(ms, `${where}: inside the 5 ms budget`).toBeLessThan(5);
+    for (const [where, ms] of Object.entries(cost))
+      expect(ms, `${where}: inside the ${BUDGET.frameMs} ms budget`).toBeLessThan(BUDGET.frameMs);
     expect(problems).toEqual([]);
   });
 });
@@ -802,7 +804,8 @@ test.describe('golf on The Links', () => {
     console.log(
       `the links: tee ${cost.tee.toFixed(2)} ms, in the air ${cost.air.toFixed(2)} ms, the worst view ${cost.worst.toFixed(2)} ms, the whole hole ${cost.whole.toFixed(2)} ms a frame`,
     );
-    for (const [where, ms] of Object.entries(cost)) expect(ms, `${where}: inside the 5 ms budget`).toBeLessThan(5);
+    for (const [where, ms] of Object.entries(cost))
+      expect(ms, `${where}: inside the ${BUDGET.frameMs} ms budget`).toBeLessThan(BUDGET.frameMs);
     expect(problems).toEqual([]);
   });
 
@@ -841,7 +844,9 @@ test.describe('golf on The Links', () => {
       `the aim view: the worst is ${worst.where}, ${worst.ms.toFixed(2)} ms a frame, of ${rows.length} measured`,
     );
     for (const r of rows)
-      expect(r.ms, `${r.where} (${r.distance.toFixed(0)} back): inside the 5 ms budget`).toBeLessThan(5);
+      expect(r.ms, `${r.where} (${r.distance.toFixed(0)} back): inside the ${BUDGET.frameMs} ms budget`).toBeLessThan(
+        BUDGET.frameMs,
+      );
     expect(
       rows.some((r) => r.distance > 150),
       'the driver is looked at from well past where minigolf stops',
@@ -869,7 +874,8 @@ test.describe('golf on The Links', () => {
       expect(problems).toEqual([]);
     }
     console.log(`the driver's aim view on each rung: ${costs.map((c) => c.toFixed(2)).join(', ')} ms a frame`);
-    for (const [rung, ms] of costs.entries()) expect(ms, `rung ${rung}: inside the 5 ms budget`).toBeLessThan(5);
+    for (const [rung, ms] of costs.entries())
+      expect(ms, `rung ${rung}: inside the ${BUDGET.frameMs} ms budget`).toBeLessThan(BUDGET.frameMs);
     // a rung down is never dearer by more than the wobble of a frame (a third of a millisecond, measured)
     for (let rung = 1; rung < costs.length; rung++)
       expect(costs[rung], `rung ${rung} against the one above`).toBeLessThan(costs[rung - 1] + 0.5);
@@ -925,8 +931,8 @@ test.describe('the aim view on a phone held upright', () => {
         if (r.ms > worst.ms) Object.assign(worst, { ms: r.ms, where: `${size.width}x${size.height} ${r.where}` });
         expect(
           r.ms,
-          `${size.width}x${size.height} ${r.where} (${r.back.toFixed(0)} back): inside the 5 ms budget`,
-        ).toBeLessThan(5);
+          `${size.width}x${size.height} ${r.where} (${r.back.toFixed(0)} back): inside the ${BUDGET.frameMs} ms budget`,
+        ).toBeLessThan(BUDGET.frameMs);
       }
       expect(problems).toEqual([]);
     }
@@ -956,7 +962,8 @@ test.describe('the aim view on a phone held upright', () => {
     console.log(
       `the driver's aim view on a 360 by 640 phone, each rung: ${costs.map((c) => c.toFixed(2)).join(', ')} ms a frame`,
     );
-    for (const [rung, ms] of costs.entries()) expect(ms, `rung ${rung}: inside the 5 ms budget`).toBeLessThan(5);
+    for (const [rung, ms] of costs.entries())
+      expect(ms, `rung ${rung}: inside the ${BUDGET.frameMs} ms budget`).toBeLessThan(BUDGET.frameMs);
     for (let rung = 1; rung < costs.length; rung++)
       expect(costs[rung], `rung ${rung} against the one above`).toBeLessThan(costs[rung - 1] + 0.5);
   });
@@ -1196,7 +1203,7 @@ test.describe('the grass', () => {
       expect(seen.blades, `${tiles} tiles: the rough grows round it`).toBeGreaterThan(20_000);
       expect(seen.blades, `${tiles} tiles: within the renderer's room`).toBeLessThan(BLADE_ROOM * 0.85);
       expect(seen.onCourse, `${tiles} tiles: no blade on the course`).toBe(0);
-      expect(seen.cost, `${tiles} tiles: a frame inside the budget`).toBeLessThan(5);
+      expect(seen.cost, `${tiles} tiles: a frame inside the budget`).toBeLessThan(BUDGET.frameMs);
       // and it is played: the autopilot's first shot from the tee is struck and comes to rest
       const played = await page.evaluate(() => {
         const g = window.game!;

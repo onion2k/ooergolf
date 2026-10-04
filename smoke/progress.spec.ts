@@ -21,6 +21,7 @@ import { DRAG } from '../src/shot';
 import { scoreName } from '../src/score';
 import { LIE } from '../src/surfaces';
 import { smallHole } from './bighole';
+import { BUDGET } from './budget';
 import { drag, puttingHole, start, watch } from './game';
 import { CONTRAST, THUMB, openDrawer, read } from './panels';
 
@@ -1600,7 +1601,7 @@ test.describe('putting on a golf hole whose greens have a speed and a contour', 
     // the frame with the roll, the arrows and the cut drawn is inside the budget: they cost a few hundred triangles
     const ms = await page.evaluate(() => window.game!.measureFrame());
     console.log(`putting: a frame with the roll aimed and the arrows up, ${ms.toFixed(2)} ms`);
-    expect(ms, 'a frame of the putting green').toBeLessThan(5);
+    expect(ms, 'a frame of the putting green').toBeLessThan(BUDGET.frameMs);
     // let go: the ball comes to rest at the ring
     await page.mouse.up();
     await untilReady(page, 'after the aimed putt');

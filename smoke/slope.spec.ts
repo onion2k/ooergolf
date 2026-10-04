@@ -9,6 +9,7 @@ import { breakOf } from '../src/green';
 import { puttText } from '../src/readout';
 import { SIDE_HILL } from '../test/hills';
 import { bigHole } from './bighole';
+import { BUDGET } from './budget';
 import { drag, start, watch } from './game';
 import { CONTRAST, openDrawer, read } from './panels';
 
@@ -83,7 +84,7 @@ test.describe('the break on a sloped hole of minigolf', () => {
     expect(aimed.shot!.spread, 'a putt has none').toBeNull();
     const ms = await page.evaluate(() => window.game!.measureFrame());
     console.log(`slope: a frame with the roll aimed and the arrows up, ${ms.toFixed(2)} ms`);
-    expect(ms).toBeLessThan(5);
+    expect(ms).toBeLessThan(BUDGET.frameMs);
     await hideStats(page);
     await expect(page.locator('#view')).toHaveScreenshot('slope-aim.png', TOLERANCE);
     const ring = aimed.shot!.ring!;
@@ -119,7 +120,7 @@ test.describe('the break on a sloped hole of minigolf', () => {
     expect(seen.arrows.count).toBeGreaterThan(1500);
     expect(seen.shot).not.toBeNull();
     console.log(`slope: The Far Pin, ${seen.arrows.count} arrows and a roll aimed, a frame ${seen.ms.toFixed(2)} ms`);
-    expect(seen.ms).toBeLessThan(5);
+    expect(seen.ms).toBeLessThan(BUDGET.frameMs);
     await page.mouse.up();
     expect(problems).toEqual([]);
   });

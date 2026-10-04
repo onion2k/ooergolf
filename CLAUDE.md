@@ -65,8 +65,8 @@ Numbers, held by gates, on this machine at 1280×800:
 | ------------------------------------------------------ | ------------------------------ | -------------- |
 | Boot, page start to the frame loop running             | 3000 ms                        | `perf`         |
 | Download, scripts and styles gzipped                   | 400 kB                         | `perf`         |
-| A frame drawn, lower quartile at the standard view     | 5 ms                           | `perf`         |
-| The biggest hole begun, and a frame of it drawn        | 400 ms begin, 5 ms a frame     | `perf`         |
+| A frame drawn, lower quartile at the standard view     | 6 ms                           | `perf`         |
+| The biggest hole begun, and a frame of it drawn        | 400 ms begin, 6 ms a frame     | `perf`         |
 | The physics, a frame, against the reference arithmetic | baseline ± 20%                 | `bench`        |
 | Anything kept: bodies, slots, save bytes, heap         | ceilings in `scripts/leaks.ts` | `leaks`        |
 | The look: colour, framing, contrast, shade and shape   | floors in `look-metrics.spec`  | `look:metrics` |
@@ -252,7 +252,7 @@ change meant to move it, and the commit says why. Look at every picture.
   tilted between `TILT.least` and `TILT.most` (home is 0.78, 45 degrees; the
   lowest is 57 degrees only because the grass is what a frame costs, and a
   lower view draws far more of it: `TILT`'s comment has the figures, and the
-  worst view is held under the 5 ms budget by `smoke/game.spec.ts`), and its
+  worst view is held under the 6 ms budget by `smoke/game.spec.ts`), and its
   lead of `LEAD` units turns with the view so the ball stays low on the
   screen. A new hole puts the switch back to Aim and eases the view home
   over the glide, by the shortest way; nothing of the view is saved. On a
@@ -275,7 +275,7 @@ change meant to move it, and the commit says why. Look at every picture.
   (`aimedFor` in `main.ts`). A driver's aim view is 192 back at the lowest tilt, which
   costs 2.6 ms a frame on a quiet machine (up to 3.5 on a busy one), the worst of all
   the clubs on the two longest holes facing either way, and each rung of the ladder
-  less (2.6, 1.5, 1.2, 0.9), held under the 5 ms budget by `smoke/game.spec.ts`.
+  less (2.6, 1.6, 1.3, 0.9, measured 4 October 2026, load average 3.6 to 4), held under the 6 ms budget by `smoke/game.spec.ts`.
   `src/quality.ts` is the ladder the picture steps down on a slow machine,
   and the governor that chooses the rung from the time between frames and
   how much of it the drawing takes: frames that come slowly but
@@ -471,8 +471,9 @@ change meant to move it, and the commit says why. Look at every picture.
   `mid` and `far` are the game's own, since the renderer's scale with the
   blade's height and would keep every blade for eighty units, and `BLADE_ROOM`
   is its room for blades in a frame, which the smoke test holds every hole
-  at every zoom well short of. The standard view costs 2.5 ms of the 5, and
-  the ladder's rungs 1.3, 0.9 and 0.5 at the home view. No blade grows on the course:
+  at every zoom well short of. The standard view costs 2.5 ms of the 6, and
+  the ladder's rungs 1.3, 1.0 and 0.7 at the home view (measured 4 October 2026, load average 3.6 to 6: 2.5 to 2.7, 1.3,
+  1.0 to 1.03, 0.69 to 0.73 over two runs). No blade grows on the course:
   the green is painted, in its two stripes, by the scene (`PALETTE` in
   `scene.ts`), as `LOOK.md`'s clean look has it, and the ball leaves no
   track. The page hands the field to the renderer when a hole begins, and

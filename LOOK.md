@@ -361,6 +361,9 @@ Made by the user on 28 September 2026.
 1. **What the look may cost a frame:** the top rung at most 5 ms at the
    standard view on this machine, now 1.1; a phone steps down the ladder as
    it does now. The perf gate's frame budget is 5 ms, where it was 8.
+   On 4 October 2026 the budget was raised to 6 ms for the course-as-a-place
+   parts (denser grass, moving water, a ground texture), the standard view then
+   costing about 2.6; the gates read it from `smoke/budget.ts`.
 2. **The ball's track in the green:** dropped. It goes with the blades, and
    the track is retired from the game, its picture and its gates with it.
 3. **Antialiasing:** needed. Four samples a pixel at the top rung, and a

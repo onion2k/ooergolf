@@ -21,23 +21,12 @@ import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
 import { expect, test } from '@playwright/test';
 import { bigHole, smallHole } from './bighole';
+import { BUDGET } from './budget';
 import { start, watch } from './game';
 
+export { BUDGET };
+
 const BASELINE = 'smoke/perf-baseline.json';
-/**
- * What the game may cost at all, on this machine, whatever it cost before.
- * The frame is `LOOK.md`'s: the look may spend up to 5 ms of it at the top
- * rung, and a slower machine steps down the ladder.
- */
-export const BUDGET = {
-  bootMs: 3000,
-  frameMs: 5,
-  bundleKb: 400,
-  beginMs: 400,
-  bigFrameMs: 5,
-  linksBeginMs: 400,
-  linksFrameMs: 5,
-};
 /** How far a figure may move from the baseline before it is a change: a share, and a slack for the noisy ones. */
 // the frame, timed ten at a time after the GPU is warmed, wobbles about 5% between runs (0.83 to 0.91 ms over ten):
 // three times that, and a tenth of a millisecond for a frame so small
