@@ -36,11 +36,12 @@ a feature at a time, in the order `DESIGN.md` gives.
 
 This repo is a line that turns ideas into a browser game that loads fast,
 draws fast and has no bugs, one feature at a time, and it holds those three
-properties as numbers from the first commit. Every change goes down the same
-line: a spec agreed, tests written and seen failing, the change built, every
-gate run, the result looked at, the report made with evidence, then a
-commit. The line does not skip a station, and it stops when a gate is red:
-a red gate is fixed before anything else lands, never skipped with
+properties as numbers from the first commit. Every piece of work goes down
+the same line: a spec agreed, tests written and seen failing, the change
+built, and then, once, at the end of the piece of work, every gate run, the
+result looked at and the report made with evidence. The line does not skip a
+station; it puts the checking last (see "When to check"). A gate red at the
+end is fixed at its cause before the work is called done, never skipped with
 `--no-verify` and never made green by moving its baseline.
 
 The three properties, and what holds each:
@@ -56,6 +57,27 @@ The three properties, and what holds each:
   same gate, and the physics' by `npm run bench`. A feature that cannot fit
   the budget gets a rung the game steps down to on a slower machine, not a
   pass.
+
+## When to check
+
+Checking is left to the end of a piece of work, not run after each step. A
+piece of work is what the user asked for in one go: a feature, a fix, a part
+of a plan, or a wave of agents' parts. While it is under way, a step is built
+and its own new tests are run (`npx vitest run test/the-file.test.ts`), and
+the pre-commit hook's quick check runs on any commit; nothing more. The full
+check, the fuzzer over 24 seeds, determinism, leaks, perf and bench timed
+against the parent, the pictures written and looked at, and the look metrics
+are run once, when the work is finished, on the tree as it will land, and the
+report says what they found. Where the work lands as several commits, those
+before the last carry no figures and say the checks follow; the last runs
+them and says so. A builder agent's brief says the same: its own tests while
+it builds, and the gates once when its part is done, or not at all where the
+orchestrator runs them at the end of the wave. The user may ask for the
+checks sooner, or for none.
+
+Why: the full check takes a quarter of an hour and the measuring gates read
+wrong while anything else is on the GPU, so checking step by step cost hours,
+read noise as often as signal, and measured figures the next step moved again.
 
 ## Budgets
 
@@ -207,8 +229,8 @@ today, and what the next features must hand it:
 ## Commands
 
     npm run dev            the game at http://localhost:5200 (PORT=n for another port; the smoke tests take PORT too, 5201 by default)
-    npm run check:quick    formatting, types, lint, unit tests (the pre-commit hook; ~10 s)
-    npm run check          all of it: check:quick, fuzz, determinism, leaks, bench, smoke with perf and look (~20 s)
+    npm run check:quick    formatting, types, lint, unit tests (the pre-commit hook; ~40 s)
+    npm run check          all of it: check:quick, fuzz, determinism, leaks, bench, smoke with perf and look (~15 min; at the end of a piece of work)
     npm test               unit tests (Vitest, test/)
     npm run fuzz           the game played at random, rules checked; -- --seed N plays one failure again
     npm run determinism    the same seed played twice, hashed, to catch chance not from the seed
@@ -982,7 +1004,8 @@ tests in `test/`, a stage in `smoke/progress.spec.ts`, an action in
 `scripts/leaks.ts` for anything kept, the perf figures before and after in
 the report and within budget, `measureFrame` in any other scene touched, and
 a picture in `smoke/look.spec.ts`. `npm run check` green, and
-`npm run fuzz -- --seeds 1-24` clean.
+`npm run fuzz -- --seeds 1-24` clean: run once, at the end of the piece of
+work, as "When to check" says, and not after each step of it.
 
 ## Edge-case checklist
 
