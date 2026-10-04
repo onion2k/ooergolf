@@ -290,7 +290,8 @@ change meant to move it, and the commit says why. Look at every picture.
   on the rough as a raised green: the rough lies `ROUGH_DEPTH` below the
   grass, under the bottom of the cup, so the cup is seen into, and the rail
   comes down to meet it. The look is `LOOK.md`'s clean toy, toon daylight
-  on artshape-render v0.22.2, in `src/look.ts`, shared by the game and the
+  on artshape-render v0.25.0 (0.23.0 brought the surface that flows, which the water
+  uses; 0.24.0 and 0.25.0 particles blown by a wash of air, which the game does not yet), in `src/look.ts`, shared by the game and the
   showcase: edges drawn at four samples a pixel (the post pass one rung
   down the ladder, and none on the last), the toon bands eased at their
   edges, a cool blue-violet shade, a warm rim, the sky's light from above
@@ -366,8 +367,21 @@ change meant to move it, and the commit says why. Look at every picture.
   (bumper, kicker, barrier, windmill with its turning blades, flipper, water, bunker,
   conveyor, stream). Water lies `WATER_LEVEL` (0.3) below the grass, in the
   earth `ground.ts` brings down to it from every edge of grass or sand that
-  meets it, in a rim of foam, two bands of shallows and deep water veined
-  in a lighter blue, filling its tiles exactly. The scene draws a hole's
+  meets it, in a rim of foam, two bands of shallows and deep water that
+  ripples, filling its tiles exactly. The deep water's surface is the renderer's
+  ripple kind (`PATTERN.ripple`, 5, drawn through the flowing build): the pattern
+  travels east along the mesh's own +x by the game's clock (`renderer.time`, which
+  `main.ts` already sets from game time, so a paused game is still and a picture is
+  the same every run) at `RIPPLE.speed` 1.5 units a second, in cells of `RIPPLE.scale`
+  0.5 a unit (two tiles across a cell), the crests in `PALETTE.waterVein`, the normal
+  turned by the slope so the sun glints on it; it costs a frame about 0.1 to 0.5 ms
+  (Rapids 2.5 to 3.2 tight, Pond 3.4 to 3.5 at the tee). A stream's surface keeps its
+  marbling, since a pattern runs east and a stream may run any way, and its streaks
+  already move along it. A part's pattern with a flow kind has a `speed` where the old
+  kinds have a seed (`group` writes it with the renderer's `packFlow`); `look.ts`
+  hands the renderer a group with no placements and a flow kind at boot, so the
+  flowing build is compiled before the first hole is drawn. The three idle rings are
+  kept over the ripple. The scene draws a hole's
   water as one bed over all its tiles (`waterBed`, built as `sandBed` is:
   the bands only along sides that meet what is not water, mitred at the
   corners), so a pond of any shape has one edge and a channel between

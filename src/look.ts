@@ -4,7 +4,8 @@
  * light. One place for it, so the game and the models' showcase are drawn
  * alike; without it, a colour tuned on one page would be wrong on the other.
  */
-import type { GameRenderer } from 'artshape-render/game/renderer';
+import { PATTERN_STRIDE, type GameRenderer } from 'artshape-render/game/renderer';
+import { FLOW_RIPPLE, packFlow } from 'artshape-render/game/flow';
 import type { Gpu } from 'artshape-render/gpu/context';
 import { noFog } from 'artshape-render/game/fog';
 import { bakeEnvironment } from 'artshape-render/render/env';
@@ -56,6 +57,26 @@ export const TOY = {
 } as const;
 
 /**
+ * Has the renderer compile the build that draws a surface that flows, now, and not the first time a hole with water is
+ * begun: it compiles when it is first handed a group with a flow kind and until it is in such a group is drawn as the
+ * still speckle, so a picture of a water hole taken after a hole change would be of the speckle on some runs and the
+ * ripple on others. A group with no placements live draws nothing, and the first hole's own groups take its place.
+ */
+function flowing(renderer: GameRenderer) {
+  const triangle = {
+    positions: new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]),
+    normals: new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1]),
+    uvs: new Float32Array(6),
+    indices: new Uint32Array([0, 1, 2]),
+  };
+  const patterns = new Float32Array(PATTERN_STRIDE);
+  packFlow(patterns, 0, { kind: FLOW_RIPPLE, scale: 1, speed: 0, second: [1, 1, 1] });
+  const matrices = new Float32Array(16);
+  matrices.set([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+  renderer.setDynamic([{ mesh: triangle, matrices, count: 0, patterns }]);
+}
+
+/**
  * Put the daylight look on `renderer`: a cartoon in daylight, as bearing's
  * sweet world is, in the clean toy's light. Resolves once the pipelines the
  * look asks for are compiled, which the first frame waits for.
@@ -92,5 +113,6 @@ export async function daylight(renderer: GameRenderer, ctx: Gpu): Promise<void> 
   renderer.post = { ...renderer.post, vignette: 0, grain: 0, tone: 'soft' };
   const env = bakeEnvironment(ctx, 'daylight', { size: 128, mips: 6 });
   renderer.setEnvironment(env.specular, env.brdf, env.mips);
+  flowing(renderer);
   await renderer.prepare();
 }

@@ -605,6 +605,31 @@ test.describe('water', () => {
     expect(cost.whole, `the whole hole inside the ${BUDGET.frameMs} ms budget`).toBeLessThan(BUDGET.frameMs);
     expect(problems).toEqual([]);
   });
+
+  test('costs a frame inside the budget on The Meadow’s Pond, rippling, from its tee and with the pond in the middle of the view', async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true });
+    const cost = await page.evaluate(async () => {
+      const g = window.game!;
+      g.startHole(g.content().holes.findIndex((h) => h.name === 'Pond'));
+      g.step(120);
+      const tee = await g.measureFrame(100);
+      const { floor } = g.content();
+      g.look((floor.minX + floor.maxX) / 2, (floor.minY + floor.maxY) / 2, 40);
+      g.step(2);
+      const wide = await g.measureFrame(100);
+      return { tee, wide };
+    });
+    console.log(
+      `the water: The Meadow's Pond from its tee ${cost.tee.toFixed(2)} ms, from far ${cost.wide.toFixed(2)} ms a frame`,
+    );
+    expect(cost.tee, `the tee inside the ${BUDGET.frameMs} ms budget`).toBeLessThan(BUDGET.frameMs);
+    expect(cost.wide, `the far view inside the ${BUDGET.frameMs} ms budget`).toBeLessThan(BUDGET.frameMs);
+    expect(problems).toEqual([]);
+  });
 });
 
 test.describe('golf', () => {

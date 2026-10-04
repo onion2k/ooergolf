@@ -322,6 +322,14 @@ export function placeBlades(out: Float32Array, i: number, x: number, y: number, 
  */
 export const WATER = { drop: -WATER_LEVEL, foam: 0.16, band: 0.5 } as const;
 
+/**
+ * How a pond's surface ripples, on the renderer's own ripple pattern: `scale` is how many of the pattern's cells fit in a
+ * unit (a tile is three units, so a cell is two), and `speed` how far the pattern travels east in a unit of game time, a
+ * stroll across the pond. A stream is not given it: the pattern travels along the mesh's own +x, which is east, and a
+ * stream may run any way, so a channel running north would ripple sideways. Its streaks already move along it.
+ */
+export const RIPPLE = { scale: 0.5, speed: 1.5 } as const;
+
 /** A pond: a model, with the room on its water a ripple or a sparkle has, and how wide a ring may spread. */
 export interface Pond extends Model {
   /** The half sizes, across X and along Y, of the water a ring or a sparkle may be on: in from the foam and the shallows. */
@@ -336,7 +344,7 @@ export interface Pond extends Model {
  * in a lighter blue and glossy. The ripples are in `moving`, one fat ring of unit size that the game places, as many
  * times as it likes, wherever and however wide and in whatever colour it likes on the water.
  */
-export function water(w: number, h: number, { seed = 1 } = {}): Pond {
+export function water(w: number, h: number, _options: { seed?: number } = {}): Pond {
   const z = WATER_LEVEL;
   const { foam } = WATER;
   const band = Math.min(WATER.band, (w - 2 * foam) / 8, (h - 2 * foam) / 8);
@@ -360,7 +368,7 @@ export function water(w: number, h: number, { seed = 1 } = {}): Pond {
         name: 'surface',
         mesh: surface,
         material: matte(PALETTE.water, ROUGH.water),
-        pattern: { kind: PATTERN.marbling, scale: 0.5, seed: (seed * 0.29) % 1, second: PALETTE.waterVein },
+        pattern: { kind: PATTERN.ripple, scale: RIPPLE.scale, seed: 0, speed: RIPPLE.speed, second: PALETTE.waterVein },
       },
     ],
     moving: [{ name: 'ring', mesh: ring, material: matte(PALETTE.ripple, ROUGH.water) }],
@@ -434,9 +442,14 @@ function bed(
  * A bed of water over the tiles `cells`, each `tile` across: the pond's bands, the foam, the shallows and the mid water,
  * only along the sides where a tile meets what is not water, and the deep veined water filling everything inside them,
  * so a channel between two ponds is one water and a pond of any shape has one edge. The surface lies at the game's
- * `WATER_LEVEL`, as a pond's does.
+ * `WATER_LEVEL`, as a pond's does, and ripples (`RIPPLE`). The seed is still taken, since the scene hands one, but a
+ * ripple has no seed to shift, as the marbling had.
  */
-export function waterBed(cells: readonly (readonly [number, number])[], tile: number, { seed = 1 } = {}): Model {
+export function waterBed(
+  cells: readonly (readonly [number, number])[],
+  tile: number,
+  _options: { seed?: number } = {},
+): Model {
   const { foam } = WATER;
   const band = Math.min(WATER.band, (tile - 2 * foam) / 8);
   const water = (c: Colour) => matte(c, ROUGH.water);
@@ -453,7 +466,7 @@ export function waterBed(cells: readonly (readonly [number, number])[], tile: nu
       {
         name: 'water bed',
         material: water(PALETTE.water),
-        pattern: { kind: PATTERN.marbling, scale: 0.5, seed: (seed * 0.29) % 1, second: PALETTE.waterVein },
+        pattern: { kind: PATTERN.ripple, scale: RIPPLE.scale, seed: 0, speed: RIPPLE.speed, second: PALETTE.waterVein },
       },
     ),
   };

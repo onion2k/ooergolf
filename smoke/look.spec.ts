@@ -345,6 +345,61 @@ test.describe('what it looks like', () => {
     expect(problems).toEqual([]);
   });
 
+  test('the water moves on the game’s clock alone: the same time is the same bytes, a second on is not, and only the water changes', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true });
+    const at = pondOf('Pond');
+    await page.evaluate((c) => {
+      const g = window.game!;
+      g.startHole(g.content().holes.findIndex((h) => h.name === 'Pond'));
+      g.step(90);
+      g.look(c.x, c.y - 6, 22);
+      g.step(1);
+    }, at);
+    await hideStats(page);
+    // the middle of the pond, and a tile of the green beside it, a few pixels either side of the point where each lies
+    const spots = await page.evaluate((c) => {
+      const g = window.game!;
+      return { water: g.project(c.x, c.y, -0.3), green: g.project(c.x + 9, c.y, 0) };
+    }, at);
+    const crop = (p: { x: number; y: number }) => ({
+      x: Math.round(p.x) - 16,
+      y: Math.round(p.y) - 16,
+      width: 32,
+      height: 32,
+    });
+    const look = async () => ({
+      water: await page.screenshot({ clip: crop(spots.water), scale: 'css' }),
+      green: await page.screenshot({ clip: crop(spots.green), scale: 'css' }),
+    });
+    // the crops are of the canvas alone: the grass's blades are drawn in no fixed order on the GPU and two pixels of a whole
+    // frame differ between two shots of the same moment, which is the grass's and not the water's
+    // the panels arrive with a spring in wall-clock time, which is the page's and not the game's: let them land
+    await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished.catch(() => null))));
+    const first = await look();
+    // paused, the same game time again: nothing may have moved, not the ripple and not a wall-clock of any kind
+    const again = await look();
+    expect(again.water.equals(first.water), 'the water at the same moment drawn twice is the same bytes').toBe(true);
+    expect(again.green.equals(first.green), 'and so is the green').toBe(true);
+    // a second of the game's time on, a pond rippling is another picture and a green is the same one
+    await page.evaluate(() => window.game!.step(60));
+    const later = await look();
+    // pixels that moved by more than a few levels of a channel: the GPU may leave a pixel one level out between two draws
+    const moved = async (a: Buffer, b: Buffer) => {
+      const { PNG } = await import('pngjs');
+      const [p, q] = [PNG.sync.read(a).data, PNG.sync.read(b).data];
+      let n = 0;
+      for (let i = 0; i < p.length; i += 4)
+        if (Math.max(Math.abs(p[i] - q[i]), Math.abs(p[i + 1] - q[i + 1]), Math.abs(p[i + 2] - q[i + 2])) > 3) n++;
+      return n;
+    };
+    expect(await moved(first.water, later.water), 'the water a second on is not the water it was').toBeGreaterThan(100);
+    expect(await moved(first.green, later.green), 'the green beside it is just as it was').toBe(0);
+    expect(problems).toEqual([]);
+  });
+
   test('the sand, close to: raked in stripes, its lip lit on the outside and shaded within', async ({ page }) => {
     const problems = watch(page);
     await start(page, { seed: 11, paused: true });

@@ -876,9 +876,9 @@ describe('the obstacles are drawn to exactly the size the physics gives them', (
       // the foam is a thin edge, and the deep water is most of a pond that is big enough for it to be
       const foam = areaOf(partNamed(m, 'foam').mesh);
       expect(foam).toBeCloseTo(w * h - (w - 2 * WATER.foam) * (h - 2 * WATER.foam), 4);
-      // veined in a lighter blue, and glossy
+      // rippling, the crests in a lighter blue, and glossy
       const deep = partNamed(m, 'surface');
-      expect(deep.pattern?.kind).toBe(PATTERN.marbling);
+      expect(deep.pattern?.kind).toBe(PATTERN.ripple);
       expect(luminance(deep.pattern!.second)).toBeGreaterThan(luminance(deep.material));
       expect(deep.material[3]).toBeLessThan(0.2);
     });
