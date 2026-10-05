@@ -406,7 +406,7 @@ square-edged, the value noise's grid showing as pixel camouflage; the user
 chose 0.2 and 0.15, which reads as soft turf. Seventy-two pictures moved,
 each looked at, and the metrics held their floors (framing 2.32, from 2.39).
 
-**Open water, golf only.** The pin moved to v0.27.0, which has the renderer's
+**Open water, golf only.** The pin moved to v0.27.0 (then v0.27.1, which bent the sheet by a slow warp and weakened the swell, since three fixed swell waves lined up into banded clouds in the mirror), which has the renderer's
 open-water kind (`FLOW_WATER`, after three.js's water example): waves that
 turn the surface's normal in the world and mirror the sky by a Fresnel term, so
 the crests glint and the glitter moves with the camera. A golf hole's ponds

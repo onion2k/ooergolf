@@ -344,7 +344,7 @@ and all the words in the page, not the picture.
 
 - **The renderer** is `artshape-render`, on the game path, with
   `shading: 'toon'`, as bearing has it; the version it is on is in `package.json`
-  (v0.27.0), and `LOOK.md` says what each release brought the look.
+  (v0.27.1), and `LOOK.md` says what each release brought the look.
 - **Light.** The `daylight` environment, a sun with a shadow, and ambient
   light on. Lamps only where a hole wants one. The shade where things meet
   from screen-space occlusion, a thin haze that pales the far rough, and a

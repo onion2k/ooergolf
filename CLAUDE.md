@@ -312,8 +312,8 @@ change meant to move it, and the commit says why. Look at every picture.
   on the rough as a raised green: the rough lies `ROUGH_DEPTH` below the
   grass, under the bottom of the cup, so the cup is seen into, and the rail
   comes down to meet it. The look is `LOOK.md`'s clean toy, toon daylight
-  on artshape-render v0.27.0 (0.23.0 brought the surface that flows, which the ponds
-  use; 0.24.0 and 0.25.0 particles blown by a wash of air, which the game does not yet use; 0.26.0 the ground texture; 0.27.0 open water, which a golf pond wears), in `src/look.ts`, shared by the game and the
+  on artshape-render v0.27.1 (0.23.0 brought the surface that flows, which the ponds
+  use; 0.24.0 and 0.25.0 particles blown by a wash of air, which the game does not yet use; 0.26.0 the ground texture; 0.27.0 open water, which a golf pond wears; 0.27.1 its sky no longer repeats: the sheet is bent by a slow warp and the swell is weaker), in `src/look.ts`, shared by the game and the
   showcase: edges drawn at four samples a pixel (the post pass one rung
   down the ladder, and none on the last), the toon bands eased at their
   edges, a cool blue-violet shade, a warm rim, the sky's light from above
