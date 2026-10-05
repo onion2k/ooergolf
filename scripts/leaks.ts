@@ -93,19 +93,23 @@ export function trouble(samples: Record<string, number[]>): string[] {
   return out;
 }
 
+/** The courses of golf a leak run may be played on, each by the name its course has. */
+export const GOLF_COURSES = { links: 'The Links', fells: 'The Fells', isles: 'The Isles' } as const;
+export type GolfCourseKey = keyof typeof GOLF_COURSES;
+
 export interface LeakOptions {
   seed: number;
   /** Game minutes to play. */
   minutes: number;
-  /** Play a course of golf, The Links, instead of The Meadow. */
-  golf?: 'links';
+  /** Play a course of golf, The Links, The Fells or The Isles, instead of The Meadow. */
+  golf?: GolfCourseKey;
 }
 
 export interface LeakRun {
   seed: number;
   minutes: number;
   /** Which course of golf it was played on, if not The Meadow. */
-  golf?: 'links';
+  golf?: GolfCourseKey;
   /** Every size, sampled once a game minute. */
   samples: Record<string, number[]>;
   problems: string[];
@@ -123,7 +127,7 @@ export function leakRun({ seed, minutes, golf }: LeakOptions): LeakRun {
       {},
       {
         random: seeded(seed),
-        course: golf === 'links' ? COURSES.find((c) => c.name === 'The Links')!.holes : undefined,
+        course: golf ? COURSES.find((c) => c.name === GOLF_COURSES[golf])!.holes : undefined,
       },
     );
     // round after round, as a player who never stops would

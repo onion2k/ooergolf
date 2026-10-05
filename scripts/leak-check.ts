@@ -4,6 +4,7 @@
  *
  *   npm run leaks                              an hour, seed 1
  *   npm run leaks -- --minutes 20 --seeds 1-4
+ *   npm run leaks -- --on fells --minutes 2   one course only, for a short look
  *   npm run leaks -- --show                    every size, minute by minute
  *
  * In `npm run check` this runs short, ten minutes. An hour is worth running
@@ -11,7 +12,7 @@
  */
 import { availableParallelism } from 'node:os';
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
-import { leakRun, type LeakOptions, type LeakRun } from './leaks';
+import { GOLF_COURSES, leakRun, type GolfCourseKey, type LeakOptions, type LeakRun } from './leaks';
 
 async function main() {
   const args = process.argv.slice(2);
@@ -23,11 +24,17 @@ async function main() {
   const seeds = Array.from({ length: (range[1] ?? range[0]) - range[0] + 1 }, (_, k) => range[0] + k);
   const minutes = +(value('minutes') ?? 60);
   const started = performance.now();
-  // each seed on The Meadow, and again on The Links, which is golf: a lofted ball, a bag, trees and a rehearsal are what it adds to keep
-  const queue: LeakOptions[] = seeds.flatMap((seed) => [
-    { seed, minutes },
-    { seed, minutes, golf: 'links' as const },
-  ]);
+  // each seed on The Meadow, and again on each course of golf: a lofted ball, a bag, trees and a rehearsal are what it adds to
+  // keep, and The Fells and The Isles add their lanes, lakes and islands, on holes of up to thirty-odd thousand tiles. `--on`
+  // narrows the run to one kind (`meadow` or a golf course's key), for a short look at a new course
+  const on = value('on');
+  const kinds: (GolfCourseKey | undefined)[] = [undefined, ...(Object.keys(GOLF_COURSES) as GolfCourseKey[])];
+  const queue: LeakOptions[] = seeds.flatMap((seed) =>
+    kinds
+      .filter((golf) => on === undefined || (golf ?? 'meadow') === on)
+      .map((golf) => (golf ? { seed, minutes, golf } : { seed, minutes })),
+  );
+  if (!queue.length) throw new Error(`--on ${on}: not meadow, ${Object.keys(GOLF_COURSES).join(', ')}`);
   const runs: LeakRun[] = [];
   await Promise.all(
     Array.from({ length: Math.max(1, Math.min(queue.length, availableParallelism() - 1)) }, async () => {

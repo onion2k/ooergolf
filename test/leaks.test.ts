@@ -5,11 +5,14 @@
  * game properly, and that the thing which decides what is growing says so
  * when it is, and holds its tongue when it is not.
  */
+import { runInNewContext } from 'node:vm';
+import { setFlagsFromString } from 'node:v8';
 import { describe, expect, it } from 'vitest';
-import { WATCH, grew, sizes, trouble } from '../scripts/leaks';
+import { GOLF_COURSES, WATCH, grew, sizes, trouble } from '../scripts/leaks';
 import { BALL } from '../src/arena';
 import { CLUBS } from '../src/clubs';
 import { COURSES } from '../src/course';
+import { golfHole, laneOf } from '../src/golf';
 import { Progress, memoryStore } from '../src/progress';
 import { newGame } from './helpers';
 
@@ -58,5 +61,45 @@ describe('what must stay bounded', () => {
     expect(trouble({ 'heap MB': [10, 40, 70, 100, 130, 160, 190, 220, 250] }).join('\n')).toMatch(/grew all the way/);
     // a size that only ever climbs is held by its ceiling alone
     expect(trouble({ slots: [1, 2, 3, 4, 5, 6, 7, 8, 9] })).toEqual([]);
+  });
+
+  it('has a leak run for every course of golf there is, each by the name its course has', () => {
+    const golf = COURSES.filter((c) => c.golf).map((c) => c.name);
+    expect(Object.values(GOLF_COURSES).sort()).toEqual(golf.sort());
+  });
+
+  it("lets a hole with a lane go when nothing else holds it: the lane's table does not keep it alive", async () => {
+    // a lane is kept beside its hole in a WeakMap, so a hole a course lets go of must be collectable and its lane with it;
+    // a strong table there would hold every hole ever made, a Fells round after round
+    setFlagsFromString('--expose-gc');
+    const gc = runInNewContext('gc') as () => void;
+    let ref: WeakRef<object>;
+    (() => {
+      const hole = golfHole({
+        name: 'Leak Wood',
+        par: 4,
+        length: 300,
+        bend: 40,
+        corner: 0.5,
+        width: 12,
+        seed: 3,
+        feel: 'hills',
+        steepness: 0.5,
+        bunkers: { fairway: 0, green: 1 },
+        ponds: [],
+        trees: 20,
+        wind: 0,
+        contour: 0.3,
+        greens: 13,
+        gap: { to: 180 },
+      });
+      expect(laneOf(hole), 'it has a lane').toBeDefined();
+      ref = new WeakRef(hole);
+    })();
+    for (let i = 0; i < 10 && ref!.deref(); i++) {
+      await new Promise((r) => setTimeout(r, 0));
+      gc();
+    }
+    expect(ref!.deref(), 'collected').toBeUndefined();
   });
 });
