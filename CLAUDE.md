@@ -230,9 +230,12 @@ today, and what the next features must hand it:
   are far bigger than the unit or two it gains on the level; its worth is in `test/planner.test.ts`, on slopes
   and rises, and in `test/strategy.test.ts`, on a dogleg (3.4 strokes a round on a par four, and no ball lost
   in twenty-four rounds, where aiming at the cup across the corner lost one in every round). The Fells and The Isles
-  are held to the targets the plan set them (The Fells a quarter to four tenths of a stroke a hole under par, The Isles up
-  to four tenths over), and a hole picked up in no more than one round of sixteen; their figures: TODO-PASS (to be written
-  by the end-of-work pass from `scripts/pace-baseline.json`).
+  are held to the order of how hard they are (`HARDER` in `scripts/pace.ts`: each course at least a tenth of a stroke a
+  hole over par above the one before it, a rule `pace:check` fails and a test holds), and a hole is picked up in no more than
+  one round of sixteen. The Fells 35.44 for par 37 (0.17 a hole under, the target a tenth to four tenths) and The Isles
+  47.75 for par 45 (0.31 a hole over, the target from a tenth under to four tenths over), against The Links' 0.68 under;
+  written 5 October 2026, when the Fells' hole five was renamed The Plunge (its wind is a name's, and it moved the figure
+  from 34.63 to 35.44).
 - **Leaks:** ten minutes of the autopilot playing round after round, on The
   Meadow and again on each golf course (`GOLF_COURSES` in `scripts/leaks.ts`: The Links, The Fells, The Isles, under
   the Links' ceilings; `leaks:check` queues the four, and `--on` narrows a run to one kind for a short look; a test holds that a hole

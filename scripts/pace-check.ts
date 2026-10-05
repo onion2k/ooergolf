@@ -7,7 +7,7 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { COURSES } from '../src/course';
-import { CHECK, mean, median, moved, paceRun, round } from './pace';
+import { CHECK, mean, median, moved, orderProblems, paceRun, round } from './pace';
 
 const BASELINE = 'scripts/pace-baseline.json';
 
@@ -37,6 +37,12 @@ function main() {
     if (stuck.length) stuckAny = true;
   }
   if (stuckAny) process.exitCode = 1;
+  // the golf courses are held in order of how hard they are, whatever each figure's own baseline says
+  const pars = Object.fromEntries(COURSES.map((c) => [c.name, c.holes.reduce((a, h) => a + h.par, 0)]));
+  const holeCounts = Object.fromEntries(COURSES.map((c) => [c.name, c.holes.length]));
+  const order = orderProblems(figures, pars, holeCounts);
+  for (const problem of order) console.error(`pace order: ${problem}`);
+  if (order.length) process.exitCode = 1;
   if (!args.includes('--check')) return;
 
   if (args.includes('--update')) {
