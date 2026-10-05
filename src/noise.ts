@@ -103,6 +103,13 @@ export interface GroundSpec {
   feel: Feel;
   steepness: number;
   flats?: readonly Flat[];
+  /**
+   * How much higher the hills are made than `steepness` alone would make them, one or more (one is the ground as it always
+   * was, byte for byte). The ground is scaled to `steepness`, multiplied by this, and then every tile is lowered to the
+   * highest ground that has no step past what `steepness` allows (`lowerToLimit`): the hills stand taller, and what is
+   * steeper than the limit is cut into a cliff's worth of the steepest ground the physics takes, never a step more.
+   */
+  heighten?: number;
 }
 
 /** How far past its radius a level disc is quite level, and how far past that the ground comes back to the noise, in tiles. */
@@ -129,9 +136,14 @@ export function smoothstep(a: number, b: number, x: number): number {
  * step between neighbours exactly `steepness` of the physics' limit of half a
  * tile, and flat round the tee and the cup.
  */
-export function noiseGround(layout: Layout, { seed, feel, steepness, flats = [] }: GroundSpec): Float32Array {
+export function noiseGround(
+  layout: Layout,
+  { seed, feel, steepness, flats = [], heighten = 1 }: GroundSpec,
+): Float32Array {
   if (!(steepness > 0 && steepness < 1))
     throw new RangeError(`a ground's steepness is between nought and one, not ${steepness}`);
+  if (!(heighten >= 1 && Number.isFinite(heighten)))
+    throw new RangeError(`a ground's heighten is a finite number from one, not ${heighten}`);
   for (const { x, y, r, blend } of flats) {
     if (!(r > 0 && x >= 0 && y >= 0 && x <= layout.cols - 1 && y <= layout.rows - 1))
       throw new RangeError(
@@ -170,6 +182,12 @@ export function noiseGround(layout: Layout, { seed, feel, steepness, flats = [] 
   // the height the ground has at its middle, or at the lowest the noise reached, which the ground is brought to nought
   // from, so water lies exactly at the ground's floor. Their levels are fixed first, and every disc's own ground put
   // back level last, so that a disc's blend into the noise never lifts another's, however near they lie
+  // where the plateaus are, for `heighten` to hold them level again
+  const plateaus: [number, number, number][] = [layout.tee, layout.cup].map((at) => [
+    (at.x - layout.originX) / TILE - 0.5,
+    (at.y - layout.originY) / TILE - 0.5,
+    FLAT.inner,
+  ]);
   const levels = flats.map(({ x, y, floor }) => (floor ? lowestNoise : h[Math.round(y) * cols + Math.round(x)]));
   flats.forEach(({ x, y, r, blend }, i) => {
     const outer = blend === undefined ? r + FLATS.outer : r + FLATS.inner + blend;
@@ -195,8 +213,87 @@ export function noiseGround(layout: Layout, { seed, feel, steepness, flats = [] 
       if (ty + 1 < rows) steepest = Math.max(steepest, Math.abs(h[(ty + 1) * cols + tx] - h[ty * cols + tx]));
     }
   const k = steepest > 0 ? (steepness * (TILE / 2)) / steepest : 0;
-  // the lowest exactly nought, though the arithmetic may leave it a rounding off
-  return Float32Array.from(h, (v) => Math.max(0, (v - lowest) * k));
+  if (heighten === 1) {
+    // the lowest exactly nought, though the arithmetic may leave it a rounding off
+    return Float32Array.from(h, (v) => Math.max(0, (v - lowest) * k));
+  }
+  // taller, and then cut: every tile lowered to the exact lower envelope under the cap, with each plateau and disc held
+  // level, which is what the old ground's flat places were before the scale and are again after it
+  for (let t = 0; t < h.length; t++) h[t] = Math.max(0, (h[t] - lowest) * k * heighten);
+  const groups = levelGroups(layout, plateaus, flats);
+  lowerToLimit(h, cols, rows, (steepness * TILE) / 2, groups);
+  return Float32Array.from(h);
+}
+
+/** The tiles of each plateau and disc that stay level, as lists of indices: a tile is in the last that levelled it, so a disc over a plateau leaves the rest of it as it was. */
+function levelGroups(
+  layout: Layout,
+  plateaus: readonly (readonly [number, number, number])[],
+  flats: readonly Flat[],
+): number[][] {
+  const { cols, rows } = layout;
+  const owner = new Int32Array(cols * rows).fill(-1);
+  const discs = [...plateaus, ...flats.map(({ x, y, r }) => [x, y, r + FLATS.inner] as const)];
+  discs.forEach(([x, y, reach], i) => {
+    for (let ty = 0; ty < rows; ty++)
+      for (let tx = 0; tx < cols; tx++) if (Math.hypot(tx - x, ty - y) <= reach) owner[ty * cols + tx] = i;
+  });
+  const groups: number[][] = discs.map(() => []);
+  for (let t = 0; t < owner.length; t++) if (owner[t] >= 0) groups[owner[t]].push(t);
+  return groups.filter((g) => g.length > 1);
+}
+
+/** The most rounds `lowerToLimit` may take: it is a handful in practice (a test bounds it), and a ground that needed more would be a loop and not a ground. */
+export const CUT_ROUNDS = 64;
+
+/**
+ * Lowers heights, in place, to the highest ground under them that has no step between side-by-side tiles of more than
+ * `cap`, and in which each of the `groups` of tiles (a plateau, a level disc) is level: the exact lower envelope, which
+ * two sweeps over the four neighbours give (`h[i] = min(h[i], h[neighbour] + cap)`, forward then backward) and a group's
+ * levelling is then held to by lowering it to its lowest tile and sweeping again, until nothing changes. Heights only fall,
+ * and a tile never falls below the lowest it was, so the lowest stays where it was. Returns how many rounds it took, which
+ * is what a test bounds; one that runs out of them throws, since the ground it left would not be a limit.
+ */
+export function lowerToLimit(
+  h: Float64Array,
+  cols: number,
+  rows: number,
+  cap: number,
+  groups: readonly (readonly number[])[],
+): number {
+  for (let round = 1; round <= CUT_ROUNDS; round++) {
+    let changed = false;
+    const lower = (t: number, from: number) => {
+      const v = h[from] + cap;
+      if (v < h[t]) {
+        h[t] = v;
+        changed = true;
+      }
+    };
+    for (let ty = 0; ty < rows; ty++)
+      for (let tx = 0; tx < cols; tx++) {
+        const t = ty * cols + tx;
+        if (tx > 0) lower(t, t - 1);
+        if (ty > 0) lower(t, t - cols);
+      }
+    for (let ty = rows - 1; ty >= 0; ty--)
+      for (let tx = cols - 1; tx >= 0; tx--) {
+        const t = ty * cols + tx;
+        if (tx + 1 < cols) lower(t, t + 1);
+        if (ty + 1 < rows) lower(t, t + cols);
+      }
+    for (const group of groups) {
+      let least = Infinity;
+      for (const t of group) least = Math.min(least, h[t]);
+      for (const t of group)
+        if (h[t] > least) {
+          h[t] = least;
+          changed = true;
+        }
+    }
+    if (!changed) return round;
+  }
+  throw new RangeError(`the ground was not cut to its limit in ${CUT_ROUNDS} rounds`);
 }
 
 /**

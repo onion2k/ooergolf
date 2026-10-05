@@ -14,14 +14,15 @@
  * made is refused, by name, and never returned as a hole that cannot be played. It is content's tool: handed a spec and
  * giving back a `HoleDef`, importing no content, only the type of a hole.
  */
-import { PHYSICS, TILE, layoutOf, slopeAt } from './arena';
+import { TILE, layoutOf } from './arena';
 import type { HoleDef } from './course';
 import { GREEN as GREEN_RULES } from './green';
 import { FEELS, gradientNoise, greenContour, noiseGround, smoothstep, type Feel, type Flat } from './noise';
 
 import { seeded, type Random } from './random';
 import { WIND } from './shaping';
-import { GREENS, LIE, rollOf } from './surfaces';
+import { holdsBall } from './slopes';
+import { GREENS, LIE } from './surfaces';
 
 /** A pond: how far along the way of play it lies, which side of it (nought is across it, on the line) and how big, in tiles of radius. */
 export interface PondSpec {
@@ -193,11 +194,7 @@ function rests(l: ReturnType<typeof layoutOf>, greens: number | undefined): bool
   for (let t = 0; t < l.cols * l.rows; t++) {
     const lie = l.lie[t];
     if (l.solid[t] || l.oob[t] || (lie !== LIE.fairway && lie !== LIE.green && lie !== LIE.tee)) continue;
-    const x = l.originX + ((t % l.cols) + 0.5) * TILE,
-      y = l.originY + (Math.floor(t / l.cols) + 0.5) * TILE;
-    const [sx, sy] = slopeAt(l, x, y);
-    const s = Math.hypot(sx, sy);
-    if (s / Math.sqrt(1 + s * s) > (0.97 * rollOf(lie, greens)) / PHYSICS.gravity) return false;
+    if (!holdsBall(l, t, greens)) return false;
   }
   return true;
 }
