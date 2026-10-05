@@ -10,6 +10,11 @@
  * is mown last, a first cut one tile wide round the green and along both edges of the fairway, from the grass alone and
  * with no chance spent, so that every hazard and tree is where it would be without it.
  *
+ * A hole may have large lakes (`lakes`), water too big to go round that has to be carried, with islands of land in them to
+ * be flown to and played from, or the green itself an island. They are laid before anything else that is water or sand, so
+ * that a spec without them is the hole it was, and a way from the tee to the cup is then land and flights over water of no
+ * more than `CARRY`: a lake that would leave none is not laid.
+ *
  * Pure and seeded: the same spec is the same hole, and nothing here reaches for chance of its own. A spec that cannot be
  * made is refused, by name, and never returned as a hole that cannot be played. It is content's tool: handed a spec and
  * giving back a `HoleDef`, importing no content, only the type of a hole.
@@ -32,6 +37,30 @@ export interface PondSpec {
   size: [min: number, max: number];
 }
 
+/** A piece of land in a lake: of what ground, how big (a radius, in tiles) and how many bunkers it has of its own. */
+export interface IslandSpec {
+  kind: 'fairway' | 'rough' | 'sand' | 'green';
+  radius: number;
+  bunkers?: number;
+}
+
+/**
+ * A lake: water too big to go round, which has to be carried. `at` is how far along the way (a tenth to nine tenths) or
+ * `'green'` for a lake round the green, which is then its one island; `side` is which side of the line it lies, nought across
+ * it (spanning the fairway and the rough, from rock to rock), or left or right of it, against the fairway's edge; `size` is
+ * the range its radius along the way is drawn from, in tiles; `islands` are the land in it, each at least `LAKE.water` tiles
+ * from the shore and from the next. Where it lies is not its spec's to say but the hollow it is set in, the lowest of a few
+ * places, as a pond's is.
+ */
+export interface LakeSpec {
+  at: number | 'green';
+  side: -1 | 0 | 1;
+  size: [min: number, max: number];
+  islands: IslandSpec[];
+  /** The most water, in tiles, a flight over this lake may have to cross, no more than `CARRY` (which it is unless told less): a hole's limit is the least of its lakes'. */
+  carry?: number;
+}
+
 export interface GolfSpec {
   name: string;
   par: number;
@@ -46,8 +75,14 @@ export interface GolfSpec {
   seed: number;
   feel: Feel;
   steepness: number;
-  bunkers: { fairway: number; green: number };
+  /**
+   * How many bunkers of each place. `island` is bunkers on the lakes' islands that are not of fairway or sand, over and
+   * above any an island is given of its own, and counts with the fairway's in the twelve.
+   */
+  bunkers: { fairway: number; green: number; island?: number };
   ponds: PondSpec[];
+  /** Large lakes, placed before everything else that is water or sand, so that a spec without them is the hole it was. */
+  lakes?: LakeSpec[];
   trees: number;
   /** How hard the wind blows on the hole, in miles an hour: calm unless told. See `HoleDef.wind`. */
   wind?: number;
@@ -92,6 +127,27 @@ export const SHELF = { radius: 4, apart: 40 };
  */
 export const WOOD = { bend: 35, width: 8, widths: [4, 20], apart: 3, shift: 1, past: 20, base: 6.5 };
 
+/**
+ * The longest flight over water a hole asks of a ball, in tiles of water on a straight line: a hundred and thirty-five
+ * yards, which the longer clubs carry with a little to spare. A hole's lakes must leave a way from the tee to the cup of land
+ * and flights of no more than this, and the generator refuses to make one that does not.
+ */
+export const CARRY = 45;
+/**
+ * A lake: its radius's range in tiles, how many lakes a hole may have and islands a lake, the water round an island in tiles,
+ * an island's radius's range, how far the radius of a bunker on an island is drawn from, and how many directions a carry is
+ * looked for in, which is as fine as a landing three tiles wide is found at the longest carry.
+ */
+export const LAKE = {
+  size: [6, 20],
+  most: 4,
+  islands: 4,
+  water: 3,
+  radius: [2, 10],
+  bunker: [1.2, 1.8],
+  rays: 72,
+} as const;
+
 /** Where a hole's lane is, in the layout's own units: the tee and the lane's far end on the second leg, and how wide it is. */
 export interface Lane {
   from: { x: number; y: number };
@@ -118,6 +174,8 @@ const ROUGH = 7,
   WALL = 2;
 /** How wide the green is round the cup, in tiles: about eighteen yards, a green of thirty-odd across. */
 const GREEN = 5.5;
+/** How far an island green's land goes past the green's edge at the least, in tiles: the first cut and a little more. */
+const ISLAND_APRON = 1.5;
 /** How near a hazard may come to the tee and the cup, in tiles, and how far a tree may from the cup, and how near another tree. */
 const KEEP = { hazard: 4, cup: 2.5, tree: 6, green: 9, trees: 2 };
 /** The tiles left clear between one hazard and the next. */
@@ -130,6 +188,8 @@ const WANDER = { fairway: 0.22, rough: 0.3 };
 const WOBBLE = { two: 0.25, three: 0.15 };
 /** How far a pond's ground and a bunker's take to come back to the noise, as a share of the feel's swell: as `open.ts` has it. */
 const BLEND = { pond: 0.3, sand: 0.12 };
+/** How far a lake's ground takes to come back to the noise, as a share of the feel's swell: a lake's wall is a long one. */
+const LAKE_BLEND = 0.45;
 /** The play a ball rolls on, which a way three tiles wide must run over: fairway, rough, the first cut, green, the tee and its box, the cup and sand. */
 const PLAY = 'frcgtTCs';
 const SAMPLES = 16;
@@ -209,11 +269,75 @@ function refuse(spec: GolfSpec) {
     if (!Number.isInteger(n) || n < 0 || n > 12)
       throw fault(`its ${what} are a whole number from nought to twelve, not ${n}`);
   if (!Number.isInteger(trees) || trees < 0) throw fault(`its trees are a whole number from nought, not ${trees}`);
+  if (bunkers.island !== undefined && (!Number.isInteger(bunkers.island) || bunkers.island < 0 || bunkers.island > 12))
+    throw fault(`its island bunkers are a whole number from nought to twelve, not ${bunkers.island}`);
+  if (bunkers.fairway + (bunkers.island ?? 0) > 12)
+    throw fault(
+      `its fairway bunkers and island bunkers are twelve at most between them, not ${bunkers.fairway} and ${bunkers.island}`,
+    );
+  refuseLakes(spec, fault);
+  if (
+    (bunkers.island ?? 0) > 0 &&
+    !(spec.lakes ?? []).some((lake) => lake.islands.some((island) => island.kind !== 'sand'))
+  )
+    throw fault('its island bunkers need an island of fairway, rough or green to stand on, and it has none');
   for (const p of ponds) {
     if (!(p.at >= 0.1 && p.at <= 0.9)) throw fault(`a pond is a tenth to nine tenths of the way, not ${p.at}`);
     if (![-1, 0, 1].includes(p.side)) throw fault(`a pond is on one side, the other or across the line, not ${p.side}`);
     if (!(p.size[0] > 0 && p.size[0] <= p.size[1]))
       throw fault(`a pond is from more than nought to as much again in radius, not ${p.size[0]} to ${p.size[1]}`);
+  }
+}
+
+/** A lake that cannot be made is refused here, by what is wrong with it. */
+function refuseLakes(spec: GolfSpec, fault: (what: string) => RangeError) {
+  const lakes = spec.lakes ?? [];
+  if (lakes.length > LAKE.most) throw fault(`a hole has at most ${LAKE.most} lakes, not ${lakes.length}`);
+  const [least, most] = LAKE.size;
+  for (const lake of lakes) {
+    const round = lake.at === 'green';
+    if (!round && !(typeof lake.at === 'number' && lake.at >= 0.1 && lake.at <= 0.9))
+      throw fault(`a lake is a tenth to nine tenths of the way, or round the green, not ${lake.at}`);
+    if (![-1, 0, 1].includes(lake.side))
+      throw fault(`a lake is on one side of the line, the other, or across it, not ${lake.side}`);
+    const [a, b] = lake.size;
+    if (!(a >= least && a <= b && b <= most))
+      throw fault(
+        `a lake is from ${least} to ${most} tiles in radius, and its range from least to most, not ${a} to ${b}`,
+      );
+    if (lake.carry !== undefined && !(lake.carry >= 1 && lake.carry <= CARRY))
+      throw fault(`a lake's carry is from one to ${CARRY} tiles of water, not ${lake.carry}`);
+    if (lake.islands.length > LAKE.islands)
+      throw fault(`a lake has at most ${LAKE.islands} islands, not ${lake.islands.length}`);
+    if (round) {
+      if (lakes.length > 1) throw fault('a lake round the green leaves no room for another lake');
+      if (lake.side !== 0) throw fault(`a lake round the green is across the line, side nought, not ${lake.side}`);
+      if (lake.islands.length !== 1 || lake.islands[0].kind !== 'green')
+        throw fault('a lake round the green has one island, the green');
+    }
+    for (const island of lake.islands) {
+      if (!['fairway', 'rough', 'sand', 'green'].includes(island.kind))
+        throw fault(`an island's kind is fairway, rough, sand or green, not ${island.kind}`);
+      if (island.kind === 'green' && !round) throw fault('a green island is the green in a lake round it');
+      const [small, big] = LAKE.radius;
+      if (!(island.radius >= small))
+        throw fault(`an island's radius is from ${small} to ${big} tiles, not ${island.radius}`);
+      if (island.radius + LAKE.water >= a)
+        throw fault(
+          `an island of ${island.radius} tiles' radius is too big for a lake of ${a}: it leaves ${LAKE.water} tiles of water round it only where the lake is as wide as its radius and ${LAKE.water} more`,
+        );
+      if (!(island.radius <= big))
+        throw fault(`an island's radius is from ${small} to ${big} tiles, not ${island.radius}`);
+      if (
+        island.bunkers !== undefined &&
+        !(Number.isInteger(island.bunkers) && island.bunkers >= 0 && island.bunkers <= 12)
+      )
+        throw fault(`an island's bunkers are a whole number from nought to twelve, not ${island.bunkers}`);
+      if (round && !(island.radius >= GREEN + ISLAND_APRON))
+        throw fault(
+          `a green island is at least ${GREEN + ISLAND_APRON} tiles in radius, to hold the green, not ${island.radius}`,
+        );
+    }
   }
 }
 
@@ -336,6 +460,10 @@ function mown(grid: readonly (readonly string[])[]): string[][] {
 export function golfHole(spec: GolfSpec): HoleDef {
   refuse(spec);
   const { name, par, seed, feel, steepness, width, bunkers, ponds, trees, wind, greens, contour = 0 } = spec;
+  const lakes = spec.lakes ?? [];
+  const greenLake = lakes.some((lake) => lake.at === 'green');
+  // the most water a flight has to cross: the least any of the lakes asks
+  const carry = Math.min(CARRY, ...lakes.map((lake) => lake.carry ?? CARRY));
   const { heighten = 1 } = spec;
   // a gap's lane lands on a shelf, so the landing rests among hills that run
   const target = gapTarget(spec);
@@ -408,7 +536,11 @@ export function golfHole(spec: GolfSpec): HoleDef {
   const between = (least: number, most: number, chance: Random) => least + chance() * (most - least);
   const inMap = (c: number, r: number) => c >= 0 && r >= 0 && c < cols && r < rows;
 
-  /** Whether a route three tiles wide, over what a ball rolls on and past no tree, joins the tee and the cup. */
+  /**
+   * Whether a route three tiles wide, over what a ball rolls on and past no tree, joins the tee and the cup. On a hole with
+   * lakes a ball may also be flown: from a tile of the shore reached, over water, in a straight line, of no more than the hole's carry (`CARRY`
+   * tiles of it unless a lake says less), to land three tiles wide. A hole without lakes has no flights, and is what it always was.
+   */
   const joined = (): boolean => {
     const open = (c: number, r: number) => inMap(c, r) && PLAY.includes(grid[r][c]);
     const wide = (c: number, r: number) => {
@@ -418,24 +550,73 @@ export function golfHole(spec: GolfSpec): HoleDef {
     const seen = new Uint8Array(cols * rows);
     const todo = [tee[1] * cols + tee[0]];
     seen[todo[0]] = 1;
-    for (let head = 0; head < todo.length; head++) {
-      const c = todo[head] % cols,
-        r = Math.floor(todo[head] / cols);
-      if (c === cup[0] && r === cup[1]) return true;
-      for (const [dc, dr] of [
-        [1, 0],
-        [-1, 0],
-        [0, 1],
-        [0, -1],
-      ]) {
-        const k = (r + dr) * cols + (c + dc);
-        if (open(c + dc, r + dr) && !seen[k] && wide(c + dc, r + dr)) {
-          seen[k] = 1;
-          todo.push(k);
+    // where the next look for a flight begins: every tile reached before it has been looked from
+    let scanned = 0;
+    for (let head = 0; ;) {
+      for (; head < todo.length; head++) {
+        const c = todo[head] % cols,
+          r = Math.floor(todo[head] / cols);
+        if (c === cup[0] && r === cup[1]) return true;
+        for (const [dc, dr] of [
+          [1, 0],
+          [-1, 0],
+          [0, 1],
+          [0, -1],
+        ]) {
+          const k = (r + dr) * cols + (c + dc);
+          if (open(c + dc, r + dr) && !seen[k] && wide(c + dc, r + dr)) {
+            seen[k] = 1;
+            todo.push(k);
+          }
         }
       }
+      if (!lakes.length) return false;
+      // the flights from every tile of shore reached since the last look, each over water to land three wide
+      const from = scanned;
+      scanned = todo.length;
+      for (let i = from; i < scanned; i++) {
+        const c0 = todo[i] % cols,
+          r0 = Math.floor(todo[i] / cols);
+        // a tile of the shore: reached land (three wide, so a tile in from the water's edge) with water within two tiles
+        let shore = false;
+        for (let dc = -2; dc <= 2 && !shore; dc++)
+          for (let dr = -2; dr <= 2 && !shore; dr++)
+            if (inMap(c0 + dc, r0 + dr) && grid[r0 + dr][c0 + dc] === '~') shore = true;
+        if (!shore) continue;
+        for (let a = 0; a < LAKE.rays; a++) {
+          const dx = Math.cos((a * 2 * Math.PI) / LAKE.rays),
+            dy = Math.sin((a * 2 * Math.PI) / LAKE.rays);
+          let run = 0,
+            ashore = 0;
+          for (let d = 1; d <= carry + 6; d++) {
+            const c = Math.round(c0 + dx * d),
+              r = Math.round(r0 + dy * d);
+            if (!inMap(c, r)) break;
+            if (grid[r][c] === '~' && !ashore) {
+              if (++run > carry) break;
+              continue;
+            }
+            // before the water, only the shore's own tiles are crossed: a flight is over water from the first of it
+            if (!run) {
+              if (d > 3 || !open(c, r)) break;
+              continue;
+            }
+            // land at the far end of the water: a place to come down on, the first tile of it that is three wide, which
+            // is a step or two in from the water's edge
+            if (wide(c, r)) {
+              if (!seen[r * cols + c]) {
+                seen[r * cols + c] = 1;
+                todo.push(r * cols + c);
+              }
+              break;
+            }
+            if (!open(c, r) || ++ashore > 3) break;
+          }
+        }
+      }
+      // nothing new to be reached by a flight: no way
+      if (todo.length === scanned) return false;
     }
-    return false;
   };
 
   /** Puts `ch` on `tiles` if the way from the tee to the cup is still there, and says whether it was. */
@@ -478,8 +659,18 @@ export function golfHole(spec: GolfSpec): HoleDef {
     return true;
   };
 
-  /** Puts a bunker or a pond, its middle at (cx, cy) and its bed levelled, or says it would not go. */
-  const place = (kind: 'sand' | 'pond', cx: number, cy: number, r0: number, kinds: string): boolean => {
+  /**
+   * Puts a bunker or a pond, its middle at (cx, cy) and its bed levelled, or says it would not go. A bunker's bed is
+   * levelled at the height the ground has there, or, with `floor`, at nought: an island in a lake stands at the lake's floor.
+   */
+  const place = (
+    kind: 'sand' | 'pond',
+    cx: number,
+    cy: number,
+    r0: number,
+    kinds: string,
+    floor = kind === 'pond',
+  ): boolean => {
     const tiles = blob(cx, cy, r0);
     if (!fits(tiles, kinds)) return false;
     // a pond in a hollow, the ground there low already
@@ -490,7 +681,7 @@ export function golfHole(spec: GolfSpec): HoleDef {
       x: cx,
       y: cy,
       r: radius,
-      floor: kind === 'pond',
+      floor,
       blend: Math.max(2, BLEND[kind === 'pond' ? 'pond' : 'sand'] * swell),
     });
     return true;
@@ -499,13 +690,190 @@ export function golfHole(spec: GolfSpec): HoleDef {
   const fail = (what: string, n: number, of: number) =>
     new Error(`${name}: could not place ${what} ${n + 1} of ${of} in ${TRIES} tries`);
 
+  // the lakes, first, so that what is placed after them is placed round them: each in the lowest ground of a few places,
+  // its islands laid back as land in it and its bed at nought. The land the hole has to be played over is joined by flights
+  // over the water, of no more than `CARRY`, or the lake is not laid
+  const islands: { kind: IslandSpec['kind']; tiles: Tile[] }[] = [];
+  lakes.forEach((lake, n) => {
+    const round = lake.at === 'green';
+    const rim = (a: number, p2: number, p3: number) =>
+      1 + WOBBLE.two * Math.sin(2 * a + p2) + WOBBLE.three * Math.sin(3 * a + p3);
+    /** Whether a tile is rock, or has rock or the map's edge beside it: water is kept a tile off both. */
+    const nearRock = (c: number, r: number) => {
+      for (let dc = -1; dc <= 1; dc++)
+        for (let dr = -1; dr <= 1; dr++) if (!inMap(c + dc, r + dr) || grid[r + dr][c + dc] === ' ') return true;
+      return false;
+    };
+    /** The tiles of an ellipse about (cx, cy), `ra` along `dir` and `rc` across it, its edge wandering, less any near rock. */
+    const lakeBlob = (cx: number, cy: number, ra: number, rc: number, dir: Pt): Tile[] => {
+      const p2 = random() * Math.PI * 2,
+        p3 = random() * Math.PI * 2;
+      const span = Math.ceil(Math.max(ra, rc) * (1 + WOBBLE.two + WOBBLE.three)) + 1;
+      const tiles: Tile[] = [];
+      for (let r = Math.floor(cy) - span; r <= Math.ceil(cy) + span; r++)
+        for (let c = Math.floor(cx) - span; c <= Math.ceil(cx) + span; c++) {
+          if (!inMap(c, r) || nearRock(c, r)) continue;
+          const u = (c - cx) * dir[0] + (r - cy) * dir[1],
+            v = -(c - cx) * dir[1] + (r - cy) * dir[0];
+          if (Math.hypot(u / ra, v / rc) <= rim(Math.atan2(v, u), p2, p3)) tiles.push([c, r]);
+        }
+      return tiles;
+    };
+    /** The island of `spec` in the lake `mask` (one where there is water), or null if there is no room for it clear of the shore and the others. */
+    const islandIn = (spec: IslandSpec, lakeTiles: Tile[], mask: Uint8Array): Tile[] | null => {
+      for (let attempt = 0; attempt < 40; attempt++) {
+        let tiles: Tile[];
+        if (round) {
+          // the green and a margin of land round it, wandering a little, never less than the green and its apron
+          const p2 = random() * Math.PI * 2,
+            p3 = random() * Math.PI * 2;
+          tiles = [];
+          const span = Math.ceil(spec.radius * (1 + WOBBLE.two + WOBBLE.three)) + 1;
+          for (let r = cup[1] - span; r <= cup[1] + span; r++)
+            for (let c = cup[0] - span; c <= cup[0] + span; c++) {
+              const reach = Math.max(
+                GREEN + ISLAND_APRON,
+                spec.radius * rim(Math.atan2(r - cup[1], c - cup[0]), p2, p3),
+              );
+              if (inMap(c, r) && Math.hypot(c - cup[0], r - cup[1]) <= reach) tiles.push([c, r]);
+            }
+        } else {
+          const [cx, cy] = lakeTiles[Math.floor(random() * lakeTiles.length)];
+          tiles = blob(cx, cy, spec.radius);
+        }
+        const own = new Set(tiles.map(([c, r]) => r * cols + c));
+        // every tile within `LAKE.water` of the island is water of this lake, or the island's own
+        const clear = tiles.every(([c, r]) => {
+          if (!inMap(c, r) || mask[r * cols + c] !== 1) return false;
+          for (let dc = -LAKE.water; dc <= LAKE.water; dc++)
+            for (let dr = -LAKE.water; dr <= LAKE.water; dr++) {
+              if (Math.hypot(dc, dr) > LAKE.water) continue;
+              const k = (r + dr) * cols + c + dc;
+              if (!inMap(c + dc, r + dr) || (mask[k] !== 1 && !own.has(k))) return false;
+            }
+          return true;
+        });
+        if (tiles.length >= 3 && clear) return tiles;
+      }
+      return null;
+    };
+
+    let placed = false;
+    for (let attempt = 0; attempt < TRIES && !placed; attempt++) {
+      let best: {
+        score: number;
+        water: Tile[];
+        land: Tile[][];
+        cx: number;
+        cy: number;
+        ra: number;
+        rc: number;
+      } | null = null;
+      for (let k = 0; k < (round ? 1 : SAMPLES); k++) {
+        const r0 = between(lake.size[0], lake.size[1], random);
+        let cx = cup[0],
+          cy = cup[1],
+          rc = r0,
+          dir: Pt = [0, 1];
+        const ra = r0;
+        if (!round) {
+          const s = ((lake.at as number) + (random() - 0.5) * 0.3) * total;
+          const here = at(points, s);
+          dir = here.dir;
+          if (lake.side === 0) {
+            // across: from rock to rock, so that there is no way round it, and as long along the way as it says
+            rc = half(s) + band(s) + OUT + 2;
+            const off = (random() - 0.5) * 2;
+            [cx, cy] = [here.p[0] - dir[1] * off - minX, here.p[1] + dir[0] * off - minY];
+          } else {
+            // beside it: its near edge a little into the fairway, its far edge at the end of out of bounds, no wider than long
+            const inner = half(s) - between(0, 3, random);
+            const far = half(s) + band(s) + OUT;
+            rc = Math.min(r0, (far - inner) / 2);
+            if (rc < 3) continue;
+            const off = lake.side * (inner + rc);
+            [cx, cy] = [here.p[0] - dir[1] * off - minX, here.p[1] + dir[0] * off - minY];
+          }
+        }
+        const lakeTiles = lakeBlob(cx, cy, ra, rc, dir);
+        const mask = new Uint8Array(cols * rows);
+        for (const [c, r] of lakeTiles) mask[r * cols + c] = 1;
+        const land: Tile[][] = [];
+        let ok = lakeTiles.length > 0;
+        for (const spec of lake.islands) {
+          const tiles = ok ? islandIn(spec, lakeTiles, mask) : null;
+          if (!tiles) {
+            ok = false;
+            break;
+          }
+          for (const [c, r] of tiles) mask[r * cols + c] = 2;
+          land.push(tiles);
+        }
+        if (!ok) continue;
+        const water = lakeTiles.filter(([c, r]) => mask[r * cols + c] === 1);
+        if (!fits(water, 'frx')) continue;
+        // set in a hollow: the lowest ground of the places tried, the mean over the water, and low enough to be one
+        const mean = water.reduce((sum, [c, r]) => sum + heightAt(c, r), 0) / water.length;
+        if (mean <= HOLLOW * highest && (!best || mean < best.score))
+          best = { score: mean, water, land, cx, cy, ra, rc };
+      }
+      if (!best) continue;
+      // laid, and kept only if the hole can still be got from the tee to the cup by land and flights of `CARRY` or less
+      const tiles = [...best.water, ...best.land.flat()];
+      const was = tiles.map(([c, r]) => grid[r][c]);
+      for (const [c, r] of best.water) grid[r][c] = '~';
+      best.land.forEach((land, i) => {
+        const kind = lake.islands[i].kind;
+        const ch = kind === 'sand' ? 's' : kind === 'rough' ? 'r' : 'f';
+        // an island green keeps the green and the cup it was drawn with, and the land round it is mown fairway
+        for (const [c, r] of land) if (!(kind === 'green' && 'gC'.includes(grid[r][c]))) grid[r][c] = ch;
+      });
+      if (!joined()) {
+        tiles.forEach(([c, r], i) => (grid[r][c] = was[i]));
+        continue;
+      }
+      placed = true;
+      best.land.forEach((land, i) => islands.push({ kind: lake.islands[i].kind, tiles: land }));
+      // the bed at nought wherever the lake is, islands and all, as discs enough to cover it: a pond's one disc is too round for this
+      const all = [...best.water, ...best.land.flat()];
+      const disc = Math.max(3, 0.5 * Math.min(best.ra, best.rc));
+      const covering: { x: number; y: number }[] = [];
+      for (const [c, r] of all)
+        if (!covering.some((d) => Math.hypot(c - d.x, r - d.y) <= disc)) covering.push({ x: c, y: r });
+      for (const d of covering)
+        flats.push({ x: d.x, y: d.y, r: disc, floor: true, blend: Math.max(2, LAKE_BLEND * swell) });
+    }
+    if (!placed) throw fail('a lake', n, lakes.length);
+  });
+
+  // the bunkers on the islands: each island's own, and the hole's `island` ones over those islands that are land to play from
+  // and not sand, a little at a time round them. A small bunker, on level ground at the lake's floor, a tile off the water
+  const kept = lakes.flatMap((lake) => lake.islands);
+  const wanted = kept.map((island) => island.bunkers ?? 0);
+  const hosts = kept.flatMap((island, i) => (island.kind === 'sand' ? [] : [i]));
+  for (let k = 0; k < (bunkers.island ?? 0); k++) {
+    if (!hosts.length) throw fail('a bunker on an island', k, bunkers.island ?? 0);
+    wanted[hosts[k % hosts.length]]++;
+  }
+  wanted.forEach((count, i) => {
+    for (let n = 0; n < count; n++) {
+      let placed = false;
+      for (let attempt = 0; attempt < TRIES && !placed; attempt++) {
+        const [c, r] = islands[i].tiles[Math.floor(random() * islands[i].tiles.length)];
+        const r0 = between(LAKE.bunker[0], LAKE.bunker[1], random);
+        placed = place('sand', c + (random() - 0.5), r + (random() - 0.5), r0, 'frg', true);
+      }
+      if (!placed) throw fail('a bunker on an island', n, count);
+    }
+  });
   // the bunkers by the green, on the side the ball comes from and round it, each against its edge
   const approach = at(points, total * 0.98).dir;
   for (let n = 0; n < bunkers.green; n++) {
     let placed = false;
     for (let attempt = 0; attempt < TRIES && !placed; attempt++) {
       const a = Math.atan2(-approach[1], -approach[0]) + (random() - 0.5) * Math.PI * 1.5;
-      const r0 = between(2, 3.2, random);
+      // on an island the green's land is a ring a few tiles wide, so its bunkers are smaller
+      const r0 = greenLake ? between(LAKE.bunker[0], 2, random) : between(2, 3.2, random);
       const dist = GREEN + r0 * 0.55;
       placed = place('sand', cup[0] + Math.cos(a) * dist, cup[1] + Math.sin(a) * dist, r0, 'frg');
     }

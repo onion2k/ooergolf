@@ -316,6 +316,11 @@ export function checkInvariants(game: Game): string[] {
       const t = tileAt(layout, world.x[ball], world.y[ball]);
       if (t >= 0 && layout.oob[t]) out.push(`the ball is at rest out of bounds: ${at(ball)}`);
     }
+    // a ball is lost the step it meets water, so none lies at rest on a tile of it: an island's shore is where a ball could
+    if (layout.golf && world.asleep[ball]) {
+      const t = tileAt(layout, world.x[ball], world.y[ball]);
+      if (t >= 0 && layout.water[t] && !layout.solid[t]) out.push(`the ball is at rest on water: ${at(ball)}`);
+    }
     // at rest on ground its lie holds it on: a ball that stopped on a slope steeper than the roll can hold would have rolled
     if (layout.golf && world.asleep[ball]) {
       const slope = Math.hypot(...slopeAt(layout, world.x[ball], world.y[ball]));
