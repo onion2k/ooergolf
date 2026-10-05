@@ -21,7 +21,7 @@ import { FEELS, gradientNoise, greenContour, noiseGround, smoothstep, type Feel,
 
 import { seeded, type Random } from './random';
 import { WIND } from './shaping';
-import { holdsBall } from './slopes';
+import { drainFault, holdsBall } from './slopes';
 import { GREENS, LIE } from './surfaces';
 
 /** A pond: how far along the way of play it lies, which side of it (nought is across it, on the line) and how big, in tiles of radius. */
@@ -58,7 +58,23 @@ export interface GolfSpec {
   contour?: number;
   /** How fast the greens are: `HoleDef.greens`. */
   greens?: number;
+  /**
+   * How much higher the hills are made than `steepness` alone makes them, from one (the hills as they were) to
+   * `HEIGHTEN.most`, and then cut to the step the physics takes (`noiseGround`'s `heighten`): steeper ground a ball runs
+   * down. With more than one the whole fairway is no longer asked to rest a ball, only the tee, the green and its plate and
+   * the `shelves`, and every tile of fairway or cut that runs must drain (`drainFault`).
+   */
+  heighten?: number;
+  /**
+   * Where level ground is made on the way, in yards from the tee: a shelf of `SHELF.radius` tiles, for a landing to rest
+   * on among hills that run. Each is at least `SHELF.apart` yards from the tee and from the cup.
+   */
+  shelves?: number[];
 }
+
+/** How high `heighten` may go, and the shelf: its radius in tiles and how far in yards from the tee and the cup it may lie. */
+export const HEIGHTEN = { most: 2.5 };
+export const SHELF = { radius: 4, apart: 40 };
 
 /** How wide the rough is either side of the fairway, and how wide out of bounds is beyond it, in tiles, and the rock beyond that. */
 const ROUGH = 7,
@@ -98,8 +114,24 @@ const PLATE = { full: 2, blend: 3, most: 24 };
 
 /** A spec that is not a hole is refused here, by what is wrong with it. */
 function refuse(spec: GolfSpec) {
-  const { name, par, seed, length, bend, width, steepness, bunkers, ponds, trees, corner, wind, contour, greens } =
-    spec;
+  const {
+    name,
+    par,
+    seed,
+    length,
+    bend,
+    width,
+    steepness,
+    bunkers,
+    ponds,
+    trees,
+    corner,
+    wind,
+    contour,
+    greens,
+    heighten,
+    shelves,
+  } = spec;
   const fault = (what: string) => new RangeError(`${name || 'a golf hole'}: ${what}`);
   if (!name) throw new RangeError('a golf hole has to have a name');
   if (!Number.isInteger(par) || par < 1) throw fault(`its par is a whole number from one, not ${par}`);
@@ -114,6 +146,11 @@ function refuse(spec: GolfSpec) {
   if (!(steepness > 0 && steepness < 1)) throw fault(`its steepness is between nought and one, not ${steepness}`);
   if (contour !== undefined && !(contour >= 0 && contour <= 1))
     throw fault(`its contour is from nought to one, not ${contour}`);
+  if (heighten !== undefined && !(heighten >= 1 && heighten <= HEIGHTEN.most))
+    throw fault(`its heighten is from one to ${HEIGHTEN.most}, not ${heighten}`);
+  for (const y of shelves ?? [])
+    if (!(y >= SHELF.apart && y <= length - SHELF.apart))
+      throw fault(`a shelf is ${SHELF.apart} yards or more from the tee and from the cup, not ${y} of ${length}`);
   if (greens !== undefined && !(greens >= GREENS.fast && greens <= GREENS.slow))
     throw fault(`its greens run from ${GREENS.fast} (fast) to ${GREENS.slow} (slow), not ${greens}`);
   for (const [what, n] of [
@@ -190,10 +227,11 @@ function at(points: Pt[], s: number): { p: Pt; dir: Pt } {
  * Whether the tee, the fairway and the green of a hole are ground a ball rests on: no steeper than their roll holds it
  * against gravity, which is the green's own speed on a green, since a fast green holds a ball on less of a slope.
  */
-function rests(l: ReturnType<typeof layoutOf>, greens: number | undefined): boolean {
+function rests(l: ReturnType<typeof layoutOf>, greens: number | undefined, only?: Uint8Array): boolean {
   for (let t = 0; t < l.cols * l.rows; t++) {
     const lie = l.lie[t];
     if (l.solid[t] || l.oob[t] || (lie !== LIE.fairway && lie !== LIE.green && lie !== LIE.tee)) continue;
+    if (only && !only[t]) continue;
     if (!holdsBall(l, t, greens)) return false;
   }
   return true;
@@ -234,6 +272,7 @@ function mown(grid: readonly (readonly string[])[]): string[][] {
 export function golfHole(spec: GolfSpec): HoleDef {
   refuse(spec);
   const { name, par, seed, feel, steepness, width, bunkers, ponds, trees, wind, greens, contour = 0 } = spec;
+  const { heighten = 1, shelves = [] } = spec;
   const random = seeded(seed);
   const { points, total } = way(spec);
   const shape = gradientNoise(seed * 3 + 1);
@@ -293,6 +332,9 @@ export function golfHole(spec: GolfSpec): HoleDef {
     { x: cup[0], y: cup[1], r: GREEN * 0.75, blend: 3 },
     { x: tee[0], y: tee[1], r: 2, blend: 3 },
   ];
+  // the shelves, each a level disc on the way: where a landing rests among hills that run
+  const shelfAt: Tile[] = shelves.map((y) => tile(at(points, y / TILE).p));
+  for (const [x, y] of shelfAt) flats.push({ x, y, r: SHELF.radius, blend: 3 });
   const swell = FEELS[feel].swell.size;
   const highest = Math.max(...plain);
 
@@ -358,6 +400,8 @@ export function golfHole(spec: GolfSpec): HoleDef {
     if (tiles.length < 3) return false;
     for (const [c, r] of tiles) {
       if (!inMap(c, r) || !kinds.includes(grid[r][c])) return false;
+      // a hazard leaves a shelf as it is: its bed would be levelled at a height of its own across the landing
+      for (const [sc, sr] of shelfAt) if (Math.hypot(c - sc, r - sr) < SHELF.radius + 2) return false;
       if (Math.hypot(c - tee[0], r - tee[1]) < KEEP.hazard || Math.hypot(c - cup[0], r - cup[1]) < KEEP.cup)
         return false;
       for (let dc = -GAP; dc <= GAP; dc++)
@@ -488,6 +532,20 @@ export function golfHole(spec: GolfSpec): HoleDef {
   // the green's swells and swales, if it is to have any: made once, for the tiles of green the hole is drawn with
   const greenTiles: number[] = [];
   for (let t = 0; t < flat.cols * flat.rows; t++) if (flat.lie[t] === LIE.green) greenTiles.push(t);
+  // with heighten the ground runs, and a ball is only asked to rest on the tee, the green and the plate round it, and the
+  // shelves: the fairway elsewhere may run, and must drain instead
+  let only: Uint8Array | undefined;
+  if (heighten > 1) {
+    only = new Uint8Array(flat.cols * flat.rows);
+    for (let r = 0; r < flat.rows; r++)
+      for (let c = 0; c < flat.cols; c++) {
+        const t = r * flat.cols + c;
+        const lie = flat.lie[t];
+        if (lie === LIE.tee || lie === LIE.green) only[t] = 1;
+        else if (Math.hypot(c - cup[0], r - cup[1]) <= GREEN + PLATE.full) only[t] = 1;
+        else if (shelfAt.some(([sc, sr]) => Math.hypot(c - sc, r - sr) <= SHELF.radius)) only[t] = 1;
+      }
+  }
   const field =
     contour > 0
       ? greenContour(flat, {
@@ -529,7 +587,7 @@ export function golfHole(spec: GolfSpec): HoleDef {
     // a plate that is tilted stands high or low of the hills where it ends, so a short blend is a slope steeper than a ball
     // rests on, on the fairway that is under it: it is lengthened for that too, unless the hills alone are already too steep
     // to rest one (the hole is then made gentler, and that is tried again)
-    const playable = rests(layoutOf(drawn, ground), greens);
+    const playable = rests(layoutOf(drawn, ground), greens, only);
     let out = ground;
     for (let blend = PLATE.blend; blend <= PLATE.most; blend++) {
       const edge = GREEN + PLATE.full,
@@ -543,7 +601,7 @@ export function golfHole(spec: GolfSpec): HoleDef {
         }
       if (
         steepestStep(out, cup[0] - reach - 1, cup[1] - reach - 1, cup[0] + reach + 1, cup[1] + reach + 1) <= hills &&
-        (!playable || rests(layoutOf(drawn, out), greens))
+        (!playable || rests(layoutOf(drawn, out), greens, only))
       )
         break;
     }
@@ -553,9 +611,15 @@ export function golfHole(spec: GolfSpec): HoleDef {
   // ball: a hole that cannot be played is never returned. It is tried against the hole as it was drawn, before the cut,
   // so that the cut changes what a ball rolls on and not how steep a hole may be
   for (let k = 0, steep = steepness; k < GENTLER.tries; k++, steep *= GENTLER.by) {
-    const ground = noiseGround(flat, { seed, feel, steepness: steep, flats });
+    const ground = noiseGround(flat, { seed, feel, steepness: steep, flats, ...(heighten > 1 ? { heighten } : {}) });
     const terrain = field ? contoured(ground, field) : ground;
-    if (rests(layoutOf(drawn, terrain), greens))
+    // the ground that runs must drain, judged on the hole as it is mown, since the first cut is ground a ball is played from;
+    // and it must still be a ground the physics takes: a plate blended into steep hills can be a step past half a tile
+    if (
+      rests(layoutOf(drawn, terrain), greens, only) &&
+      (!only ||
+        (steepestStep(terrain, 0, 0, cols - 1, rows - 1) <= TILE / 2 && drainFault(layoutOf(map, terrain), greens) < 0))
+    )
       return { name, par, map, terrain, ...(wind ? { wind } : {}), ...(greens !== undefined ? { greens } : {}) };
   }
   throw new Error(`${name}: its fairway will not rest a ball, however gentle its hills`);
