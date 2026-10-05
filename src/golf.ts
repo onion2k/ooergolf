@@ -70,11 +70,47 @@ export interface GolfSpec {
    * on among hills that run. Each is at least `SHELF.apart` yards from the tee and from the cup.
    */
   shelves?: number[];
+  /**
+   * A shortcut across the corner of a dogleg, threaded through a wood: only on a bend of `WOOD.bend` degrees or more. `to` is
+   * how far from the tee, straight, the lane lands on the second leg's fairway (a shelf is made there, so the landing rests),
+   * and `width` is how many yards are clear between the canopies' bases along the lane (`WOOD.width` unless told). The rough
+   * on the inside of the corner is planted, three tiles apart, so that a drive cutting the corner is stopped by it, and no
+   * trunk stands within half the width and the canopy's base from the lane's line. See `laneOf`.
+   */
+  gap?: { to: number; width?: number };
 }
 
 /** How high `heighten` may go, and the shelf: its radius in tiles and how far in yards from the tee and the cup it may lie. */
 export const HEIGHTEN = { most: 2.5 };
 export const SHELF = { radius: 4, apart: 40 };
+/**
+ * The gap: the least bend a lane may be cut across, in degrees; the width clear between canopies' bases by default and its
+ * range, in yards; the wood's planting, three tiles apart, each row shifted a tile along from the last so no straight line
+ * runs between two rows; how far past the lane's end the wood goes and how far a trunk stands from the tee, in yards; and
+ * the least a canopy's inflated base is (a ball's radius over the canopy's own, `TREE.radius`), which is how far a trunk is
+ * kept from the lane's edge past half its width.
+ */
+export const WOOD = { bend: 35, width: 8, widths: [4, 20], apart: 3, shift: 1, past: 20, base: 6.5 };
+
+/** Where a hole's lane is, in the layout's own units: the tee and the lane's far end on the second leg, and how wide it is. */
+export interface Lane {
+  from: { x: number; y: number };
+  to: { x: number; y: number };
+  /** Yards clear between the canopies' bases, as asked. */
+  width: number;
+  /** How far a trunk is kept from the lane's line, in yards: half the width and a canopy base's inflated radius. */
+  keep: number;
+}
+
+const LANES = new WeakMap<HoleDef, Lane>();
+
+/**
+ * The lane a hole with a gap was made with, or undefined for a hole without: for tests, the fuzzer and the autopilot to
+ * aim along. It is kept beside the hole and not in it, so a hole is what it always was in every field a save or a hash reads.
+ */
+export function laneOf(hole: HoleDef): Lane | undefined {
+  return LANES.get(hole);
+}
 
 /** How wide the rough is either side of the fairway, and how wide out of bounds is beyond it, in tiles, and the rock beyond that. */
 const ROUGH = 7,
@@ -131,6 +167,7 @@ function refuse(spec: GolfSpec) {
     greens,
     heighten,
     shelves,
+    gap,
   } = spec;
   const fault = (what: string) => new RangeError(`${name || 'a golf hole'}: ${what}`);
   if (!name) throw new RangeError('a golf hole has to have a name');
@@ -151,6 +188,18 @@ function refuse(spec: GolfSpec) {
   for (const y of shelves ?? [])
     if (!(y >= SHELF.apart && y <= length - SHELF.apart))
       throw fault(`a shelf is ${SHELF.apart} yards or more from the tee and from the cup, not ${y} of ${length}`);
+  if (gap) {
+    if (!(Math.abs(bend) >= WOOD.bend))
+      throw fault(`a gap is cut across a bend of ${WOOD.bend} degrees or more, and this one is ${bend}`);
+    const [least, most] = WOOD.widths;
+    if (gap.width !== undefined && !(gap.width >= least && gap.width <= most))
+      throw fault(`a gap is from ${least} to ${most} yards clear, not ${gap.width}`);
+    const out = gapTarget(spec);
+    if (!out || !(out.along >= 10 && out.along <= (1 - (corner ?? 0.55)) * length - SHELF.apart))
+      throw fault(
+        `a gap's target is on the second leg, ten yards past the corner and ${SHELF.apart} short of the cup, not ${gap.to} yards from the tee`,
+      );
+  }
   if (greens !== undefined && !(greens >= GREENS.fast && greens <= GREENS.slow))
     throw fault(`its greens run from ${GREENS.fast} (fast) to ${GREENS.slow} (slow), not ${greens}`);
   for (const [what, n] of [
@@ -180,9 +229,23 @@ function way(spec: GolfSpec): { points: Pt[]; total: number } {
   return { points: [[0, 0], corner, cup], total: L };
 }
 
-/** How far along the way, from its start, the nearest point to `p` is, and how far `p` is from it. */
-function along(points: Pt[], p: Pt): { s: number; d: number } {
-  let best = { s: 0, d: Infinity };
+/**
+ * Where a gap's lane lands: how far along the second leg, in yards from the corner, the point `to` yards straight from the
+ * tee is (the law of cosines: the legs meet at the bend's angle), or undefined where there is none.
+ */
+function gapTarget(spec: GolfSpec): { along: number; s: number } | undefined {
+  if (!spec.gap) return undefined;
+  const c = (spec.corner ?? 0.55) * spec.length;
+  const k = c * Math.cos((spec.bend * Math.PI) / 180);
+  const root = k * k - (c * c - spec.gap.to * spec.gap.to);
+  if (!(root >= 0)) return undefined;
+  const along = -k + Math.sqrt(root);
+  return { along, s: c + along };
+}
+
+/** How far along the way, from its start, the nearest point to `p` is, how far `p` is from it, and which side of it. */
+function along(points: Pt[], p: Pt): { s: number; d: number; side: number } {
+  let best = { s: 0, d: Infinity, side: 0 };
   let run = 0;
   for (let k = 0; k + 1 < points.length; k++) {
     const [ax, ay] = points[k],
@@ -193,7 +256,8 @@ function along(points: Pt[], p: Pt): { s: number; d: number } {
     const u = ((p[0] - ax) * lx + (p[1] - ay) * ly) / (len * len);
     const t = Math.max(0, Math.min(1, u));
     const d = Math.hypot(p[0] - (ax + lx * t), p[1] - (ay + ly * t));
-    if (d < best.d) best = { s: run + len * t, d };
+    // which side of the way it is on, by the cross product: positive to the left of the way, negative to its right
+    if (d < best.d) best = { s: run + len * t, d, side: Math.sign(lx * (p[1] - ay) - ly * (p[0] - ax)) };
     run += len;
   }
   return best;
@@ -272,7 +336,10 @@ function mown(grid: readonly (readonly string[])[]): string[][] {
 export function golfHole(spec: GolfSpec): HoleDef {
   refuse(spec);
   const { name, par, seed, feel, steepness, width, bunkers, ponds, trees, wind, greens, contour = 0 } = spec;
-  const { heighten = 1, shelves = [] } = spec;
+  const { heighten = 1 } = spec;
+  // a gap's lane lands on a shelf, so the landing rests among hills that run
+  const target = gapTarget(spec);
+  const shelves = target ? [...(spec.shelves ?? []), target.s] : (spec.shelves ?? []);
   const random = seeded(seed);
   const { points, total } = way(spec);
   const shape = gradientNoise(seed * 3 + 1);
@@ -480,10 +547,23 @@ export function golfHole(spec: GolfSpec): HoleDef {
     if (!placed) throw fail('a pond', n, ponds.length);
   });
 
+  // a gap's lane, in tiles: the tee's tile to the target's, which no trunk may stand within `keepT` of
+  const wayTo = target ? tile(at(points, target.s / TILE).p) : undefined;
+  const keepT = ((spec.gap?.width ?? WOOD.width) / 2 + WOOD.base) / TILE;
+  /** How far, in tiles, (c, r) is from the lane's line, a segment from the tee to the target; infinity where there is none. */
+  const fromLane = (c: number, r: number): number => {
+    if (!wayTo) return Infinity;
+    const lx = wayTo[0] - tee[0],
+      ly = wayTo[1] - tee[1];
+    const u = Math.max(0, Math.min(1, ((c - tee[0]) * lx + (r - tee[1]) * ly) / (lx * lx + ly * ly)));
+    return Math.hypot(c - tee[0] - lx * u, r - tee[1] - ly * u);
+  };
+
   // the trees, in clusters in the rough, off the tee and the green and clear of one another's trunks
   const placedTrees: Tile[] = [];
   const treeFits = (c: number, r: number) => {
     if (!inMap(c, r) || grid[r][c] !== 'r') return false;
+    if (fromLane(c, r) < keepT) return false;
     const k = r * cols + c;
     // in the rough, not up against the fairway or out of bounds
     if (reach[k] < edge[k] + 1.5 || reach[k] > outer[k] - 1.5) return false;
@@ -494,6 +574,52 @@ export function golfHole(spec: GolfSpec): HoleDef {
         if (inMap(c + dc, r + dr) && '~s'.includes(grid[r + dr][c + dc])) return false;
     return true;
   };
+  // the wood of a gap, before the scattered trees so they come round it: every tile of the rough inside the corner that a
+  // trunk may stand on, three tiles apart, then the lane's edges, each trunk as near the lane as `keepT` lets it. Chance is
+  // spent on none of it, so the scattered trees, the ground and everything else are what they would have been
+  let made: Lane | undefined;
+  if (target && wayTo) {
+    const lane: Pt = [wayTo[0] - tee[0], wayTo[1] - tee[1]];
+    const laneLength = Math.hypot(lane[0], lane[1]);
+    const unit: Pt = [lane[0] / laneLength, lane[1] / laneLength];
+    const room = (c: number, r: number) => {
+      const w = along(points, world(c, r));
+      return (
+        w.side * spec.bend < 0 &&
+        w.s <= target.s / TILE + WOOD.past / TILE &&
+        Math.hypot(c - tee[0], r - tee[1]) <= laneLength + WOOD.past / TILE
+      );
+    };
+    // the lane's edges first, so the planting round them leaves the lane the width asked
+    for (let u = KEEP.tree; u <= laneLength + WOOD.past / TILE; u += KEEP.trees)
+      for (const side of [-1, 1]) {
+        const ideal: Pt = [
+          tee[0] + unit[0] * u - unit[1] * side * (keepT + 0.3),
+          tee[1] + unit[1] * u + unit[0] * side * (keepT + 0.3),
+        ];
+        let best: { c: number; r: number; d: number } | null = null;
+        for (let dc = -2; dc <= 2; dc++)
+          for (let dr = -2; dr <= 2; dr++) {
+            const c = Math.round(ideal[0]) + dc,
+              r = Math.round(ideal[1]) + dr;
+            const d = fromLane(c, r);
+            if (d >= keepT && (!best || d < best.d) && treeFits(c, r) && room(c, r)) best = { c, r, d };
+          }
+        if (best) {
+          grid[best.r][best.c] = '^';
+          placedTrees.push([best.c, best.r]);
+        }
+      }
+    for (let r = 0; r < rows; r += WOOD.apart)
+      for (let c = ((r / WOOD.apart) * WOOD.shift) % WOOD.apart; c < cols; c += WOOD.apart)
+        if (treeFits(c, r) && room(c, r)) {
+          grid[r][c] = '^';
+          placedTrees.push([c, r]);
+        }
+    if (!joined()) throw new Error(`${name}: its wood leaves no way from the tee to the cup`);
+    const cell = (t: Tile) => ({ x: (t[0] + 0.5 - cols / 2) * TILE, y: (t[1] + 0.5 - rows / 2) * TILE });
+    made = { from: cell(tee), to: cell(wayTo), width: spec.gap?.width ?? WOOD.width, keep: keepT * TILE };
+  }
   for (let n = 0; n < trees;) {
     let placed = false;
     for (let attempt = 0; attempt < TRIES && !placed; attempt++) {
@@ -619,8 +745,18 @@ export function golfHole(spec: GolfSpec): HoleDef {
       rests(layoutOf(drawn, terrain), greens, only) &&
       (!only ||
         (steepestStep(terrain, 0, 0, cols - 1, rows - 1) <= TILE / 2 && drainFault(layoutOf(map, terrain), greens) < 0))
-    )
-      return { name, par, map, terrain, ...(wind ? { wind } : {}), ...(greens !== undefined ? { greens } : {}) };
+    ) {
+      const hole: HoleDef = {
+        name,
+        par,
+        map,
+        terrain,
+        ...(wind ? { wind } : {}),
+        ...(greens !== undefined ? { greens } : {}),
+      };
+      if (made) LANES.set(hole, made);
+      return hole;
+    }
   }
   throw new Error(`${name}: its fairway will not rest a ball, however gentle its hills`);
 }
