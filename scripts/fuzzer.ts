@@ -45,7 +45,6 @@ import { golfHole } from '../src/golf';
 import { LINKS_SPECS } from '../src/links';
 import { flipperYaw } from '../src/obstacles';
 import { Previewer } from '../src/preview';
-import { RANGE } from '../src/range';
 import { BAG } from '../src/bag';
 import { carryFrom } from '../src/flight';
 import { lieAt } from '../src/arena';
@@ -62,20 +61,6 @@ import { GREENS, LIE } from '../src/surfaces';
 const MISSES = 2;
 
 const DT = 1 / 60;
-
-/** The winds, in miles an hour, that the holes of The Range are given in turn, over again past the last. */
-export const WINDS = [12, 18, 6] as const;
-
-/**
- * The holes of The Range with a wind on them, of 12, 18 and 6 miles an hour in turn and over again for a course of more
- * than three (a hole past the list would otherwise be given none, and be calm without a word), under names of their own
- * (the save keeps a best score by name): where the monkey plays golf in wind, since The Range itself is calm and stays so.
- */
-export const WINDY: readonly HoleDef[] = RANGE.map((hole, k) => ({
-  ...hole,
-  name: `${hole.name} windy`,
-  wind: WINDS[k % WINDS.length],
-}));
 
 /**
  * How fast the greens of each of the contoured holes run, in turn: the fastest, the slowest, and a fifth and an eighth of the

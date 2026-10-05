@@ -10,12 +10,10 @@ import { Autopilot, golfCandidates, speedAcross } from '../src/autopilot';
 import { layoutOf, lieAt } from '../src/arena';
 import { PUTTER, bagClub } from '../src/bag';
 import { Rehearsal } from '../src/planner';
-import { paceRun } from '../scripts/pace';
 import type { HoleDef } from '../src/course';
 import { GREENS, LIE } from '../src/surfaces';
-import { RANGE } from '../src/range';
 import { seeded } from '../src/random';
-import { DT, field, golfGame } from './helpers';
+import { DT, FLAT, field, golfGame } from './helpers';
 
 const ROWS = 40,
   COLS = 41,
@@ -307,9 +305,9 @@ describe('putting from the fringe and playing from the first cut', () => {
   });
 });
 
-describe('The Range’s green, as it was', () => {
+describe('A level green, as it was', () => {
   it('putts by the arithmetic alone on a level green, which is exact: no trial is made, and the plan is the first guess', () => {
-    const { game } = golfGame(RANGE[0]);
+    const { game } = golfGame(FLAT.pitch);
     const { cup } = game.layout;
     game.place(cup.x - 8, cup.y - 10);
     const pilot = new Autopilot(game);
@@ -317,11 +315,5 @@ describe('The Range’s green, as it was', () => {
     expect(plan.expect).toBeUndefined();
     expect(pilot.trials).toBe(0);
     expect(plan).toEqual(golfCandidates(game, game.world.x[game.ball], game.world.y[game.ball])[0]);
-  });
-
-  it('plays the rounds it played: the card of each of the first three seeds is two, two and three on the first three holes', () => {
-    // as measured before stage 6, with the pace gate's player, shot for shot: the card of each seed. The holes added to
-    // The Range after them come after them, so that chance, which runs on from hole to hole, reaches the first three as it did.
-    for (const seed of [1, 2, 3]) expect(paceRun(seed, 20, RANGE).card.slice(0, 3), `seed ${seed}`).toEqual([2, 2, 3]);
   });
 });

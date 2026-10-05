@@ -10,6 +10,7 @@ import { TILE, heightAt, layoutOf, slopeAt, tileAt, type Layout } from '../src/a
 import { GREEN, greenArrows } from '../src/green';
 import { COURSES } from '../src/course';
 import { ARROWS, RING_LIFT, Scene, arrowMarks } from '../src/scene';
+import { FLAT_HOLES } from './helpers';
 
 const WIND: Wind = { direction: [1, 0], strength: 0.5, gustSize: 8, gustSpeed: 5 };
 const COLS = 15,
@@ -81,14 +82,14 @@ describe('where the arrows stand and which way they point', () => {
     expect(ARROWS.longest).toBeLessThan(TILE);
   });
 
-  it('has none on a level green, on the rough or first cut round it, or on a level hole of minigolf or The Range', () => {
+  it('has none on a level green, on the rough or first cut round it, or on a level hole of minigolf or of golf', () => {
     expect(arrowMarks(LEVEL)).toEqual([]);
     const l2 = tilted(0.03);
     for (const m of arrowMarks(l2)) expect(l2.lie[tileAt(l2, m.x, m.y)]).toBe(4);
-    // every hole of The Meadow, which is level, and of The Range, which has no contour; the minigolf holes that slope have
-    // arrows on their floor (test/slope-aids.test.ts)
-    for (const course of COURSES.filter((c) => ['The Meadow', 'The Range'].includes(c.name)))
-      for (const h of course.holes) expect(arrowMarks(layoutOf(h.map, h.terrain)), h.name).toEqual([]);
+    // every hole of The Meadow, which is level, and the level golf holes of the helpers, which have no contour; the minigolf
+    // holes that slope have arrows on their floor (test/slope-aids.test.ts)
+    for (const h of [...COURSES.find((c) => c.name === 'The Meadow')!.holes, ...FLAT_HOLES])
+      expect(arrowMarks(layoutOf(h.map, h.terrain)), h.name).toEqual([]);
   });
 });
 

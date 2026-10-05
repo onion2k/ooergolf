@@ -1,22 +1,21 @@
 /**
  * The autopilot on a golf hole: it picks the club a golfer would for the distance it has, aims at the cup, and putts
  * from the green. It is the measuring instrument every gate plays golf through, so what it must do is that it gets
- * round every hole of the range, in the strokes a competent player takes, the same every time from a seed. It works
+ * round every level hole, in the strokes a competent player takes, the same every time from a seed. It works
  * the distance out from the distance and the loft, not from the game's own tables; a planner that tries its shots
  * in a copy of the game is a later stage's.
  */
 import { describe, expect, it } from 'vitest';
 import { Autopilot } from '../src/autopilot';
 import { BAG, bagClub, carryOf } from '../src/bag';
-import { RANGE } from '../src/range';
 import { seeded } from '../src/random';
 import { checkInvariants } from '../src/invariants';
-import { DT, field, golfGame } from './helpers';
+import { DT, FLAT, FLAT_HOLES, field, golfGame } from './helpers';
 import { paceRun } from '../scripts/pace';
 
 describe('the autopilot on a golf hole', () => {
   it('plans a driver, at full power, from the tee of a hole longer than anything else can reach', () => {
-    const { game } = golfGame(RANGE[2]);
+    const { game } = golfGame(FLAT.long);
     const plan = new Autopilot(game).plan()!;
     expect(plan.club).toBe('driver');
     expect(plan.power).toBeGreaterThan(0.95);
@@ -25,7 +24,7 @@ describe('the autopilot on a golf hole', () => {
   });
 
   it('plans the shortest club that reaches, at the power that lands at the cup: a wedge from a hundred units', () => {
-    const { game } = golfGame(RANGE[0]);
+    const { game } = golfGame(FLAT.pitch);
     const plan = new Autopilot(game).plan()!;
     const club = bagClub(plan.club!);
     expect(['pitching-wedge', '9-iron', 'sand-wedge']).toContain(club.id);
@@ -63,32 +62,34 @@ describe('the autopilot on a golf hole', () => {
   });
 
   it('is none for a ball that is not at rest, on a golf hole as elsewhere', () => {
-    const { game } = golfGame(RANGE[0]);
+    const { game } = golfGame(FLAT.pitch);
     game.shoot(Math.PI / 2, 1);
     game.step(DT * 10);
     expect(new Autopilot(game).plan()).toBeNull();
   });
 
-  it('gets round every hole of the range, on every seed, in a round a player would recognise', () => {
+  it('gets round every level hole, on every seed, in a round a player would recognise', () => {
     for (let seed = 1; seed <= 8; seed++) {
-      const run = paceRun(seed, 20, RANGE);
+      const run = paceRun(seed, 20, FLAT_HOLES);
       expect(run.finished, `seed ${seed}`).toBe(true);
-      // each hole is holed out or picked up at the limit, and a round over the range is a few dozen strokes at most
-      run.card.forEach((score, h) => expect(score, `seed ${seed} hole ${h + 1}`).toBeLessThanOrEqual(RANGE[h].par + 5));
-      expect(run.strokes, `seed ${seed}`).toBeLessThan(RANGE.reduce((a, h) => a + h.par, 0) + 12);
+      // each hole is holed out or picked up at the limit, and a round over them is a few dozen strokes at most
+      run.card.forEach((score, h) =>
+        expect(score, `seed ${seed} hole ${h + 1}`).toBeLessThanOrEqual(FLAT_HOLES[h].par + 5),
+      );
+      expect(run.strokes, `seed ${seed}`).toBeLessThan(FLAT_HOLES.reduce((a, h) => a + h.par, 0) + 12);
     }
   });
 
   it('plays the same round from the same seed, and a different one from another', () => {
-    const a = paceRun(3, 20, RANGE),
-      b = paceRun(3, 20, RANGE),
-      c = paceRun(4, 20, RANGE);
+    const a = paceRun(3, 20, FLAT_HOLES),
+      b = paceRun(3, 20, FLAT_HOLES),
+      c = paceRun(4, 20, FLAT_HOLES);
     expect(a.card).toEqual(b.card);
     expect(c.strokes).toBeGreaterThan(0);
   });
 
   it('keeps every rule while it plays a hole with slips', () => {
-    const { game } = golfGame(RANGE[2], seeded(5));
+    const { game } = golfGame(FLAT.long, seeded(5));
     const pilot = new Autopilot(game, { skill: { aim: 0.05, power: 0.1 }, random: seeded(9) });
     for (let f = 0; f < 60 * 240 && game.phase !== 'over'; f++) {
       pilot.step(DT);

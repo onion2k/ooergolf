@@ -1,6 +1,6 @@
 /**
  * The first cut: the mown ground one tile wide round every putting green and along both edges of a fairway, which a golf
- * hole made from a spec has and the golf held by hand (The Range) does not. What is held is where it is (a continuous
+ * hole made from a spec has and the golf held by hand does not. What is held is where it is (a continuous
  * fringe, gaps only where something else is), that it takes nothing from a hazard, the way of play or a tree (it is made
  * after them all, from the grass alone, and spends no chance), that a ball rolls on it and is struck from it as the
  * surfaces table says, and that a hole drawn with it is a hole the layout reads.
@@ -9,8 +9,8 @@ import { describe, expect, it } from 'vitest';
 import { layoutOf, lieAt } from '../src/arena';
 import { golfHole, type GolfSpec } from '../src/golf';
 import { LINKS_SPECS } from '../src/links';
-import { RANGE } from '../src/range';
 import { LIE, SURFACES } from '../src/surfaces';
+import { FLAT_HOLES } from './helpers';
 
 const SPEC: GolfSpec = {
   name: 'Cut Test',
@@ -189,7 +189,7 @@ describe('what the cut is made of', () => {
 });
 
 describe('the holes that are not made from a spec', () => {
-  it('have no first cut: The Range is as it was, and has none of the letter', () => {
-    for (const hole of RANGE) expect(hole.map.join('').includes('c'), hole.name).toBe(false);
+  it('have no first cut: a hole drawn by hand is as it was, and has none of the letter', () => {
+    for (const hole of FLAT_HOLES) expect(hole.map.join('').includes('c'), hole.name).toBe(false);
   });
 });

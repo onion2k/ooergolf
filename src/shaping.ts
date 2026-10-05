@@ -17,7 +17,7 @@ import { LIE, SURFACES, type Lie } from './surfaces';
 
 /**
  * The wind: how hard it pushes a ball, in yards a second a second for each mile an hour of it, and the most any hole has
- * (a hole's wind is in miles an hour in its content, nought for calm, which is every hole of minigolf and The Range).
+ * (a hole's wind is in miles an hour in its content, nought for calm, which is every hole of minigolf).
  * Measured: ten miles an hour carries a full driver about ten yards further with it, or ten yards off its line across it.
  */
 export const WIND = { push: 1.4, most: 25 } as const;

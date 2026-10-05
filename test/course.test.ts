@@ -106,7 +106,7 @@ describe('the course', () => {
     for (const hole of COURSES.flatMap((c) => c.holes)) {
       const l = layoutOf(hole.map, hole.terrain);
       expect(hole.par, hole.name).toBeGreaterThanOrEqual(2);
-      // the longest holes of The Range and The Links are par five; no hole is more
+      // the longest holes of The Links are par five; no hole is more
       expect(hole.par, hole.name).toBeLessThanOrEqual(5);
       // the cup sits on level grass, where its lining, collar and flag are drawn; the physics could cut it higher
       const cupTile = Math.floor((l.cup.y - l.originY) / TILE) * l.cols + Math.floor((l.cup.x - l.originX) / TILE);

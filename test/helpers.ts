@@ -1,5 +1,6 @@
 /** What the tests share: a new game in memory, from a seed, with a note of every event it tells, and a green to practise on. */
 import { COURSES, type HoleDef } from '../src/course';
+export { FLAT, FLAT_HOLES, levelHole, type LevelSpec } from './level';
 import { golfHole } from '../src/golf';
 import { LINKS_SPECS } from '../src/links';
 import { Game, type GameEvents } from '../src/game';
@@ -9,7 +10,7 @@ import { seeded } from '../src/random';
 export const DT = 1 / 60;
 
 /**
- * The holes the slow tests that try every tile of every hole are run on: every hole of The Meadow and The Range. Of The Links, whose holes are
+ * The holes the slow tests that try every tile of every hole are run on: every hole of the minigolf courses. Of The Links, whose holes are
  * twenty thousand tiles of map and eight thousand of ground each: three, the shortest, a par four and the longest, made
  * singly so that importing this does not make all nine.
  */

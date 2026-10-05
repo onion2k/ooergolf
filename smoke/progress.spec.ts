@@ -20,6 +20,7 @@ import { puttText } from '../src/readout';
 import { DRAG } from '../src/shot';
 import { scoreName } from '../src/score';
 import { LIE } from '../src/surfaces';
+import { FLAT } from '../test/level';
 import { smallHole } from './bighole';
 import { BUDGET } from './budget';
 import { drag, puttingHole, start, watch } from './game';
@@ -449,7 +450,7 @@ test('a hole of golf played with the bag: a club chosen by its button, struck in
   await start(page, { seed: 1, paused: true, screen: true });
   // the course chosen as a player chooses it, from its card, and the bag is there with the driver in hand
   await expect(page.locator('#bag')).toBeHidden();
-  await page.locator('#start .course', { hasText: 'The Range' }).click();
+  await page.locator('#start .course', { hasText: 'The Links' }).click();
   await expect(page.locator('#start')).toBeHidden();
   await page.evaluate(() => window.game!.step(75));
   await expect(page.locator('#bag')).toBeVisible();
@@ -458,7 +459,7 @@ test('a hole of golf played with the bag: a club chosen by its button, struck in
   await expect(page.locator('#bagInfo')).toContainText('Driver');
   await expect(page.locator('#help')).toContainText('swing');
   const first = await page.evaluate(() => window.game!.state());
-  expect(first).toMatchObject({ course: 'The Range', golf: true, inHand: 'driver', strokes: 0, ready: true });
+  expect(first).toMatchObject({ course: 'The Links', golf: true, inHand: 'driver', strokes: 0, ready: true });
 
   // a club chosen by pressing its button: in hand, lit, and said with how far it carries
   await page.locator('#bagClubs button[data-club="pitching-wedge"]').click();
@@ -562,8 +563,8 @@ test('a full drive is followed the whole way: the ball is in the middle of the s
   await start(page, { seed: 11, paused: true });
   const seen = await page.evaluate(() => {
     const g = window.game!;
-    g.chooseCourse('The Range');
-    g.startHole(2);
+    g.chooseCourse('The Links');
+    g.startHole(0);
     g.step(75);
     g.shoot(Math.PI / 2, 1, 'driver');
     const out: { f: number; z: number; x: number; y: number }[] = [];
@@ -986,13 +987,12 @@ test.describe('aiming a golf shot', () => {
     page,
   }) => {
     const problems = watch(page);
-    // a hole with no speed to its greens, The Range's: the dots and nothing else, no arc, no ring
+    // a hole with no speed to its greens, a level hole of the test helpers: the dots and nothing else, no arc, no ring
     await start(page, { seed: 11, paused: true });
-    await page.evaluate(() => {
-      window.game!.chooseCourse('The Range');
-      window.game!.startHole(1);
+    await page.evaluate((hole) => {
+      window.game!.playCourse([hole]);
       window.game!.step(300);
-    });
+    }, FLAT.long);
     await page.locator('#bagClubs button[data-club="putter"]').click();
     await page.evaluate(() => window.game!.step(300));
     await pull(page, 0.5);
@@ -1853,7 +1853,7 @@ test.describe('the flag button', () => {
     await expect(page.locator('#viewFlag')).toBeHidden();
     expect(await page.evaluate(() => window.game!.faceFlag()), 'nothing under the screen').toBe(false);
     expect((await view(page)).turning).toBe(false);
-    for (const course of ['The Meadow', 'The Range', 'The Links']) {
+    for (const course of ['The Meadow', 'The Links']) {
       await page.evaluate((name) => {
         window.game!.chooseCourse(name);
         window.game!.step(60);

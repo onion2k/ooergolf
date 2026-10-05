@@ -482,7 +482,7 @@ describe('what must always hold of the greens, the first cut and the break', () 
     game.layout.originY + (Math.floor(t / game.layout.cols) + 0.5) * TILE,
   ];
 
-  it('holds of every hole of The Links, contour and cut and all, and of the holes of The Range', () => {
+  it('holds of every hole of The Links, contour and cut and all, and of a level field', () => {
     for (let k = 0; k < linksHoles().length; k++) {
       const { game } = links(k);
       expect(checkInvariants(game), `hole ${k + 1}`).toEqual([]);

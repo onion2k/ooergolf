@@ -33,7 +33,7 @@ describe('the course', () => {
   it('is The Fair, among the minigolf courses after The Meadow, with its nine holes', () => {
     const names = COURSES.map((c) => c.name);
     expect(names.indexOf('The Fair')).toBeGreaterThan(names.indexOf('The Meadow'));
-    expect(names.indexOf('The Fair')).toBeLessThan(names.indexOf('The Range'));
+    expect(names.indexOf('The Fair')).toBeLessThan(names.indexOf('The Links'));
     const course = COURSES.find((c) => c.name === 'The Fair')!;
     expect(course.holes).toBe(FAIR);
     expect(course.golf).toBeUndefined();

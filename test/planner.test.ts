@@ -15,9 +15,8 @@ import { carryFrom } from '../src/flight';
 import { MOST_TRIALS, Rehearsal, TOLERANCE, refine, strokesToGo, type Trial } from '../src/planner';
 import { Route } from '../src/route';
 import { seeded } from '../src/random';
-import { RANGE } from '../src/range';
 import { LIE } from '../src/surfaces';
-import { DT, field, golfGame } from './helpers';
+import { DT, FLAT, FLAT_HOLES, field, golfGame } from './helpers';
 
 const NORTH = Math.PI / 2;
 
@@ -159,7 +158,7 @@ describe('the correction of a shot by trial', () => {
   });
 
   it('uses no more trials than it is allowed, and stops sooner for a target no club reaches once its aim is true', () => {
-    const { game } = golfGame(RANGE[2]);
+    const { game } = golfGame(FLAT.long);
     const r = new Rehearsal(game.rehearsal());
     const { tee, cup } = game.layout;
     const found = refine(r, tee, cup, bagClub('driver'), {
@@ -315,7 +314,7 @@ describe('the planner', () => {
   });
 
   it('plans, from the tee of a hole longer than any club carries, the longest club at full power, aimed true', () => {
-    const { game } = golfGame(RANGE[2]);
+    const { game } = golfGame(FLAT.long);
     const pilot = new Autopilot(game);
     const plan = pilot.plan()!;
     expect(pilot.trials, 'a few dozen at most: the drive, and the lay-ups it is judged against').toBeLessThanOrEqual(
@@ -405,7 +404,7 @@ describe('the planner', () => {
   it('plans a shot from every lie there is, however awkward: against the rail, in the corners, in the sand, on the rim of the cup', () => {
     const problems: string[] = [];
     let planned = 0;
-    for (const hole of RANGE) {
+    for (const hole of FLAT_HOLES) {
       const { game } = golfGame(hole);
       const l = game.layout;
       const { planProblems } = invariants;

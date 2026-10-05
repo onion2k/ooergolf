@@ -19,7 +19,6 @@
 import { BODY_CAPACITY } from '../src/arena';
 import { Autopilot } from '../src/autopilot';
 import { COURSE, COURSES } from '../src/course';
-import { RANGE } from '../src/range';
 import { Game } from '../src/game';
 import { Previewer } from '../src/preview';
 import { Progress, memoryStore } from '../src/progress';
@@ -98,15 +97,15 @@ export interface LeakOptions {
   seed: number;
   /** Game minutes to play. */
   minutes: number;
-  /** Play a course of golf, The Range or The Links, instead of The Meadow. */
-  golf?: 'range' | 'links';
+  /** Play a course of golf, The Links, instead of The Meadow. */
+  golf?: 'links';
 }
 
 export interface LeakRun {
   seed: number;
   minutes: number;
   /** Which course of golf it was played on, if not The Meadow. */
-  golf?: 'range' | 'links';
+  golf?: 'links';
   /** Every size, sampled once a game minute. */
   samples: Record<string, number[]>;
   problems: string[];
@@ -124,8 +123,7 @@ export function leakRun({ seed, minutes, golf }: LeakOptions): LeakRun {
       {},
       {
         random: seeded(seed),
-        course:
-          golf === 'range' ? RANGE : golf === 'links' ? COURSES.find((c) => c.name === 'The Links')!.holes : undefined,
+        course: golf === 'links' ? COURSES.find((c) => c.name === 'The Links')!.holes : undefined,
       },
     );
     // round after round, as a player who never stops would

@@ -13,7 +13,6 @@ import { runOn } from '../src/autopilot';
 import { BAG } from '../src/bag';
 import { speedName } from '../src/green';
 import { links } from '../src/links';
-import { RANGE } from '../src/range';
 import { GREENS, LIE, SURFACES } from '../src/surfaces';
 import { DT, field, golfGame } from './helpers';
 
@@ -205,14 +204,14 @@ describe('what the retune did not touch', () => {
     for (const h of links()) expect(speedName(h.greens!), h.name).toBe(was[h.name]);
   });
 
-  it('keeps the maps of The Links and The Range exactly as they were', () => {
+  it('keeps the maps of The Links exactly as they were', () => {
     const hash = (s: string) => {
       let x = 2166136261;
       for (let i = 0; i < s.length; i++) x = Math.imul(x ^ s.charCodeAt(i), 16777619) >>> 0;
       return x;
     };
     // seven of The Links' maps were written again with stage 9 of the courses plan (the corners, the ponds across the line,
-    // two lengths): The Big Dogleg's and Home Stretch's are as they were, and so are The Range's
+    // two lengths): The Big Dogleg's and Home Stretch's are as they were
     const WAS: Record<string, number> = {
       'The Opener': 129467283,
       'Water Carry': 1080251253,
@@ -223,18 +222,7 @@ describe('what the retune did not touch', () => {
       'The Big Dogleg': 3635079015,
       'The Straight Mile': 2049515231,
       'Home Stretch': 3791081546,
-      'Pitch and Putt': 2341210762,
-      'Iron Alley': 1911647415,
-      'The Long Way': 3269530478,
-      // the six appended to The Range at stage 8, held so a hazard that moves is a change that was meant
-      'Sand Trap': 3230414894,
-      'Narrow Straits': 2394408145,
-      'Over the Pond': 2029183406,
-      Gusty: 1252087741,
-      'The Corner': 560475841,
-      'The Long Road': 2869480547,
     };
-    for (const h of [...links(), ...RANGE])
-      expect(hash(h.map.join('\n') + JSON.stringify([h.par, null])), h.name).toBe(WAS[h.name]);
+    for (const h of links()) expect(hash(h.map.join('\n') + JSON.stringify([h.par, null])), h.name).toBe(WAS[h.name]);
   });
 });

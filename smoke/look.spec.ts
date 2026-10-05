@@ -21,7 +21,6 @@ import { layoutOf } from '../src/arena';
 import { COURSE, type HoleDef } from '../src/course';
 import { LINKS_SPECS, links as linksHoles } from '../src/links';
 import { breakOf } from '../src/green';
-import { RANGE } from '../src/range';
 
 import { glint } from '../src/glints';
 import { LIE } from '../src/surfaces';
@@ -509,71 +508,22 @@ test.describe('what it looks like', () => {
     expect(problems).toEqual([]);
   });
 
-  // golf, on the range: the ground told apart by its colour, the bag over it, and a ball in the air with its landing marked
-  test.describe('golf, on the range', () => {
-    /** The range's hole `k` begun from its tee, the ball still and the stats hidden. */
-    async function range(page: Page, hole: number) {
+  // golf, on The Links: nine holes made by the generator, each seen from its tee, some of their greens, the stakes at the
+  // line of out of bounds, and a drive that has met a tree
+  test.describe('golf, on The Links', () => {
+    async function links(page: Page, hole: number) {
       await start(page, { seed: 11, paused: true });
       await page.evaluate((k) => {
-        window.game!.chooseCourse('The Range');
+        window.game!.chooseCourse('The Links');
         window.game!.startHole(k);
         window.game!.step(75);
       }, hole);
       await hideStats(page);
     }
 
-    test('The Long Way from its tee: the box, the fairway between the rough, the bag, and the aim reaching as far as the driver carries', async ({
-      page,
-    }) => {
-      const problems = watch(page);
-      await range(page, 2);
-      await aim(page, 0.9);
-      await expect(page).toHaveScreenshot('range-tee.png', TOLERANCE);
-      expect(problems).toEqual([]);
-    });
-
-    test('a drive in the air, a second after it was struck: the ball high above the fairway', async ({ page }) => {
-      const problems = watch(page);
-      await range(page, 2);
-      await page.evaluate(() => {
-        window.game!.shoot(Math.PI / 2, 1, 'driver');
-        window.game!.step(60);
-      });
-      await expect(page).toHaveScreenshot('range-flight.png', TOLERANCE);
-      expect(problems).toEqual([]);
-    });
-
-    test('a drive come down: the ring opened where it landed, and the ball on its first hop', async ({ page }) => {
-      const problems = watch(page);
-      await range(page, 2);
-      await page.evaluate(() => {
-        const g = window.game!;
-        g.shoot(Math.PI / 2, 1, 'driver');
-        // to the frame it came down in, and a few after, while the ring is opening
-        for (let f = 0; f < 400 && !g.motions().landing; f++) g.step(1);
-        g.step(14);
-      });
-      await expect(page).toHaveScreenshot('range-landed.png', TOLERANCE);
-      expect(problems).toEqual([]);
-    });
-
-    test('the green of Iron Alley, close to: the putting green in its stripes, the bunker beside it, the cup and its flag', async ({
-      page,
-    }) => {
-      const problems = watch(page);
-      await range(page, 1);
-      await page.evaluate(() => {
-        const { cup } = window.game!.content();
-        window.game!.look(cup.x - 2, cup.y - 14, 60);
-        window.game!.step(1);
-      });
-      await expect(page.locator('#view')).toHaveScreenshot('range-green.png', TOLERANCE);
-      expect(problems).toEqual([]);
-    });
-
-    /** The middle of the pond of Over the Pond, the Range's sixth hole, in world units. */
-    const rangePond = () => {
-      const l = layoutOf(RANGE[5].map);
+    /** The middle of the pond of Water Carry, The Links' second hole, in world units. */
+    const linksPond = () => {
+      const l = layoutOf(linksHoles()[1].map, linksHoles()[1].terrain);
       let x = 0,
         y = 0,
         n = 0;
@@ -586,12 +536,12 @@ test.describe('what it looks like', () => {
       return { x: x / n, y: y / n };
     };
 
-    test('open water, close to: the pond of Over the Pond in its waves, the sky mirrored and the glitter on the crests, with no rings on it', async ({
+    test('open water, close to: the pond of Water Carry in its waves, the sky mirrored and the glitter on the crests, with no rings on it', async ({
       page,
     }) => {
       const problems = watch(page);
-      await range(page, 5);
-      const at = rangePond();
+      await links(page, 1);
+      const at = linksPond();
       await page.evaluate((c) => {
         window.game!.look(c.x, c.y - 14, 40);
         window.game!.step(1);
@@ -605,8 +555,8 @@ test.describe('what it looks like', () => {
       page,
     }) => {
       const problems = watch(page);
-      await range(page, 5);
-      const at = rangePond();
+      await links(page, 1);
+      const at = linksPond();
       await page.evaluate((c) => {
         const g = window.game!;
         g.look(c.x, c.y - 14, 40);
@@ -616,20 +566,6 @@ test.describe('what it looks like', () => {
       await expect(page.locator('#view')).toHaveScreenshot('golf-water-orbit.png', TOLERANCE);
       expect(problems).toEqual([]);
     });
-  });
-
-  // golf, on The Links: nine holes made by the generator, each seen from its tee, some of their greens, the stakes at the
-  // line of out of bounds, and a drive that has met a tree
-  test.describe('golf, on The Links', () => {
-    async function links(page: Page, hole: number) {
-      await start(page, { seed: 11, paused: true });
-      await page.evaluate((k) => {
-        window.game!.chooseCourse('The Links');
-        window.game!.startHole(k);
-        window.game!.step(75);
-      }, hole);
-      await hideStats(page);
-    }
 
     for (const [k, spec] of LINKS_SPECS.entries()) {
       test(`${spec.name}, hole ${k + 1} of The Links, from its tee`, async ({ page }) => {
@@ -946,18 +882,6 @@ test.describe('what it looks like', () => {
         window.game!.step(1);
       });
       await expect(page).toHaveScreenshot('phone-look.png', TOLERANCE);
-      expect(problems).toEqual([]);
-    });
-
-    test('the range, on a phone: the bag over the switch, the driver in hand', async ({ page }) => {
-      const problems = watch(page);
-      await start(page, { seed: 11, paused: true });
-      await page.evaluate(() => {
-        window.game!.chooseCourse('The Range');
-        window.game!.startHole(1);
-        window.game!.step(75);
-      });
-      await expect(page).toHaveScreenshot('phone-range.png', TOLERANCE);
       expect(problems).toEqual([]);
     });
 

@@ -24,7 +24,7 @@
  *   1-9 grass raised that many steps: a step the ball rolls up, three a wall
  *
  * A golf hole is drawn in `f` fairway, `r` rough, `g` green and `t` the tee's box in place of `.` and the digits,
- * beside the same `T`, `C`, `s`, `~`, `o` and `#`: see `layoutOf`, and `range.ts` for the first of them.
+ * beside the same `T`, `C`, `s`, `~`, `o` and `#`: see `layoutOf`, and `golf.ts` for how The Links' are made.
  *
  * What moves on a hole is in its `obstacles`, by the tile of the map it is
  * at, counted as the map is drawn: its column, and its row from the top.
@@ -33,7 +33,6 @@
 import type { ObstacleDef } from './obstacles';
 import { FAIR } from './fair';
 import { LINKS_SUMMARY, links } from './links';
-import { RANGE } from './range';
 import { SHED } from './shed';
 import { WATERWORKS } from './waterworks';
 
@@ -286,7 +285,6 @@ export const COURSES: readonly Course[] = [
   { name: 'The Pinball Shed', holes: SHED, summary: summaryOf(SHED) },
   { name: 'The Fair', holes: FAIR, summary: summaryOf(FAIR) },
   { name: 'The Waterworks', holes: WATERWORKS, summary: summaryOf(WATERWORKS) },
-  { name: 'The Range', holes: RANGE, summary: summaryOf(RANGE), golf: true },
   {
     name: 'The Links',
     get holes() {

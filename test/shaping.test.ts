@@ -8,7 +8,6 @@
 import { describe, expect, it } from 'vitest';
 import { BAG, bagClub } from '../src/bag';
 import { COURSE } from '../src/course';
-import { RANGE } from '../src/range';
 import { PHYSICS } from '../src/arena';
 import {
   SHAPE,
@@ -24,14 +23,14 @@ import {
 } from '../src/shaping';
 import { LIE } from '../src/surfaces';
 import { windOf } from '../src/turf';
-import { DT, field, golfGame } from './helpers';
+import { DT, FLAT_HOLES, field, golfGame } from './helpers';
 import { NORTH, windy } from './wind-helpers';
 
 const LOFTED = BAG.filter((c) => c.loft > 0);
 
 describe('the wind a hole blows', () => {
   it('blows the way the grass bends and the flag flies: windDirection is the direction windOf gives', () => {
-    const names = [...COURSE, ...RANGE].map((h) => h.name);
+    const names = [...COURSE, ...FLAT_HOLES].map((h) => h.name);
     for (const name of ['Pitch and Putt', 'The Long Way', 'Hole 1', 'Straight Eight', ...names]) {
       expect(windOf(name).direction, name).toEqual(windDirection(name));
     }

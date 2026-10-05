@@ -570,7 +570,7 @@ export class Game {
    * across the ground that adds none and takes none (only until it first comes down, since a hop is not a flight), and
    * the wind adds a steady push along the way it blows. Only on a golf hole, to a ball that is moving and more than
    * `ON_THE_GROUND` above where it would rest: a ball on the ground, in the cup or in the water is left alone, and
-   * so is every ball when there is neither a shape nor a wind, which is the whole of minigolf and The Range.
+   * so is every ball when there is neither a shape nor a wind, which is the whole of minigolf.
    */
   private blow(dt: number) {
     const { world, ball, layout } = this;

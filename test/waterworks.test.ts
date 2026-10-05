@@ -59,7 +59,7 @@ describe('the course', () => {
   it('is registered among the minigolf courses after The Meadow, nine holes, each with water on it and a map drawn square', () => {
     const names = COURSES.map((c) => c.name);
     expect(names.indexOf('The Waterworks')).toBeGreaterThan(names.indexOf('The Meadow'));
-    expect(names.indexOf('The Waterworks')).toBeLessThan(names.indexOf('The Range'));
+    expect(names.indexOf('The Waterworks')).toBeLessThan(names.indexOf('The Links'));
     const course = COURSES.find((c) => c.name === 'The Waterworks')!;
     expect(course.holes).toBe(WATERWORKS);
     expect(course.golf).toBeFalsy();

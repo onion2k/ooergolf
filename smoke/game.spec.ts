@@ -12,7 +12,8 @@ import { COURSE, COURSES, CUP } from '../src/course';
 import { VOLCANO } from '../test/hills';
 import { ORBIT } from '../src/gesture';
 import { LIE } from '../src/surfaces';
-import { links } from '../src/links';
+import { LINKS_SPECS, links } from '../src/links';
+import { FLAT } from '../test/level';
 import { noiseGround } from '../src/noise';
 import { clearings } from '../src/scenery';
 import { BLADE_ROOM, GOLF_FAIRWAY_DENSITY, GOLF_ROUGH_DENSITY, cellFor } from '../src/turf';
@@ -183,7 +184,7 @@ test.describe('the start screen', () => {
     const problems = watch(page);
     await start(page, { seed: 1, paused: true, screen: true });
     await expect(page.locator('#start')).toBeVisible();
-    await expect(page.locator('#start .course')).toHaveCount(6);
+    await expect(page.locator('#start .course')).toHaveCount(5);
     // the courses sit under two headings, minigolf then golf, the Meadow first of all
     await expect(page.locator('#start h2')).toHaveText(['Minigolf', 'Golf']);
     expect(
@@ -199,7 +200,6 @@ test.describe('the start screen', () => {
       'BUTTON:The Fair',
       'BUTTON:The Waterworks',
       'H2:Golf',
-      'BUTTON:The Range',
       'BUTTON:The Links',
     ]);
     await expect(page.locator('#start .course').nth(1)).toContainText('The Pinball Shed');
@@ -211,12 +211,9 @@ test.describe('the start screen', () => {
     await expect(page.locator('#start .course').nth(3)).toContainText('The Waterworks');
     await expect(page.locator('#start .course').nth(3)).toContainText('9 holes');
     await expect(page.locator('#start .course').nth(3)).toContainText('par 28');
-    await expect(page.locator('#start .course').nth(4)).toContainText('The Range');
+    await expect(page.locator('#start .course').nth(4)).toContainText('The Links');
     await expect(page.locator('#start .course').nth(4)).toContainText('9 holes');
-    await expect(page.locator('#start .course').nth(4)).toContainText('par 32');
-    await expect(page.locator('#start .course').nth(5)).toContainText('The Links');
-    await expect(page.locator('#start .course').nth(5)).toContainText('9 holes');
-    await expect(page.locator('#start .course').nth(5)).toContainText('par 36');
+    await expect(page.locator('#start .course').nth(4)).toContainText('par 36');
     await expect(page.locator('#start .course').first()).toContainText('The Meadow');
     await expect(page.locator('#start .course').first()).toContainText('9 holes');
     expect(await page.evaluate(() => window.game!.state())).toMatchObject({ choosing: true, course: 'The Meadow' });
@@ -224,14 +221,14 @@ test.describe('the start screen', () => {
     const box = (await page.locator('#view').boundingBox())!;
     await drag(page, { x: box.x + 40, y: box.y + box.height - 60 }, { x: box.x + 40, y: box.y + box.height - 10 });
     expect((await page.evaluate(() => window.game!.state())).strokes, 'no stroke through the start screen').toBe(0);
-    await page.locator('#start .course', { hasText: 'The Range' }).click();
+    await page.locator('#start .course', { hasText: 'The Links' }).click();
     await expect(page.locator('#start')).toBeHidden();
     await expect(page.locator('#strokes')).toBeVisible();
     await expect(page.locator('#holeName')).toContainText('Hole 1 of 9');
-    await expect(page.locator('#holeName')).toContainText('Pitch and Putt');
+    await expect(page.locator('#holeName')).toContainText('The Opener');
     expect(await page.evaluate(() => window.game!.state())).toMatchObject({
       choosing: false,
-      course: 'The Range',
+      course: 'The Links',
       hole: 0,
     });
     expect(problems).toEqual([]);
@@ -252,8 +249,8 @@ test.describe('the start screen', () => {
     await expect(page.locator('#card')).toBeVisible();
     await page.locator('#cardCourses').click();
     await expect(page.locator('#start')).toBeVisible();
-    await page.locator('#start .course', { hasText: 'The Range' }).click();
-    expect(await page.evaluate(() => window.game!.state())).toMatchObject({ course: 'The Range', hole: 0, card: [] });
+    await page.locator('#start .course', { hasText: 'The Links' }).click();
+    expect(await page.evaluate(() => window.game!.state())).toMatchObject({ course: 'The Links', hole: 0, card: [] });
     expect(problems).toEqual([]);
   });
 });
@@ -632,17 +629,20 @@ test.describe('water', () => {
   });
 });
 
+/** The index of The Links' longest hole, which the frame's cost is measured on. */
+const LONGEST = LINKS_SPECS.reduce((best, s, k) => (s.length > LINKS_SPECS[best].length ? k : best), 0);
+
 test.describe('golf', () => {
-  test('costs a frame inside the budget on the longest hole of the range, The Long Road: from its tee, in the air, and at the worst view', async ({
+  test('costs a frame inside the budget on the longest hole of The Links: from its tee, in the air, and at the worst view', async ({
     page,
   }) => {
     test.setTimeout(120_000);
     const problems = watch(page);
     await start(page, { seed: 11, paused: true });
-    const cost = await page.evaluate(async () => {
+    const cost = await page.evaluate(async (longest) => {
       const g = window.game!;
-      g.chooseCourse('The Range');
-      g.startHole(8);
+      g.chooseCourse('The Links');
+      g.startHole(longest);
       g.step(120);
       const tee = await g.measureFrame(60);
       // a drive in the air, the camera on it
@@ -661,9 +661,9 @@ test.describe('golf', () => {
       g.step(2);
       const whole = await g.measureFrame(60);
       return { tee, air, worst, whole };
-    });
+    }, LONGEST);
     console.log(
-      `the range, The Long Road: tee ${cost.tee.toFixed(2)} ms, in the air ${cost.air.toFixed(2)} ms, the worst view ${cost.worst.toFixed(2)} ms, the whole hole ${cost.whole.toFixed(2)} ms a frame`,
+      `The Links' longest hole: tee ${cost.tee.toFixed(2)} ms, in the air ${cost.air.toFixed(2)} ms, the worst view ${cost.worst.toFixed(2)} ms, the whole hole ${cost.whole.toFixed(2)} ms a frame`,
     );
     for (const [where, ms] of Object.entries(cost))
       expect(ms, `${where}: inside the ${BUDGET.frameMs} ms budget`).toBeLessThan(BUDGET.frameMs);
@@ -755,7 +755,6 @@ test.describe('the grass of a golf hole', () => {
         for (const [course, hole] of [
           ['The Links', 6],
           ['The Links', 2],
-          ['The Range', 8],
         ] as const) {
           g.chooseCourse(course);
           g.startHole(hole);
@@ -916,7 +915,7 @@ test.describe('the aim view on a phone held upright', () => {
     { width: 430, height: 932 },
   ];
 
-  test("costs a frame inside the budget from the aim view of every club, on the two longest holes of The Links and the range's longest, at the sizes of a phone, facing up the hole and turned round", async ({
+  test('costs a frame inside the budget from the aim view of every club, on the two longest holes of The Links, at the sizes of a phone, facing up the hole and turned round', async ({
     page,
   }) => {
     test.setTimeout(480_000);
@@ -949,7 +948,6 @@ test.describe('the aim view on a phone held upright', () => {
         const bag = ['driver', '3-wood', '5-iron', '9-iron', 'sand-wedge'];
         await measure('The Links', 2, bag);
         await measure('The Links', 6, bag);
-        await measure('The Range', 8, bag);
         return out;
       });
       for (const r of rows) {
@@ -1003,10 +1001,9 @@ test.describe('the aim view on a phone held upright', () => {
       for (const club of ['driver', '3-wood']) {
         // a page of its own for each, since a drag held is not let go of
         await start(page, { seed: 11, paused: true });
-        await page.evaluate(() => {
-          window.game!.chooseCourse('The Range');
-          window.game!.startHole(8);
-        });
+        await page.evaluate((hole) => {
+          window.game!.playCourse([hole]);
+        }, FLAT.road);
         await page.evaluate((c) => {
           window.game!.club(c);
           window.game!.step(300);
@@ -1024,7 +1021,7 @@ test.describe('the aim view on a phone held upright', () => {
           const g = window.game!;
           const ring = g.motions().shot?.ring;
           if (!ring) return null;
-          // the far edge of the ring up the page, on the flat ground of a range hole
+          // the far edge of the ring up the page, on the flat ground of a level hole
           return Math.min(
             g.project(ring.x, ring.y, 0).y,
             g.project(ring.x, ring.y + ring.radius, 0).y,

@@ -10,14 +10,14 @@ import { Game } from '../src/game';
 import { checkInvariants } from '../src/invariants';
 import { Progress, memoryStore } from '../src/progress';
 import { seeded } from '../src/random';
-import { RANGE } from '../src/range';
 import { LIE } from '../src/surfaces';
+import { FLAT } from './helpers';
 
 const DT = 1 / 60;
 
 /** A sand wedge from `back` yards short of the cup, struck at the cup with a draw and topspin, played until it is ready or holed. */
 function chip(seed: number, back: number, shape: number, spin: number) {
-  const g = new Game(new Progress(memoryStore()), {}, { random: seeded(seed), course: [RANGE[0]] });
+  const g = new Game(new Progress(memoryStore()), {}, { random: seeded(seed), course: [FLAT.pitch] });
   const { cup } = g.layout;
   g.place(cup.x, cup.y - back);
   g.pick('sand-wedge');
@@ -47,7 +47,7 @@ describe('a ball on the lip of the cup', () => {
           }
     expect(checked).toBe(108);
     // standing on the rim, its middle 1.4 from the cup's and as high as any ball stands, is a lie, and is left alone
-    const g = new Game(new Progress(memoryStore()), {}, { random: seeded(401), course: [RANGE[0]] });
+    const g = new Game(new Progress(memoryStore()), {}, { random: seeded(401), course: [FLAT.pitch] });
     const { cup } = g.layout;
     g.place(cup.x, cup.y - 5);
     g.world.x[g.ball] = cup.x - 1.4;

@@ -87,6 +87,24 @@ describe('saves from every shape the game has written', () => {
     expect(odd).toEqual({ ...FRESH, best: { Nowhere: { strokes: 3, club: 'putter' } } });
   });
 
+  it('keeps the best of a hole no course has any more, The Range’s among them, and the rest of the save, and plays on', () => {
+    // a best is kept by the hole's name and an unknown name is carried, not refused: The Range was scrapped on 5 October 2026
+    const json = JSON.stringify({
+      coins: 60,
+      gems: 1,
+      owned: ['putter', 'brass'],
+      club: 'brass',
+      best: { 'Pitch and Putt': { strokes: 2, club: 'putter' }, Straight: { strokes: 1, club: 'putter' } },
+    });
+    const save = new Progress(memoryStore(json)).save;
+    expect(save.best['Pitch and Putt']).toEqual({ strokes: 2, club: 'putter' });
+    expect(save).toMatchObject({ coins: 60, gems: 1, owned: ['putter', 'brass'], club: 'brass' });
+    expect(save.best.Straight).toEqual({ strokes: 1, club: 'putter' });
+    const game = new Game(new Progress(memoryStore(json)), {}, { random: seeded(7) });
+    for (let f = 0; f < 300; f++) game.step(1 / 60);
+    expect(checkInvariants(game)).toEqual([]);
+  });
+
   it('has the shape the game writes now: a new field means a new file here', () => {
     const game = new Game(new Progress(memoryStore()));
     game.persist();

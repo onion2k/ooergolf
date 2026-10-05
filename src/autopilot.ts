@@ -80,7 +80,7 @@ export function speedFor(distance: number, arrive: number): number {
  * How steadily the ground slows a rolling ball at a point: sand's slowing on sand, and the green's elsewhere. On a golf hole
  * the putting green runs at the hole's speed (`greens`) and the first cut round it a share slower, which is the hole's own
  * and not the minigolf's; every other golf ground is still taken for the green, as it always was, since a shot rolled
- * across it is corrected by trial and a fairway's arithmetic is not worth a change to every shot of The Range.
+ * across it is corrected by trial and a fairway's arithmetic is not worth a change to every shot of a flat hole.
  */
 function slowingAt(l: Layout, x: number, y: number, greens?: number): number {
   const t = tileAt(l, x, y);
@@ -455,7 +455,7 @@ export class Autopilot {
 
   /**
    * The putt from the green: the arithmetic's where the ground between the ball and the cup is level, which is every
-   * green of The Range and every putt that is straight, since there it is exact to the digit; and where the ground
+   * putt on a level green and every putt that is straight, since there it is exact to the digit; and where the ground
    * leans, tried in the rehearsal and corrected (`refine`) until the ball drops or comes to rest on the cup, so a break
    * is read as a golfer reads it, aimed up the slope of it, and a downhill putt is struck for the roll it will have.
    * The plan says where the true putt rests.

@@ -23,10 +23,9 @@ async function main() {
   const seeds = Array.from({ length: (range[1] ?? range[0]) - range[0] + 1 }, (_, k) => range[0] + k);
   const minutes = +(value('minutes') ?? 60);
   const started = performance.now();
-  // each seed on The Meadow, and again on The Range and The Links, which are golf: a lofted ball, a bag, trees and a rehearsal are what it adds to keep
+  // each seed on The Meadow, and again on The Links, which is golf: a lofted ball, a bag, trees and a rehearsal are what it adds to keep
   const queue: LeakOptions[] = seeds.flatMap((seed) => [
     { seed, minutes },
-    { seed, minutes, golf: 'range' as const },
     { seed, minutes, golf: 'links' as const },
   ]);
   const runs: LeakRun[] = [];

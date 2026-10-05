@@ -1,4 +1,4 @@
-/** The courses: The Meadow, the first nine, The Range, the first of golf, and The Links; and the slope holes the tests keep, played as a round. */
+/** The courses: The Meadow, the first nine, the three newer courses of minigolf and The Links; and the slope holes the tests keep, played as a round. */
 import { describe, expect, it } from 'vitest';
 import { ROLL, TILE, layoutOf, slopeAt } from '../src/arena';
 import { Autopilot } from '../src/autopilot';
@@ -9,18 +9,17 @@ import { DT, newGame } from './helpers';
 import { HILLS } from './hills';
 
 describe('the courses', () => {
-  it('are The Meadow, the first nine as they were, The Range, the first of golf, and The Links', () => {
+  it('are The Meadow, the first nine as they were, the three newer courses and The Links, the one course of golf', () => {
     expect(COURSES.map((c) => c.name)).toEqual([
       'The Meadow',
       'The Pinball Shed',
       'The Fair',
       'The Waterworks',
-      'The Range',
       'The Links',
     ]);
     expect(COURSES[0].holes).toBe(COURSE);
     expect(COURSE.length).toBe(9);
-    expect(COURSES.filter((c) => c.golf).map((c) => c.name)).toEqual(['The Range', 'The Links']);
+    expect(COURSES.filter((c) => c.golf).map((c) => c.name)).toEqual(['The Links']);
   });
 
   it('draw The Meadow’s windmill and mill race so that the cup shows from the tee, and open the race’s barrier wider', () => {

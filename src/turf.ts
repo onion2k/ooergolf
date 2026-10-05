@@ -96,7 +96,7 @@ export const KINDS: readonly GrassKind[] = [
  * blade, 0.39, stands under the ball's middle, so a ball on the fairway sits on grass that comes up short of its equator,
  * and is seen. It is the denser, at a hundred, since a short blade covers little, and it leans a little, as mown turf
  * does, its clumps a touch stronger than they were. More was tried (a hundred and sixty a unit) and cost a frame of the
- * whole of a hole of The Range 2 ms for nothing to be seen, since the ground under it is painted its colour and the
+ * whole of a flat golf hole 2 ms for nothing to be seen, since the ground under it is painted its colour and the
  * renderer thins the blades with the square of the distance: the blades a frame draws, and so its cost, grow with both
  * densities.
  */

@@ -36,7 +36,7 @@ for (const [where, device] of [
   test.describe(where, () => {
     test.use(device);
 
-    test('the start screen holds its four minigolf and two golf courses without scrolling, the colours going round the cards', async ({
+    test('the start screen holds its four minigolf and one golf course without scrolling, the colours going round the cards', async ({
       page,
     }) => {
       const problems = watch(page);
@@ -49,8 +49,8 @@ for (const [where, device] of [
         return { fits: panel.scrollHeight <= panel.clientHeight, faces };
       });
       expect(r.fits, 'no scrolling in the start screen').toBe(true);
-      // four cards, four colours: a heading among them must not shift the cycle
-      expect(new Set(r.faces).size, 'each card its own colour').toBe(6);
+      // five cards, five colours: a heading among them must not shift the cycle
+      expect(new Set(r.faces).size, 'each card its own colour').toBe(5);
       expect(problems).toEqual([]);
     });
 
@@ -106,7 +106,7 @@ for (const [where, device] of [
       if (where === 'on a phone') await expect(page.locator('#help')).toBeHidden();
       else await expect(page.locator('#help')).toContainText('putt');
       await page.evaluate(() => {
-        window.game!.chooseCourse('The Range');
+        window.game!.chooseCourse('The Links');
         window.game!.step(60);
       });
       await expect(page.locator('#bag')).toBeVisible();
@@ -280,7 +280,7 @@ for (const [where, device] of [
       await expect(page.locator('#coins')).toHaveText('130');
       const minigolf = (await page.locator('#purse').boundingBox())!;
       await page.evaluate(() => {
-        window.game!.chooseCourse('The Range');
+        window.game!.chooseCourse('The Links');
         window.game!.step(60);
       });
       await settle();
@@ -498,7 +498,7 @@ for (const [where, device] of [
       const problems = watch(page);
       await start(page, { seed: 11, paused: true, screen: true });
       await page.evaluate(() => {
-        window.game!.chooseCourse('The Range');
+        window.game!.chooseCourse('The Links');
         window.game!.step(60);
       });
       await expect(page.locator('#holeMap')).toBeVisible();
@@ -508,7 +508,7 @@ for (const [where, device] of [
       await expect(page.locator('#start')).toBeVisible();
       await expect(page.locator('#holeMap'), 'no map over the start screen').toBeHidden();
       await expect(page.locator('#bag')).toBeHidden();
-      await page.locator('#start .course', { hasText: 'The Range' }).click();
+      await page.locator('#start .course', { hasText: 'The Links' }).click();
       await page.evaluate(() => window.game!.step(60));
       await expect(page.locator('#holeMap')).toBeVisible();
       await openDrawer(page);

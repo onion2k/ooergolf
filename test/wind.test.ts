@@ -1,6 +1,6 @@
 /**
  * The wind on a golf hole: it pushes a ball while it is in the air and no other time, along the way the hole's grass
- * and flag show, by the figures `shaping.ts` holds; a hole with none, which is all of minigolf and The Range, plays to the digit as
+ * and flag show, by the figures `shaping.ts` holds; a hole with none, which is all of minigolf, plays to the digit as
  * it did before there was any; and what is planned for it, by the rehearsal the autopilot tries its shots in and the preview a
  * drag draws, is what the game does, since each is a trial in a game of the same hole.
  */
@@ -14,9 +14,8 @@ import { LINKS_SPECS } from '../src/links';
 import { Rehearsal } from '../src/planner';
 import { Previewer } from '../src/preview';
 import { seeded } from '../src/random';
-import { RANGE } from '../src/range';
 import { windDirection, windReach } from '../src/shaping';
-import { DT, GREEN, field, golfGame, newGame } from './helpers';
+import { DT, GREEN, FLAT, FLAT_HOLES, field, golfGame, newGame } from './helpers';
 import { NORTH, blowing, openField, windy } from './wind-helpers';
 
 /** Where a shot of `club` first came down and where it came to rest, from where it was struck, across the aim and along it. */
@@ -177,11 +176,11 @@ describe('a game with no wind, no shape and no spin', () => {
     expect(play(25).slice(2)).toEqual([0, 0]);
   });
 
-  it('has no wind on the courses of minigolf or on The Range but Gusty, and a wind from the hole on The Links', () => {
-    for (const hole of [...COURSE, ...RANGE.filter((h) => h.name !== 'Gusty')])
+  it('has no wind on the courses of minigolf or on a level hole but the windy one, and a wind from the hole on The Links', () => {
+    for (const hole of [...COURSE, ...FLAT_HOLES.filter((h) => h !== FLAT.windy)])
       expect(hole.wind, hole.name).toBeUndefined();
-    expect(RANGE.find((h) => h.name === 'Gusty')!.wind, 'the one hole of The Range with a wind').toBe(8);
-    const { game } = golfGame(RANGE[0]);
+    expect(FLAT.windy.wind, 'the one level hole with a wind').toBe(8);
+    const { game } = golfGame(FLAT.pitch);
     expect(game.wind.speed).toBe(0);
     const links = golfHole({ ...LINKS_SPECS[0], wind: 7 });
     expect(links.wind).toBe(7);
