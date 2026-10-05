@@ -58,4 +58,19 @@ describe('a ball on the lip of the cup', () => {
     for (let f = 0; f < 120; f++) g.step(DT);
     expect(g.phase, 'a ball on the rim does not fall in on its own').toBe('play');
   });
+
+  it('is holed by a ball put back onto it, and is never gone from the world with the hole still in play', () => {
+    // a ball struck from where it lay on the rim and lost is put back there, which `place` refuses to do by hand: a fresh ball
+    // on the rim is not asleep, as the one that rested there was, and falls in while it settles
+    for (const back of [1.1, 1.3, 1.37, 1.44, 1.6]) {
+      const g = new Game(new Progress(memoryStore()), {}, { random: seeded(1), course: [FLAT.pitch] });
+      const { cup } = g.layout;
+      g.lie.x = cup.x + 0.27;
+      g.lie.y = cup.y - back;
+      (g as unknown as { putBack(x: number, y: number): void }).putBack(cup.x + 50, cup.y);
+      expect(checkInvariants(g), `put back ${back} yards from the cup`).toEqual([]);
+      // 0.27 across and `back` along is inside the cup's radius up to a little past 1.42, and a ball outside it just rests there
+      expect(g.phase, `put back ${back} yards from the cup`).toBe(Math.hypot(0.27, back) < 1.43 ? 'done' : 'play');
+    }
+  });
 });

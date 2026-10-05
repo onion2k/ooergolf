@@ -511,7 +511,9 @@ export class Game {
     tell?.(x, y);
     // a ball lost in water has left the world by the bottom; one out of bounds is still in it, and is taken out
     if (this.world.alive[this.ball]) this.world.remove(this.ball);
-    this.spawnAt(this.lie.x, this.lie.y);
+    // a ball struck from where it rested on the cup's rim, and lost, is put back there: a fresh ball on the rim is not asleep, as
+    // the one that rested there was, and falls in while it settles, which holes it
+    if (this.spawnAt(this.lie.x, this.lie.y)) return this.done('holed');
     if (this.strokes >= this.limit) this.done('pickedUp');
   }
 
@@ -681,12 +683,15 @@ export class Game {
     this.events.knocked?.(hard, world.x[ball], world.y[ball], dx / hard, dy / hard, dz / hard);
   }
 
-  /** A new ball put down at (x, y), resting on the floor there, and left to settle until it is at rest, and it is the ball. */
-  private spawnAt(x: number, y: number) {
+  /**
+   * A new ball put down at (x, y), resting on the floor there, and left to settle until it is at rest, and it is the ball.
+   * Whether it settled down the cup, which leaves the world, and is holed.
+   */
+  private spawnAt(x: number, y: number): boolean {
     this.ball = this.world.spawn(BALL, x, y, this.restingZ(x, y));
     this.lie.x = x;
     this.lie.y = y;
-    this.settle();
+    return this.settle();
   }
 
   /** How high a ball's middle is, resting on the floor at (x, y). */
@@ -801,14 +806,21 @@ export class Game {
    * settles, or a ball put down on a belt would be carried off it before the
    * game had begun again.
    */
-  private settle() {
+  private settle(): boolean {
     const { world } = this;
     const { pushers, belts } = world;
     world.pushers = [];
     world.belts = [];
-    for (let f = 0; f < SETTLE_FRAMES && world.asleep[this.ball] !== 1; f++) world.step(1 / 120, () => undefined);
+    // the only body is the ball, so what goes down the cup is the ball, and what goes out of the bottom is a ball in water,
+    // which a lie is never on
+    const went = { cup: false };
+    const collect = (_kind: number, _x: number, _y: number, _slot: number, hole: number) => {
+      if (hole === THE_CUP) went.cup = true;
+    };
+    for (let f = 0; f < SETTLE_FRAMES && world.asleep[this.ball] !== 1 && !went.cup; f++) world.step(1 / 120, collect);
     world.pushers = pushers;
     world.belts = belts;
+    return went.cup;
   }
 
   /** The save written now. */
