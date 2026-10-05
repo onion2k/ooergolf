@@ -17,9 +17,13 @@
  * `test-results/`. Look at all three before deciding which is right.
  */
 import { expect, test, type Page } from '@playwright/test';
-import { layoutOf } from '../src/arena';
+import { layoutOf, slopeAt, TILE } from '../src/arena';
 import { COURSE, type HoleDef } from '../src/course';
 import { LINKS_SPECS, links as linksHoles } from '../src/links';
+import { FELLS_SPECS, fells as fellsHoles } from '../src/fells';
+import { ISLES_SPECS, isles as islesHoles } from '../src/isles';
+import { laneOf } from '../src/golf';
+import { holdsBall } from '../src/slopes';
 import { breakOf } from '../src/green';
 
 import { glint } from '../src/glints';
@@ -738,6 +742,113 @@ test.describe('what it looks like', () => {
       }, map);
       await hideStats(page);
       await expect(page.locator('#view')).toHaveScreenshot('links-tree.png', TOLERANCE);
+      expect(problems).toEqual([]);
+    });
+  });
+
+  // golf, on The Fells and The Isles: each hole from its tee, and the three things the courses are for, seen from where a
+  // player stands: the wood and its lane, an island green from its approach, and a ball on a bank that runs
+  test.describe('golf, on The Fells and The Isles', () => {
+    async function hole(page: Page, course: string, k: number) {
+      await start(page, { seed: 11, paused: true });
+      await page.evaluate(
+        ([c, k]) => {
+          window.game!.chooseCourse(c as string);
+          window.game!.startHole(k as number);
+          window.game!.step(75);
+        },
+        [course, k],
+      );
+      await hideStats(page);
+    }
+
+    for (const [course, key, specs] of [
+      ['The Fells', 'fells', FELLS_SPECS],
+      ['The Isles', 'isles', ISLES_SPECS],
+    ] as const) {
+      for (const [k, spec] of specs.entries()) {
+        test(`${spec.name}, hole ${k + 1} of ${course}, from its tee`, async ({ page }) => {
+          const problems = watch(page);
+          await hole(page, course, k);
+          await expect(page).toHaveScreenshot(`${key}-tee-${k + 1}.png`, TOLERANCE);
+          expect(problems).toEqual([]);
+        });
+      }
+    }
+
+    test("The Pinewood's lane from the tee: a low, close view down the gap in the wood", async ({ page }) => {
+      const problems = watch(page);
+      await hole(page, 'The Fells', 1);
+      const lane = laneOf(fellsHoles()[1])!;
+      expect(lane, 'the hole has a lane').toBeTruthy();
+      await page.evaluate((lane) => {
+        const g = window.game!;
+        const dx = lane.to.x - lane.from.x,
+          dy = lane.to.y - lane.from.y,
+          d = Math.hypot(dx, dy);
+        // stood on the tee looking along the lane, low, with the camera's target a little way down it
+        g.look(lane.from.x + (dx / d) * 190, lane.from.y + (dy / d) * 190, 70);
+        g.orbit(Math.atan2(dx, dy), 0.35);
+        g.step(2);
+      }, lane);
+      await expect(page.locator('#view')).toHaveScreenshot('fells-lane.png', TOLERANCE);
+      expect(problems).toEqual([]);
+    });
+
+    test('The Green Isle from its approach, sixty yards out: the island green in its lake', async ({ page }) => {
+      const problems = watch(page);
+      await hole(page, 'The Isles', 1);
+      const def = islesHoles()[1];
+      const l = layoutOf(def.map, def.terrain);
+      const at = await page.evaluate(() => window.game!.content().cup);
+      // the nearest dry ground a ball is played from, sixty yards short of the cup along the way from the tee
+      let best = { x: 0, y: 0, d: Infinity };
+      for (let t = 0; t < l.cols * l.rows; t++) {
+        if (l.water[t] || l.solid[t] || l.oob[t] || l.lie[t] !== LIE.fairway) continue;
+        const x = l.originX + ((t % l.cols) + 0.5) * TILE,
+          y = l.originY + (Math.floor(t / l.cols) + 0.5) * TILE;
+        if (y > at.y - 40) continue;
+        const d = Math.abs(Math.hypot(x - at.x, y - at.y) - 60);
+        if (d < best.d) best = { x, y, d };
+      }
+      expect(best.d, 'dry fairway about sixty yards out').toBeLessThan(3);
+      await page.evaluate((b) => {
+        const g = window.game!;
+        g.lay(b.x, b.y);
+        g.step(150);
+      }, best);
+      await expect(page).toHaveScreenshot('isles-green-approach.png', TOLERANCE);
+      expect(problems).toEqual([]);
+    });
+
+    test('a ball laid on a bank of The Plunge that runs, from the side and low: the slope in profile', async ({
+      page,
+    }) => {
+      const problems = watch(page);
+      await hole(page, 'The Fells', 4);
+      const def = fellsHoles()[4];
+      const l = layoutOf(def.map, def.terrain);
+      // the steepest tile of running fairway, so a ball laid there has a bank under it
+      let best = { x: 0, y: 0, sx: 0, sy: 0, s: 0 };
+      for (let t = 0; t < l.cols * l.rows; t++) {
+        if (l.lie[t] !== LIE.fairway || holdsBall(l, t, def.greens)) continue;
+        const x = l.originX + ((t % l.cols) + 0.5) * TILE,
+          y = l.originY + (Math.floor(t / l.cols) + 0.5) * TILE;
+        const [sx, sy] = slopeAt(l, x, y);
+        const s = Math.hypot(sx, sy);
+        if (s > best.s) best = { x, y, sx, sy, s };
+      }
+      expect(best.s, 'a bank that runs').toBeGreaterThan(0.2);
+      await page.evaluate((b) => {
+        const g = window.game!;
+        g.lay(b.x, b.y);
+        const at = g.ball();
+        // looking along the contour so the fall of the ground is across the picture
+        g.look(at.x, at.y, 26);
+        g.orbit(Math.atan2(-b.sy, b.sx), 10);
+        g.step(1);
+      }, best);
+      await expect(page.locator('#view')).toHaveScreenshot('fells-bank.png', TOLERANCE);
       expect(problems).toEqual([]);
     });
   });
