@@ -25,7 +25,7 @@ gem; the shop sells finer putters that strike harder. The coins, the clubs
 and the best score on each hole are kept in the browser. The camera follows
 the ball; the wheel zooms on a desktop, and two fingers pinch on a phone. A
 switch, Aim or Look, chooses whether a drag strikes the ball or turns and
-tilts the camera right round it, and a flag button beside it turns the camera to face the flag. On The Links, the course of golf, a bag of
+tilts the camera right round it, and a flag button beside it turns the camera to face the flag. On the courses of golf, a bag of
 eight clubs sits over the course: choose one, and the same drag swings it, the
 ball flying at the club's loft, coming down in a ring that marks where, hopping
 and running on by what it landed on, with a scatter that grows the harder it is
@@ -61,7 +61,10 @@ something that moves on every hole: windmills with two doors, barriers sliding a
 throw, and belts that carry the ball where they will. The Waterworks is water on every hole and the ball always one slip
 from it, on causeways, stones and an island green, and on the last three streams, belts drawn as running water, that carry
 a ball along and never sink it. A hole's ground may slope, and the break is shown over one that does: arrows, the putt's
-roll and the words. One course of golf follows, The Links.
+roll and the words. Three courses of golf follow, nine holes each. The Links is hills, bunkers, water and trees. The Fells is steep fell-side ground
+that a ball runs down, with level shelves to land on, doglegs, lakes and lanes cut through woods that a true drive can fly
+and a slice cannot. The Isles is nine long holes, a par four to a par six, round big lakes with islands, one of them a green
+that is itself an island, and sand everywhere.
 
 ## What is here
 
@@ -122,6 +125,8 @@ fixed, and no baseline is moved to make it green.
     src/flight.ts      a club, a power, an aim and a lie turned into a launch, with its scatter
     src/golf.ts        golf holes made from a spec and a seed: fairway, bend, hazards, trees, hills
     src/links.ts       The Links: nine holes, made when asked for
+    src/fells.ts       The Fells: nine steep holes with lanes and lakes, made when asked for
+    src/isles.ts       The Isles: nine long holes round lakes and islands, made when asked for
     src/trees.ts       a tree's trunk and its canopy, a cone the game tests a ball's step against
     src/route.ts       the way to the cup round water, out of bounds and trees
     src/planner.ts     a golf shot tried in a rehearsal, judged, and chosen

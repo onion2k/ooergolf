@@ -11,7 +11,7 @@ made. The house
 rules in `~/.claude/CLAUDE.md` apply too. What is in `src/` is a round of
 a course, chosen on a start screen: holes drawn as maps, each played from
 its tee to its cup with a drag pulled back and let go, scored against par,
-and the card at the end. Five courses are here, on artshape-physics v0.8.0, four of minigolf and one of golf.
+and the card at the end. Seven courses are here, on artshape-physics v0.8.0, four of minigolf and three of golf.
 The Meadow is nine holes of grass, rail, sand, water, raised grass, posts,
 sliding barriers, a windmill and a conveyor, with a green that lets a putt
 die, a rail and obstacles that bounce, posts that throw a ball back faster
@@ -22,7 +22,7 @@ and never sink it. All three are drawn by hand. (The Hills, The Downs and The Mo
 or nothing on it, were scrapped on 3 October 2026 as dull and these three replaced them; four of The Hills stay as test
 holes in `test/hills.ts`, and the generator that made The Moors, `src/open.ts`, stays for the two test holes
 `smoke/bighole.ts` makes with it.)
-The Links is the one course of golf proper: nine holes at a yard a unit, each a tee, a fairway, rough
+The Links is the first course of golf proper: nine holes at a yard a unit, each a tee, a fairway, rough
 and a green, played with a bag of eight clubs that loft the ball into the air, a par three to a par
 five, made by a generator on hills, with bunkers, water, trees and out of
 bounds, from the plan in `~/.claude/plans/ooergolf-proper-golf.md` (which is out of date in naming The Range; stage 6
@@ -30,10 +30,19 @@ of six is built: a player sees where a shot lands, shapes it, spins it and plays
 in the wind, and putts on greens with a first cut round them, a tilt and swells in them, a speed of their
 own, and arrows and words that show the break). The golf goes in
 a feature at a time, in the order `DESIGN.md` gives.
-The Range, the first course of golf (nine flat holes, three to learn the clubs on and six that each added a hazard), was
+The Fells and The Isles are the two hard courses of golf, built from `~/.claude/plans/ooergolf-two-hard-courses.md` on
+5 October 2026, each nine holes made by `golfHole` from specs, as The Links is, and each chosen on the start screen after it.
+**The Fells** (`src/fells.ts`, par 37) is steep fell-side golf: every hole's hills are heightened 2.5 and cut to nine tenths
+of the physics' step, so a seventh to two fifths of a fairway is slope a ball runs down, with level shelves to land on; five
+holes are doglegs, four have a lake, and three have a lane through a wood that a driver struck true flies and one six degrees
+off does not. Its fifth hole is The Plunge (it was The Drop; its old name's wind bent the grass less than `test/turf.test.ts` asks).
+**The Isles** (`src/isles.ts`, par 45) is nine long holes round big lakes with islands, a par four to a par six (mean par five),
+fresh winds, fast turned greens, 83 bunkers, and one island green: its second hole, The Green Isle, is named so because The
+Links has an `Island Green` and a best score is kept by name. The holes' own comments say what each is for and why its seed.
+The Range, the first course of golf, was
 scrapped on 5 October 2026 at the user's word ("Delete the first one entirely"), in the commit whose summary is "The Range
 is scrapped" (`git log --grep "The Range is scrapped"`): its source, tests, pictures, pace figure and fuzz and leak runs are
-gone, and a new first course of golf is to be built. Its holes' names are unknown to the game now, and a save that names one
+gone. Its holes' names are unknown to the game now, and a save that names one
 still loads (a best is kept by name, and an unknown name is carried). What the tests used it for, a golf hole with level
 ground, is `FLAT` and `levelHole` in `test/level.ts` (re-exported by `test/helpers.ts`).
 
@@ -157,12 +166,15 @@ today, and what the next features must hand it:
   without that kind plays as it did: it strikes a moving bumper where the barrier is, strikes a kicker, strikes at
   a flipper through every phase of its swing, and strikes onto a stream, where the ball must be carried and never told lost
   (`lostOnStreamProblems`, checked as a loss is told).
-  `npm run fuzz` plays every seed six times, as a player who
+  On a hole with a wood's lane it drives along the lane from the tee, slipped, and on a hole with land wholly in water it
+  plays the shortest club that carries to the middle of it from wherever the ball lies (each on a chance of its own, so no
+  other run changes, and both count in `done`).
+  `npm run fuzz` plays every seed eight times, as a player who
   chooses among the courses, on The Links alone (whose nine holes have winds of 4 to 12 miles an hour, which is the wind the
   runs cover; a gale of 12, 18 and 6 in turn on level holes is played in `test/fuzz.test.ts` and not in the queue), on the contoured Links (`--on contoured`: its nine holes at contour 1 with greens at
-  12, 22, 12.96 and 14.4 by hole), and on each of The Pinball Shed, The Fair and The Waterworks alone
-  (`--on shed`, `fair`, `waterworks`), since a monkey
-  choosing among five is on golf too seldom to hold it to anything and on a minigolf course's own kind not much oftener; each landing
+  12, 22, 12.96 and 14.4 by hole), and on each of The Fells, The Isles, The Pinball Shed, The Fair and The Waterworks alone
+  (`--on fells`, `isles`, `shed`, `fair`, `waterworks`), since a monkey
+  choosing among seven is on golf too seldom to hold it to anything and on a minigolf course's own kind not much oftener; each landing
   the game tells of is checked as it is told (`landingProblems`). Two runs are for replays and are not in the queue:
   `--on kickers`, `KICKER_HOLES` in `scripts/fuzzer.ts` (a kicker in the way of the cup, a pair facing each other, which
   is the ceiling's hardest case, and a ring of four), and `--on stream`, `STREAM_HOLE` in `test/stream-hole.ts`.
@@ -181,7 +193,7 @@ today, and what the next features must hand it:
   seconds (`viewProblems`, checked after each look round and every frame of a turn to the flag). On a golf hole the club in hand is one of the
   bag's, and the ball is never faster in all, in the air as on the ground,
   than the club that struck it could send it and a fall from the highest
-  ground make it, never at rest out of bounds and never inside a tree's trunk
+  ground make it, never at rest out of bounds or on water and never inside a tree's trunk
   or canopy; each landing told is of the live ball, where it is, and at
   least `LANDING.least` hard (`landingProblems`). A preview is a flight from
   the ball to where it says it came down, in numbers, growing in length, no
@@ -206,20 +218,25 @@ today, and what the next features must hand it:
   chance, round after round, and the hash takes in the hole and the card.
 - **Pace:** the strokes a round of each course takes; see above (the minigolf courses: The Meadow 16.63 for par 26, The
   Pinball Shed 20.94 for 25, The Fair 19.38 for 28 and The Waterworks 18.94 for 28, which is what `scripts/pace-baseline.json`
-  holds). The pace player never banks and fires
+  holds, as it does for the golf courses below). The pace player never banks and fires
   blind after ten seconds without a timing window, so a bank hole's par is the human's intent, and a timed hole
   needs a window at the autopilot's margin, the ball's radius and 0.6. The
   autopilot does not read a slope's break on minigolf, so on a hole that slopes it is a player
-  who aims straight and is carried by the ground; on a golf green it does, by rehearsal. The golf course is a player one under par on every hole: The Links 29.88 for 36 (the contoured greens did not move it: 30.19 over 48 seeds against 30.27
+  who aims straight and is carried by the ground; on a golf green it does, by rehearsal. The Links is a player one under par on every hole: 29.88 for 36 (the contoured greens did not move it: 30.19 over 48 seeds against 30.27
   before them; the livelier ball and the respecified holes moved The Links to 30.33 over 48),
   each hole a stroke or so better than its par, since the
   autopilot plays like a good golfer and par is each hole's intent. The planner did not move the figure of a course of
   level holes (6.88 to 6.94, when The Range was three holes): a player's slips, a tenth of the power and a few degrees, and the swing's own scatter,
   are far bigger than the unit or two it gains on the level; its worth is in `test/planner.test.ts`, on slopes
   and rises, and in `test/strategy.test.ts`, on a dogleg (3.4 strokes a round on a par four, and no ball lost
-  in twenty-four rounds, where aiming at the cup across the corner lost one in every round).
+  in twenty-four rounds, where aiming at the cup across the corner lost one in every round). The Fells and The Isles
+  are held to the targets the plan set them (The Fells a quarter to four tenths of a stroke a hole under par, The Isles up
+  to four tenths over), and a hole picked up in no more than one round of sixteen; their figures: TODO-PASS (to be written
+  by the end-of-work pass from `scripts/pace-baseline.json`).
 - **Leaks:** ten minutes of the autopilot playing round after round, on The
-  Meadow and again on The Links. The card is emptied each round and
+  Meadow and again on each golf course (`GOLF_COURSES` in `scripts/leaks.ts`: The Links, The Fells, The Isles, under
+  the Links' ceilings; `leaks:check` queues the four, and `--on` narrows a run to one kind for a short look; a test holds that a hole
+  with a lane is collectable, so `laneOf`'s cache keeps nothing alive). The card is emptied each round and
   watched against the number of holes; on golf a previewer is made with each hole, as
   the page makes one, and tried now and then, and the bodies in its rehearsal are held
   to the one ball.
@@ -644,6 +661,26 @@ change meant to move it, and the commit says why. Look at every picture.
   a spec that cannot be made, by name. `src/links.ts` is The Links: nine specs, made when first asked for, each seed
   chosen by playing forty with the pace gate's player and looking. A hole of 560 yards is 24,000 tiles of map and
   8,500 of ground: 82 ms to begin in the page, 3.9 ms a frame at its worst view, held by `perf`.
+  What the two hard courses added are options of a `GolfSpec`, each with a default that leaves a hole as it was
+  (`test/golf-hash.test.ts` holds every hole of every course to a hash of its map, par, wind, greens, obstacles and terrain, so
+  when a gate says a hash moved, a generator changed and not the content; a hole of a new course is added to it when it should be
+  held): **`heighten`** (1 to 2.5, refused by name outside it) is `noiseGround`'s own, which scales the heights, multiplies
+  them by the steepness and cuts every tile to the exact lower envelope under the physics' step (`lowerToLimit`, which says how
+  many rounds it took), with the tee and cup plateaus and the level discs held level again; only the tee box, the green and
+  its plate, and the **`shelves`** (yards along the way, 40 or more from tee and cup, each a level disc of four tiles) are asked
+  to rest a ball, and in place of the rest of the fairway holding one, `drainFault` in `src/slopes.ts` asks that from every tile
+  that does not, the steepest descent of the smoothed ground reach ground that holds a ball, rough, sand or water, never rock or
+  out of bounds. `holdsBall` there is the one rule for whether a lie holds a tile's slope, and `runningShare` the share of fairway
+  that does not. Only hills or long hills give relief enough, and heighten 1.4 to 1.8, which the plan began with, reached no more
+  than about a twelfth, so The Fells are at 2.5 on steepness 0.9 (seeds are chosen by share and relief). **`gap: { to, width? }`**
+  on a bend of 35 degrees or more plants the rough inside the corner as a wood, trunks three tiles apart, with a lane from the
+  tee to `to` yards along the second leg kept clear (`laneOf(hole)` gives it to a test) and a shelf at its end; a wood spends no
+  chance. A lane on a bend past 55 degrees runs into the rock beyond out of bounds. **`lakes`** (`LakeSpec`: where along the way
+  or round the green, which side, a radius range, `islands` of fairway, rough, sand or the green, and an optional `carry`) lays
+  water too big to go round, before any bunker or pond; `CARRY` is the most water, 45 tiles, a flight may need, and a lake that
+  would leave no way is not laid; **`bunkers.island`** puts sand on an island (radius 5 or more, since two on a radius of
+  4 fail half the seeds). A lake across a 560-yard hole is only 45 to 80 yards of water on its shortest line, so an island is a
+  lay-up only from well back. The seed search takes `--course links|fells|isles` and prints the running share.
 - **Putting** (stage 6). A golf map's `c` is the **first cut** (`LIE.cut`): mown, but longer than the green, one tile
   (3 yards) wide round every putting green (eight ways, so no gap at a corner) and one tile of rough along each side of a
   fairway, laid by `mown` in `golf.ts` after everything else is placed, spending no chance, and only on a tile that is
@@ -687,7 +724,10 @@ change meant to move it, and the commit says why. Look at every picture.
   plays, chance held in the middle so a trial is the shot struck true, and only it may `trial(x, y)`; `refine`
   (`src/planner.ts`) corrects a candidate's power in proportion and its aim by the angle it was out by until the
   ball rests where it is meant to or drops. `src/route.ts` is the way to the cup over ground a ball is played from
-  (round water, out of bounds, rock and canopies; the fairway cheapest), and `strokesToGo` judges a resting ball by it,
+  (round water, out of bounds, rock and canopies; the fairway cheapest; where land is cut off from the cup by water, an
+  island or a shore a lake runs across, the flood back from the cup also crosses water at the fairway's cost, so the ball
+  there has a distance and a lay-up has somewhere to go, a way point never stopping on water; land of fewer than `ISLAND`, 6, tiles
+  is not counted as cut off, and canopies are ignored when judging it), and `strokesToGo` judges a resting ball by it,
   by its lie and by whether it is under a tree. The candidates are the arithmetic's (`golfCandidates`: the two shortest
   clubs that reach, the putter for a chip and run) at the cup, and lay-ups (`golfLayUps`): the longest few clubs at the
   place on the route they reach; `choose` tries each, judges it by where it rests (a ball lost is the stroke again and
@@ -705,7 +745,9 @@ change meant to move it, and the commit says why. Look at every picture.
   score's name when a hole is done, the card, the coins and gems, the
   shop, and the start screen, a card for each course with its holes and
   par, shown at boot and from the card's Courses button. The page plays no
-  shot while it is up. `src/score.ts` names a score and says what kind it
+  shot while it is up; seven cards would not fit, so the panel is 820 wide and three cards across on a desk, and the cards'
+  colours cycle through six (`#courses .course:nth-of-type(6n + k)` in `index.html`, so the seventh wears the first's). `src/score.ts` names a score
+  (four or more under par is a Condor!, a hole in one still first) and says what kind it
   is, which colours its callout. Both are given what to show and never read
   the game. How the words look and move is `index.html`'s stylesheet, in the
   clean toy of `LOOK.md`: bright panels with a thick coloured edge, chunky
@@ -751,8 +793,8 @@ change meant to move it, and the commit says why. Look at every picture.
   feel is in figures (relief, steepest slope, bumpiness, detail, and how much
   of the ground a ball rests on), which the tests hold each hole to.
 - The courses are content in `course.ts`, `COURSES`, each a name and its holes: The Meadow (`COURSE`), The Pinball Shed
-  (`SHED`, `src/shed.ts`), The Fair (`FAIR`, `src/fair.ts`), The Waterworks (`WATERWORKS`, `src/waterworks.ts`)
-  and The Links. The three new courses are nine holes each, drawn by hand as The Meadow's are, with no generator, and
+  (`SHED`, `src/shed.ts`), The Fair (`FAIR`, `src/fair.ts`), The Waterworks (`WATERWORKS`, `src/waterworks.ts`),
+  The Links, The Fells (`src/fells.ts`) and The Isles (`src/isles.ts`). The three minigolf courses are nine holes each, drawn by hand as The Meadow's are, with no generator, and
   made as the page loads. Each hole has a comment saying its idea and why it is drawn as it is, since what the
   autopilot would play decided the drawing: a ball's radius and three tenths of a unit clear of the water, a timing window at
   the autopilot's margin, a cup on level grass with a tile of grass round it. The Pinball Shed (par 25) is banks and bounces:
@@ -903,6 +945,11 @@ always taken at the top rung unless a test asks. In unit tests, `game.place(x, y
 ball down at a lie.
 
 ## What is not there yet
+
+- The Fells and The Isles, as they are. The preview shows only the first landing, so how far a ball runs down The Fells' slopes
+  after it lands is not seen, which is the biggest risk to how the course feels and is for the user to judge by playing. The
+  autopilot and the pace player know no slope and play round the wood, so a lane is a human's shortcut that no gate plays.
+  On steep ground a marginal slope does not run when a ball is put down on it, only when struck. A lake across one of The Isles' longer holes is 45 to 80 yards of water, no more than a flight needs.
 
 Each of these is the first feature's to bring, with every gate green at
 each step, and a gate handed what it needs in the same change:
