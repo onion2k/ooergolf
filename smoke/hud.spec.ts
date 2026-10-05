@@ -36,7 +36,7 @@ for (const [where, device] of [
   test.describe(where, () => {
     test.use(device);
 
-    test('the start screen holds its four minigolf and one golf course without scrolling, the colours going round the cards', async ({
+    test('the start screen holds its four minigolf and three golf courses without scrolling, the colours going round the cards', async ({
       page,
     }) => {
       const problems = watch(page);
@@ -49,8 +49,10 @@ for (const [where, device] of [
         return { fits: panel.scrollHeight <= panel.clientHeight, faces };
       });
       expect(r.fits, 'no scrolling in the start screen').toBe(true);
-      // five cards, five colours: a heading among them must not shift the cycle
-      expect(new Set(r.faces).size, 'each card its own colour').toBe(5);
+      // seven cards go round six colours, so the seventh wears the first's, which is a heading away; a heading must not shift the cycle
+      expect(r.faces.length, 'a card for each course').toBe(7);
+      expect(new Set(r.faces).size, 'six colours, each used').toBe(6);
+      expect(r.faces[6], 'the seventh card goes round to the first colour').toBe(r.faces[0]);
       expect(problems).toEqual([]);
     });
 

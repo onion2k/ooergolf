@@ -556,6 +556,40 @@ test('a hole of golf played with the bag: a club chosen by its button, struck in
   expect(problems).toEqual([]);
 });
 
+for (const [course, first] of [
+  ['The Fells', 'Fell Foot'],
+  ['The Isles', 'Landfall'],
+] as const) {
+  test(`${course} is chosen by its card on the start screen, begun on its first hole with the driver in hand, and a stroke is struck by a drag`, async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 1, paused: true, screen: true });
+    await expect(page.locator('#start .course')).toHaveCount(7);
+    await page.locator('#start .course', { hasText: course }).click();
+    await expect(page.locator('#start')).toBeHidden();
+    await page.evaluate(() => window.game!.step(75));
+    await expect(page.locator('#bag')).toBeVisible();
+    await expect(page.locator('#bagClubs button')).toHaveCount(8);
+    expect(await page.evaluate(() => window.game!.state())).toMatchObject({
+      course,
+      golf: true,
+      inHand: 'driver',
+      strokes: 0,
+      ready: true,
+    });
+    expect(await page.evaluate(() => window.game!.content().holes[0].name)).toBe(first);
+    const at = await page.evaluate(() => {
+      const b = window.game!.ball();
+      return window.game!.project(b.x, b.y, b.z);
+    });
+    const short = await page.evaluate(() => Math.min(innerWidth, innerHeight));
+    await drag(page, at, { x: at.x, y: at.y + 0.35 * short });
+    expect((await page.evaluate(() => window.game!.state())).strokes, 'let go, the stroke is taken').toBe(1);
+    expect(problems).toEqual([]);
+  });
+}
+
 test('a full drive is followed the whole way: the ball is in the middle of the screen at every frame from the tee to rest', async ({
   page,
 }) => {
@@ -1853,7 +1887,7 @@ test.describe('the flag button', () => {
     await expect(page.locator('#viewFlag')).toBeHidden();
     expect(await page.evaluate(() => window.game!.faceFlag()), 'nothing under the screen').toBe(false);
     expect((await view(page)).turning).toBe(false);
-    for (const course of ['The Meadow', 'The Links']) {
+    for (const course of ['The Meadow', 'The Links', 'The Fells', 'The Isles']) {
       await page.evaluate((name) => {
         window.game!.chooseCourse(name);
         window.game!.step(60);

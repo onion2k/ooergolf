@@ -33,6 +33,36 @@ describe('a course made by a generator', () => {
     vi.resetModules();
   });
 
+  it('is made only when chosen for The Fells and The Isles too: summaries read, nothing made, until their holes are asked for', async () => {
+    vi.resetModules();
+    const made: string[] = [];
+    vi.doMock('../src/golf', async () => {
+      const real = await vi.importActual<typeof import('../src/golf')>('../src/golf');
+      return {
+        ...real,
+        golfHole: (spec: Parameters<typeof real.golfHole>[0]) => {
+          made.push(spec.name);
+          return real.golfHole(spec);
+        },
+      };
+    });
+    const course = await import('../src/course');
+    expect(made).toEqual([]);
+    for (const name of ['The Fells', 'The Isles']) {
+      const c = course.COURSES.find((x) => x.name === name)!;
+      expect(c.golf, `${name} is golf`).toBe(true);
+      expect(c.summary.holes).toBe(9);
+      expect(made, `${name}: its summary was read, nothing made`).toEqual([]);
+      const holes = c.holes;
+      expect(made.length).toBe(9);
+      expect(c.holes).toBe(holes);
+      expect(made.length, 'once').toBe(9);
+      made.length = 0;
+    }
+    vi.doUnmock('../src/golf');
+    vi.resetModules();
+  });
+
   it('says in its summary what its holes say, for every course there is', () => {
     for (const c of COURSES) {
       expect(c.summary.holes, `${c.name}: how many holes`).toBe(c.holes.length);

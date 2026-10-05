@@ -103,11 +103,11 @@ describe('the course', () => {
   it('has holes, each with a par, a cup the ball fits, and grass the whole way from the tee to the cup, on every course', () => {
     expect(COURSE.length).toBeGreaterThanOrEqual(2);
     expect(CUP.radius).toBeGreaterThan(1);
-    for (const hole of COURSES.flatMap((c) => c.holes)) {
+    for (const { hole, golf } of COURSES.flatMap((c) => c.holes.map((h) => ({ hole: h, golf: !!c.golf })))) {
       const l = layoutOf(hole.map, hole.terrain);
       expect(hole.par, hole.name).toBeGreaterThanOrEqual(2);
-      // the longest holes of The Links are par five; no hole is more
-      expect(hole.par, hole.name).toBeLessThanOrEqual(5);
+      // the longest holes of The Isles are par six; no hole is more
+      expect(hole.par, hole.name).toBeLessThanOrEqual(6);
       // the cup sits on level grass, where its lining, collar and flag are drawn; the physics could cut it higher
       const cupTile = Math.floor((l.cup.y - l.originY) / TILE) * l.cols + Math.floor((l.cup.x - l.originX) / TILE);
       expect(l.floor[cupTile], `${hole.name}: the cup on level grass`).toBe(0);
@@ -118,7 +118,8 @@ describe('the course', () => {
       const queue = [tile(l.tee.x, l.tee.y)];
       while (queue.length) {
         const t = queue.pop()!;
-        if (seen.has(t) || l.solid[t] || l.water[t]) continue;
+        // a ball on a golf hole flies over water, so an island green is reached from the tee across it
+        if (seen.has(t) || l.solid[t] || (l.water[t] && !golf)) continue;
         seen.add(t);
         queue.push(t + 1, t - 1, t + l.cols, t - l.cols);
       }

@@ -24,7 +24,7 @@ const RELIEF = { least: 15, most: 40 };
 const CLEARLY = 1.3;
 
 /**
- * Three holes of the table: Fell Foot, The Drop and The Fell Race, with their lengths, widths, feels, contours, greens,
+ * Three holes of the table: Fell Foot, The Plunge and The Fell Race, with their lengths, widths, feels, contours, greens,
  * bunkers and trees (no lakes: those are a later part's). Each is at `heighten` 2.5 and steepness 0.9, which the table's
  * 1.4 to 1.8 do not reach (0 to 15 per cent of the fairway runs at 1.4 and 1.8, and 6 to 29 at 2.5); the seeds are the ones
  * of eight whose share and relief are both inside the targets, 7, 6 and 4.
@@ -49,7 +49,7 @@ const SPECS: GolfSpec[] = [
     greens: 13.5,
   },
   {
-    name: 'The Drop',
+    name: 'The Plunge',
     par: 3,
     length: 210,
     bend: 0,
@@ -250,7 +250,7 @@ describe('a hole of steep ground, as The Fells have it', () => {
 
 describe('the steepest ground the physics takes', () => {
   it('is never handed back past it: a plate blended into tall hills is gentled until the physics takes it', () => {
-    // these seeds of The Fell Race and The Drop (on long hills) made a step of 1.50 to 1.65 where the green's plate meets the
+    // these seeds of The Fell Race and The Plunge (on long hills) made a step of 1.50 to 1.65 where the green's plate meets the
     // hills, past the half a tile the physics allows, before the generator held the finished ground to it
     const cases: GolfSpec[] = [
       { ...SPECS[2], seed: 2 },

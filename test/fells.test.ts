@@ -223,7 +223,7 @@ describe('The Fells', () => {
     }
     const mine = FELLS_SPECS.map((s) => s.name);
     expect(new Set(mine).size).toBe(9);
-    const others = COURSES.flatMap((c) => c.holes.map((h) => h.name));
+    const others = COURSES.filter((c) => c.name !== 'The Fells').flatMap((c) => c.holes.map((h) => h.name));
     for (const name of mine) expect(others, name).not.toContain(name);
     for (const name of ISLES) expect(mine, name).not.toContain(name);
     for (const s of LINKS_SPECS) expect(mine, s.name).not.toContain(s.name);

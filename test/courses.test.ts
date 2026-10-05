@@ -5,21 +5,26 @@ import { Autopilot } from '../src/autopilot';
 import { COURSE, COURSES, CUP } from '../src/course';
 import { checkInvariants } from '../src/invariants';
 import { PHYSICS, terrainRefusal } from '../src/physics';
+import { Progress, memoryStore } from '../src/progress';
 import { DT, newGame } from './helpers';
 import { HILLS } from './hills';
 
+const holeNames = (course: string) => COURSES.find((c) => c.name === course)!.holes.map((h) => h.name);
+
 describe('the courses', () => {
-  it('are The Meadow, the first nine as they were, the three newer courses and The Links, the one course of golf', () => {
+  it('are The Meadow, the first nine as they were, the three newer courses and The Links, The Fells and The Isles, the courses of golf, in order of difficulty', () => {
     expect(COURSES.map((c) => c.name)).toEqual([
       'The Meadow',
       'The Pinball Shed',
       'The Fair',
       'The Waterworks',
       'The Links',
+      'The Fells',
+      'The Isles',
     ]);
     expect(COURSES[0].holes).toBe(COURSE);
     expect(COURSE.length).toBe(9);
-    expect(COURSES.filter((c) => c.golf).map((c) => c.name)).toEqual(['The Links']);
+    expect(COURSES.filter((c) => c.golf).map((c) => c.name)).toEqual(['The Links', 'The Fells', 'The Isles']);
   });
 
   it('draw The Meadow’s windmill and mill race so that the cup shows from the tee, and open the race’s barrier wider', () => {
@@ -47,6 +52,20 @@ describe('the courses', () => {
   it('name every hole once across them all, since a best score is kept by the hole’s name', () => {
     const names = [...COURSES.flatMap((c) => c.holes.map((h) => h.name)), ...HILLS.map((h) => h.name)];
     expect(new Set(names).size).toBe(names.length);
+  });
+
+  it('keep a best score by the name of each hole of The Fells and The Isles, saved and read back', () => {
+    const names = ['The Fells', 'The Isles'].flatMap((n) =>
+      COURSES.find((c) => c.name === n)!.summary.holes ? holeNames(n) : [],
+    );
+    expect(names.length).toBe(18);
+    const best: Record<string, { strokes: number; club: string }> = {};
+    names.forEach((n, i) => (best[n] = { strokes: 2 + (i % 5), club: 'putter' }));
+    const store = memoryStore(JSON.stringify({ coins: 0, gems: 0, owned: ['putter'], club: 'putter', best }));
+    const progress = new Progress(store);
+    progress.persist();
+    const again = new Progress(store);
+    expect(again.save.best).toEqual(best);
   });
 
   it('slope only as the physics allows, and round each cup no steeper than the green holds a ball', () => {

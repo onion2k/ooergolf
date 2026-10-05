@@ -32,6 +32,8 @@
 
 import type { ObstacleDef } from './obstacles';
 import { FAIR } from './fair';
+import { FELLS_SUMMARY, fells } from './fells';
+import { ISLES_SUMMARY, isles } from './isles';
 import { LINKS_SUMMARY, links } from './links';
 import { SHED } from './shed';
 import { WATERWORKS } from './waterworks';
@@ -291,6 +293,22 @@ export const COURSES: readonly Course[] = [
       return links();
     },
     summary: LINKS_SUMMARY,
+    golf: true,
+  },
+  {
+    name: 'The Fells',
+    get holes() {
+      return fells();
+    },
+    summary: FELLS_SUMMARY,
+    golf: true,
+  },
+  {
+    name: 'The Isles',
+    get holes() {
+      return isles();
+    },
+    summary: ISLES_SUMMARY,
     golf: true,
   },
 ];

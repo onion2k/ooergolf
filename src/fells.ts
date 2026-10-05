@@ -119,7 +119,7 @@ export const FELLS_SPECS: readonly GolfSpec[] = [
     greens: 13,
   },
   {
-    name: 'The Drop',
+    name: 'The Plunge',
     par: 3,
     length: 210,
     bend: 0,
