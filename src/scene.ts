@@ -60,6 +60,7 @@ import {
   waterBed,
   stream,
   streamBed,
+  oceanFor,
   windmill,
   type Model,
   STREAM,
@@ -359,6 +360,11 @@ function groups(model: Model, matrices: Float32Array): GameGroup[] {
   return model.parts.map((part) => group(part, matrices));
 }
 
+/** How a hole's water is drawn: the open water where `OCEAN_ON` says for its kind of hole, the rippling pond elsewhere. */
+function lookOf(layout: Layout): 'ocean' | 'ripple' {
+  return oceanFor(layout.golf) ? 'ocean' : 'ripple';
+}
+
 /** A pool of what moves, as a group after the aim: its placements, how many are drawn, and how it is written at a time. */
 interface Entry {
   matrices: Float32Array;
@@ -542,7 +548,7 @@ export class Scene {
     if (!cells.length) return [];
     const at = new Float32Array(16);
     place(at, 0, layout.originX, layout.originY, 0);
-    return groups(waterBed(cells, TILE, { seed: first + 1 }), at);
+    return groups(waterBed(cells, TILE, { seed: first + 1, look: lookOf(layout) }), at);
   }
 
   /**
@@ -556,7 +562,7 @@ export class Scene {
       .map((t): [number, number] => [t % layout.cols, Math.floor(t / layout.cols)]);
     const at = new Float32Array(16);
     place(at, 0, layout.originX, layout.originY, 0);
-    return groups(streamBed(cells, TILE, { seed: cells[0][0] * 7 + cells[0][1] + 1 }), at);
+    return groups(streamBed(cells, TILE, { seed: cells[0][0] * 7 + cells[0][1] + 1, look: lookOf(layout) }), at);
   }
 
   /** The sand on a hole, as one bed over all its tiles, with the lip only where it meets the grass. */
@@ -623,7 +629,8 @@ export class Scene {
       seed,
     }));
     this.shares = sparkleShares(this.ponds.length);
-    if (!ponds.length) return;
+    // open water has no rings, which would be circles on waves of their own: the ponds are still known, for the sparkles
+    if (!ponds.length || lookOf(layout) === 'ocean') return;
     const mesh = ponds[0].model.moving[0].mesh;
     const [dr, dg, db] = COLOURS.water,
       [pr, pg, pb] = COLOURS.ripple;
@@ -849,7 +856,8 @@ export class Scene {
     for (const c of obstacles?.conveyors ?? []) {
       const yaw = c.angle - Math.PI / 2;
       if (c.look === 'water') {
-        this.streamRipples(c, yaw, out);
+        // open water has no streaks either: its waves carry no ring or streak over them
+        if (!layout || lookOf(layout) === 'ripple') this.streamRipples(c, yaw, out);
         continue;
       }
       const belt = conveyor(TILE, c.length);
@@ -1093,6 +1101,8 @@ export class Scene {
 
   /** A ball went into the water at (x, y) at game time `t`: a ring spreads from there until it fades. */
   splashedAt(x: number, y: number, t: number) {
+    // open water draws no ring, so none is kept for the page to read back
+    if (this.layout && lookOf(this.layout) === 'ocean') return;
     this.splashed = { x, y, at: t };
   }
 

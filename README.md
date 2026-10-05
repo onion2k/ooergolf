@@ -48,8 +48,8 @@ roll, curving across the slope to where it will stop. A
 machine that cannot keep up has the picture stepped down a rung at a time.
 
 The green is painted in its mown stripes, with a soft turf grain under the light, and the rough round it is
-short, dense turf of real blades, bending in each hole's own wind. A pond's surface ripples
-in the sun, from the game's own clock.
+short, dense turf of real blades, bending in each hole's own wind. A minigolf pond's surface ripples
+in the sun, from the game's own clock, and a golf pond is open water, waves that mirror the sky and glitter as the camera moves.
 
 Four courses of minigolf, nine holes each. The Meadow is the first: a straight putt, a dog-leg, a bunker in front of the
 cup, a pond, sliding barriers, a field of pinball posts, a ramp up onto a plateau between ponds, a windmill whose blades

@@ -406,6 +406,23 @@ square-edged, the value noise's grid showing as pixel camouflage; the user
 chose 0.2 and 0.15, which reads as soft turf. Seventy-two pictures moved,
 each looked at, and the metrics held their floors (framing 2.32, from 2.39).
 
+**Open water, golf only.** The pin moved to v0.27.0, which has the renderer's
+open-water kind (`FLOW_WATER`, after three.js's water example): waves that
+turn the surface's normal in the world and mirror the sky by a Fresnel term, so
+the crests glint and the glitter moves with the camera. A golf hole's ponds
+wear it, in `OCEAN` (cells of 0.3 a yard, a speed of 0.55, a tilt of 0.8), and
+the user's tweaks after seeing it were three: brighter, with the glitter taken
+from the camera, and no circles. The body is a bluer, brighter deep colour than
+the example's green-black, so a pond reads as water from the tee, and the ring
+mesh is gone from it: no idle rings, no ring where a ball went in and no
+streaks on a stream, since the waves are the whole of the water. The sun's
+sparkles stay. The foam, the shallows and the earth are as they were. Minigolf
+keeps its rippling ponds, rings and streaks, held bit for bit, and the user chose
+golf only for now; the one switch, `OCEAN_ON`, gives it to minigolf and its
+streams when wanted, and nothing else needs to change. The golf pictures that
+show water moved, each looked at. What the new water costs a frame on a golf hole
+was not measured at the commit: the check at the end of the piece of work reads it.
+
 **What it costs, and what was not measured.** The standard view cost 2.99 ms
 at the grass's commit, inside the 6. The v0.26.0 move and the texture were
 committed at the user's word without the full check, the fuzzer,

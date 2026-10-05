@@ -21,6 +21,7 @@ import { layoutOf } from '../src/arena';
 import { COURSE, type HoleDef } from '../src/course';
 import { LINKS_SPECS, links as linksHoles } from '../src/links';
 import { breakOf } from '../src/green';
+import { RANGE } from '../src/range';
 
 import { glint } from '../src/glints';
 import { LIE } from '../src/surfaces';
@@ -567,6 +568,52 @@ test.describe('what it looks like', () => {
         window.game!.step(1);
       });
       await expect(page.locator('#view')).toHaveScreenshot('range-green.png', TOLERANCE);
+      expect(problems).toEqual([]);
+    });
+
+    /** The middle of the pond of Over the Pond, the Range's sixth hole, in world units. */
+    const rangePond = () => {
+      const l = layoutOf(RANGE[5].map);
+      let x = 0,
+        y = 0,
+        n = 0;
+      for (let t = 0; t < l.cols * l.rows; t++)
+        if (l.water[t]) {
+          x += l.originX + ((t % l.cols) + 0.5) * 3;
+          y += l.originY + (Math.floor(t / l.cols) + 0.5) * 3;
+          n++;
+        }
+      return { x: x / n, y: y / n };
+    };
+
+    test('open water, close to: the pond of Over the Pond in its waves, the sky mirrored and the glitter on the crests, with no rings on it', async ({
+      page,
+    }) => {
+      const problems = watch(page);
+      await range(page, 5);
+      const at = rangePond();
+      await page.evaluate((c) => {
+        window.game!.look(c.x, c.y - 14, 40);
+        window.game!.step(1);
+      }, at);
+      expect((await page.evaluate(() => window.game!.motions())).splash, 'no ring on open water').toBe(0);
+      await expect(page.locator('#view')).toHaveScreenshot('golf-water.png', TOLERANCE);
+      expect(problems).toEqual([]);
+    });
+
+    test('open water, from the side and low: the same pond with the camera turned, so the glitter has moved with it', async ({
+      page,
+    }) => {
+      const problems = watch(page);
+      await range(page, 5);
+      const at = rangePond();
+      await page.evaluate((c) => {
+        const g = window.game!;
+        g.look(c.x, c.y - 14, 40);
+        g.orbit(-Math.PI / 2, 0.7);
+        g.step(1);
+      }, at);
+      await expect(page.locator('#view')).toHaveScreenshot('golf-water-orbit.png', TOLERANCE);
       expect(problems).toEqual([]);
     });
   });

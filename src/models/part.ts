@@ -17,7 +17,7 @@ export type Colour = readonly [number, number, number];
 export type Material = readonly [number, number, number, number];
 
 /** The renderer's patterns, by the number its shader knows each by. */
-export const PATTERN = { swirl: 1, bands: 2, marbling: 3, speckle: 4, ripple: 5 } as const;
+export const PATTERN = { swirl: 1, bands: 2, marbling: 3, speckle: 4, ripple: 5, ocean: 8 } as const;
 
 /**
  * A second colour mixed into a part, drawn from where on the part a fragment

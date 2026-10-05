@@ -312,8 +312,8 @@ change meant to move it, and the commit says why. Look at every picture.
   on the rough as a raised green: the rough lies `ROUGH_DEPTH` below the
   grass, under the bottom of the cup, so the cup is seen into, and the rail
   comes down to meet it. The look is `LOOK.md`'s clean toy, toon daylight
-  on artshape-render v0.26.0 (0.23.0 brought the surface that flows, which the ponds
-  use; 0.24.0 and 0.25.0 particles blown by a wash of air, which the game does not yet use; 0.26.0 the ground texture), in `src/look.ts`, shared by the game and the
+  on artshape-render v0.27.0 (0.23.0 brought the surface that flows, which the ponds
+  use; 0.24.0 and 0.25.0 particles blown by a wash of air, which the game does not yet use; 0.26.0 the ground texture; 0.27.0 open water, which a golf pond wears), in `src/look.ts`, shared by the game and the
   showcase: edges drawn at four samples a pixel (the post pass one rung
   down the ladder, and none on the last), the toon bands eased at their
   edges, a cool blue-violet shade, a warm rim, the sky's light from above
@@ -400,7 +400,15 @@ change meant to move it, and the commit says why. Look at every picture.
   `main.ts` already sets from game time, so a paused game is still and a picture is
   the same every run) at `RIPPLE.speed` 1.5 units a second, in cells of `RIPPLE.scale`
   0.5 a unit (two tiles across a cell), the crests in `PALETTE.waterVein`, the normal
-  turned by the slope so the sun glints on it; it costs a frame 0.4 to 0.6 ms on The Rapids and under 0.3 on The Meadow's Pond. A stream's surface keeps its
+  turned by the slope so the sun glints on it; it costs a frame 0.4 to 0.6 ms on The Rapids and under 0.3 on The Meadow's Pond. **A golf hole's water is open water instead**: `PATTERN.ocean` (8, held equal to the renderer's
+  `FLOW_WATER` by `test/water-ocean.test.ts`), waves that turn the normal in the world and mirror the sky, so the sun
+  glints on the crests and the glitter moves with the camera, in `OCEAN`'s figures (`scale` 0.3, `speed` 0.55, `tilt` 0.8, a
+  `body` brighter and bluer than three.js's and a `tint` of sky). There are no circles on it: no idle rings, no splash ring
+  (`splashedAt` keeps none, so `motions().splash` reads 0 on golf) and no stream streaks; the sparkles stay, laid on the
+  same `ponds`. `OCEAN_ON` (`{ golf: true, minigolf: false }`, read through `oceanFor`) is the one switch: `waterBed` and
+  `streamBed` are built for either `look`, so giving minigolf the new look, its streams too, is that one figure, and a
+  minigolf hole as it stands is held to a hash of its beds and by the rings tests. The cost of a golf pond in open water
+  is not yet measured: the figures here are the ripple's. A stream's surface keeps its
   marbling, since a pattern runs east and a stream may run any way, and its streaks
   already move along it. A part's pattern with a flow kind has a `speed` where the old
   kinds have a seed (`group` writes it with the renderer's `packFlow`); `look.ts`

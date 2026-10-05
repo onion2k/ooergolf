@@ -9,7 +9,7 @@
 import { MeshBuilder, type Mesh } from 'artshape-render/mesh/types';
 import { WATER_LEVEL } from '../arena';
 import { face } from '../meshes';
-import { PALETTE, ROUGH } from './palette';
+import { PALETTE, ROUGH, shown } from './palette';
 import { PATTERN, matte, type Colour, type Material, type Model, type Part, type V3 } from './part';
 import { annulus, at, block, built, faceOut, facingSouth, frustum, roundedBox } from './shapes';
 
@@ -330,6 +330,42 @@ export const WATER = { drop: -WATER_LEVEL, foam: 0.16, band: 0.5 } as const;
  */
 export const RIPPLE = { scale: 0.5, speed: 1.5 } as const;
 
+/**
+ * The look of open water, which golf's ponds wear: the renderer's `FLOW_WATER` (see artshape-render's flow.ts), after
+ * three.js's water example, the waves turning the surface's normal in the world and the sky mirrored in them by a Fresnel
+ * term, so the sun glints on the crests and the glitter follows the camera as it moves. `scale` is how many of the biggest
+ * wave's cells fit a world unit (a yard on golf), `speed` how fast the waves go, `tilt` how steeply they turn the normal,
+ * `body` the deep colour seen through the surface (a brighter, bluer one than three.js's green-black, so a pond reads as
+ * water from the tee), and `tint` the sky the waves mirror.
+ */
+export const OCEAN = {
+  scale: 0.3,
+  speed: 0.55,
+  tilt: 0.8,
+  body: shown(0.05, 0.4, 0.9),
+  tint: shown(0.7, 0.9, 1),
+} as const;
+
+/** The open water's pattern, one for every bed that wears it: the waves, and the sky they mirror. */
+const OCEAN_PATTERN: Part['pattern'] = {
+  kind: PATTERN.ocean,
+  scale: OCEAN.scale,
+  seed: 0,
+  speed: OCEAN.speed,
+  glow: OCEAN.tilt,
+  second: OCEAN.tint,
+};
+
+/**
+ * Where the open-water look is switched on: golf only, since minigolf's rippling ponds and streaks are held as they
+ * were. Both beds are built for either look, so turning minigolf on, its streams too, is this one figure; it is
+ * written to by a test and put back, and by nothing else.
+ */
+export const OCEAN_ON: { golf: boolean; minigolf: boolean } = { golf: true, minigolf: false };
+
+/** Whether a hole of this kind draws its water as open water, with no rings, no splash ring and no streaks over it. */
+export const oceanFor = (golf: boolean): boolean => (golf ? OCEAN_ON.golf : OCEAN_ON.minigolf);
+
 /** A pond: a model, with the room on its water a ripple or a sparkle has, and how wide a ring may spread. */
 export interface Pond extends Model {
   /** The half sizes, across X and along Y, of the water a ring or a sparkle may be on: in from the foam and the shallows. */
@@ -442,13 +478,13 @@ function bed(
  * A bed of water over the tiles `cells`, each `tile` across: the pond's bands, the foam, the shallows and the mid water,
  * only along the sides where a tile meets what is not water, and the deep veined water filling everything inside them,
  * so a channel between two ponds is one water and a pond of any shape has one edge. The surface lies at the game's
- * `WATER_LEVEL`, as a pond's does, and ripples (`RIPPLE`). The seed is still taken, since the scene hands one, but a
- * ripple has no seed to shift, as the marbling had.
+ * `WATER_LEVEL`, as a pond's does, and ripples (`RIPPLE`) or, as `look` says, is open water (`OCEAN`) and a deeper, brighter
+ * body. The seed is still taken, since the scene hands one, but neither has a seed to shift, as the marbling had.
  */
 export function waterBed(
   cells: readonly (readonly [number, number])[],
   tile: number,
-  _options: { seed?: number } = {},
+  { look = 'ripple' }: { seed?: number; look?: 'ripple' | 'ocean' } = {},
 ): Model {
   const { foam } = WATER;
   const band = Math.min(WATER.band, (tile - 2 * foam) / 8);
@@ -463,11 +499,23 @@ export function waterBed(
         { name: 'shallows', width: band, material: water(PALETTE.waterShallow) },
         { name: 'mid', width: band, material: water(PALETTE.waterMid) },
       ],
-      {
-        name: 'water bed',
-        material: water(PALETTE.water),
-        pattern: { kind: PATTERN.ripple, scale: RIPPLE.scale, seed: 0, speed: RIPPLE.speed, second: PALETTE.waterVein },
-      },
+      look === 'ocean'
+        ? {
+            name: 'water bed',
+            material: water(OCEAN.body),
+            pattern: OCEAN_PATTERN,
+          }
+        : {
+            name: 'water bed',
+            material: water(PALETTE.water),
+            pattern: {
+              kind: PATTERN.ripple,
+              scale: RIPPLE.scale,
+              seed: 0,
+              speed: RIPPLE.speed,
+              second: PALETTE.waterVein,
+            },
+          },
     ),
   };
 }
@@ -475,9 +523,14 @@ export function waterBed(
 /**
  * A bed of running water over the tiles `cells` of every belt drawn as water, each `tile` across: the stream's bank,
  * foam and shallows only along the sides where a tile meets what is not a stream, so belts that touch are one channel
- * and not a channel each with a gap of bank between. A hair above the grass, as a stream lies.
+ * and not a channel each with a gap of bank between. A hair above the grass, as a stream lies. Its surface is marbled
+ * and streaked, or, as `look` says, open water (`OCEAN`).
  */
-export function streamBed(cells: readonly (readonly [number, number])[], tile: number, { seed = 1 } = {}): Model {
+export function streamBed(
+  cells: readonly (readonly [number, number])[],
+  tile: number,
+  { seed = 1, look = 'ripple' }: { seed?: number; look?: 'ripple' | 'ocean' } = {},
+): Model {
   const bank = Math.min(STREAM.bank, tile / 12);
   const foam = Math.min(STREAM.foam, tile / 10);
   const band = Math.min(STREAM.band, tile / 6);
@@ -493,8 +546,15 @@ export function streamBed(cells: readonly (readonly [number, number])[], tile: n
     ],
     {
       name: 'stream bed',
-      material: water(PALETTE.water),
-      pattern: { kind: PATTERN.marbling, scale: 0.5, seed: (seed * 0.29) % 1, second: PALETTE.waterVein },
+      ...(look === 'ocean'
+        ? {
+            material: water(OCEAN.body),
+            pattern: OCEAN_PATTERN,
+          }
+        : {
+            material: water(PALETTE.water),
+            pattern: { kind: PATTERN.marbling, scale: 0.5, seed: (seed * 0.29) % 1, second: PALETTE.waterVein },
+          }),
     },
   );
 }
