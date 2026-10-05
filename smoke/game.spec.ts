@@ -8,11 +8,13 @@
 import { expect, test, type Page } from '@playwright/test';
 import { PNG } from 'pngjs';
 import { BALL, KIND_RADIUS, ROLL, heightAt, layoutOf, powerFor } from '../src/arena';
-import { COURSE, COURSES, CUP } from '../src/course';
+import { COURSE, COURSES, CUP, type HoleDef } from '../src/course';
 import { VOLCANO } from '../test/hills';
 import { ORBIT } from '../src/gesture';
 import { LIE } from '../src/surfaces';
 import { LINKS_SPECS, links } from '../src/links';
+import { fells } from '../src/fells';
+import { isles } from '../src/isles';
 import { FLAT } from '../test/level';
 import { noiseGround } from '../src/noise';
 import { clearings } from '../src/scenery';
@@ -795,6 +797,77 @@ test.describe('the grass of a golf hole', () => {
     expect(shares[3]).toBeLessThan(0.35);
     expect(problems).toEqual([]);
   });
+});
+
+/** The index of the biggest hole of a course by tiles of map, from its layouts: the one the frame's cost is measured on. */
+const biggestOf = (holes: readonly HoleDef[]) => {
+  const tiles = holes.map((h) => {
+    const l = layoutOf(h.map, h.terrain);
+    return l.cols * l.rows;
+  });
+  return tiles.indexOf(Math.max(...tiles));
+};
+
+// The Fells' and The Isles' biggest holes (high relief at a low tilt, and the widest lakes and woods) at the four views
+// that draw the most: the home view from the tee, the lowest tilt turned round, the driver's aim view at its worst heading
+// (facing up the hole, and turned right round), and the whole hole at the widest zoom; each inside the frame's budget and
+// short of the renderer's room for blades.
+test.describe('golf on The Fells and The Isles', () => {
+  for (const [course, holes] of [
+    ['The Fells', fells()],
+    ['The Isles', isles()],
+  ] as const) {
+    const hole = biggestOf(holes);
+    test(`costs a frame inside the budget, and keeps room for blades, on the biggest hole of ${course} (${holes[hole].name}) at four views`, async ({
+      page,
+    }) => {
+      test.setTimeout(180_000);
+      const problems = watch(page);
+      await start(page, { seed: 11, paused: true });
+      const seen = await page.evaluate(
+        async ([name, hole]) => {
+          const g = window.game!;
+          g.chooseCourse(name as string);
+          g.startHole(hole as number);
+          g.club('driver');
+          g.step(300);
+          const out: { where: string; ms: number; blades: number }[] = [];
+          const take = async (where: string) => {
+            g.step(2);
+            const ms = await g.measureFrame(60);
+            const grass = await g.grass();
+            out.push({ where, ms, blades: grass.near + grass.far });
+          };
+          // the driver's aim view, from the tee, facing up the hole (the home view of a golf hole)
+          await take('the aim view of the driver, facing up the hole');
+          g.orbit(Math.PI, 0);
+          await take('the aim view of the driver, turned right round');
+          g.orbit(-Math.PI, 0);
+          // the home view parked at the tee, and then as low as the camera goes, from behind and turned round: the most
+          // ground in view (the driver's aim view is already at the lowest tilt, so this is the home zoom's worst)
+          const { tee, cup } = g.content();
+          g.look(tee.x, tee.y, 62);
+          await take('the home view from the tee');
+          g.orbit(Math.PI, 10);
+          await take('the lowest tilt at the home zoom, turned round');
+          g.orbit(-Math.PI, -10);
+          for (const d of [110, 200]) {
+            g.look((tee.x + cup.x) / 2, (tee.y + cup.y) / 2, d);
+            await take(`the whole hole at zoom ${d}`);
+          }
+          return out;
+        },
+        [course, hole],
+      );
+      for (const r of seen)
+        console.log(`${holes[hole].name}: ${r.where}, ${r.ms.toFixed(2)} ms a frame, ${r.blades} blades`);
+      for (const r of seen) {
+        expect(r.ms, `${r.where}: inside the ${BUDGET.frameMs} ms budget`).toBeLessThan(BUDGET.frameMs);
+        expect(r.blades, `${r.where}: room to spare`).toBeLessThan(BLADE_ROOM * 0.85);
+      }
+      expect(problems).toEqual([]);
+    });
+  }
 });
 
 test.describe('golf on The Links', () => {

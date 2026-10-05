@@ -2,7 +2,7 @@
  * What the game costs a player, held to a budget and to what it cost
  * before: how long it takes to boot, what a frame costs to draw at the
  * standard view, how much is downloaded, and what the biggest holes there are
- * (a large test hole of minigolf, and The Links' longest) cost to begin and to draw. The budget is what a good
+ * (a large test hole of minigolf, and the biggest golf hole of any course) cost to begin and to draw. The budget is what a good
  * browser game may cost at all; the baseline is what this one cost at the
  * last commit, so a step toward the budget is noticed as much as a step
  * over it.
@@ -20,11 +20,39 @@ import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
 import { expect, test } from '@playwright/test';
+import { layoutOf } from '../src/arena';
+import { COURSES } from '../src/course';
 import { bigHole, smallHole } from './bighole';
 import { BUDGET } from './budget';
 import { start, watch } from './game';
 
 export { BUDGET };
+
+/**
+ * The biggest golf hole of any course by tiles of map, and the smallest of its own course to begin it in turn with, found
+ * from the layouts and not by name, so a longer hole on any course is the one held to the budget and a course added is
+ * reached without this file being told.
+ */
+function biggestGolfHole(): { course: string; big: number; small: number; tiles: number; name: string } {
+  let best = { course: '', big: 0, small: 0, tiles: 0, name: '' };
+  for (const c of COURSES) {
+    if (!c.golf) continue;
+    const tiles = c.holes.map((h) => {
+      const l = layoutOf(h.map, h.terrain);
+      return l.cols * l.rows;
+    });
+    const big = tiles.indexOf(Math.max(...tiles));
+    if (tiles[big] > best.tiles)
+      best = {
+        course: c.name,
+        big,
+        small: tiles.indexOf(Math.min(...tiles)),
+        tiles: tiles[big],
+        name: c.holes[big].name,
+      };
+  }
+  return best;
+}
 
 const BASELINE = 'smoke/perf-baseline.json';
 /** How far a figure may move from the baseline before it is a change: a share, and a slack for the noisy ones. */
@@ -38,7 +66,7 @@ const TOLERANCE = {
   // that spread, and narrower than a hole costing twice as much to begin or half as much again to draw
   beginMs: [0.5, 30],
   bigFrameMs: [0.25, 0.3],
-  // the same for the biggest hole of The Links, which is golf's: a hole of 24,000 tiles of map, hills, trees and water
+  // the same for the biggest golf hole of any course (the figures keep their old names so the baseline's keys are the same), which is golf's: a hole of 24,000 tiles of map, hills, trees and water
   linksBeginMs: [0.5, 40],
   linksFrameMs: [0.25, 0.4],
 } as const;
@@ -118,22 +146,25 @@ test('boots, draws and downloads within budget, and as it did before', async ({ 
     }
     return { begin: begins[Math.floor(begins.length / 2)], frame: Math.max(...frames) };
   }, holes);
-  // and the same of the biggest hole of The Links, the par five that bends: golf's holes are of a different sort, tens of
-  // thousands of tiles of map with hills and trees and out of bounds on them, and what they cost is held on their own
-  const links = await page.evaluate(async () => {
+  // and the same of the biggest golf hole of any course (Home Waters, the par six of The Isles, at the time of writing):
+  // golf's holes are of a different sort, tens of thousands of tiles of map with hills, lakes, trees and out of bounds on
+  // them, and what they cost is held on their own
+  const golf = biggestGolfHole();
+  console.log(`perf: the biggest golf hole is ${golf.name} of ${golf.course}, ${golf.tiles} tiles`);
+  const links = await page.evaluate(async (golf) => {
     const g = window.game!;
-    g.chooseCourse('The Links');
+    g.chooseCourse(golf.course);
     g.step(2);
     await g.grass();
     const begins: number[] = [];
     for (let k = 0; k < 11; k++) {
       const t = performance.now();
-      g.startHole(k % 2 ? 1 : 6);
+      g.startHole(k % 2 ? golf.small : golf.big);
       await g.grass();
       if (k % 2 === 0) begins.push(performance.now() - t);
     }
     begins.sort((a, b) => a - b);
-    g.startHole(6);
+    g.startHole(golf.big);
     g.step(120);
     const { floor, tee, cup } = g.content();
     const frames: number[] = [];
@@ -148,7 +179,7 @@ test('boots, draws and downloads within budget, and as it did before', async ({ 
       frames.push(await g.measureFrame(120));
     }
     return { begin: begins[Math.floor(begins.length / 2)], frame: Math.max(...frames) };
-  });
+  }, golf);
   const now: Figures = {
     bootMs: Math.round(boot),
     frameMs: Math.round(frame * 100) / 100,
@@ -160,7 +191,7 @@ test('boots, draws and downloads within budget, and as it did before', async ({ 
   };
   info.annotations.push({ type: 'perf', description: JSON.stringify(now) });
   console.log(
-    `perf: boot ${now.bootMs} ms, frame ${now.frameMs} ms, download ${now.bundleKb} kB, begin the biggest hole ${now.beginMs} ms, its frame ${now.bigFrameMs} ms; of The Links, begin ${now.linksBeginMs} ms, frame ${now.linksFrameMs} ms`,
+    `perf: boot ${now.bootMs} ms, frame ${now.frameMs} ms, download ${now.bundleKb} kB, begin the biggest hole ${now.beginMs} ms, its frame ${now.bigFrameMs} ms; of ${golf.name}, begin ${now.linksBeginMs} ms, frame ${now.linksFrameMs} ms`,
   );
 
   if (process.env.PERF_UPDATE) {
@@ -200,7 +231,7 @@ test('boots, draws and downloads within budget, and as it did before', async ({ 
   expect(now.bundleKb, 'download within budget').toBeLessThanOrEqual(BUDGET.bundleKb);
   expect(now.beginMs, 'the biggest hole begun within budget').toBeLessThanOrEqual(BUDGET.beginMs);
   expect(now.bigFrameMs, 'a frame of the biggest hole within budget').toBeLessThanOrEqual(BUDGET.bigFrameMs);
-  expect(now.linksBeginMs, 'the biggest hole of The Links begun within budget').toBeLessThanOrEqual(
+  expect(now.linksBeginMs, 'the biggest golf hole of any course begun within budget').toBeLessThanOrEqual(
     BUDGET.linksBeginMs,
   );
   expect(now.linksFrameMs, 'a frame of it within budget').toBeLessThanOrEqual(BUDGET.linksFrameMs);
