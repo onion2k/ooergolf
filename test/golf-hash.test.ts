@@ -59,6 +59,28 @@ const WAS: Record<string, number> = {
   'The Links/Home Stretch': 236793054,
 };
 
+/** The Fells and The Isles, as they were when they were built (5 October 2026): the same hash, so a generator change that redraws them is seen. */
+const BUILT: Record<string, number> = {
+  'The Fells/Fell Foot': 1440210233,
+  'The Fells/The Pinewood': 4183814432,
+  'The Fells/Tarn': 3440185478,
+  'The Fells/Scree Corner': 1322076311,
+  'The Fells/The Plunge': 2137109730,
+  'The Fells/Beck Bend': 2973865398,
+  'The Fells/The Shortcut': 875279416,
+  'The Fells/Waterfall': 3583191086,
+  'The Fells/The Fell Race': 938263015,
+  'The Isles/Landfall': 737574761,
+  'The Isles/The Green Isle': 3259333563,
+  'The Isles/Long Water': 4185261796,
+  'The Isles/The Archipelago': 1240752909,
+  'The Isles/Causeway': 1373283062,
+  'The Isles/The Long Swim': 1456314309,
+  'The Isles/Two Lakes': 4243180024,
+  'The Isles/The Peninsula': 169994907,
+  'The Isles/Home Waters': 397515127,
+};
+
 describe('the holes as they were', () => {
   it('makes each Links hole from its spec as it was, to the byte', () => {
     // made afresh here and not through `links()`, so a cached hole cannot stand in for what the generator now makes
@@ -71,5 +93,11 @@ describe('the holes as they were', () => {
     const got = Object.fromEntries(COURSES.flatMap((c) => c.holes.map((h) => [`${c.name}/${h.name}`, hashHole(h)])));
     expect(Object.keys(WAS)).toHaveLength(45);
     for (const key of Object.keys(WAS)) expect(got[key], key).toBe(WAS[key]);
+  });
+
+  it('holds every hole of The Fells and The Isles to the hash it was built with', () => {
+    const got = Object.fromEntries(COURSES.flatMap((c) => c.holes.map((h) => [`${c.name}/${h.name}`, hashHole(h)])));
+    expect(Object.keys(BUILT)).toHaveLength(18);
+    for (const key of Object.keys(BUILT)) expect(got[key], key).toBe(BUILT[key]);
   });
 });
