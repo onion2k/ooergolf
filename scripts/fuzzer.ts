@@ -41,11 +41,12 @@ import {
   TURN_TIME,
 } from '../src/invariants';
 import { breakOf, greenArrows, leansOnMinigolf } from '../src/green';
-import { golfHole } from '../src/golf';
+import { golfHole, laneOf } from '../src/golf';
+import { centre, figures } from '../test/lake-figures';
 import { LINKS_SPECS } from '../src/links';
 import { flipperYaw } from '../src/obstacles';
 import { Previewer } from '../src/preview';
-import { BAG } from '../src/bag';
+import { BAG, type BagClub } from '../src/bag';
 import { carryFrom } from '../src/flight';
 import { lieAt } from '../src/arena';
 import { Progress, memoryStore } from '../src/progress';
@@ -86,6 +87,22 @@ export function contoured(): readonly HoleDef[] {
     ...golfHole({ ...spec, contour: 1, greens: CONTOURED_GREENS[k % CONTOURED_GREENS.length] }),
     name: `${spec.name} contoured`,
   })));
+}
+
+const ISLANDS = new WeakMap<HoleDef, { x: number; y: number }[]>();
+/**
+ * The middles of the pieces of land of a golf hole that lie wholly in water (neither the tee's nor the cup's), found from its
+ * map alone by the lake tests' own reading and kept, since a hole's map does not change.
+ */
+function islandsOf(hole: HoleDef): { x: number; y: number }[] {
+  let found = ISLANDS.get(hole);
+  if (!found) {
+    found = hole.map.some((row) => row.includes('~'))
+      ? figures(hole).islands.map((i) => centre(hole, i.centre[0], i.centre[1]))
+      : [];
+    ISLANDS.set(hole, found);
+  }
+  return found;
 }
 
 /** What a player's buttons give a shape and a spin: straight or flat, and one way or the other, straight the likeliest for a shape. */
@@ -730,6 +747,65 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
       }
       busy = Math.floor(between(10, 90));
     };
+    /**
+     * A player driving through a wood's gap: from the tee of a hole that has a lane, the driver along the lane's bearing at
+     * full power, with the slips a player has (a few degrees of aim, a tenth of the power). Done on a chance of its own, as the
+     * flag button is, and only on a hole with a lane and with the ball at its tee, so the monkey's stream and every run on
+     * holes without one play as they did. The canopies are the game's to hold, as every ten frames.
+     */
+    const driver = seeded(seed * 29 + 3);
+    const driveTheLane = () => {
+      const lane = laneOf(game.def);
+      if (!lane || !game.ready || input.aim !== null || game.phase !== 'play' || !game.layout.golf) return;
+      const { world, ball } = game;
+      if (Math.hypot(world.x[ball] - lane.from.x, world.y[ball] - lane.from.y) > 6) return;
+      const bearing = Math.atan2(lane.to.y - lane.from.y, lane.to.x - lane.from.x);
+      game.pick(BAG[0].id);
+      game.setShape(0);
+      game.setSpin(0);
+      if (game.shoot(bearing + (driver() - 0.5) * 0.1, 1 - driver() * 0.1)) {
+        spent();
+        did('drive the lane');
+        busy = Math.floor(between(10, 90));
+      }
+    };
+    /**
+     * A player flying the ball to an island: the shortest club that carries to the middle of a piece of land wholly in
+     * water, at the power that carries just so far on the level, from wherever the ball lies and a little off its line.
+     * Done on a chance of its own and only on a hole with an island and with one within a driver's carry, so no other hole
+     * plays differently. Whatever comes of it (water, the island, a tree) the game's rules hold.
+     */
+    const islander = seeded(seed * 31 + 5);
+    const flyToIsland = () => {
+      if (!game.ready || input.aim !== null || game.phase !== 'play' || !game.layout.golf) return;
+      const islands = islandsOf(game.def);
+      if (!islands.length) return;
+      const { world, ball, layout } = game;
+      const lie = lieAt(layout, world.x[ball], world.y[ball]);
+      const island = islands[Math.floor(islander() * islands.length)];
+      const dx = island.x - world.x[ball],
+        dy = island.y - world.y[ball],
+        far = Math.hypot(dx, dy);
+      if (far < 20) return;
+      const lofted = BAG.filter((c) => c.loft > 0).sort((a, b) => carryFrom(a, 1, lie) - carryFrom(b, 1, lie));
+      const club: BagClub | undefined = lofted.find((c) => carryFrom(c, 1, lie) >= far * 1.05);
+      if (!club) return;
+      let low = 0,
+        high = 1;
+      for (let k = 0; k < 20; k++) {
+        const mid = (low + high) / 2;
+        if (carryFrom(club, mid, lie) < far) low = mid;
+        else high = mid;
+      }
+      game.pick(club.id);
+      game.setShape(0);
+      game.setSpin(0);
+      if (game.shoot(Math.atan2(dy, dx) + (islander() - 0.5) * 0.1, Math.min(1, high * (0.95 + 0.1 * islander())))) {
+        spent();
+        did('fly to an island');
+        busy = Math.floor(between(10, 90));
+      }
+    };
     const total = actions.reduce((n, [w]) => n + w, 0);
     const act = () => {
       let pick = random() * total;
@@ -749,6 +825,8 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
       if (bumped() < 0.03) bump();
       if (game.layout.kickers.length && striker() < 0.03) strike();
       if (game.obstacles.streamed.size && streamer() < 0.03) strikeOntoStream();
+      if (laneOf(game.def) && driver() < 0.03) driveTheLane();
+      if (game.layout.golf && islandsOf(game.def).length && islander() < 0.03) flyToIsland();
       game.step(DT);
       // a kicker throws the hardest of anything on a course, so what it does to the ball is checked in every frame
       if (game.layout.kickers.length) {

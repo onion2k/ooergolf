@@ -4,7 +4,7 @@
  *   npm run fuzz                         seeds 1-12, 4000 frames each, on the courses, on each course alone, on The Links and on contoured greens
  *   npm run fuzz -- --seeds 1-50 --frames 10000
  *   npm run fuzz -- --seed 17            one seed again, with what was done before it went wrong
- *   npm run fuzz -- --seed 17 --on links the seed's run on The Links again, if that is where it went wrong (or `contoured`, The Links' holes with the steepest greens at
+ *   npm run fuzz -- --seed 17 --on links the seed's run on The Links again, if that is where it went wrong (or `fells` or `isles`, The Fells and The Isles, or `contoured`, The Links' holes with the steepest greens at
  *                                        every speed, `shed`, The Pinball Shed's holes, `fair`, The Fair's, or `waterworks`, The
  *                                        Waterworks', each minigolf course played once more as its own run)
  *
@@ -25,6 +25,8 @@ import { STREAM_HOLE } from '../test/stream-hole';
 /** The courses of golf a run may be played on alone, by the short name a replay asks for and the name a course has. */
 const GOLF = {
   links: 'The Links',
+  fells: 'The Fells',
+  isles: 'The Isles',
   contoured: 'The Links, contoured',
   kickers: 'the holes with kickers',
   stream: 'a hole with a stream',
@@ -66,7 +68,7 @@ async function main() {
   // each seed as a player choosing among the courses, and on each course of golf alone; or only the one asked for, to play a failure again
   const on = value('on') as Golf | undefined;
   if (on !== undefined && !(on in GOLF))
-    throw new Error(`--on is links, contoured, kickers, stream, shed, fair or waterworks, not ${on}`);
+    throw new Error(`--on is links, fells, isles, contoured, kickers, stream, shed, fair or waterworks, not ${on}`);
   const queue: { seed: number; on: Golf | undefined }[] = seeds.flatMap<{ seed: number; on: Golf | undefined }>(
     (seed) =>
       on
@@ -76,6 +78,8 @@ async function main() {
           : [
               { seed, on: undefined },
               { seed, on: 'links' as const },
+              { seed, on: 'fells' as const },
+              { seed, on: 'isles' as const },
               { seed, on: 'contoured' as const },
               { seed, on: 'shed' as const },
               { seed, on: 'fair' as const },
