@@ -404,8 +404,8 @@ change meant to move it, and the commit says why. Look at every picture.
   `FLOW_WATER` by `test/water-ocean.test.ts`), waves that turn the normal in the world and mirror the sky, so the sun
   glints on the crests and the glitter moves with the camera, in `OCEAN`'s figures (`scale` 0.3, `speed` 0.55, `tilt` 0.8, a
   `body` brighter and bluer than three.js's and a `tint` of sky). There are no circles on it: no idle rings, no splash ring
-  (`splashedAt` keeps none, so `motions().splash` reads 0 on golf) and no stream streaks; the sparkles stay, laid on the
-  same `ponds`. `OCEAN_ON` (`{ golf: true, minigolf: false }`, read through `oceanFor`) is the one switch: `waterBed` and
+  (`splashedAt` keeps none, so `motions().splash` reads 0 on golf) and no stream streaks, and no sparkles (a pond is still in `ponds`, with a share of
+  none, since the waves' own glints are the twinkle). `OCEAN_ON` (`{ golf: true, minigolf: false }`, read through `oceanFor`) is the one switch: `waterBed` and
   `streamBed` are built for either `look`, so giving minigolf the new look, its streams too, is that one figure, and a
   minigolf hole as it stands is held to a hash of its beds and by the rings tests. The cost of a golf pond in open water
   is not yet measured: the figures here are the ripple's. A stream's surface keeps its

@@ -628,9 +628,11 @@ export class Scene {
       reach: model.reach,
       seed,
     }));
-    this.shares = sparkleShares(this.ponds.length);
-    // open water has no rings, which would be circles on waves of their own: the ponds are still known, for the sparkles
-    if (!ponds.length || lookOf(layout) === 'ocean') return;
+    const open = lookOf(layout) === 'ocean';
+    // open water has its own glints in its waves, so a sparkle on it would be a second twinkle on the first, and no rings,
+    // which would be circles on waves: it keeps the ponds, which a hole's other code finds, and gives each no sparkle
+    this.shares = open ? this.ponds.map(() => 0) : sparkleShares(this.ponds.length);
+    if (!ponds.length || open) return;
     const mesh = ponds[0].model.moving[0].mesh;
     const [dr, dg, db] = COLOURS.water,
       [pr, pg, pb] = COLOURS.ripple;

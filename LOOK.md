@@ -416,7 +416,7 @@ from the camera, and no circles. The body is a bluer, brighter deep colour than
 the example's green-black, so a pond reads as water from the tee, and the ring
 mesh is gone from it: no idle rings, no ring where a ball went in and no
 streaks on a stream, since the waves are the whole of the water. The sun's
-sparkles stay. The foam, the shallows and the earth are as they were. Minigolf
+sparkles are gone from it too, the waves' glints being twinkle enough. The foam, the shallows and the earth are as they were. Minigolf
 keeps its rippling ponds, rings and streaks, held bit for bit, and the user chose
 golf only for now; the one switch, `OCEAN_ON`, gives it to minigolf and its
 streams when wanted, and nothing else needs to change. The golf pictures that

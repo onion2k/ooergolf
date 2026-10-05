@@ -136,18 +136,10 @@ describe('a hole’s water, in the scene', () => {
     expect(scene.splashReach(2.3), 'no ring to read back').toBe(0);
   });
 
-  it('is still known to the sparkles, which stay on it, inside its water', () => {
+  it('is still a known pond, but has no sparkles, its waves glinting enough', () => {
     const { scene } = sceneOf(GOLF_POND);
     expect(scene.ponds.length).toBe(1);
-    let lit = 0;
-    for (let t = 0; t < 30; t += 0.1)
-      for (const s of scene.sparkles(t)) {
-        lit++;
-        const p = scene.ponds[0];
-        expect(Math.abs(s.x - p.x)).toBeLessThanOrEqual(p.free.hx + 1e-6);
-        expect(Math.abs(s.y - p.y)).toBeLessThanOrEqual(p.free.hy + 1e-6);
-      }
-    expect(lit, 'the sun twinkles on it').toBeGreaterThan(0);
+    for (let t = 0; t < 30; t += 0.1) expect(scene.sparkles(t)).toEqual([]);
   });
 
   it('is rippling on a minigolf hole, with its rings, its splash ring and its streaks all as they were', () => {
