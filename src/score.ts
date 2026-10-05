@@ -1,6 +1,6 @@
 /**
  * What a score on a hole is called, as a golfer would say it: a hole in one,
- * an eagle, a birdie, par, a bogey and so on, or picked up at the limit. The
+ * an eagle, an albatross, on a par six a condor, a birdie, par, a bogey and so on, or picked up at the limit. The
  * page shows it when a hole is done, and the card sums the round against par.
  */
 
@@ -9,7 +9,8 @@ export function scoreName(strokes: number, par: number, pickedUp = false): strin
   if (pickedUp) return 'Picked up';
   if (strokes === 1) return 'Hole in one!';
   const over = strokes - par;
-  if (over <= -3) return 'Albatross!';
+  if (over <= -4) return 'Condor!';
+  if (over === -3) return 'Albatross!';
   if (over === -2) return 'Eagle!';
   if (over === -1) return 'Birdie!';
   if (over === 0) return 'Par';
