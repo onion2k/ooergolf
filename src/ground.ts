@@ -12,6 +12,7 @@
  */
 import { MeshBuilder, type Mesh } from 'artshape-render/mesh/types';
 import { TILE, WATER_LEVEL, heightAt, slopeAt, stepAt, terrainAt, tileAt, type Layout } from './arena';
+import { fan, outside, overlaps, type Point, type Ring } from './clip';
 import { face, tri } from './meshes';
 import { LIE } from './surfaces';
 
@@ -46,9 +47,19 @@ function isGrass(l: Layout, t: number, cupTile: number): boolean {
   return !l.solid[t] && !l.water[t] && !l.sand[t] && t !== cupTile;
 }
 
-/** The ground of a hole. */
-export function groundOf(l: Layout): Ground {
+/**
+ * The ground of a hole. The cup's own tile is left to its collar, and so is whatever of a wider mouth than the tile
+ * reaches into the tiles beside it: given the cup's `mouth`, as a ring round its middle (see `cupRing`), each piece of
+ * those tiles' grass that it reaches into is cut to it, in the colour and the texture of its own tile, so the grass stops
+ * on the mouth's edge and no tile of it covers the hole. A tile that is not level grass like the cup's, a step up or sand,
+ * is left whole, and the mouth stops at it.
+ */
+export function groundOf(l: Layout, mouth?: Ring): Ground {
   const cupTile = tileAt(l, l.cup.x, l.cup.y);
+  // the mouth where it is on the hole, and how many tiles out from the cup's it can reach into
+  const hole: Point[] | null = mouth ? mouth.map(([x, y]) => [l.cup.x + x, l.cup.y + y]) : null;
+  const reach = mouth ? Math.ceil(Math.max(...mouth.map(([x, y]) => Math.hypot(x, y))) / TILE) : 0;
+  const [cupX, cupY] = [cupTile % l.cols, Math.floor(cupTile / l.cols)];
   const green = new MeshBuilder(),
     mown = new MeshBuilder(),
     banks = new MeshBuilder();
@@ -62,6 +73,15 @@ export function groundOf(l: Layout): Ground {
   const n = GROUND.pieces;
   // the height of the ground of tile `t` at a point: its own step, whichever tile the point's edge also bounds
   const at = (t: number, x: number, y: number) => l.floor[t] + terrainAt(l, x, y);
+  /** A piece of the grass of tile `t` the mouth leaves, laid as triangles: each corner on the ground at its own height, and facing as the slope there does. */
+  const lay = (b: MeshBuilder, t: number, x0: number, y0: number, piece: Ring) => {
+    const ids = piece.map(([x, y]) => {
+      const [sx, sy] = slopeAt(l, x, y);
+      const k = 1 / Math.hypot(sx, sy, 1);
+      return b.vertex(x, y, at(t, x, y), -sx * k, -sy * k, k, (x - x0) / TILE, (y - y0) / TILE);
+    });
+    for (const [p, q, r] of fan(piece)) b.triangle(ids[p], ids[q], ids[r]);
+  };
   for (let t = 0; t < l.cols * l.rows; t++) {
     // the grass is laid here; the sand is the bunker's own, but it has an edge by the water as the grass has, and the
     // earth comes down from it too
@@ -91,8 +111,27 @@ export function groundOf(l: Layout): Ground {
           const k = 1 / Math.hypot(sx, sy, 1);
           b.vertex(x, y, at(t, x, y), -sx * k, -sy * k, k, i / n, j / n);
         }
+      // a tile the mouth can reach into, level grass like the cup's: each piece of it is cut where the mouth is
+      const cutTo =
+        hole !== null && l.floor[t] === l.floor[cupTile] && Math.abs(tx - cupX) <= reach && Math.abs(ty - cupY) <= reach
+          ? hole
+          : null;
       for (let j = 0; j < n; j++)
         for (let i = 0; i < n; i++) {
+          if (cutTo) {
+            const [xa, xb] = [x0 + (i / n) * TILE, x0 + ((i + 1) / n) * TILE],
+              [ya, yb] = [y0 + (j / n) * TILE, y0 + ((j + 1) / n) * TILE];
+            const piece: Ring = [
+              [xa, ya],
+              [xb, ya],
+              [xb, yb],
+              [xa, yb],
+            ];
+            if (overlaps(piece, cutTo)) {
+              for (const part of outside(piece, cutTo)) lay(b, t, x0, y0, part);
+              continue;
+            }
+          }
           const a = base + j * (n + 1) + i;
           b.quad(a, a + 1, a + n + 2, a + n + 1);
         }

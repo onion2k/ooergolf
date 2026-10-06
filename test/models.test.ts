@@ -33,6 +33,7 @@ import {
   collar,
   conveyor,
   cup,
+  cupRing,
   fence,
   flag,
   flowers,
@@ -47,6 +48,7 @@ import {
   tree,
   triangles,
   water,
+  wideCollar,
   windmill,
   type Model,
   type Part,
@@ -66,12 +68,40 @@ function near(got: ArrayLike<number>, want: readonly number[], digits: number) {
   want.forEach((w, i) => expect(got[i], `[${i}]`).toBeCloseTo(w, digits));
 }
 
+/** A convex polygon cut to what lies to the left of the line from `p` to `q`: the same cut the models use, written out so that a test does not lean on it. */
+function clipLeft(
+  poly: [number, number][],
+  p: readonly [number, number],
+  q: readonly [number, number],
+): [number, number][] {
+  const side = (r: readonly [number, number]) => (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]);
+  const out: [number, number][] = [];
+  poly.forEach((a, i) => {
+    const b = poly[(i + 1) % poly.length];
+    const [sa, sb] = [side(a), side(b)];
+    if (sa >= 0) out.push(a);
+    if ((sa > 0 && sb < 0) || (sa < 0 && sb > 0))
+      out.push([a[0] + ((b[0] - a[0]) * sa) / (sa - sb), a[1] + ((b[1] - a[1]) * sa) / (sa - sb)]);
+  });
+  return out;
+}
+
+/** The area of a polygon, counter-clockwise or not. */
+function polygonArea(poly: readonly (readonly [number, number])[]): number {
+  return (
+    Math.abs(
+      poly.reduce((s, a, i) => s + a[0] * poly[(i + 1) % poly.length][1] - poly[(i + 1) % poly.length][0] * a[1], 0),
+    ) / 2
+  );
+}
+
 /** Every model the game can have, at the ends of the sizes it will try and between. */
 function catalogue(): [string, Model][] {
   return [
     ['cup 1.6', cup(1.6)],
     ['cup 3', cup(3)],
     ['collar', collar(9, 3)],
+    ['wide collar', wideCollar(3, 1.9)],
     ['flag', flag(FLAG_COLOURS.red)],
     ['tall flag', flag(FLAG_COLOURS.yellow, { height: 12 })],
     ['rainbow flag', flag(FLAG_COLOURS.red, { rainbow: true })],
@@ -632,6 +662,100 @@ describe('the cup and the flag', () => {
     expect(() => collar(3, 2)).toThrow();
     // one tile of grass holds a cup narrower than the tile: the game's own
     expect(() => collar(3, 1.45)).not.toThrow();
+  });
+
+  it('turns the cup’s lining on the very polygon the grass is cut to, from the east, counter-clockwise', () => {
+    for (const radius of [1.45, 1.9, 3]) {
+      const ring = cupRing(radius);
+      expect(ring).toHaveLength(CUP.sides);
+      ring.forEach(([x, y], i) => {
+        expect(Math.hypot(x, y), `corner ${i} of ${radius}`).toBeCloseTo(radius, 12);
+        expect(Math.atan2(y, x) + (y < 0 ? Math.PI * 2 : 0), `its angle`).toBeCloseTo(
+          (i / CUP.sides) * Math.PI * 2,
+          12,
+        );
+      });
+      // the lining's top, where it meets the grass: a corner of the lining at every corner of the ring, and none besides
+      const top = points(partNamed(cup(radius), 'liner').mesh).filter(([, , z]) => Math.abs(z) < 1e-9);
+      for (const [x, y] of ring)
+        expect(
+          top.some((p) => Math.hypot(p[0] - x, p[1] - y) < 1e-5),
+          `${x},${y}`,
+        ).toBe(true);
+      for (const [x, y] of top)
+        expect(
+          ring.some(([a, b]) => Math.hypot(a - x, b - y) < 1e-5),
+          `${x},${y}`,
+        ).toBe(true);
+    }
+  });
+
+  it('is cut by `wideCollar` where a cup is wider than its tile, to the same ring, and `collar` refuses what it cannot hold', () => {
+    expect(() => collar(3, 1.9)).toThrow(/cannot hold a cup/);
+    const m = wideCollar(3, 1.9);
+    const b = bounds(m.parts);
+    expect(b.min.slice(0, 2)).toEqual([-1.5, -1.5]);
+    expect(b.max.slice(0, 2)).toEqual([1.5, 1.5]);
+    expect(b.min[2]).toBe(0);
+    // what the square leaves of the mouth: the square's grass by the sum of its triangles, each facing up, and never over the mouth
+    const mesh = partNamed(m, 'collar').mesh;
+    const ring = cupRing(1.9);
+    let covered = 0;
+    for (let t = 0; t < mesh.indices.length; t += 3) {
+      const [a, c, d] = [mesh.indices[t] * 3, mesh.indices[t + 1] * 3, mesh.indices[t + 2] * 3];
+      const p = mesh.positions;
+      const z = (p[c] - p[a]) * (p[d + 1] - p[a + 1]) - (p[d] - p[a]) * (p[c + 1] - p[a + 1]);
+      expect(z, `triangle ${t / 3} faces up`).toBeGreaterThan(0);
+      covered += z / 2;
+      // no corner of it is inside the mouth: one at least as far from the middle as the polygon's own sides
+      for (const k of [a, c, d])
+        expect(Math.hypot(p[k], p[k + 1])).toBeGreaterThan(1.9 * Math.cos(Math.PI / CUP.sides) - 1e-6);
+    }
+    // the square less the part of the mouth inside it, which is the mouth less four caps over its edge
+    let inside: [number, number][] = [
+      [-1.5, -1.5],
+      [1.5, -1.5],
+      [1.5, 1.5],
+      [-1.5, 1.5],
+    ];
+    ring.forEach((p, i) => {
+      const q = ring[(i + 1) % ring.length];
+      inside = clipLeft(inside, p, q);
+    });
+    expect(covered).toBeCloseTo(9 - polygonArea(inside), 5);
+  });
+
+  it('is the zipped collar’s own grass where the square holds the mouth, a few more triangles for the same ground', () => {
+    for (const [side, radius] of [
+      [3, 1.45],
+      [3, 1.2],
+      [9, 3],
+    ]) {
+      const zipped = partNamed(collar(side, radius), 'collar').mesh;
+      const cut = partNamed(wideCollar(side, radius, { pieces: 3 }), 'collar').mesh;
+      expect(areaOf(cut), `${side} across, ${radius}`).toBeCloseTo(areaOf(zipped), 4);
+    }
+  });
+
+  it('lies on the ground that slopes as `collar` does, every point at the ground’s height, facing as it does', () => {
+    const height = (x: number, y: number) => 0.15 * x + 0.05 * y;
+    const mesh = partNamed(wideCollar(3, 1.9, { height }), 'collar').mesh;
+    for (const [x, y, z] of points(mesh)) expect(z, `at ${x},${y}`).toBeCloseTo(height(x, y), 5);
+    const k = 1 / Math.hypot(0.15, 0.05, 1);
+    for (let i = 0; i < mesh.normals.length; i += 3) {
+      expect(mesh.normals[i], 'across').toBeCloseTo(-0.15 * k, 4);
+      expect(mesh.normals[i + 1], 'along').toBeCloseTo(-0.05 * k, 4);
+      expect(mesh.normals[i + 2], 'up').toBeCloseTo(k, 4);
+    }
+    // and on level ground it is the level one
+    expect(points(partNamed(wideCollar(3, 1.9, { height: () => 0 }), 'collar').mesh)).toEqual(
+      points(partNamed(wideCollar(3, 1.9), 'collar').mesh),
+    );
+  });
+
+  it('leaves no grass where the mouth covers the whole of the square', () => {
+    expect(triangles(wideCollar(3, 2.2))).toBe(0);
+    expect(triangles(wideCollar(3, 1.9))).toBeGreaterThan(0);
   });
 
   it('stands the pin to its height from the bottom of the cup, and flies the flag near its top in its colour', () => {
@@ -1252,6 +1376,7 @@ describe('every model keeps to its triangle budget', () => {
     const at: [keyof typeof BUDGET, Model][] = [
       ['cup', cup(3)],
       ['collar', collar(12, 3)],
+      ['wide collar', wideCollar(3, 1.5)],
       ['flag', flag(FLAG_COLOURS.red, { height: 12 })],
       ['rainbow flag', flag(FLAG_COLOURS.red, { height: 12, rainbow: true })],
       ['teeMarkers', teeMarkers(6)],

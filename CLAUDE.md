@@ -442,7 +442,13 @@ angle, roll)` is how far the putter's hardest putt rolls along an angle before t
   open, plumb below that where the ball meets it, its corners rounded out
   and square in, drawn on its own tiles and no further so what is seen is
   what the ball meets, and sloping with the ground; `cupGround` is the
-  cup's own step and slope, which the collar is cut to. The cup, flag, tee, sand, posts,
+  cup's own step and slope, which the collar is cut to. A cup wider than its tile (the magnet's 1.9, against a tile's half of 1.5)
+  has a mouth that reaches into the tiles beside it, so `groundOf(layout, mouth)` cuts every yard-square piece of their grass the
+  mouth reaches into (`cupRing`, the lining's own polygon, cut with `src/clip.ts`), each in the colour and the texture of its own
+  tile, and `wideCollar` is the cup tile's grass round it; the plain cup's is `collar`, zipped to the tile in one piece, which no hole's
+  picture has moved by a bit (`test/cup-drawn.test.ts`, which also draws every item on every kind of hole, since the fuzzer has no
+  picture to see a scene throw). `collar` still refuses a hole wider than its square, since the ground beside it would cover the rest.
+  A tile that is not level grass like the cup's (a step up, sand) is left whole, and the mouth stops at it. The cup, flag, tee, sand, posts,
   aim, camera and glints all stand on it. No course's hole slopes now; the
   test holes in `test/hills.ts` do, and `playCourse` in the test API plays one of a test's own.
   `src/glints.ts` says when the gold of the cup and the pin twinkles, from
@@ -894,7 +900,9 @@ angle, roll)` is how far the putter's hardest putt rolls along an angle before t
   spin, curve, sock, wedge, sticky, slow (golf greens only), magnet, rubber, waders (first water or out of bounds loss a hole is
   free), mulligan (`Game.mulligan()`, one a round, the page's Retake button), penny (consumable), ghost (`Preview.rest`), reader.
   Cosmetics: glow (`trail.ts`), confetti (`cupBurst` style), rainbow (`flag` strips). Magnet, rubber, slow, ghost, reader and rainbow
-  take hold at the next hole. The save (`progress.ts`) holds coins, gems, the items owned, the one worn and the best score on each hole
+  take hold at the next hole, and a hole begun with one worn is drawn with it as the game made it. The magnet's cup is wider than a
+  tile, which the scene refused until 6 October 2026: the page stopped on a blue screen as it loaded, and a hole begun in a round was
+  never drawn, the last hole's picture left under the next hole's ball and rails (`smoke/progress.spec.ts` plays it). The save (`progress.ts`) holds coins, gems, the items owned, the one worn and the best score on each hole
   with the item it was made with; `Game` pays into it when a hole is done (golf too), and buys and equips from it.
   Every save shape is in `test/saves/`. The save
   lives in `progress.ts`. Chance comes from `random.ts`, handed in.
@@ -1097,6 +1105,9 @@ each step, and a gate handed what it needs in the same change:
   aim, desk and phone, is for the user to judge by playing. The overhead view draws no grass on most holes (it stands past the rings), and
   has no new rung on the ladder, since it costs a frame less than the standard view. The overhead view is fitted to the screen and not to what the panels leave of it: on a phone the far end of a long hole is under the chips and its tee under the bag, and on a desk the tee is under the bag; the pictures `overhead-links` and `phone-overhead-meadow` show it, and whether to fit it inside the safe area is for the user to say.
 - Slow roll does nothing on minigolf (its roll is a constant); the autopilot takes no item and never uses the mulligan.
+- The magnet's mouth is cut only in the level grass round the cup, so on Three Cushion and The Fair's Carousel, whose cups stand against
+  a wall 1.2 high, the hole runs into the wall's foot, where no ball can be; a bunker beside a cup would cover a part of it
+  too, and no hole has one. No `look` picture holds the magnet's cup, since a picture is held to the GPU it was written on.
 
 ## Rules for the code
 

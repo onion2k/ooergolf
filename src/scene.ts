@@ -44,6 +44,7 @@ import {
   collar,
   conveyor,
   cup,
+  cupRing,
   flag,
   flowers,
   breakArrow,
@@ -58,6 +59,7 @@ import {
   tree,
   water,
   waterBed,
+  wideCollar,
   stream,
   streamBed,
   oceanFor,
@@ -450,8 +452,10 @@ export class Scene {
         : odd(t)
           ? PALETTE.grassMown
           : PALETTE.grass;
-    // the grass as one mesh over the hole, following its slopes, and the earth down its steps
-    const ground = groundOf(layout);
+    // the grass as one mesh over the hole, following its slopes, and the earth down its steps; a cup whose mouth is wider than its
+    // tile, as the magnet's is, is a hole the grass beside the cup's own tile is cut to as well, so no tile of it covers the mouth
+    const wide = cupRadius >= TILE / 2;
+    const ground = groundOf(layout, wide ? cupRing(cupRadius) : undefined);
     const still = new Float32Array(16);
     place(still, 0, 0, 0, 0);
     // the rail from the rough up past the grass beside it, however high that stands and however it slopes: the green's
@@ -466,7 +470,7 @@ export class Scene {
     const { z: cupZ, ...round } = cupGround(layout);
     const atCup = new Float32Array(16);
     place(atCup, 0, at.x, at.y, cupZ);
-    const [collarPart] = collar(TILE, cupRadius, { ...round, pieces: GROUND.pieces }).parts;
+    const [collarPart] = (wide ? wideCollar : collar)(TILE, cupRadius, { ...round, pieces: GROUND.pieces }).parts;
     const flagAt = new Float32Array(16);
     place(flagAt, 0, at.x, at.y, cupZ);
     const teeAt = new Float32Array(16);

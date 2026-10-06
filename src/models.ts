@@ -15,7 +15,7 @@
 export type { Colour, Material, Model, Part, Pattern, V3 } from './models/part';
 export { PATTERN, bounds, group, triangles } from './models/part';
 export { FLAG_COLOURS, FLOWER_COLOURS, PALETTE, PENNANT_COLOURS, RAINBOW, ROUGH } from './models/palette';
-export { CUP, breakArrow, collar, cup, flag, golfBall, teeMarkers } from './models/course';
+export { CUP, breakArrow, collar, cup, cupRing, flag, golfBall, teeMarkers, wideCollar } from './models/course';
 export type { Conveyor, Footprint, Pond, Windmill } from './models/obstacles';
 export {
   BUNKER,
@@ -54,6 +54,8 @@ export { OCEAN, OCEAN_ON, STREAM, stream, oceanFor } from './models/obstacles';
 export const BUDGET = {
   cup: 380,
   collar: 40,
+  /** The collar of a cup wider than its tile: the tile's four corners, and a cell or two of the mouth's edge; 16 for the magnet's, and 56 at the widest a tile can be cut to. */
+  'wide collar': 64,
   flag: 240,
   /** The rainbow flag: the pole and knob of the flag, and six strips of cloth of eighty triangles less their inner edges. */
   'rainbow flag': 640,

@@ -16,6 +16,7 @@ import { MeshBuilder, type Mesh } from 'artshape-render/mesh/types';
 import { PALETTE, RAINBOW, ROUGH } from './palette';
 import { PATTERN, matte, type Colour, type Model, type V3 } from './part';
 import { at, ballProfile, built, lathe, lifted, type Turned } from './shapes';
+import { fan, outside, type Ring } from '../clip';
 import { face, tri } from '../meshes';
 
 /**
@@ -91,12 +92,27 @@ export function cup(
 }
 
 /**
+ * The mouth of a cup of `radius`: its circle as the polygon it is drawn with, `CUP.sides` corners counter-clockwise from
+ * the east, round the cup's middle. The lining is turned on it, the collar is cut to it, and the ground beside a cup
+ * wider than its tile is cut to it too, so wherever the grass stops it stops on the lining's own edge.
+ */
+export function cupRing(radius: number): [number, number][] {
+  const n = CUP.sides;
+  return Array.from({ length: n }, (_, i): [number, number] => {
+    const a = (i / n) * Math.PI * 2;
+    return [Math.cos(a) * radius, Math.sin(a) * radius];
+  });
+}
+
+/**
  * The grass round a cup: a square `side` across with the cup's hole cut out
  * of its middle, for the game to lay where the grass would otherwise cover
  * the cup. Its hole is the lining's own polygon, so the two meet edge to
  * edge, and its edge is cut in `pieces` a side, the ground's own, so the
  * grass beside it meets it corner to corner and no crack opens between them
- * on a slope. The square must be wider than the hole; the rim is a raised
+ * on a slope. The square must be wider than the hole, or the grass beside it
+ * would cover the part of the hole outside it: a cup that is wider than its
+ * tile is `wideCollar`'s, and the ground beside it is cut to the hole too; the rim is a raised
  * ring on the grass. Given the ground's `height`, it lies on it, and faces
  * as the ground does, so it is shaded as the grass round it is.
  */
@@ -112,11 +128,7 @@ export function collar(
     const a = Math.atan2(p[1], p[0]);
     return a < 0 ? a + Math.PI * 2 : a;
   };
-  const circle: V3[] = [];
-  for (let i = 0; i < n; i++) {
-    const a = (i / n) * Math.PI * 2;
-    circle.push([Math.cos(a) * radius, Math.sin(a) * radius, 0]);
-  }
+  const circle: V3[] = cupRing(radius).map(([x, y]) => [x, y, 0]);
   // the square's edge, a piece of the ground's at a time, all the way round, in order of the way it faces
   const square: V3[] = [];
   for (let k = 0; k < pieces; k++) {
@@ -145,6 +157,45 @@ export function collar(
         j++;
       }
     }
+  });
+  return {
+    name: 'collar',
+    parts: [{ name: 'collar', mesh: onGround(mesh, height), material: matte(PALETTE.grass, 0.85) }],
+    moving: [],
+  };
+}
+
+/**
+ * The grass of a square `side` across round a cup whose mouth is wider than the square, as the magnet's is than a tile: the
+ * square cut in `pieces` a side, each the ground's own piece, and the mouth cut out of every one that it reaches into.
+ * What the mouth reaches beyond the square is for the ground beside it to be cut to, by the same `cupRing`, so the grass
+ * everywhere stops on the lining's own edge and nowhere is the hole covered. A piece the mouth does not reach is whole,
+ * as the ground has it. It lies on the ground and faces as the ground does, as `collar` does, and is the same part, so
+ * one is put in the other's place; `collar` is the cheaper for a mouth its square holds, zipped to it in one piece.
+ */
+export function wideCollar(
+  side: number,
+  radius: number,
+  { height, pieces = 3 }: { height?: (x: number, y: number) => number; pieces?: number } = {},
+): Model {
+  const mouth = cupRing(radius);
+  const half = side / 2,
+    step = side / pieces;
+  const mesh = built((b) => {
+    for (let j = 0; j < pieces; j++)
+      for (let i = 0; i < pieces; i++) {
+        const [x0, y0] = [-half + i * step, -half + j * step];
+        const cell: Ring = [
+          [x0, y0],
+          [x0 + step, y0],
+          [x0 + step, y0 + step],
+          [x0, y0 + step],
+        ];
+        for (const piece of outside(cell, mouth)) {
+          const ids = piece.map(([x, y]) => b.vertex(x, y, 0, 0, 0, 1, (x + half) / side, (y + half) / side));
+          for (const [p, q, r] of fan(piece)) b.triangle(ids[p], ids[q], ids[r]);
+        }
+      }
   });
   return {
     name: 'collar',

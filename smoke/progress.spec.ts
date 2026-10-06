@@ -24,7 +24,7 @@ import { FLAT } from '../test/level';
 import { smallHole } from './bighole';
 import { BUDGET } from './budget';
 import { drag, puttingHole, start, watch } from './game';
-import { CONTRAST, THUMB, openDrawer, read } from './panels';
+import { CONTRAST, THUMB, holeOut, openDrawer, read } from './panels';
 
 /** Play `frames` frames, and check nothing that must hold has broken. */
 async function play(page: Page, frames: number, stage: string) {
@@ -172,6 +172,31 @@ test('a hole played out to the cup by drags, its score shown, and the next hole 
   expect(next.phase).toBe('play');
   await expect(page.locator('#toast')).toBeHidden();
   await expect(page.locator('#holeName')).toContainText(`Hole 2 of ${holes.length}`);
+  expect(problems).toEqual([]);
+});
+
+test('with the magnet cup worn the game loads, and a hole holed out is followed by the next, drawn and played', async ({
+  page,
+}) => {
+  const problems = watch(page);
+  // a player who has bought the magnet and wears it, as the save they come back to has it. Its cup is wider than a tile, which the scene
+  // refused to draw: the page stopped on a blue screen as it loaded, and a hole begun in a round left the last hole's picture and panel
+  // up over the next hole's physics, the ball on a tee that was not drawn and rails that were not
+  await start(page, { seed: 1, paused: true, save: { coins: 500, gems: 5, owned: ['magnet'], item: 'magnet' } });
+  for (const course of ['The Meadow', 'The Links']) {
+    await page.evaluate((name) => window.game!.chooseCourse(name), course);
+    const first = await page.evaluate(() => window.game!.content().cup);
+    expect(first.radius, `${course}: the magnet's cup, 1.9 across the middle`).toBe(1.9);
+    const done = await holeOut(page);
+    expect(done.phase, `${course}: holed`).toBe('done');
+    // the next hole begun, which is drawn as it begins: its panel names it, the card has the one score, and nothing threw
+    await play(page, 200, `${course}: between holes`);
+    const next = await page.evaluate(() => window.game!.state());
+    expect(next.hole, `${course}: the next hole begun`).toBe(1);
+    expect(next.phase).toBe('play');
+    expect(next.card.length).toBe(1);
+    await expect(page.locator('#holeName')).toContainText('Hole 2 of');
+  }
   expect(problems).toEqual([]);
 });
 

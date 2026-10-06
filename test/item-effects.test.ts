@@ -21,6 +21,8 @@ import { Previewer } from '../src/preview';
 import { Progress, memoryStore } from '../src/progress';
 import { seeded } from '../src/random';
 import { reachOf } from '../src/aimview';
+import { PALETTE } from '../src/models/palette';
+import { Scene } from '../src/scene';
 import { GREENS, LIE, SURFACES, surfaceFor } from '../src/surfaces';
 import { airTime, curveRate, spunKeep, windPush, windReach } from '../src/shaping';
 import { DT, FLAT, GREEN, field, levelHole, onGreen } from './helpers';
@@ -581,8 +583,23 @@ describe('magnet cup', () => {
     expect(sunk('', 1.3)).toBe(true);
   });
 
-  it('is on the page too: the drawn rim and the cup follow the radius the game says', () => {
-    expect(make('magnet').game.cup.radius + 0.15).toBeCloseTo(2.05, 12);
+  it('is on the page too: the scene draws the cup at the radius the game says, its lining on the mouth', () => {
+    for (const [item, radius] of [
+      ['', CUP.radius],
+      ['magnet', 1.9],
+    ] as const) {
+      const { game } = make(item);
+      expect(game.cup.radius).toBe(radius);
+      const groups = new Scene().static(game.layout, game.def.name, game.obstacles, game.cup.radius);
+      // the lining is the one group in the cup's dark colour, and its top, where the grass meets it, is on the radius the game says
+      const [liner, ...others] = groups.filter((g) => PALETTE.hole.every((c, k) => c === g.albedo![k]));
+      expect(others, 'one lining').toEqual([]);
+      const tops = Array.from({ length: liner.mesh.positions.length / 3 }, (_, i) =>
+        liner.mesh.positions.slice(i * 3, i * 3 + 3),
+      ).filter((p) => Math.abs(p[2]) < 1e-6);
+      expect(tops.length).toBeGreaterThan(0);
+      for (const [x, y] of tops) expect(Math.hypot(x, y)).toBeCloseTo(radius, 5);
+    }
   });
 });
 
