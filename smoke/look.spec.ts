@@ -79,6 +79,18 @@ async function around(page: Page, x: number, y: number) {
   };
 }
 
+/** The index of the longest hole of The Links, the one the overhead view has the most to fit. */
+const LONGEST_LINKS = LINKS_SPECS.reduce((best, spec, k) => (spec.length > LINKS_SPECS[best].length ? k : best), 0);
+
+/** The overhead view switched on and given the time to blend all the way up, as the button does. */
+async function fromAbove(page: Page) {
+  await page.evaluate(() => {
+    window.game!.overhead(true);
+    window.game!.step(240);
+  });
+  await hideStats(page);
+}
+
 /** The whole round played by the autopilot's shots, to the card. */
 async function playRound(page: Page) {
   await page.evaluate(() => {
@@ -443,6 +455,17 @@ test.describe('what it looks like', () => {
     expect(problems).toEqual([]);
   });
 
+  test('the overhead view: the whole of the first hole from straight above, with the Overhead button pressed', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true });
+    await page.evaluate(() => window.game!.step(60));
+    await fromAbove(page);
+    await expect(page).toHaveScreenshot('overhead-meadow.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
   test('a cup on a side-hill, close to: its collar and rim lying on the slope, its floor level', async ({ page }) => {
     const problems = watch(page);
     await start(page, { seed: 11, paused: true });
@@ -464,6 +487,8 @@ test.describe('what it looks like', () => {
     await start(page, { seed: 11, paused: true });
     await page.evaluate(() => {
       const g = window.game!;
+      // the camera follows the ball to the cup, as it does for one stroke in five: the picture is of the confetti over the cup
+      g.followShots('always');
       for (let s = 0; s < 6 && g.state().phase === 'play'; s++) {
         const shot = g.suggest();
         if (shot) g.shoot(shot.angle, shot.power);
@@ -606,6 +631,51 @@ test.describe('what it looks like', () => {
       // and the ring and the spread close to, since they are a small part of the frame and the picture of it all would not miss them
       const clip = await around(page, shot!.ring!.x, shot!.ring!.y);
       await expect(page).toHaveScreenshot('links-aim-ring.png', { ...TOLERANCE, clip });
+      expect(problems).toEqual([]);
+    });
+
+    test("the overhead view of the longest hole of The Links: the whole of it from above, tee to green, the hole's bounds on the screen", async ({
+      page,
+    }) => {
+      const problems = watch(page);
+      await links(page, LONGEST_LINKS);
+      await fromAbove(page);
+      await expect(page).toHaveScreenshot('overhead-links.png', TOLERANCE);
+      expect(problems).toEqual([]);
+    });
+
+    test('a drive aimed thirty degrees off the hole with the drag held: the camera has turned to look the way it goes, the arc and the ring ahead of it', async ({
+      page,
+    }) => {
+      const problems = watch(page);
+      await links(page, 0);
+      // across by 395 pixels over a pull of 224 down: through a camera tipped back that is thirty degrees off the line of the
+      // hole on the ground (the screen's angle is not the ground's, the ground ahead being stretched by the tilt)
+      await pullDown(page, 0.8, 395);
+      await page.evaluate(() => window.game!.step(180));
+      const turned = await page.evaluate(() => window.game!.view());
+      expect(Math.abs(turned.azimuth), 'turned by about thirty degrees').toBeGreaterThan(0.47);
+      expect(Math.abs(turned.azimuth)).toBeLessThan(0.57);
+      expect(turned.azimuth).toBeCloseTo(turned.heading, 6);
+      await hideStats(page);
+      await expect(page).toHaveScreenshot('aim-turned.png', TOLERANCE);
+      expect(problems).toEqual([]);
+    });
+
+    test('a drive in the air with the camera holding the aim view, and not following: the ball flying across the view the shot was aimed from', async ({
+      page,
+    }) => {
+      const problems = watch(page);
+      await links(page, 0);
+      await page.evaluate(() => {
+        const g = window.game!;
+        g.followShots('never');
+        g.shoot(Math.PI / 2, 1, 'driver');
+        g.step(50);
+      });
+      expect((await page.evaluate(() => window.game!.view())).following, 'held, not following').toBe(false);
+      await hideStats(page);
+      await expect(page).toHaveScreenshot('hold-mid-drive.png', TOLERANCE);
       expect(problems).toEqual([]);
     });
 
@@ -947,6 +1017,26 @@ test.describe('what it looks like', () => {
       await start(page, { seed: 11, paused: true });
       await page.evaluate(() => window.game!.step(60));
       await expect(page).toHaveScreenshot('phone.png', TOLERANCE);
+      expect(problems).toEqual([]);
+    });
+
+    test('the overhead view, on a phone: the first hole of The Meadow from above, and the longest of The Links', async ({
+      page,
+    }) => {
+      const problems = watch(page);
+      await start(page, { seed: 11, paused: true });
+      await page.evaluate(() => window.game!.step(60));
+      await fromAbove(page);
+      await expect(page).toHaveScreenshot('phone-overhead-meadow.png', TOLERANCE);
+      await page.evaluate((k) => {
+        const g = window.game!;
+        g.overhead(false);
+        g.chooseCourse('The Links');
+        g.startHole(k);
+        g.step(75);
+      }, LONGEST_LINKS);
+      await fromAbove(page);
+      await expect(page).toHaveScreenshot('phone-overhead-links.png', TOLERANCE);
       expect(problems).toEqual([]);
     });
 
