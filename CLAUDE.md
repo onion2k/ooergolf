@@ -339,7 +339,7 @@ angle, roll)` is how far the putter's hardest putt rolls along an angle before t
   screen's shape (`setScreen(aspect, height)`) and a seed (`setSeed`), driven by the page and the fuzzer alike (one implementation, so
   the fuzzer holds the page and not a copy of it). `started()` puts the camera on a hole's tee and, on golf, sends it to the driver's aim
   view; `frame(dt, parked)` sends the aim view again when the club or the lie changes, eases the rig and follows the ball; `struck()`
-  says whether the stroke is followed; `aiming(input.aim)`, `faceFlag(held)`, `nearFlag()` and `reachPoint(out)` are below. It holds a fixed
+  says whether the stroke is followed; `aiming(input.aim)`, `faceFlag(held)`, `nearFlag()` and `reachPoint(out)` are below; `park(on)` is the test API's `look` telling it the camera has been left where a test put it, so a hole of minigolf is not sent to the view that frames the reach (`frame`'s own `parked` says only that the ball is not followed). It holds a fixed
   set of numbers and one string, never a list (the leaks gate has nothing of it to watch), and it never draws the game's chance. On a
   golf hole it keeps the ball and the reach on the screen by the aim view of the club in hand; on minigolf it frames the putter's reach
   along the way the camera faces, which is the home view exactly (and the zoom as the player left it, no nearer than shows the
@@ -369,9 +369,9 @@ angle, roll)` is how far the putter's hardest putt rolls along an angle before t
   view's azimuth, tilt, distance, lead and goal are not touched while it is on, so leaving it gives the view back to the digit. The renderer's far plane
   is raised with it (`CLIP`: 800, and 2.5 times the overhead distance while blended, `farPlane`). The game keeps running, and the Director's logic
   continues underneath it; the framing rule is not asked while it is blended. On the golf holes it stands out past every ring of the grass (`GRASS`: 36, 110 and 300) in all but
-  a few views, so it draws almost no blades and is plainer than the aim view. Measured 6 October 2026 on every hole of the three golf courses
-  at 1280 by 800 and 400 by 860, every rung, turned along the hole and across it: the worst frame 2.49 ms on the top rung (desk) and
-  2.08 (phone), at most 21,560 blades of room for 262,144, and 3000 shows The Isles' longest hole, 858 yards, whole on a phone turned across it,
+  a few views, so it draws almost no blades and is plainer than the aim view. Measured 6 October 2026, load average 3 to 6, on every hole of the three golf courses
+  at 1280 by 800 and 400 by 860, every rung, turned along the hole and across it (54 scenes a run): the worst frame 2.90 ms on the top rung (desk, The Links' Water
+  Carry across) and 1.84 (phone), 1.52 and 0.87 on the next rung, at most 21,560 blades of room for 262,144 (none on a phone), and 3000 shows The Isles' longest hole, 858 yards, whole on a phone turned across it,
   which needs 2737 (the plan's Part 0 has the figures; `test/overhead-far.test.ts` holds every golf hole to fit under `far`).
   `src/quality.ts` is the ladder the picture steps down on a slow machine,
   and the governor that chooses the rung from the time between frames and
@@ -1083,7 +1083,7 @@ each step, and a gate handed what it needs in the same change:
   catches a strong pale sheen from some: both are left as they are. A chase camera behind the ball for the strokes it does not follow, the
   ball hidden behind a tree or a rail, and the map turning with the camera are not there, and how the held view feels after a big turn to the
   aim, desk and phone, is for the user to judge by playing. The overhead view draws no grass on most holes (it stands past the rings), and
-  has no new rung on the ladder, since it costs a frame less than the standard view.
+  has no new rung on the ladder, since it costs a frame less than the standard view. The overhead view is fitted to the screen and not to what the panels leave of it: on a phone the far end of a long hole is under the chips and its tee under the bag, and on a desk the tee is under the bag; the pictures `overhead-links` and `phone-overhead-meadow` show it, and whether to fit it inside the safe area is for the user to say.
 - A shop that shows how far each putter reaches. It shows each one's
   hardest speed, 40 to 48, and under the green's steady slowing a little
   more speed goes a good deal further: the gold rolls 72 units to the
