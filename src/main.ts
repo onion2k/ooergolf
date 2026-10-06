@@ -886,6 +886,7 @@ async function main() {
     followShots: (mode) => director.followShots(mode),
     look(x, y, distance) {
       parked = true;
+      director.park(true);
       rig.jump(x, y, heightAt(played.layout, x, y));
       // the camera is parked where the test wants it, at the home view as it always was (the aim view of a golf hole is
       // a player's and not a test's), looking at the point and not a lead beyond it: the ease to an aim view is over
@@ -894,6 +895,7 @@ async function main() {
     },
     follow() {
       parked = false;
+      director.park(false);
     },
     project(x, y, z) {
       rig.place(cam, played.t);

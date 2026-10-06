@@ -77,6 +77,8 @@ export class Director {
   private readonly ndc: [number, number] = [0, 0];
   /** Whether the camera has been put on a hole yet: the first has nowhere to glide from. */
   private looked = false;
+  /** Whether a test has put the camera somewhere and left it: on minigolf the aim view that frames the reach is not sent while it has. */
+  private left = false;
 
   constructor(readonly rig: CameraRig) {}
 
@@ -91,6 +93,17 @@ export class Director {
    */
   setSeed(seed: number) {
     this.seed = seed;
+  }
+
+  /**
+   * A test's say that it has put the camera where it wants it (`on`) or taken it back (`off`): while it has, a hole of minigolf
+   * is not sent to the view that frames the putter's reach, since that would move a camera the test parked. It is not the
+   * `parked` of `frame`, which only says the ball is not followed, as the fuzzer says it for the frames it holds the camera still.
+   */
+  park(on: boolean) {
+    this.left = on;
+    // taken back, the view is worked out afresh for where the ball and the heading are
+    this.worked.x = Number.NaN;
   }
 
   /** Which strokes the camera follows the ball for, as a test chooses: the share `FOLLOW` says, all of them, or none (but where the ball would leave the screen). */
@@ -237,8 +250,8 @@ export class Director {
         if (this.aimedFor !== `${inHand.id}|${lieAt(layout, world.x[ball], world.y[ball])}`) this.aimFor(false);
       }
     } else if (!game.ready) this.worked.x = Number.NaN;
-    // a camera a test has parked is where the test put it: it is not sent to a view that frames the reach, which would zoom it out
-    else if (!parked) this.aimOnMinigolf();
+    // a camera a test has left where it put it is not sent to a view that frames the reach, which would zoom it out
+    else if (!this.left) this.aimOnMinigolf();
     rig.settle(dt);
     const { world, ball } = game;
     if (!world.alive[ball] || parked) return;

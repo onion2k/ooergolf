@@ -335,9 +335,14 @@ describe('the minigolf aim view', () => {
     const { rig, director } = onMinigolf(OPEN, 1.6, 800, 'gold');
     // parked as the test API's `look` parks it: close to, with no floor of its own
     rig.aimAt({ distance: 30, tilt: TILT.home, lead: LEAD, floor: 0 }, true);
+    director.park(true);
     for (let f = 0; f < 120; f++) director.frame(DT, true);
     expect(rig.distance).toBe(30);
     expect(rig.aiming).toBe(false);
+    // and taken back, it is framed again
+    director.park(false);
+    rest(director, rig);
+    expect(rig.distance).toBeGreaterThan(30);
   });
 
   it('does not move the camera on a hole of minigolf while the ball rolls: it follows as it always did', () => {
