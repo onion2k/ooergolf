@@ -5,11 +5,15 @@
  * the page and the fuzzer drive one implementation and the camera can be tested without either. Without it a change to how
  * the camera behaves would be made twice, and the fuzzer would hold the page to a copy.
  *
+ * It also keeps the ball and the furthest a shot can reach on the screen (`aimview.ts`'s safe box): on a golf hole by the aim
+ * view of the club, and on a hole of minigolf by one of the putter's reach along the aim, which is the home view exactly when
+ * that fits there.
+ *
  * It holds a fixed set of numbers and a string, never a list, and it never draws the game's chance.
  */
-import { BALL, KIND_RADIUS, heightAt, lieAt } from './arena';
-import { aimView, reachOf } from './aimview';
-import { CameraRig, catchUp, facing, wrap } from './camera';
+import { BALL, KIND_RADIUS, heightAt, lieAt, rollsFor } from './arena';
+import { aimView, fitsHome, floorFor, reachOf, reachOnMinigolf } from './aimview';
+import { CameraRig, LEAD, TILT, VIEW, catchUp, facing, tallOf, wrap } from './camera';
 import type { Game } from './game';
 import type { Shot } from './shot';
 
@@ -23,10 +27,15 @@ export class Director {
   private game: Game | null = null;
   private aspect = 1.6;
   private height = 0;
-  /** The hole's wind in miles an hour, read as the hole begins: nothing on minigolf. */
-  private wind = 0;
   /** The club and the lie the camera was last sent to look at a shot from, so it is sent again only when one changes. */
   private aimedFor = '';
+  /**
+   * Where the minigolf aim view was last worked out for: the ball's place and the way it faces, so it is worked out again
+   * only when one changes (nothing is made); not a number while the ball is not ready or the screen has changed.
+   */
+  private readonly worked = { x: Number.NaN, y: Number.NaN, t: Number.NaN };
+  /** Whether the camera was last sent to a view stood back from home on minigolf, so that it is sent home again when the reach fits there. */
+  private stood = false;
   /** Whether the camera has been put on a hole yet: the first has nowhere to glide from. */
   private looked = false;
 
@@ -43,6 +52,7 @@ export class Director {
     this.height = height;
     this.rig.setScreen(aspect);
     this.aimedFor = '';
+    this.worked.x = Number.NaN;
   }
 
   /**
@@ -56,12 +66,12 @@ export class Director {
     if (!game) return;
     const { layout, t } = game;
     const { rig } = this;
-    this.wind = layout.golf ? game.wind.speed : 0;
     const teeZ = heightAt(layout, layout.tee.x, layout.tee.y);
     if (glide) rig.glide(layout.tee.x, layout.tee.y, teeZ, t);
     else rig.jump(layout.tee.x, layout.tee.y, teeZ);
     rig.setGolf(layout.golf);
     this.aimedFor = '';
+    this.worked.x = Number.NaN;
     if (layout.golf) this.aimFor(!glide);
     this.looked = true;
   }
@@ -76,12 +86,65 @@ export class Director {
     const { world, ball, layout, inHand } = game;
     const lie = lieAt(layout, world.x[ball], world.y[ball]);
     this.aimedFor = `${inHand.id}|${lie}`;
-    this.rig.aimAt(aimView(reachOf(inHand, lie, this.wind), this.aspect, this.height), now);
+    this.rig.aimAt(aimView(reachOf(inHand, lie, game.wind.speed), this.aspect, this.height), now);
+  }
+
+  /**
+   * The camera sent to the view that shows where the putter's hardest putt stops along the way the camera faces, on a hole of
+   * minigolf, when the ball is ready: the home view exactly (with the zoom as the player left it, and no nearer than shows
+   * the reach) when the reach is inside the safe box from there, and otherwise the aim view of the reach, no further back than
+   * `VIEW.far` (the zoom's own limit). Worked out again only when the ball or the heading has changed.
+   */
+  private aimOnMinigolf() {
+    const game = this.game;
+    if (!game) return;
+    const { world, ball, layout } = game;
+    const { rig, worked } = this;
+    const [x, y, t] = [world.x[ball], world.y[ball], Math.PI / 2 - rig.headed];
+    if (x === worked.x && y === worked.y && t === worked.t) return;
+    [worked.x, worked.y, worked.t] = [x, y, t];
+    const reach = reachOnMinigolf(layout, x, y, t, rollsFor(game.hardest));
+    if (fitsHome(reach, this.aspect, this.height)) {
+      const floor = floorFor(reach, this.aspect, this.height, TILT.home, LEAD);
+      if (this.stood) {
+        this.stood = false;
+        rig.aimAt({ distance: VIEW.home, tilt: TILT.home, lead: LEAD, floor });
+      } else {
+        rig.floor = floor;
+        // a zoom made before there was a reach to keep is brought out to where it shows it
+        if (rig.distance < floor) rig.aimAt({ distance: floor, tilt: rig.tilt, lead: rig.lead, floor });
+      }
+      return;
+    }
+    this.stood = true;
+    // the camera may stand as far back as the zoom lets it on this screen, which is `VIEW.far` before a tall screen pushes it
+    rig.aimAt(aimView(reach, this.aspect, this.height, { far: VIEW.far * tallOf(this.aspect) }));
   }
 
   /** The aim view sent again for the club in hand now, as when the player chooses another club. */
   reaim() {
     this.aimFor(false);
+  }
+
+  /**
+   * Where the furthest a shot can reach is, along the way the camera faces (which is the way a drag aims, once it has turned
+   * there): written into `out`, and whether there is one, which is only while the ball is ready. A golf shot's is its carry at
+   * full power and the tailwind's reach; a putt's is how far the hardest putt goes before a rail stops it. The framing rule
+   * holds the camera to keeping it on the screen. Its `z` is the ground under the ball, which the aim view takes the shot to
+   * be level with.
+   */
+  reachPoint(out: { x: number; y: number; z: number }): boolean {
+    const game = this.game;
+    if (!game || !game.ready) return false;
+    const { world, ball, layout, inHand } = game;
+    const [x, y, t] = [world.x[ball], world.y[ball], Math.PI / 2 - this.rig.headed];
+    const reach = layout.golf
+      ? reachOf(inHand, lieAt(layout, x, y), game.wind.speed)
+      : reachOnMinigolf(layout, x, y, t, rollsFor(game.hardest));
+    out.x = x + reach * Math.cos(t);
+    out.y = y + reach * Math.sin(t);
+    out.z = heightAt(layout, x, y);
+    return true;
   }
 
   /**
@@ -99,7 +162,8 @@ export class Director {
         const { world, ball, layout, inHand } = game;
         if (this.aimedFor !== `${inHand.id}|${lieAt(layout, world.x[ball], world.y[ball])}`) this.aimFor(false);
       }
-    }
+    } else if (!game.ready) this.worked.x = Number.NaN;
+    else this.aimOnMinigolf();
     rig.settle(dt);
     const { world, ball } = game;
     if (!world.alive[ball] || parked) return;

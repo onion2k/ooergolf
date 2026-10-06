@@ -32,6 +32,8 @@
  * Checked by the fuzzer after everything it does, by the test API on asking,
  * and by the unit tests. Each broken rule is a line saying what and where.
  */
+import type { Camera } from 'artshape-render/gpu/camera';
+import type { SafeBox } from './aimview';
 import { KICKER, fromKickers } from './arena';
 import {
   BUMPER,
@@ -108,6 +110,53 @@ export function viewProblems(rig: CameraRig, turningFor = 0): string[] {
     if (!(x >= b.minX - 1e-9 && x <= b.maxX + 1e-9 && y >= b.minY - 1e-9 && y <= b.maxY + 1e-9))
       out.push(`the overhead view looks at ${x},${y}, which is off the hole`);
   }
+  return out;
+}
+
+/** How much of the screen, in the device's coordinates from minus one to one, the framing rule allows past the safe box: a hundredth either side of the edge it is held to. */
+export const FRAMING = { tolerance: 0.02 } as const;
+
+/** Where a point is drawn by the camera as last placed, in the device's coordinates, from minus one to one each way. */
+function drawnAt(camera: Camera, x: number, y: number, z: number): [number, number] {
+  const m = camera.viewProjection;
+  const w = m[3] * x + m[7] * y + m[11] * z + m[15];
+  return [(m[0] * x + m[4] * y + m[8] * z + m[12]) / w, (m[1] * x + m[5] * y + m[9] * z + m[13]) / w];
+}
+
+/**
+ * The framing rule: the ball, and the furthest place a shot can reach where there is one (`reach`, or null when only the ball
+ * is to be on the screen, as while it flies), are inside the safe box as the camera `camera`, placed by the rig, draws them,
+ * to `FRAMING.tolerance`. It is held only when the view has settled: nothing is said while the rig is easing to an aim
+ * view, turning, or blended toward the view from above, since the rule is of where it comes to and not of the way there.
+ * Whether the camera is gliding to a new tee, or parked by a test, is the caller's to say, as the rig does not know the time.
+ * A reach past the top of the box is let go when the camera already stands as far back as it may (`atLimit`): a club that
+ * goes further than the furthest view shows is the limit's, and the view is the best there is.
+ */
+export function framingProblems(
+  rig: CameraRig,
+  camera: Camera,
+  ball: { x: number; y: number; z: number },
+  reach: { x: number; y: number; z: number } | null,
+  box: SafeBox,
+): string[] {
+  if (rig.blend > 0 || rig.aiming || rig.turning) return [];
+  const out: string[] = [];
+  const check = (what: string, p: { x: number; y: number; z: number }) => {
+    const [nx, ny] = drawnAt(camera, p.x, p.y, p.z);
+    if (!Number.isFinite(nx) || !Number.isFinite(ny)) {
+      out.push(`the ${what} is not a number on the screen: ${nx},${ny}`);
+      return;
+    }
+    const slack = FRAMING.tolerance;
+    const at = `${nx.toFixed(3)},${ny.toFixed(3)}`;
+    if (Math.abs(nx) > box.x + slack) out.push(`the ${what} is off the side of the safe box, at ${at}, past ${box.x}`);
+    if (ny > box.top + slack && !(what === 'reach' && rig.atLimit))
+      out.push(`the ${what} is past the top of the safe box, at ${at}, over ${box.top.toFixed(3)}`);
+    if (ny < box.bottom - slack)
+      out.push(`the ${what} is past the bottom of the safe box, at ${at}, under ${box.bottom.toFixed(3)}`);
+  };
+  check('ball', ball);
+  if (reach) check('reach', reach);
   return out;
 }
 

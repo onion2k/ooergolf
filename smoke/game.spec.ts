@@ -1161,6 +1161,75 @@ test.describe('the aim view on a phone held upright', () => {
   });
 });
 
+test.describe('the framing', () => {
+  const SCREENS = [
+    { name: 'a desk', width: 1280, height: 800 },
+    { name: 'a phone', width: 400, height: 860 },
+  ];
+  for (const screen of SCREENS)
+    for (const [course, hole] of [
+      ['The Links', LONGEST],
+      ['The Meadow', 0],
+    ] as const)
+      test(`keeps the ball and the furthest reach inside the safe box after a real drag 30 degrees off, taken back and settled, on ${course} hole ${hole + 1} on ${screen.name}`, async ({
+        page,
+      }) => {
+        test.setTimeout(120_000);
+        await page.setViewportSize({ width: screen.width, height: screen.height });
+        const problems = watch(page);
+        await start(page, { seed: 11, paused: true });
+        await page.evaluate(
+          ([c, h]) => {
+            const g = window.game!;
+            g.chooseCourse(c as string);
+            g.startHole(h as number);
+            g.step(300);
+          },
+          [course, hole],
+        );
+        const before = await page.evaluate(() => window.game!.view().framing);
+        expect(before.settled, 'settled from the tee').toBe(true);
+        expect(before.problems).toEqual([]);
+        // pulled back and held 30 degrees off straight down, so the shot aims 30 degrees off up the course: the camera turns
+        // to it while the finger is still, and is left there when the finger is brought back to the ball
+        const ball = await page.evaluate(() => {
+          const b = window.game!.ball();
+          return window.game!.project(b.x, b.y, b.z);
+        });
+        const short = Math.min(screen.width, screen.height);
+        const length = 0.3 * short;
+        const angle = (30 * Math.PI) / 180;
+        await drag(
+          page,
+          ball,
+          { x: ball.x - Math.sin(angle) * length, y: ball.y + Math.cos(angle) * length },
+          { hold: true },
+        );
+        await page.evaluate(() => window.game!.step(120));
+        const held = await page.evaluate(() => window.game!.view());
+        expect(Math.abs(held.azimuth), 'turned to the aim').toBeGreaterThan(0.3);
+        await page.mouse.move(ball.x, ball.y);
+        await page.mouse.up();
+        await page.evaluate(() => window.game!.step(300));
+        const after = await page.evaluate(() => ({ view: window.game!.view(), strokes: window.game!.state().strokes }));
+        expect(after.strokes, 'a drag taken back is no stroke').toBe(0);
+        const { framing } = after.view;
+        expect(framing.settled, 'settled after the turn').toBe(true);
+        expect(framing.problems).toEqual([]);
+        expect(framing.reach, 'a reach to keep on the screen').not.toBeNull();
+        const slack = 0.02;
+        for (const [name, p] of [
+          ['ball', framing.ball],
+          ['reach', framing.reach!],
+        ] as const) {
+          expect(Math.abs(p[0]), `${name} across`).toBeLessThanOrEqual(framing.box.x + slack);
+          expect(p[1], `${name} down`).toBeGreaterThanOrEqual(framing.box.bottom - slack);
+          expect(p[1], `${name} up`).toBeLessThanOrEqual(framing.box.top + slack);
+        }
+        expect(problems).toEqual([]);
+      });
+});
+
 test.describe('the cup and the rail', () => {
   /** The ball put down `back` short of the cup on the first hole, and struck at it to arrive at its edge at `speed`. */
   const putt = async (page: Page, speed: number, back = 5) => {

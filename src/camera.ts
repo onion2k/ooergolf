@@ -166,6 +166,11 @@ export class CameraRig {
   lead: number = LEAD;
   /** How far back the zoom goes: `VIEW.far`, and `VIEW.golfFar` on a golf hole. */
   far: number = VIEW.far;
+  /**
+   * The nearest the zoom may bring it, on top of `VIEW.near`: the distance of the aim view it was last sent to, since a view
+   * nearer than that has the furthest a shot reaches off the screen. Further is free. Nought when it was sent nowhere.
+   */
+  floor = 0;
   /** The furthest the camera itself stands from what it looks at, tall screen and all: none on a hole of minigolf. */
   private stand = Infinity;
   /** Whether the hole is golf, and the shape of the screen: what the zoom's limit and the camera's are worked out from. */
@@ -236,6 +241,11 @@ export class CameraRig {
     return k ? k * Math.hypot(this.behind[0], this.behind[1], this.behind[2]) : 0;
   }
 
+  /** Whether a new hole's glide is still being eased away at game time `t`, in where it looks or in how it is turned and tilted. */
+  easing(t: number): boolean {
+    return this.left(t) > 0;
+  }
+
   /** The share of a glide still to go at game time `t`, eased at both ends: one as it begins, nought from its end on. */
   private left(t: number): number {
     const u = (t - this.glidFrom) / GLIDE;
@@ -268,6 +278,7 @@ export class CameraRig {
    */
   setGolf(on: boolean) {
     this.golfNow = on;
+    this.floor = 0;
     this.limit();
     if (!on) this.lead = LEAD;
     this.goal = null;
@@ -291,6 +302,16 @@ export class CameraRig {
     this.distance = Math.min(this.far, this.distance);
   }
 
+  /**
+   * Whether it stands as far back as it may: at the zoom's limit, or, on a golf hole, as far as the camera itself may stand on
+   * this screen. A view there is the best there is, and a reach beyond what it shows is a club that goes further than the
+   * screen can hold; the framing rule is not asked of it.
+   */
+  get atLimit(): boolean {
+    const r = this.distance * tallOf(this.screen);
+    return this.distance >= this.far - 1e-6 || (this.stand !== Infinity && r >= this.stand - 1e-6);
+  }
+
   /** Whether the hole it is set for is golf. */
   get golf(): boolean {
     return this.stand !== Infinity;
@@ -306,12 +327,15 @@ export class CameraRig {
    * there by `settle`; or put there at once if `now`, as the first hole is. Held within the limits. The way it faces is
    * not touched, and whatever the player does to the view, a zoom or a turn, takes it back from here.
    */
-  aimAt(goal: { distance: number; tilt: number; lead?: number }, now = false) {
+  aimAt(goal: { distance: number; tilt: number; lead?: number; floor?: number }, now = false) {
     const distance = Number.isFinite(goal.distance)
       ? Math.max(VIEW.near, Math.min(this.far, goal.distance))
       : this.distance;
     const tilt = Number.isFinite(goal.tilt) ? Math.max(TILT.least, Math.min(TILT.most, goal.tilt)) : this.tilt;
     const lead = goal.lead !== undefined && Number.isFinite(goal.lead) ? Math.max(0, goal.lead) : this.lead;
+    // the zoom may go further back than the view and no nearer, unless the goal says how near
+    this.floor =
+      goal.floor !== undefined && Number.isFinite(goal.floor) ? Math.max(0, Math.min(this.far, goal.floor)) : distance;
     if (now) {
       this.distance = distance;
       this.tilt = tilt;
@@ -382,15 +406,23 @@ export class CameraRig {
   /**
    * Nearer for less than zero, further for more, held within the limits. The player's own, which ends an ease to an aim
    * view; in the overhead view it is that view's own distance, between `OVERHEAD.near` and the fit, and the normal view and
-   * the ease to an aim view are left as they are.
+   * the ease to an aim view are left as they are. In the normal view it is no nearer than `floor`, and a zoom made while it is easing
+   * to an aim view takes the rest of the ease at once, so that the view is never left half way.
    */
   zoom(by: number) {
     if (this.wanted && this.fit) {
       if (Number.isFinite(by)) this.top.distance = this.reach(this.top.distance + by);
       return;
     }
+    // a zoom in the middle of the ease to an aim view takes the tilt and the lead the rest of the way at once and goes on
+    // from the distance it has, which the floor holds to the view's own: left half way they would show less than the view does
+    const goal = this.goal;
     this.goal = null;
-    this.distance = Math.max(VIEW.near, Math.min(this.far, this.distance + by));
+    if (goal) {
+      this.tilt = goal.tilt;
+      this.lead = goal.lead;
+    }
+    this.distance = Math.min(this.far, Math.max(VIEW.near, this.floor, this.distance + by));
   }
 
   /**

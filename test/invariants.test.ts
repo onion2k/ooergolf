@@ -4,7 +4,9 @@ import { links as linksHoles } from '../src/links';
 import { GREEN as GREEN_RULES_REAL, greenArrows } from '../src/green';
 import { GREENS, LIE } from '../src/surfaces';
 import type { HoleDef } from '../src/course';
+import { Camera } from 'artshape-render/gpu/camera';
 import { CameraRig, TILT, VIEW } from '../src/camera';
+import { safeBox } from '../src/aimview';
 import {
   GREEN_RULES,
   arrowProblems,
@@ -12,6 +14,7 @@ import {
   checkInvariants,
   groundProblems,
   planProblems,
+  framingProblems,
   previewProblems,
   viewProblems,
   TURN_TIME,
@@ -646,5 +649,89 @@ describe('what must always hold of the greens, the first cut and the break', () 
     expect(arrowProblems(game.layout, many).join('\n')).toMatch(/more arrows than the green has tiles/);
     // none on a level hole, or minigolf
     expect(arrowProblems(golfGame(field('f')).game.layout, [])).toEqual([]);
+  });
+});
+
+describe('what must hold of the framing', () => {
+  /** The camera as the rig places it, looking up the course from the origin, on a desk's screen. */
+  function seen(rig: CameraRig) {
+    const cam = new Camera();
+    cam.fov = rig.fov;
+    cam.aspect = 1.6;
+    rig.jump(0, 0, 0);
+    rig.place(cam);
+    cam.update();
+    return cam;
+  }
+  const box = safeBox(1.6, 800);
+
+  it('holds for the ball and a reach that are on the screen, and reports one that is off it, by name', () => {
+    const rig = new CameraRig();
+    const cam = seen(rig);
+    const ball = { x: 0, y: 0, z: 1 };
+    expect(framingProblems(rig, cam, ball, { x: 0, y: 40, z: 0 }, box)).toEqual([]);
+    expect(framingProblems(rig, cam, ball, null, box)).toEqual([]);
+    expect(framingProblems(rig, cam, ball, { x: 0, y: 400, z: 0 }, box).join('\n')).toMatch(/reach.*top/);
+    expect(framingProblems(rig, cam, ball, { x: 200, y: 20, z: 0 }, box).join('\n')).toMatch(/reach.*side/);
+    expect(framingProblems(rig, cam, { x: 0, y: -25, z: 1 }, null, box).join('\n')).toMatch(/ball.*bottom/);
+    expect(framingProblems(rig, cam, { x: Number.NaN, y: 0, z: 1 }, null, box).join('\n')).toMatch(
+      /ball.*not a number/,
+    );
+  });
+
+  it('allows a hair over the box, which is the tolerance, and no more', () => {
+    const rig = new CameraRig();
+    const cam = seen(rig);
+    const ball = { x: 0, y: 0, z: 1 };
+    // find where the box top is on the ground and go just either side of it
+    let a = 0,
+      b = 300;
+    const topOf = (y: number) => {
+      const m = cam.viewProjection;
+      const w = m[3] * 0 + m[7] * y + m[11] * 0 + m[15];
+      return (m[5] * y + m[13]) / w;
+    };
+    for (let k = 0; k < 60; k++) {
+      const mid = (a + b) / 2;
+      if (topOf(mid) < box.top) a = mid;
+      else b = mid;
+    }
+    expect(framingProblems(rig, cam, ball, { x: 0, y: a, z: 0 }, box)).toEqual([]);
+    // 0.01 of the screen over is inside the tolerance of 0.02, and 0.05 over is not
+    let c = a;
+    while (topOf(c) < box.top + 0.01) c += 0.01;
+    expect(framingProblems(rig, cam, ball, { x: 0, y: c, z: 0 }, box)).toEqual([]);
+    while (topOf(c) < box.top + 0.05) c += 0.01;
+    expect(framingProblems(rig, cam, ball, { x: 0, y: c, z: 0 }, box).length).toBeGreaterThan(0);
+  });
+
+  it('says nothing while the camera is on its way: easing to a view, turning, or blended toward the view from above', () => {
+    const rig = new CameraRig();
+    const cam = seen(rig);
+    const ball = { x: 0, y: 0, z: 1 };
+    const far = { x: 0, y: 400, z: 0 };
+    rig.aimAt({ distance: 90, tilt: 0.9, lead: 20 });
+    expect(framingProblems(rig, cam, ball, far, box)).toEqual([]);
+    rig.setGolf(true);
+    rig.turnTo(1);
+    expect(framingProblems(rig, cam, ball, far, box)).toEqual([]);
+    for (let f = 0; f < 300; f++) rig.settle(1 / 60);
+    expect(framingProblems(rig, cam, ball, far, box).length).toBeGreaterThan(0);
+    rig.setOverhead(true, { bounds: { minX: -50, minY: -100, maxX: 50, maxY: 100 }, distance: 300 });
+    rig.settle(1 / 60);
+    expect(rig.blend).toBeGreaterThan(0);
+    expect(framingProblems(rig, cam, ball, far, box)).toEqual([]);
+  });
+
+  it('reports a reach pushed out of the box by a zoom that bypassed the floor', () => {
+    const rig = new CameraRig();
+    rig.setGolf(true);
+    rig.aimAt({ distance: 62, tilt: TILT.home, lead: 10 }, true);
+    // the zoom's clamp refuses to go nearer, so a distance written past it is a bypass
+    const reach = { x: 0, y: 70, z: 0 };
+    const ball = { x: 0, y: 0, z: 1 };
+    rig.distance = VIEW.near;
+    const cam = seen(rig);
+    expect(framingProblems(rig, cam, ball, reach, box).join('\n')).toMatch(/reach/);
   });
 });

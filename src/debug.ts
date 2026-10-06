@@ -188,6 +188,18 @@ export interface GameApi {
    * whether the grass bends in the wind.
    */
   view(): {
+    /**
+     * Where the ball and the furthest a shot can reach (null when the ball is not ready) are on the screen, from minus one to
+     * one each way, the safe box they are held inside, whether the view has settled so that the rule is asked of it, and what is
+     * wrong with it when it has: nothing, always.
+     */
+    framing: {
+      ball: [number, number];
+      reach: [number, number] | null;
+      box: { x: number; top: number; bottom: number };
+      settled: boolean;
+      problems: string[];
+    };
     distance: number;
     /** How far ahead of the ball it looks, and whether it is still easing to the view that shows a golf shot's landing. */
     lead: number;

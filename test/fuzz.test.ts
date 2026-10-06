@@ -41,6 +41,9 @@ describe('the fuzzer', () => {
     // stray draw anywhere (a new action reading the monkey's chance, say) moves these and not only what is done. Recorded
     // on 6 October 2026 before 'aim and take back' was added, and it must not move with it
     expect([one.drawn, two.drawn, golf.drawn], "draws from the monkey's main stream").toEqual([3296, 3217, 2670]);
+    // the framing rule was asked of the camera, on golf and on minigolf, a good many times: a check that never ran passes in silence
+    expect(one.framed + two.framed, 'times the framing was checked').toBeGreaterThan(300);
+    expect(golf.framed, 'times it was checked on level golf').toBeGreaterThan(30);
     expect(one.failure, JSON.stringify(one.failure)).toBe(null);
     expect(two.failure, JSON.stringify(two.failure)).toBe(null);
     expect(golf.failure, JSON.stringify(golf.failure)).toBe(null);

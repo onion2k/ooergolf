@@ -9,6 +9,7 @@
  * through the camera, so a camera that moved while a drag was held would turn the aim under the hand. Pure arithmetic
  * on the camera's own geometry, tested without a page; the rig eases to what this says.
  */
+import { BALL, KIND_RADIUS, tileAt, type Ground } from './arena';
 import type { BagClub } from './bag';
 import { LEAD, TILT, VIEW, phoneOf, standOf, tallOf } from './camera';
 import { carryFrom } from './flight';
@@ -60,6 +61,36 @@ function topFor(aspect: number): number {
   return AIM.top.wide + (AIM.top.tall - AIM.top.wide) * tall;
 }
 
+/**
+ * The part of the screen the ball and the furthest place a shot reaches are kept inside, in the device's own coordinates
+ * from minus one to one: `x` either side of the middle, `top` the highest and `bottom` the lowest. The top is where the
+ * landing is wanted at the highest (the words across a phone's top are under it), and the bottom keeps the ball off the
+ * edge. The aim view is worked from it and the framing rule holds the camera to it.
+ *
+ * The bag across a phone's foot is not in it: the aim view puts the ball as low as it was and no lower than the bag where
+ * it can, and on a short phone a driver's view leaves it a little behind the bag's top, which is how the view has always
+ * been. The ball is on the screen there, and the rule is of that and not of what the bag covers.
+ */
+export interface SafeBox {
+  x: number;
+  top: number;
+  bottom: number;
+}
+
+/** How far across the screen, and how near its foot, the framed things may go: nine tenths of the way across and of the way down. */
+export const SAFE = { x: 0.9, bottom: -0.9 } as const;
+
+/**
+ * The safe box for a screen of `aspect` and, on a phone upright whose height is known, `height` pixels: the top the aim view
+ * has always aimed the landing at (under the words across a phone's top), and the edge's margin at the bottom.
+ */
+export function safeBox(aspect: number, height = 0): SafeBox {
+  const phone = height > 0 ? phoneOf(aspect) : 0;
+  const base = topFor(aspect);
+  const chips = 1 - (2 * CHROME.top) / Math.max(height, 1);
+  return { x: SAFE.x, top: phone > 0 ? base + (chips - base) * phone : base, bottom: SAFE.bottom };
+}
+
 export interface AimView {
   /** The rig's distance, before a tall screen pushes it further. */
   distance: number;
@@ -93,7 +124,7 @@ function screenY(r: number, tilt: number, lead: number, ahead: number, up: numbe
  * back than `AIM.far` however tall the screen, and the tilt within the camera's own limits. A reach too far for the
  * limit gets the limit: the best view there is.
  */
-export function aimView(reach: number, aspect: number, height = 0): AimView {
+export function aimView(reach: number, aspect: number, height = 0, options: { far?: number } = {}): AimView {
   const tall = tallOf(aspect);
   const need = Math.max(0, Number.isFinite(reach) ? reach : 0);
   const share = Math.max(0, Math.min(1, (need - AIM.tiltFrom) / (AIM.tiltTo - AIM.tiltFrom)));
@@ -102,12 +133,12 @@ export function aimView(reach: number, aspect: number, height = 0): AimView {
   // a phone upright with its height known: the far edge of the ring is wanted below the words across the top, the
   // camera may stand further back than a desk's allows, and the ball may sit lower, down to just over the bag
   const phone = height > 0 ? phoneOf(aspect) : 0;
-  const far = standOf(aspect);
-  const chips = 1 - (2 * CHROME.top) / Math.max(height, 1);
-  const top = phone > 0 ? topFor(aspect) + (chips - topFor(aspect)) * phone : topFor(aspect);
+  const lo = VIEW.home * tall;
+  const cap = options.far === undefined ? AIM.far : Math.max(lo, options.far);
+  const far = options.far === undefined ? standOf(aspect) : cap;
+  const { top } = safeBox(aspect, height);
   // the ring's far edge, in yards past the landing, at a camera `r` back
   const edge = (r: number) => (phone > 0 ? AIM.ring * markScale(r) * phone : 0);
-  const lo = VIEW.home * tall;
   // the nearest of `r` between home and `limit` for which `fitsAt` holds: further back always shows more of the way ahead, so it is found by halving
   const nearest = (fitsAt: (r: number) => boolean, limit: number) => {
     if (fitsAt(lo)) return lo;
@@ -123,7 +154,7 @@ export function aimView(reach: number, aspect: number, height = 0): AimView {
   };
   const upright = (r: number) => screenY(r, tilt, lead(r), need + edge(r), 0) <= top;
   if (phone === 0 || upright(lo))
-    return { distance: nearest(upright, AIM.far) / tall, tilt, lead: lead(nearest(upright, AIM.far)) };
+    return { distance: nearest(upright, cap) / tall, tilt, lead: lead(nearest(upright, cap)) };
   // the view as it is does not show the ring clear of the words: the ball is put lower, by looking further ahead of it,
   // to as low as the bag leaves it, and the camera stands back as far as is needed from there
   const low = -1 + (2 * CHROME.bottom) / Math.max(height, 1);
@@ -143,4 +174,55 @@ export function aimView(reach: number, aspect: number, height = 0): AimView {
   const lowered = (r: number) => screenY(r, tilt, leadFor(r), need + edge(r), 0) <= top;
   const r = nearest(lowered, far);
   return { distance: r / tall, tilt, lead: leadFor(r) };
+}
+
+/**
+ * Whether a shot reaching `reach` yards is inside the safe box from the home view, at the home tilt and the lead it always had:
+ * what decides whether a hole of minigolf is left exactly as it was.
+ */
+export function fitsHome(reach: number, aspect: number, height = 0): boolean {
+  const need = Math.max(0, Number.isFinite(reach) ? reach : 0);
+  return screenY(VIEW.home * tallOf(aspect), TILT.home, LEAD, need, 0) <= safeBox(aspect, height).top;
+}
+
+/**
+ * The nearest the camera may stand, as the rig's distance, with the tilt and the lead it has, for a shot reaching `reach` yards
+ * to be inside the safe box: no nearer than `VIEW.near` and no further than home, which a view that fits there is held to.
+ */
+export function floorFor(reach: number, aspect: number, height: number, tilt: number, lead: number): number {
+  const need = Math.max(0, Number.isFinite(reach) ? reach : 0);
+  const tall = tallOf(aspect);
+  const { top } = safeBox(aspect, height);
+  const fits = (distance: number) => screenY(distance * tall, tilt, lead, need, 0) <= top;
+  if (fits(VIEW.near)) return VIEW.near;
+  if (!fits(VIEW.home)) return VIEW.home;
+  let a = VIEW.near,
+    b = VIEW.home;
+  for (let k = 0; k < 40; k++) {
+    const mid = (a + b) / 2;
+    if (fits(mid)) b = mid;
+    else a = mid;
+  }
+  return b;
+}
+
+/**
+ * How far a putt struck at the hardest the putter strikes goes along `angle` from (x, y) on a hole of minigolf: the whole of
+ * `roll` (what such a putt rolls on the level, `rollsFor`) unless a rail or the edge of the course stops it first, where it
+ * is as far as the ball's middle gets to the wall. Worked out by marching along the line a quarter of a yard at a time, nothing
+ * made, so it may be asked for every frame of a drag. Nought for a place that is off the hole and for an angle that is not
+ * one; never more than `roll`.
+ */
+export function reachOnMinigolf(ground: Ground, x: number, y: number, angle: number, roll: number): number {
+  if (!(roll > 0) || !Number.isFinite(x) || !Number.isFinite(y)) return 0;
+  const start = tileAt(ground, x, y);
+  if (start < 0 || ground.solid[start] === 1) return 0;
+  const a = Number.isFinite(angle) ? angle : 0;
+  const [dx, dy] = [Math.cos(a), Math.sin(a)];
+  const step = 0.25;
+  for (let d = step; d <= roll; d += step) {
+    const t = tileAt(ground, x + dx * d, y + dy * d);
+    if (t < 0 || ground.solid[t] === 1) return Math.max(0, d - step - KIND_RADIUS[BALL]);
+  }
+  return roll;
 }

@@ -10,7 +10,8 @@ import { LightPool } from 'artshape-render/game/lights';
 import { GameRenderer, antialiasFor } from 'artshape-render/game/renderer';
 import { BALL, HARDEST_SHOT, KICKER, KIND_RADIUS, heightAt, kickerAt, lieAt, onSand, rollsFor } from './arena';
 import { BAG, PUTTER, carryOf } from './bag';
-import { markScale } from './aimview';
+import { markScale, safeBox } from './aimview';
+import { framingProblems } from './invariants';
 import { CLIP, CameraRig, LEAD, TILT, overheadFit, standOf, tallOf } from './camera';
 import { Director } from './director';
 import { CLUBS } from './clubs';
@@ -200,6 +201,8 @@ async function main() {
   const windNow = { x: 0, y: 0, speed: 0 };
   /** The camera's turn as the wind's arrow is worked out from it, written into each frame and never made. */
   const turnNow = { azimuth: 0, tilt: 0 };
+  /** Where the furthest a shot can reach is, written for the test API's reading of the framing and never made. */
+  const reaching = { x: 0, y: 0, z: 0 };
   /** The hole's map as it was painted, and whether it was for a phone's box: painted again if the screen changes to the other. */
   let mapped: { size: MapSize; small: string } | null = null;
   /** Where the ball was when the pin was last read, so it is read again only when it has moved. */
@@ -793,6 +796,32 @@ async function main() {
     // the ball seen to roll, as far as it went this frame
     roll(scene.ballTurn, world.vx[ball], world.vy[ball], KIND_RADIUS[BALL], dt);
   }
+  /**
+   * The framing as the camera is placed now, for the test API: where the ball and the furthest reach are on the screen
+   * (from minus one to one each way), the safe box, whether the view has settled so that the rule is asked of it, and what is
+   * wrong with it if it has. Not asked while the camera is parked by a test, gliding to a tee, easing, turning or overhead.
+   */
+  function framing() {
+    const { world, ball } = played;
+    rig.place(cam, played.t);
+    cam.update();
+    const box = safeBox(aspect, innerHeight);
+    const at = (x: number, y: number, z: number): [number, number] => {
+      const m = cam.viewProjection;
+      const w = m[3] * x + m[7] * y + m[11] * z + m[15];
+      return [(m[0] * x + m[4] * y + m[8] * z + m[12]) / w, (m[1] * x + m[5] * y + m[9] * z + m[13]) / w];
+    };
+    const there = { x: world.x[ball], y: world.y[ball], z: world.z[ball] };
+    const reach = director.reachPoint(reaching) ? reaching : null;
+    const settled = !parked && !choosing && !rig.easing(played.t) && !rig.aiming && !rig.turning && rig.blend === 0;
+    return {
+      ball: at(there.x, there.y, there.z),
+      reach: reach ? at(reach.x, reach.y, reach.z) : null,
+      box,
+      settled,
+      problems: settled ? framingProblems(rig, cam, there, reach, box) : [],
+    };
+  }
   /** The frame drawn, and when it was begun, for the governor to measure the drawing against. */
   function draw(dt: number): number {
     // the far plane is further while the view from above is up, so the whole of a big hole is inside it
@@ -853,7 +882,7 @@ async function main() {
       rig.jump(x, y, heightAt(played.layout, x, y));
       // the camera is parked where the test wants it, at the home view as it always was (the aim view of a golf hole is
       // a player's and not a test's), looking at the point and not a lead beyond it: the ease to an aim view is over
-      rig.aimAt({ distance: rig.distance, tilt: rig.golf ? TILT.home : rig.tilt, lead: LEAD }, true);
+      rig.aimAt({ distance: rig.distance, tilt: rig.golf ? TILT.home : rig.tilt, lead: LEAD, floor: 0 }, true);
       rig.zoom(distance !== undefined ? distance - rig.distance : 0);
     },
     follow() {
@@ -882,6 +911,7 @@ async function main() {
       };
     },
     view: () => ({
+      framing: framing(),
       distance: rig.distance,
       lead: rig.lead,
       aiming: rig.aiming,

@@ -19,7 +19,7 @@
  * --seed N` does, and prints what was done before it went wrong.
  */
 import { Camera } from 'artshape-render/gpu/camera';
-import { aimView, reachOf } from '../src/aimview';
+import { aimView, reachOf, safeBox } from '../src/aimview';
 import { AIM_TURN, Director } from '../src/director';
 import { ROLL, heightAt, powerFor, strikeSpeed } from '../src/arena';
 import { Autopilot, timeAlong } from '../src/autopilot';
@@ -32,6 +32,7 @@ import {
   arrowProblems,
   breakProblems,
   checkInvariants,
+  framingProblems,
   kickerProblems,
   knockProblems,
   landingProblems,
@@ -136,6 +137,8 @@ export interface FuzzResult {
   visited: Record<string, number>;
   /** How many numbers the monkey drew from its main stream: held by a test, since every other action keeps to a stream of its own and must never add to it. */
   drawn: number;
+  /** How many times the framing rule was asked of the camera, which a test holds above nothing: a check that never ran passes in silence. */
+  framed: number;
 }
 
 /**
@@ -156,6 +159,9 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
   /** The game being played, once there is one, and what was wrong with a knock as it was told, for the next check. */
   let playing: Game | null = null;
   const told: string[] = [];
+  /** How often the framing rule was asked, and the page's own camera director (made once the game's screen is known), which is told of each hole begun. */
+  let framed = 0;
+  let directing: Director | null = null;
   const events: GameEvents = new Proxy(
     {},
     {
@@ -164,6 +170,7 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
         (...args: number[]) => {
           count(happened, name);
           if (name === 'started' && playing) count(visited, playing.def.name);
+          if (name === 'started' && playing && directing) directing.started();
           if (name === 'knocked' && playing) told.push(...knockProblems(playing, ...(args as Knock)));
           // a stream is a belt: the ball is carried on it, and never lost
           if ((name === 'splash' || name === 'outOfBounds') && playing)
@@ -215,6 +222,7 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
     happened,
     visited,
     drawn: monkeyDraws,
+    framed,
   });
 
   try {
@@ -524,6 +532,7 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
           game = new Game(new Progress(store), events, { random: chance(seed + frame), course });
           playing = game;
           director.use(game);
+          director.started();
           const loaded = JSON.stringify(game.progress.save);
           if (loaded !== kept) throw new Error(`the save was ${kept} and loaded as ${loaded}`);
           did('reload');
@@ -531,11 +540,16 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
       ],
     ];
     // a player's hand on the screen, as the page's is: the same pointers, mode and camera, on a desktop-sized window
-    const SCREEN = { w: 1280, h: 800 };
+    // (a desk's, on even seeds, and a phone's held upright on odd ones, which the framing is held on in each)
+    const SCREEN = seed % 2 ? { w: 400, h: 860 } : { w: 1280, h: 800 };
     const rig = new CameraRig();
-    // the page's own camera director, which the flag button is pressed through here as there
+    // the page's own camera director, which the flag button is pressed through here as there, and which sends the camera
+    // where the aim view says in every frame of the game
     const director = new Director(rig);
+    directing = director;
     director.use(game);
+    director.setScreen(SCREEN.w / SCREEN.h, SCREEN.h);
+    director.started();
     const cam = new Camera();
     cam.aspect = SCREEN.w / SCREEN.h;
     cam.fov = rig.fov;
@@ -565,8 +579,7 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
         // view is as it was to the digit (the pans and the pinches moved the overhead view's own and nothing of the other's)
         const strokes = game.strokes;
         did('look from overhead');
-        // the camera set for the hole as a page sets it, and on a golf hole sometimes sent to look at a shot's landing
-        rig.setGolf(game.layout.golf);
+        // the camera is set for the hole by the director as a hole begins; on a golf hole it is sometimes sent to look at a shot's landing
         if (game.layout.golf && random() < 0.5) {
           const lie = lieAt(game.layout, game.world.x[game.ball], game.world.y[game.ball]);
           rig.aimAt(aimView(reachOf(game.inHand, lie, 0), cam.aspect), random() < 0.3);
@@ -608,6 +621,9 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
         if (after !== before) told.push(`the view was ${before} and after the overhead view it was ${after}`);
         if (rig.blend !== 0) told.push(`the overhead view was left and still blended ${rig.blend}`);
         for (const problem of viewProblems(rig)) told.push(problem);
+        // the camera was sent to a view of this action's own (the aim view of a shot in no wind, on no phone's page), which the
+        // director did not know of: it is told the screen again, which has it work out where the camera should be and send it
+        director.setScreen(SCREEN.w / SCREEN.h, SCREEN.h);
       },
     ]);
     // a course with a flipper on it gets one more thing the monkey does, and a course without leaves the monkey exactly as it
@@ -677,7 +693,6 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
       }
       const digest = JSON.stringify([game.t, game.strokes, ballAt.x, ballAt.y, world.z[ball], game.shape, game.spin]);
       const drawn = draws;
-      rig.setGolf(layout.golf);
       if (facer() < 0.5) {
         // from above there is no way to face the cup: the button does nothing, and the camera stays as it was
         const bounds = layout.bounds;
@@ -703,7 +718,8 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
       const off = Math.abs(rig.azimuth - heading);
       if (!(Math.min(off, 2 * Math.PI - off) <= 1e-6))
         told.push(`the camera faces ${rig.azimuth}, and the flag is at ${heading} from the ball`);
-      // pressed again it changes nothing
+      // pressed again it changes nothing (the camera at rest first: it may be easing to an aim view as well, which goes on)
+      for (let k = 0; k < 600; k++) rig.settle(DT);
       const at = [rig.azimuth, rig.tilt, rig.distance, rig.lead];
       rig.turnTo(heading);
       rig.settle(DT);
@@ -735,7 +751,6 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
       const digest = () => JSON.stringify([game.t, game.strokes, world.x[ball], world.y[ball], world.z[ball]]);
       const was = digest();
       const drawn = draws;
-      rig.setGolf(game.layout.golf);
       // the camera at rest, as a player's is when the drag begins
       for (let k = 0; k < 600; k++) rig.settle(DT);
       const home = rig.azimuth;
@@ -924,6 +939,33 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
         busy = Math.floor(between(10, 90));
       }
     };
+    /**
+     * The framing rule, asked of the camera as the page's director leaves it: once the ball is ready, the view has settled
+     * (not easing, turning, gliding or blended to the view from above, the camera caught up with the ball) and no drag is
+     * held, the ball and the furthest a shot reaches are inside the safe box for the screen. No chance is drawn, and nothing of
+     * the game is touched.
+     */
+    const reach = { x: 0, y: 0, z: 0 };
+    const framing = (): string[] => {
+      const { world, ball } = game;
+      if (!game.ready || input.aim !== null || !world.alive[ball] || game.phase !== 'play') return [];
+      if (rig.aiming || rig.turning || rig.blend > 0 || rig.easing(game.t)) return [];
+      if (Math.hypot(rig.target[0] - world.x[ball], rig.target[1] - world.y[ball]) > 0.05) return [];
+      rig.place(cam, game.t);
+      cam.update();
+      framed++;
+      const there = { x: world.x[ball], y: world.y[ball], z: world.z[ball] };
+      const pr = framingProblems(
+        rig,
+        cam,
+        there,
+        director.reachPoint(reach) ? reach : null,
+        safeBox(cam.aspect, SCREEN.h),
+      );
+      return pr.map(
+        (p) => `${p} (${game.layout.golf ? 'golf' : 'minigolf'}, ${SCREEN.w} by ${SCREEN.h}, ${game.def.name})`,
+      );
+    };
     const total = actions.reduce((n, [w]) => n + w, 0);
     const act = () => {
       let pick = random() * total;
@@ -947,6 +989,7 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
       if (laneOf(game.def) && driver() < 0.03) driveTheLane();
       if (game.layout.golf && islandsOf(game.def).length && islander() < 0.03) flyToIsland();
       game.step(DT);
+      director.frame(DT, false);
       // a kicker throws the hardest of anything on a course, so what it does to the ball is checked in every frame
       if (game.layout.kickers.length) {
         const bad = kickerProblems(game);
@@ -955,11 +998,13 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
       // a knock told wrongly is told once, and waits for no check
       if (told.length) return fail(told.splice(0));
       if (frame % CHECK_EVERY === 0) {
+        const bad = framing();
+        if (bad.length) return fail(bad);
         const problems = checkInvariants(game);
         if (problems.length) return fail(problems);
       }
     }
-    return { seed, frames, failure: null, done, happened, visited, drawn: monkeyDraws };
+    return { seed, frames, failure: null, done, happened, visited, drawn: monkeyDraws, framed };
   } catch (err) {
     return fail([`threw: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`]);
   }
