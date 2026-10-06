@@ -220,6 +220,44 @@ describe('what must always hold of the camera', () => {
     expect(viewProblems(rig).join('\n')).toMatch(/distance/);
   });
 
+  it('holds of the overhead view as it is switched on, panned, zoomed and blended, as far as a player can', () => {
+    const rig = new CameraRig();
+    const bounds = { minX: -50, minY: -100, maxX: 50, maxY: 100 };
+    rig.setOverhead(true, { bounds, distance: 300 });
+    for (let f = 0; f < 30; f++) {
+      rig.settle(1 / 60);
+      expect(viewProblems(rig)).toEqual([]);
+    }
+    rig.pan(1e5, -1e5, 800);
+    rig.zoom(-1e5);
+    expect(viewProblems(rig)).toEqual([]);
+    rig.zoom(1e5);
+    rig.setOverhead(false);
+    for (let f = 0; f < 200; f++) rig.settle(1 / 60);
+    expect(viewProblems(rig)).toEqual([]);
+  });
+
+  it('reports a blend that is not between nought and one, an overhead distance out of its range and a place off the hole', () => {
+    const rig = new CameraRig();
+    rig.setOverhead(true, { bounds: { minX: -50, minY: -100, maxX: 50, maxY: 100 }, distance: 300 });
+    expect(viewProblems(rig)).toEqual([]);
+    rig.top.distance = 10;
+    expect(viewProblems(rig).join('\n')).toMatch(/overhead distance/);
+    rig.top.distance = 1000;
+    expect(viewProblems(rig).join('\n')).toMatch(/overhead distance/);
+    rig.top.distance = 300;
+    rig.top.x = 51;
+    expect(viewProblems(rig).join('\n')).toMatch(/overhead view looks at/);
+    rig.top.x = 0;
+    rig.top.y = Number.NaN;
+    expect(viewProblems(rig).join('\n')).toMatch(/overhead view looks at/);
+    rig.top.y = 0;
+    (rig as unknown as { k: number }).k = 1.5;
+    expect(viewProblems(rig).join('\n')).toMatch(/blend/);
+    (rig as unknown as { k: number }).k = Number.NaN;
+    expect(viewProblems(rig).join('\n')).toMatch(/blend/);
+  });
+
   it('allows a golf hole the further zoom it has, and nothing of it to a hole of minigolf', () => {
     const golf = new CameraRig();
     golf.setGolf(true);

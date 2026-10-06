@@ -11,6 +11,9 @@
  * not so far that the whole width fits: a phone shows the way ahead large and
  * the far sides of the course less, since it follows the ball anyway.
  *
+ * It can also be blended up to the overhead view, the whole hole from straight above, which is for looking at and
+ * never for aiming from, and leaves the view it came from exactly as it was.
+ *
  * It only says where the camera is; the page hands it the renderer's camera
  * to place, and nothing here draws.
  */
@@ -78,6 +81,51 @@ const TURN_EASE = 6;
 /** How near an aim view it is called there, in yards of distance and in radians of tilt, which snaps it the rest of the way. */
 const SETTLED = { distance: 0.25, tilt: 0.002, lead: 0.25, turn: 0.002 };
 
+/**
+ * The overhead view, which is the hole seen whole from straight above, to be looked at and never aimed from. `tilt` is how
+ * far from the vertical it looks (not nought, since the renderer's camera has the ground's up for its own and looking
+ * exactly down is degenerate), `ease` the rate the view blends in and out at, `near` the nearest it may be zoomed to,
+ * `far` the furthest (provisional until the cost of the view is measured on the biggest holes, and the renderer's far
+ * plane, 800 in the page, must be raised to it), and `margin` how much more than the hole's bounds the fit shows.
+ */
+export const OVERHEAD = { tilt: 0.05, ease: 4, near: 60, far: 1500, margin: 1.08 } as const;
+/** The ground a hole covers, the corners of a layout's `bounds`. */
+export interface Bounds {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}
+/** What the overhead view is fitted to: the bounds of the hole and the distance that shows all of them. */
+export interface OverheadFit {
+  bounds: Bounds;
+  distance: number;
+}
+/** How near the blend is to its goal before it is called there, which snaps it the rest of the way. */
+const BLENDED = 0.002;
+
+/**
+ * How far back the overhead view stands to show the whole of `bounds` (and `OVERHEAD.margin` more) for a camera turned to
+ * `azimuth` on a screen of `aspect`: the least distance at which every corner is on the screen, and no more than
+ * `OVERHEAD.far`. Worked out about the middle of the bounds, in the camera's own right and up, since the view is turned.
+ */
+export function overheadFit(bounds: Bounds, azimuth: number, aspect: number): number {
+  const cx = (bounds.minX + bounds.maxX) / 2,
+    cy = (bounds.minY + bounds.maxY) / 2;
+  // the camera's right and forward on the ground: forward is where it faces (sin a, cos a)
+  const [rx, ry, fx, fy] = [Math.cos(azimuth), -Math.sin(azimuth), Math.sin(azimuth), Math.cos(azimuth)];
+  let across = 0,
+    up = 0;
+  for (const x of [bounds.minX, bounds.maxX])
+    for (const y of [bounds.minY, bounds.maxY]) {
+      across = Math.max(across, Math.abs((x - cx) * rx + (y - cy) * ry));
+      up = Math.max(up, Math.abs((x - cx) * fx + (y - cy) * fy));
+    }
+  const h = Math.tan((VIEW.fov * Math.PI) / 360);
+  const need = Math.max(up / h, across / (h * Math.max(aspect, 0.1))) * OVERHEAD.margin;
+  return Math.min(OVERHEAD.far, Math.max(VIEW.near, Number.isFinite(need) ? need : VIEW.near));
+}
+
 /** An angle brought within one turn either way of nought. */
 const wrap = (a: number) => a - 2 * Math.PI * Math.round(a / (2 * Math.PI));
 
@@ -133,6 +181,13 @@ export class CameraRig {
   private readonly seen = { azimuth: 0, tilt: 0 };
   /** Where it looks, glide and all, written by `looking` for `place`. */
   private readonly at: [number, number, number] = [0, 0, 0];
+  /** Whether the overhead view is wanted, and how far it is blended in, from nought (the normal view) to one (from above). */
+  private wanted = false;
+  private k = 0;
+  /** What the overhead view is fitted to, once told; nought of it until then. */
+  private fit: OverheadFit | null = null;
+  /** Where the overhead view looks and how far back it stands: its own, so the normal view is untouched while it is on. */
+  readonly top = { x: 0, y: 0, distance: 0 };
 
   /** Straight to looking at (x, y) on ground `z` high, without easing: for the first hole, and a camera parked by a test. */
   jump(x: number, y: number, z = 0) {
@@ -278,6 +333,12 @@ export class CameraRig {
    * passed, so a slow frame goes as far as the frames it was.
    */
   settle(dt: number) {
+    // the blend to and from the overhead view, by the time that has passed
+    const g = this.wanted ? 1 : 0;
+    if (this.k !== g) {
+      this.k += (g - this.k) * (1 - Math.exp(-OVERHEAD.ease * Math.max(0, dt)));
+      if (Math.abs(g - this.k) < BLENDED) this.k = g;
+    }
     const h = this.heading;
     if (h !== null) {
       const to = wrap(h - this.azimuth);
@@ -287,26 +348,34 @@ export class CameraRig {
         this.heading = null;
       } else this.azimuth = wrap(h - left);
     }
-    const g = this.goal;
-    if (!g) return;
+    const aim = this.goal;
+    if (!aim) return;
     const k = 1 - Math.exp(-AIM_EASE * Math.max(0, dt));
-    this.distance += (g.distance - this.distance) * k;
-    this.tilt += (g.tilt - this.tilt) * k;
-    this.lead += (g.lead - this.lead) * k;
+    this.distance += (aim.distance - this.distance) * k;
+    this.tilt += (aim.tilt - this.tilt) * k;
+    this.lead += (aim.lead - this.lead) * k;
     if (
-      Math.abs(g.distance - this.distance) < SETTLED.distance &&
-      Math.abs(g.tilt - this.tilt) < SETTLED.tilt &&
-      Math.abs(g.lead - this.lead) < SETTLED.lead
+      Math.abs(aim.distance - this.distance) < SETTLED.distance &&
+      Math.abs(aim.tilt - this.tilt) < SETTLED.tilt &&
+      Math.abs(aim.lead - this.lead) < SETTLED.lead
     ) {
-      this.distance = g.distance;
-      this.tilt = g.tilt;
-      this.lead = g.lead;
+      this.distance = aim.distance;
+      this.tilt = aim.tilt;
+      this.lead = aim.lead;
       this.goal = null;
     }
   }
 
-  /** Nearer for less than zero, further for more, held within the limits. The player's own, which ends an ease to an aim view. */
+  /**
+   * Nearer for less than zero, further for more, held within the limits. The player's own, which ends an ease to an aim
+   * view; in the overhead view it is that view's own distance, between `OVERHEAD.near` and the fit, and the normal view and
+   * the ease to an aim view are left as they are.
+   */
   zoom(by: number) {
+    if (this.wanted && this.fit) {
+      if (Number.isFinite(by)) this.top.distance = this.reach(this.top.distance + by);
+      return;
+    }
     this.goal = null;
     this.distance = Math.max(VIEW.near, Math.min(this.far, this.distance + by));
   }
@@ -321,6 +390,72 @@ export class CameraRig {
     this.heading = null;
     if (Number.isFinite(turn)) this.azimuth = wrap(this.azimuth + turn);
     if (Number.isFinite(tilt)) this.tilt = Math.max(TILT.least, Math.min(TILT.most, this.tilt + tilt));
+  }
+
+  /** A distance for the overhead view, held between the nearest it zooms and the one that fits the hole. */
+  private reach(distance: number): number {
+    const most = this.fit?.distance ?? 0;
+    return Math.max(Math.min(OVERHEAD.near, most), Math.min(most, distance));
+  }
+
+  /** Whether the overhead view is wanted. */
+  get overhead(): boolean {
+    return this.wanted;
+  }
+
+  /** How far the overhead view is blended in: nought is the normal view, one the view from above. */
+  get blend(): number {
+    return this.k;
+  }
+
+  /** What the overhead view is held to, nothing before it has been fitted to a hole. */
+  get overheadLimits(): { bounds: Bounds; least: number; most: number } | null {
+    const f = this.fit;
+    return f ? { bounds: f.bounds, least: Math.min(OVERHEAD.near, f.distance), most: f.distance } : null;
+  }
+
+  /**
+   * The overhead view switched on or off, blended by `settle`. Switching on is fitted to a hole (`fit`: its bounds, and the
+   * distance `overheadFit` says shows them all) and begins looking at the middle of it, standing as far back as it fits;
+   * switching on without ever having been fitted, or to a fit that is not a hole, does nothing. Whether it is on. Switched
+   * off, the normal view is exactly as it was: it was never touched.
+   */
+  setOverhead(on: boolean, fit?: OverheadFit): boolean {
+    if (!on) {
+      this.wanted = false;
+      return false;
+    }
+    if (fit) {
+      const b = fit.bounds;
+      if (![b.minX, b.minY, b.maxX, b.maxY, fit.distance].every(Number.isFinite) || b.maxX < b.minX || b.maxY < b.minY)
+        return this.wanted;
+      this.fit = { bounds: { ...b }, distance: fit.distance };
+      this.top.x = (b.minX + b.maxX) / 2;
+      this.top.y = (b.minY + b.maxY) / 2;
+      this.top.distance = fit.distance;
+    }
+    if (!this.fit) return this.wanted;
+    this.wanted = true;
+    return true;
+  }
+
+  /**
+   * The overhead view dragged by a finger that moved `dx` pixels across and `dy` down on a screen `heightPx` tall: the
+   * ground under the finger goes with it, so the view moves the other way across the ground, along the way it is turned,
+   * and is held to the hole's bounds. Nothing when the view is not overhead.
+   */
+  pan(dx: number, dy: number, heightPx: number) {
+    const f = this.fit;
+    if (!this.wanted || !f || !(heightPx > 0) || !Number.isFinite(dx) || !Number.isFinite(dy)) return;
+    // the ground a pixel covers at the distance it stands
+    const per = (2 * this.top.distance * Math.tan((VIEW.fov * Math.PI) / 360)) / heightPx;
+    const a = this.azimuth;
+    // the view's right and forward: the finger going right takes the view left, and going down takes it forward
+    this.top.x += (-dx * Math.cos(a) + dy * Math.sin(a)) * per;
+    this.top.y += (dx * Math.sin(a) + dy * Math.cos(a)) * per;
+    const b = f.bounds;
+    this.top.x = Math.max(b.minX, Math.min(b.maxX, this.top.x));
+    this.top.y = Math.max(b.minY, Math.min(b.maxY, this.top.y));
   }
 
   /** How it is turned and tilted at game time `t`: what a player has done to it, and what is left to ease away. */
@@ -341,8 +476,21 @@ export class CameraRig {
     const { azimuth, tilt } = this.view(t, this.seen);
     // the way it faces on the ground, and the point it looks at a lead ahead of the ball that way
     const [fx, fy] = [Math.sin(azimuth), Math.cos(azimuth)];
-    const [x, y, z] = [at[0] + fx * this.lead, at[1] + fy * this.lead, at[2]];
+    let [x, y, z] = [at[0] + fx * this.lead, at[1] + fy * this.lead, at[2]];
     camera.fov = VIEW.fov;
+    const k = this.k;
+    if (k > 0) {
+      // blended toward the view from above: where it looks, how far it tilts and how far back it stands are each mixed, so the
+      // camera swings up and over the hole and is exactly the overhead view at one; the turn is kept
+      const t = tilt + (OVERHEAD.tilt - tilt) * k;
+      const d = r + (this.top.distance - r) * k;
+      x += (this.top.x - x) * k;
+      y += (this.top.y - y) * k;
+      z -= z * k;
+      camera.target = [x, y, z];
+      camera.position = [x - fx * Math.sin(t) * d, y - fy * Math.sin(t) * d, z + Math.cos(t) * d];
+      return;
+    }
     camera.target = [x, y, z];
     camera.position = [x - fx * Math.sin(tilt) * r, y - fy * Math.sin(tilt) * r, z + Math.cos(tilt) * r];
   }

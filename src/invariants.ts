@@ -96,6 +96,18 @@ export function viewProblems(rig: CameraRig, turningFor = 0): string[] {
     out.push(`the distance is out of the zoom, ${VIEW.near} to ${rig.far}: ${rig.distance}`);
   if (!(rig.lead >= 0 && Number.isFinite(rig.lead)))
     out.push(`the lead is not a number of yards, nought or more: ${rig.lead}`);
+  // the overhead view: blended between nought and one, and, once fitted to a hole, standing in the range it zooms in and
+  // looking at a place on the hole
+  if (!(rig.blend >= 0 && rig.blend <= 1)) out.push(`the overhead blend is not between nought and one: ${rig.blend}`);
+  const over = rig.overheadLimits;
+  if (over) {
+    const { x, y, distance } = rig.top;
+    if (!(distance >= over.least - 1e-9 && distance <= over.most + 1e-9))
+      out.push(`the overhead distance is out of its range, ${over.least} to ${over.most}: ${distance}`);
+    const b = over.bounds;
+    if (!(x >= b.minX - 1e-9 && x <= b.maxX + 1e-9 && y >= b.minY - 1e-9 && y <= b.maxY + 1e-9))
+      out.push(`the overhead view looks at ${x},${y}, which is off the hole`);
+  }
   return out;
 }
 

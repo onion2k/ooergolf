@@ -2,7 +2,21 @@
 import { Camera } from 'artshape-render/gpu/camera';
 import { describe, expect, it } from 'vitest';
 import { layoutOf } from '../src/arena';
-import { CameraRig, GLIDE, LEAD, TILT, catchUp, facing } from '../src/camera';
+import {
+  CameraRig,
+  GLIDE,
+  LEAD,
+  OVERHEAD,
+  TILT,
+  VIEW,
+  catchUp,
+  facing,
+  overheadFit,
+  standOf,
+  tallOf,
+} from '../src/camera';
+import { seeded } from '../src/random';
+import { SAMPLE_HOLES } from './helpers';
 import { groundAt } from '../src/shot';
 import { GREEN } from './helpers';
 
@@ -584,5 +598,238 @@ describe('turning to face a place', () => {
     rig.turnTo(-1);
     settled(rig);
     expect(rig.azimuth).toBeCloseTo(-1, 6);
+  });
+});
+
+describe('the overhead view', () => {
+  const ASPECTS = [1.6, 1.0, 400 / 860];
+  const bounds = { minX: -60, minY: -150, maxX: 60, maxY: 150 };
+
+  /** The rig fitted to `bounds` for a screen of `aspect`, switched on and blended all the way in. */
+  function above(aspect: number, box = bounds, azimuth = 0) {
+    const rig = new CameraRig();
+    const cam = new Camera();
+    cam.fov = rig.fov;
+    cam.aspect = aspect;
+    rig.setScreen(aspect);
+    rig.jump(box.minX + 5, box.minY + 5);
+    rig.orbit(azimuth, 0);
+    rig.setOverhead(true, { bounds: box, distance: overheadFit(box, rig.azimuth, aspect) });
+    for (let f = 0; f < 240; f++) rig.settle(1 / 60);
+    rig.place(cam);
+    cam.update();
+    return { rig, cam };
+  }
+
+  /** What the camera did before there was an overhead view, worked out from the rig's own fields. */
+  function today(rig: CameraRig, aspect: number): { position: number[]; target: number[] } {
+    const r = Math.min(rig.distance * tallOf(aspect), rig.golf ? standOf(aspect) : Infinity);
+    const { azimuth, tilt } = rig.view(Infinity);
+    const [fx, fy] = [Math.sin(azimuth), Math.cos(azimuth)];
+    const x = rig.target[0] + fx * rig.lead,
+      y = rig.target[1] + fy * rig.lead,
+      z = rig.target[2];
+    return {
+      target: [x, y, z],
+      position: [x - fx * Math.sin(tilt) * r, y - fy * Math.sin(tilt) * r, z + Math.cos(tilt) * r],
+    };
+  }
+
+  it('leaves the placing of the camera bit for bit as it was while it is off, for fifty views', () => {
+    const random = seeded(7);
+    for (let k = 0; k < 50; k++) {
+      const rig = new CameraRig();
+      const aspect = 0.4 + random() * 1.4;
+      rig.setGolf(random() < 0.5);
+      rig.setScreen(aspect);
+      rig.jump((random() - 0.5) * 300, (random() - 0.5) * 300, random() * 5);
+      rig.orbit((random() - 0.5) * 20, (random() - 0.5) * 2);
+      rig.zoom((random() - 0.5) * 400);
+      rig.aimAt({ distance: 40 + random() * 100, tilt: random(), lead: random() * 30 }, true);
+      // it has been switched on and off again, and settled, which must leave nothing behind
+      if (k % 2) {
+        rig.setOverhead(true, { bounds, distance: 300 });
+        rig.setOverhead(false);
+        for (let f = 0; f < 240; f++) rig.settle(1 / 60);
+      }
+      const cam = new Camera();
+      cam.aspect = aspect;
+      rig.place(cam);
+      const want = today(rig, aspect);
+      expect([...cam.position], `position ${k}`).toEqual(want.position);
+      expect([...cam.target], `target ${k}`).toEqual(want.target);
+    }
+  });
+
+  for (const aspect of ASPECTS) {
+    it(`shows every corner of the hole with room to spare, at aspect ${aspect.toFixed(2)}, on each hole there is`, () => {
+      let capped = 0;
+      for (const hole of SAMPLE_HOLES) {
+        const box = layoutOf(hole.map).bounds;
+        for (const azimuth of [0, 0.7, -2.4]) {
+          const { rig, cam } = above(aspect, box, azimuth);
+          // a hole too big for the furthest the view stands is the cap's to hold: it shows what it can, and says it is at the cap
+          if (rig.top.distance >= OVERHEAD.far) {
+            capped++;
+            continue;
+          }
+          for (const x of [box.minX, box.maxX])
+            for (const y of [box.minY, box.maxY]) {
+              const [nx, ny] = ndc(cam, x, y, 0);
+              expect(Math.abs(nx), `${hole.name} across at ${x},${y} turned ${azimuth}`).toBeLessThan(1);
+              expect(Math.abs(ny), `${hole.name} up at ${x},${y} turned ${azimuth}`).toBeLessThan(1);
+            }
+        }
+      }
+      // the cap is the exception and not the rule: it holds only a few of the views, the biggest holes turned across a narrow screen
+      expect(capped).toBeLessThan(SAMPLE_HOLES.length);
+    });
+  }
+
+  it('fits no more of the screen than it must: the biggest dimension is within a tenth of the edge of it', () => {
+    const { cam } = above(1.6);
+    const [, top] = ndc(cam, 0, bounds.maxY, 0);
+    expect(top).toBeGreaterThan(0.85);
+  });
+
+  it('looks within three degrees of straight down', () => {
+    const { cam } = above(1.0);
+    const [fx, fy, fz] = [0, 1, 2].map((a) => cam.target[a] - cam.position[a]);
+    const off = Math.acos(-fz / Math.hypot(fx, fy, fz));
+    expect(off).toBeLessThan((3 * Math.PI) / 180);
+    expect(off).toBeGreaterThan(0);
+  });
+
+  it('keeps the ground under a pixel when it is panned by that much, within a hundredth of the screen', () => {
+    const aspect = 1.6,
+      heightPx = 800;
+    for (const azimuth of [0, 1.1, -2.2]) {
+      const { rig, cam } = above(aspect, { minX: -400, minY: -400, maxX: 400, maxY: 400 }, azimuth);
+      rig.zoom(-400);
+      rig.place(cam);
+      cam.update();
+      for (const [px, py, dx, dy] of [
+        [0.2, 0.1, 80, -40],
+        [-0.5, 0.4, -120, 60],
+        [0.0, 0.0, 30, 200],
+      ]) {
+        const from = groundAt(cam, px, py, 0)!.slice();
+        rig.pan(dx, dy, heightPx);
+        rig.place(cam);
+        cam.update();
+        // the finger moved dx right and dy down, which is 2dx/width across and -2dy/height up on the screen
+        const to = groundAt(cam, px + (2 * dx) / (heightPx * aspect), py - (2 * dy) / heightPx, 0)!;
+        const per = (2 * rig.top.distance * Math.tan((VIEW.fov * Math.PI) / 360)) / heightPx;
+        expect(Math.hypot(to[0] - from[0], to[1] - from[1]) / (per * heightPx), `turned ${azimuth}`).toBeLessThan(0.01);
+      }
+    }
+  });
+
+  it('is held to the hole when panned, and does nothing when it is off or told nonsense', () => {
+    const { rig } = above(1.6);
+    rig.pan(-1e6, 1e6, 800);
+    const { x, y } = rig.top;
+    expect(x).toBeGreaterThanOrEqual(bounds.minX);
+    expect(x).toBeLessThanOrEqual(bounds.maxX);
+    expect(y).toBeGreaterThanOrEqual(bounds.minY);
+    expect(y).toBeLessThanOrEqual(bounds.maxY);
+    rig.pan(Number.NaN, 5, 800);
+    rig.pan(5, 5, 0);
+    expect([rig.top.x, rig.top.y]).toEqual([x, y]);
+    rig.setOverhead(false);
+    rig.pan(10, 10, 800);
+    expect([rig.top.x, rig.top.y]).toEqual([x, y]);
+  });
+
+  it('zooms between the nearest it goes and the distance that fits the hole, and leaves the ordinary zoom alone', () => {
+    const { rig } = above(1.6);
+    const fit = rig.top.distance;
+    const was = rig.distance;
+    rig.zoom(1e6);
+    expect(rig.top.distance).toBe(fit);
+    rig.zoom(-1e6);
+    expect(rig.top.distance).toBe(OVERHEAD.near);
+    rig.zoom(Number.NaN);
+    expect(rig.top.distance).toBe(OVERHEAD.near);
+    expect(rig.distance).toBe(was);
+  });
+
+  it('gives back the view it left exactly, turned and tilted and zoomed and led as it was, and an aim view still on its way', () => {
+    const rig = new CameraRig();
+    rig.setGolf(true);
+    rig.setScreen(1.6);
+    rig.jump(3, 4, 0);
+    rig.orbit(0.9, 0.1);
+    rig.zoom(-7);
+    rig.aimAt({ distance: 90, tilt: 0.9, lead: 20 });
+    rig.settle(0.1);
+    const was = [rig.azimuth, rig.tilt, rig.distance, rig.lead, rig.aiming];
+    const cam = new Camera();
+    cam.aspect = 1.6;
+    rig.place(cam);
+    const before = [...cam.position, ...cam.target];
+    rig.setOverhead(true, { bounds, distance: 400 });
+    rig.pan(50, 50, 800);
+    rig.zoom(-100);
+    expect([rig.azimuth, rig.tilt, rig.distance, rig.lead, rig.aiming]).toEqual(was);
+    rig.setOverhead(false);
+    expect(rig.overhead).toBe(false);
+    for (let f = 0; f < 240; f++) rig.settle(0);
+    rig.place(cam);
+    expect([...cam.position, ...cam.target]).toEqual(before);
+    expect([rig.azimuth, rig.tilt, rig.distance, rig.lead, rig.aiming]).toEqual(was);
+  });
+
+  it('keeps the turn it had while it is on, and a turn begun is carried on underneath', () => {
+    const { rig } = above(1.6, bounds, 0.5);
+    expect(rig.azimuth).toBe(0.5);
+    rig.turnTo(1.5);
+    for (let f = 0; f < 240; f++) rig.settle(1 / 60);
+    expect(rig.azimuth).toBe(1.5);
+  });
+
+  it('blends in and out within two seconds, and by the same road at thirty frames a second as at a hundred and forty', () => {
+    const run = (dt: number, on: boolean, from: number) => {
+      const rig = new CameraRig();
+      rig.setOverhead(true, { bounds, distance: 300 });
+      if (from) for (let f = 0; f < 600; f++) rig.settle(1 / 60);
+      rig.setOverhead(on);
+      const at: number[] = [];
+      for (let t = 0; t < 2; t += dt) {
+        rig.settle(dt);
+        if (Math.abs(t - 0.5) < dt / 2) at.push(rig.blend);
+      }
+      return { k: rig.blend, at };
+    };
+    for (const dt of [1 / 30, 1 / 60, 1 / 144]) {
+      expect(run(dt, true, 0).k, `in at ${dt}`).toBe(1);
+      expect(run(dt, false, 1).k, `out at ${dt}`).toBe(0);
+    }
+    const slow = run(1 / 30, true, 0).at[0],
+      fast = run(1 / 144, true, 0).at[0];
+    expect(Math.abs(slow - fast)).toBeLessThan(0.05);
+    expect(slow).toBeGreaterThan(0.5);
+    expect(slow).toBeLessThan(1);
+  });
+
+  it('is not switched on without a hole to fit to, or to a fit that is not one', () => {
+    const rig = new CameraRig();
+    expect(rig.setOverhead(true)).toBe(false);
+    expect(rig.setOverhead(true, { bounds: { minX: 0, minY: 0, maxX: Number.NaN, maxY: 1 }, distance: 100 })).toBe(
+      false,
+    );
+    expect(rig.setOverhead(true, { bounds, distance: Number.POSITIVE_INFINITY })).toBe(false);
+    expect(rig.overhead).toBe(false);
+    expect(rig.setOverhead(true, { bounds, distance: 100 })).toBe(true);
+    // switched on again without a fit, it keeps the one it had
+    rig.setOverhead(false);
+    expect(rig.setOverhead(true)).toBe(true);
+  });
+
+  it('fits a bigger hole further back and a narrower screen further back for a wide hole, and no further than it goes', () => {
+    expect(overheadFit(bounds, 0, 1.6)).toBeLessThan(overheadFit({ ...bounds, maxY: 450 }, 0, 1.6));
+    const wide = { minX: -300, minY: -50, maxX: 300, maxY: 50 };
+    expect(overheadFit(wide, 0, 0.465)).toBeGreaterThan(overheadFit(wide, 0, 1.6));
+    expect(overheadFit({ minX: 0, minY: 0, maxX: 1e6, maxY: 1e6 }, 0, 1.6)).toBe(OVERHEAD.far);
   });
 });
