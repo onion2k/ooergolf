@@ -13,7 +13,8 @@
 import { PHYSICS, strikeSpeed } from './arena';
 import type { BagClub } from './bag';
 import { seeded } from './random';
-import { LIE, SURFACES, type Lie } from './surfaces';
+import { ITEM_FIGURES, NO_EFFECTS, scaled, type Effects } from './items';
+import { LIE, surfaceFor, type Lie } from './surfaces';
 
 /**
  * The wind: how hard it pushes a ball, in yards a second a second for each mile an hour of it, and the most any hole has
@@ -63,10 +64,15 @@ export function windPush(speed: number): number {
  * behind it, which is clockwise from above, the heading angle (from +x toward +y) growing smaller; a draw is negative and
  * turns it left. A shape beyond its limits is held to them, and one that is not a number is none.
  */
-export function curveRate(shape: number, loft = 0): number {
+export function curveRate(shape: number, loft = 0, effects: Effects = NO_EFFECTS): number {
   if (!Number.isFinite(shape)) return 0;
   const s = Math.max(-1, Math.min(1, shape));
-  return s * SHAPE.turn * Math.max(0, 1 - Math.max(0, loft) / SHAPE.straight);
+  return (
+    s *
+    SHAPE.turn *
+    Math.max(0, 1 - Math.max(0, loft) / SHAPE.straight) *
+    scaled(effects, 'curve', ITEM_FIGURES.curve.rate)
+  );
 }
 
 /**
@@ -74,10 +80,12 @@ export function curveRate(shape: number, loft = 0): number {
  * (from minus one, backspin, to one, topspin): the plain `keep` times more for topspin, and less for backspin, which at the
  * fullest is below nought, a ball checked so hard that it comes back along the ground.
  */
-export function spunKeep(keep: number, spin: number): number {
+export function spunKeep(keep: number, spin: number, effects: Effects = NO_EFFECTS): number {
   if (!Number.isFinite(spin)) return keep;
   const s = Math.max(-1, Math.min(1, spin));
-  return keep * (1 + (s > 0 ? SPIN.top : SPIN.back) * s);
+  const kept = keep * (1 + (s > 0 ? SPIN.top : SPIN.back) * s * scaled(effects, 'spin', ITEM_FIGURES.spin.strength));
+  // twice the topspin would send a ball on faster than it came down, which the plain table never does by more than a sixth
+  return effects.has('spin') ? Math.min(kept, ITEM_FIGURES.spin.keepMost) : kept;
 }
 
 /**
@@ -85,9 +93,9 @@ export function spunKeep(keep: number, spin: number): number {
  * nought for a club that has no loft. The carry's own arithmetic (twice the climb over gravity), with what the lie does to
  * the speed and the loft; measured against the game, it is within a physics step of it.
  */
-export function airTime(club: BagClub, power: number, lie: Lie = LIE.tee): number {
+export function airTime(club: BagClub, power: number, lie: Lie = LIE.tee, effects: Effects = NO_EFFECTS): number {
   if (!(club.loft > 0)) return 0;
-  const surface = SURFACES[lie];
+  const surface = surfaceFor(lie, effects);
   const speed = strikeSpeed(Math.max(0, Math.min(1, power)), club.hardest) * surface.power;
   return (2 * speed * Math.sin(((club.loft + surface.loft) * Math.PI) / 180)) / PHYSICS.gravity;
 }
@@ -97,7 +105,13 @@ export function airTime(club: BagClub, power: number, lie: Lie = LIE.tee): numbe
  * (and how far a headwind takes off it, and a crosswind turns it aside at the landing): a steady push for as long as it is in the
  * air, so half its push times the time in the air, squared.
  */
-export function windReach(club: BagClub, power: number, speed: number, lie: Lie = LIE.tee): number {
-  const t = airTime(club, power, lie);
-  return 0.5 * windPush(speed) * t * t;
+export function windReach(
+  club: BagClub,
+  power: number,
+  speed: number,
+  lie: Lie = LIE.tee,
+  effects: Effects = NO_EFFECTS,
+): number {
+  const t = airTime(club, power, lie, effects);
+  return 0.5 * windPush(speed) * scaled(effects, 'sock', ITEM_FIGURES.sock.push) * t * t;
 }

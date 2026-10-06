@@ -46,6 +46,8 @@ export interface Landing {
   hit: boolean;
   shape?: number;
   spin?: number;
+  /** For the ghost shot: how far from the ball, in yards, it comes to rest after it lands; none where the item is not held or the ball does not land. */
+  rest?: number;
 }
 
 /** The words for a shot's shape and spin, as a golfer says them: a draw or a fade, backspin or topspin, and nothing for straight and flat. */
@@ -69,7 +71,8 @@ export function landingText(l: Landing): string {
   const yards = `lands ${Math.round(l.carry)} yd`;
   const where =
     l.end === 'water' ? 'in the water' : l.end === 'out' ? 'out of bounds' : (SURFACES[l.lie]?.name ?? 'ground');
-  return `${shaped.join('')}${l.hit ? 'hits a tree \u00b7 ' : ''}${yards} \u00b7 ${where}`;
+  const rests = l.rest !== undefined && l.end === 'landed' ? ` \u00b7 rests ${Math.round(l.rest)} yd` : '';
+  return `${shaped.join('')}${l.hit ? 'hits a tree \u00b7 ' : ''}${yards} \u00b7 ${where}${rests}`;
 }
 
 /** What the wind is called on the page: whole miles an hour, or calm, so a player always knows. */

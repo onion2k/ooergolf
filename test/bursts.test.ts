@@ -46,6 +46,49 @@ describe('the bursts', () => {
     ).toBe(true);
   });
 
+  it('is exactly what it was without a style: a call that gives none and one that gives the plain style are the same', () => {
+    for (const ace of [false, true]) {
+      expect(cupBurst(1, 2, ace, 'plain')).toEqual(cupBurst(1, 2, ace));
+      expect(cupBurst(1, 2, ace, undefined)).toEqual(cupBurst(1, 2, ace));
+    }
+    // held to a literal, so the default never moves by a figure drawn elsewhere
+    const par = cupBurst(1, 2, false);
+    expect(par.length).toBe(6);
+    expect(par.map((e) => [e.count, e.life, e.spread])).toEqual([
+      [14, 1.8, 5],
+      [14, 1.8, 5],
+      [14, 1.8, 5],
+      [14, 1.8, 5],
+      [14, 1.8, 5],
+      [14, 0.7, 5],
+    ]);
+  });
+
+  it('throws more confetti, for longer, wider and in the colours of the rainbow, when the cup is the confetti cup', () => {
+    for (const ace of [false, true]) {
+      const plain = cupBurst(1, 2, ace),
+        big = cupBurst(1, 2, ace, 'confetti');
+      const count = (es: typeof plain) => es.reduce((a, e) => a + e.count, 0);
+      expect(count(big)).toBeGreaterThanOrEqual(count(plain) * 2.4);
+      const bits = big.filter((e) => e.alpha !== 0),
+        was = plain.filter((e) => e.alpha !== 0);
+      expect(Math.max(...bits.map((e) => e.life))).toBeGreaterThanOrEqual(2.6);
+      expect(Math.max(...bits.map((e) => e.life))).toBeGreaterThan(Math.max(...was.map((e) => e.life)));
+      expect(Math.min(...bits.map((e) => e.spread))).toBeGreaterThan(Math.max(...was.map((e) => e.spread)));
+      expect(new Set(bits.map((e) => e.colour.join())).size, 'six colours of the rainbow').toBe(6);
+      for (const e of big) {
+        expect(e.position.slice(0, 2)).toEqual([1, 2]);
+        expect(e.velocity[2]).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("keeps even the biggest burst inside the renderer's ring of 1024 particles, with room for a stroke's puff and a splash", () => {
+    const total = (es: { count: number }[]) => es.reduce((a, e) => a + e.count, 0);
+    const ace = total(cupBurst(0, 0, true, 'confetti'));
+    expect(ace).toBeLessThanOrEqual(1024 - total(strikePuff(0, 0, 1)) - total(splash(0, 0)));
+  });
+
   it('splashes up where the ball went in, in the colour of water', () => {
     const [s] = splash(5, 6);
     // from the water's own surface, which lies below the grass, and falls back onto it

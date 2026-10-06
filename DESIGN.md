@@ -323,17 +323,11 @@ looked into further), so The Rapids' belts run at nine and the ride is one strok
 Bought in the shop with what the holes pay. They change the physics, within
 limits, so a score is a score with a given club and ball.
 
-- **Clubs** raise the most power a shot can have, and lengthen the aim
-  line. Made of precious metal and enamel. Five putters, set in
-  `src/clubs.ts`: the starting one at 40, brass at 42 for 40 coins, silver
-  at 44 for 100, enamel at 46 for 220 and a gem, and gold at 48 for 450 and
-  three gems. Each rolls as far as it did when the green slowed a ball by
-  drag, from 50 units to 72; since the roll goes as the square of the
-  speed, the figures are closer together than they were.
+- **Items** are worn one at a time, bought with coins and gems, and work on minigolf and golf: eighteen in `src/items.ts`, from a rainbow flag to a mulligan.
 - **Balls** differ in bounce and in roll. Made of enamel and gems.
 - **Coins** are paid for finishing a hole (5), and more for each stroke
   under par (5 each); a hole picked up pays nothing. **Gems** are paid for a
-  hole in one. The shop is open from the purse's button and from the card.
+  hole in one, on every course. The shop is open from the purse's button and from the card.
 - The best score on a hole is kept with the club and ball it was made with.
 
 ## The look

@@ -266,11 +266,9 @@ describe('the ball and the furthest reach are on the screen', () => {
 });
 
 describe('the minigolf aim view', () => {
-  /** A director on a hole of minigolf, with the putter of the save in hand. */
-  function onMinigolf(hole: HoleDef, aspect = 1.6, height = 800, club = 'putter', owns: string[] = []) {
-    const save =
-      club === 'putter' && !owns.length ? null : JSON.stringify({ coins: 0, gems: 0, owned: [club, ...owns], club });
-    const { game } = newGame(1, save, [hole]);
+  /** A director on a hole of minigolf, with the course's putter in hand. */
+  function onMinigolf(hole: HoleDef, aspect = 1.6, height = 800) {
+    const { game } = newGame(1, null, [hole]);
     const rig = new CameraRig();
     const director = new Director(rig);
     director.use(game);
@@ -294,7 +292,7 @@ describe('the minigolf aim view', () => {
 
   it('stands back no further than 110 for the longest putt there is on an open hole, and shows where it stops', () => {
     for (const [aspect, height] of SCREENS) {
-      const { game, rig, director } = onMinigolf(OPEN, aspect, height, 'gold');
+      const { game, rig, director } = onMinigolf(OPEN, aspect, height);
       director.aiming({ angle: Math.PI / 2, power: 1 });
       rest(director, rig);
       expect(rig.distance, `${aspect}`).toBeLessThanOrEqual(VIEW.far + 1e-6);
@@ -311,28 +309,8 @@ describe('the minigolf aim view', () => {
     }
   });
 
-  it('is worked out again when a harder putter is put in hand, since the reach is its roll and the ball and the heading have not moved', () => {
-    for (const [aspect, height] of SCREENS) {
-      const { game, rig, director } = onMinigolf(OPEN, aspect, height, 'putter', ['gold']);
-      director.aiming({ angle: Math.PI / 2, power: 1 });
-      rest(director, rig);
-      const before = rig.distance;
-      expect(game.equip('gold')).toBe(true);
-      // the page tells the director nothing of an equip: the next frame has to see the reach is longer
-      rest(director, rig);
-      const cam = placed(rig, aspect);
-      const reach = { x: 0, y: 0, z: 0 };
-      expect(director.reachPoint(reach)).toBe(true);
-      const [, ry] = ndc(cam, reach.x, reach.y, reach.z);
-      expect(ry, `${aspect} by ${height}: the longer reach is on the screen`).toBeLessThanOrEqual(
-        safeBox(aspect, height).top + 0.02,
-      );
-      expect(rig.distance, `${aspect} by ${height}: stood further back for it`).toBeGreaterThan(before);
-    }
-  });
-
   it('leaves a camera a test has parked where it was put, on a hole of minigolf, and does not zoom it out to frame the reach', () => {
-    const { rig, director } = onMinigolf(OPEN, 1.6, 800, 'gold');
+    const { rig, director } = onMinigolf(OPEN, 1.6, 800);
     // parked as the test API's `look` parks it: close to, with no floor of its own
     rig.aimAt({ distance: 30, tilt: TILT.home, lead: LEAD, floor: 0 }, true);
     director.park(true);
@@ -346,7 +324,7 @@ describe('the minigolf aim view', () => {
   });
 
   it('does not move the camera on a hole of minigolf while the ball rolls: it follows as it always did', () => {
-    const { game, rig, director } = onMinigolf(OPEN, 1.6, 800, 'gold');
+    const { game, rig, director } = onMinigolf(OPEN, 1.6, 800);
     rest(director, rig);
     game.shoot(Math.PI / 2, 1);
     const [d, t, l] = [rig.distance, rig.tilt, rig.lead];

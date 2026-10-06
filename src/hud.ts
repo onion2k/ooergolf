@@ -13,7 +13,7 @@
  * stylesheet turns into the motion, or into none for a player who has asked
  * for less.
  */
-import type { Club } from './clubs';
+import type { Item } from './items';
 import type { Mode } from './gesture';
 import { windText } from './readout';
 import { SCORE_KINDS, againstPar, scoreKind, scoreName } from './score';
@@ -33,6 +33,8 @@ export interface HudHandlers {
   overhead(on: boolean): void;
   /** The flag button pressed: the camera turned to face the cup. */
   flag(): void;
+  /** The Retake button pressed: the Mulligan item's one free retake of the last stroke. */
+  retake(): void;
   /** A club of the bag chosen on a golf hole, by its id. */
   club(id: string): void;
   /** The shape button pressed: the next shape in its cycle, from minus one (a draw) to one (a fade). */
@@ -104,12 +106,13 @@ const MAP_INK = {
   rings: ['#ffd23f', '#3aa0ff', '#ff5a4a', '#8de03a'],
 } as const;
 
-/** What the shop needs to know of the save to show each club as for sale, owned, or in hand. */
+/** What the shop needs to know of the save to show each item as for sale, owned, or equipped. */
 export interface Purse {
   coins: number;
   gems: number;
   owned: readonly string[];
-  club: string;
+  /** The item equipped, '' for none. */
+  item: string;
 }
 
 /** What the help says a drag does, in each mode: a golf hole's is a swing, and a minigolf hole's a putt. */
@@ -148,13 +151,15 @@ export class Hud {
   private readonly coins = document.getElementById('coins')!;
   private readonly gems = document.getElementById('gems')!;
   private readonly shop = document.getElementById('shop')!;
-  private readonly clubs = document.getElementById('shopClubs')!;
+  private readonly items = document.getElementById('shopItems')!;
   private readonly start = document.getElementById('start')!;
   private readonly courseList = document.getElementById('courses')!;
   private readonly help = document.getElementById('help')!;
   private readonly modes = document.getElementById('viewMode')!;
   private readonly overheadButton = document.getElementById('viewOverhead') as HTMLButtonElement;
   private readonly flagButton = document.getElementById('viewFlag') as HTMLButtonElement;
+  private readonly retakePanel = document.getElementById('retakePanel')!;
+  private readonly retakeButton = document.getElementById('mulligan') as HTMLButtonElement;
   private readonly bag = document.getElementById('bag')!;
   private readonly bagInfo = document.getElementById('bagInfo')!;
   private readonly bagClubs = document.getElementById('bagClubs')!;
@@ -200,7 +205,7 @@ export class Hud {
 
   constructor(
     private readonly handlers: HudHandlers,
-    private readonly catalogue: readonly Club[],
+    private readonly catalogue: readonly Item[],
   ) {
     document.getElementById('again')!.addEventListener('click', () => handlers.again());
     document.getElementById('cardCourses')!.addEventListener('click', () => handlers.courses());
@@ -222,6 +227,7 @@ export class Hud {
     });
     this.overheadButton.addEventListener('click', () => handlers.overhead(this.mode !== 'overhead'));
     this.flagButton.addEventListener('click', () => handlers.flag());
+    this.retakeButton.addEventListener('click', () => handlers.retake());
     // each cycles to the next of its three, and the game says what it took (`setShaping`)
     this.shapeButton.addEventListener('click', () => handlers.shape(this.next(SHAPES, this.shapeShown)));
     this.spinButton.addEventListener('click', () => handlers.spin(this.next(SPINS, this.spinShown)));
@@ -281,6 +287,22 @@ export class Hud {
   }
 
   /**
+   * The Retake button put on the course or away (the rule is `retakeShown`, which the page asks of the game each frame, as
+   * the hud draws and never reads the game). Written only when it changes, so the page may say it every frame; a panel put
+   * away stays drawn while it shrinks, so its button is disabled as it goes and takes no press.
+   */
+  setRetake(on: boolean) {
+    if (on === !this.retakePanel.hidden) return;
+    this.retakeButton.disabled = !on;
+    this.retakePanel.hidden = !on;
+  }
+
+  /** Whether the Retake button is up and can be pressed, as drawn: for the test API. */
+  retakeDrawn(): { shown: boolean; enabled: boolean } {
+    return { shown: !this.retakePanel.hidden, enabled: !this.retakeButton.disabled };
+  }
+
+  /**
    * The overhead button shows whether the view is from above, and the help says what a drag does: look round the hole from
    * above, or swing (on a golf hole, and not putt). The flag button is put away while it is on, since there is no turning
    * the camera to face the cup from above.
@@ -299,8 +321,6 @@ export class Hud {
    */
   setBag(clubs: readonly BagInfo[] | null, active = '') {
     this.bagList = clubs ?? [];
-    // golf pays nothing, so its purse is the shop's button alone, with no coins or gems to count
-    this.purse.toggleAttribute('data-golf', !!clubs);
     this.setOverhead(this.mode === 'overhead');
     if (!clubs) {
       this.bag.hidden = true;
@@ -552,12 +572,14 @@ export class Hud {
       parts.push(heading, ...of.map(cardOf));
     }
     this.courseList.replaceChildren(...parts);
+    this.retakeButton.disabled = true;
     for (const el of [
       this.panel,
       this.purse,
       this.chip,
       this.help,
       this.modes,
+      this.retakePanel,
       this.bag,
       this.mapPanel,
       this.card,
@@ -575,43 +597,74 @@ export class Hud {
     this.show();
   }
 
-  /** The coins and gems, and the shop's clubs as the save now has them. */
+  /** The coins and gems, and the shop's items as the save now has them: one row for no item, then each item for sale. */
   setPurse(p: Purse) {
     this.coins.textContent = String(p.coins);
     this.gems.textContent = String(p.gems);
-    this.clubs.replaceChildren(
-      ...this.catalogue.map((club) => {
-        const row = document.createElement('div');
-        row.className = 'club';
-        row.dataset.club = club.id;
-        const swatch = document.createElement('span');
-        swatch.className = 'swatch';
-        const [r, g, b] = club.colour.map((c) => Math.round(Math.min(1, c) * 255));
-        swatch.style.background = `rgb(${r} ${g} ${b})`;
-        const name = document.createElement('span');
-        name.textContent = club.name;
-        const detail = document.createElement('small');
+    const row = (
+      id: string,
+      name: string,
+      effect: string,
+      price: string,
+      colour: string,
+      button: HTMLButtonElement,
+    ) => {
+      const el = document.createElement('div');
+      el.className = 'item';
+      el.dataset.item = id;
+      const swatch = document.createElement('span');
+      swatch.className = 'swatch';
+      swatch.style.background = colour;
+      const words = document.createElement('span');
+      words.textContent = name;
+      const detail = document.createElement('small');
+      detail.textContent = effect;
+      words.append(detail);
+      if (price) {
+        const cost = document.createElement('small');
+        cost.className = 'price';
+        cost.textContent = price;
+        words.append(cost);
+      }
+      el.append(swatch, words, button);
+      return el;
+    };
+    /** The row's button: a badge for the one equipped, Equip for one owned, and Buy for one that is not. */
+    const button = (id: string, owned: boolean, can: boolean) => {
+      const b = document.createElement('button');
+      if (p.item === id) {
+        // not a button to press but a badge, which the stylesheet draws as one
+        b.textContent = 'Equipped';
+        b.className = 'held';
+        b.disabled = true;
+      } else if (owned) {
+        b.textContent = 'Equip';
+        b.className = 'quiet';
+        b.addEventListener('click', () => this.handlers.equip(id));
+      } else {
+        b.textContent = 'Buy';
+        b.disabled = !can;
+        b.addEventListener('click', () => this.handlers.buy(id));
+      }
+      return b;
+    };
+    this.items.replaceChildren(
+      row('', 'No item', 'Play the ball as it comes.', '', 'transparent', button('', true, true)),
+      ...this.catalogue.map((item) => {
+        const [r, g, b] = item.colour.map((c) => Math.round(Math.min(1, c) * 255));
+        const owned = p.owned.includes(item.id);
         // each figure kept with its word, so a narrow shop breaks the line between them and never inside one
-        detail.textContent = `power\u00a0${club.hardest}${club.coins ? ` \u00b7 ${club.coins}\u00a0coins` : ''}${club.gems ? ` +\u00a0${club.gems}\u00a0gem${club.gems > 1 ? 's' : ''}` : ''}`;
-        name.append(detail);
-        const button = document.createElement('button');
-        const owned = p.owned.includes(club.id);
-        if (p.club === club.id) {
-          // not a button to press but a badge, which the stylesheet draws as one
-          button.textContent = 'In hand';
-          button.className = 'held';
-          button.disabled = true;
-        } else if (owned) {
-          button.textContent = 'Use';
-          button.className = 'quiet';
-          button.addEventListener('click', () => this.handlers.equip(club.id));
-        } else {
-          button.textContent = 'Buy';
-          button.disabled = p.coins < club.coins || p.gems < club.gems;
-          button.addEventListener('click', () => this.handlers.buy(club.id));
-        }
-        row.append(swatch, name, button);
-        return row;
+        const price = owned
+          ? ''
+          : `${item.coins}\u00a0coins${item.gems ? ` +\u00a0${item.gems}\u00a0gem${item.gems > 1 ? 's' : ''}` : ''}`;
+        return row(
+          item.id,
+          item.name,
+          item.effect,
+          price,
+          `rgb(${r} ${g} ${b})`,
+          button(item.id, owned, p.coins >= item.coins && p.gems >= item.gems),
+        );
       }),
     );
   }
@@ -648,13 +701,18 @@ export class Hud {
   }
 
   /** The ball into the water: a word for it, until the next stroke. */
-  splash() {
-    this.callout('In the water! +1', 'splash');
+  splash(waded = false) {
+    this.callout(waded ? 'In the water! Waders: free' : 'In the water! +1', 'splash');
   }
 
   /** The ball out of bounds: a word for it, until the next stroke. */
-  outOfBounds() {
-    this.callout('Out of bounds! +1', 'out');
+  outOfBounds(waded = false) {
+    this.callout(waded ? 'Out of bounds! Waders: free' : 'Out of bounds! +1', 'out');
+  }
+
+  /** The mulligan taken: a word for it, until the next stroke. */
+  mulligan() {
+    this.callout('Mulligan! Take it again', 'splash');
   }
 
   /** A hole done: what the score is called, large, until the next begins. */

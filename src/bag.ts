@@ -10,6 +10,7 @@
  * measured in the game, since a landing on real ground is not the formula's.
  */
 import { HARDEST_SHOT, PHYSICS, strikeSpeed } from './arena';
+import { ITEM_FIGURES } from './items';
 
 export interface BagClub {
   id: string;
@@ -55,4 +56,17 @@ export function carrying(speed: number, loft: number): number {
 /** How far the club carries with `power` of the drag: in proportion to it, as a putt rolls in proportion to it. */
 export function carryOf(club: BagClub, power: number): number {
   return carrying(strikeSpeed(power, club.hardest), club.loft);
+}
+
+/** The gloved copies made, one a club: a club is gloved on every read, and a copy made each time would be made every frame. */
+const GLOVED = new WeakMap<BagClub, BagClub>();
+
+/** `club` as the power glove has it, every figure as it was but its hardest: the same copy each time it is asked for. */
+export function gloved(club: BagClub): BagClub {
+  let g = GLOVED.get(club);
+  if (!g) {
+    g = { ...club, hardest: club.hardest * ITEM_FIGURES.glove.hardest };
+    GLOVED.set(club, g);
+  }
+  return g;
 }

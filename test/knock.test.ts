@@ -185,10 +185,10 @@ describe('a knock', () => {
   });
 
   it('is not told of a ball struck across a slope, which the physics fits to the ground in the first step', () => {
-    // the gold putter, the hardest there is, straight up the tilt of Side-hill: struck along the level, the ball is
+    // the putter at its hardest, straight up the tilt of Side-hill: struck along the level, the ball is
     // turned up the slope in the physics' first step by as much as a knock, and that is the strike's, not a knock
-    const { game, told } = newGame(1, JSON.stringify({ owned: ['putter', 'gold'], club: 'gold' }), [SIDE_HILL]);
-    expect(game.hardest).toBe(48);
+    const { game, told } = newGame(1, null, [SIDE_HILL]);
+    expect(game.hardest).toBe(HARDEST_SHOT);
     game.shoot(0, 1);
     for (let f = 0; f < 6; f++) game.step(DT);
     expect(game.world.vz[game.ball], 'turned up the slope').toBeGreaterThan(KNOCK.least);

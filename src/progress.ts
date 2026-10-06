@@ -1,7 +1,7 @@
 /**
  * What the player has done, and where it is kept: the coins and gems, the
- * clubs owned and the one in hand, and the best score on each hole with the
- * club it was made with, in the browser's storage or, for the game run
+ * items owned and the one equipped, and the best score on each hole with the
+ * item it was made with, in the browser's storage or, for the game run
  * without a page, anywhere.
  *
  * Old saves must still load. A field a save does not have takes its default,
@@ -9,21 +9,21 @@
  * game no longer knows is dropped without complaint: every shape ever
  * written is in `test/saves/`.
  */
-import { CLUBS, STARTING_CLUB } from './clubs';
+import { itemById } from './items';
 
 export interface Best {
   strokes: number;
-  /** The club it was made with, so a score is a score with a given club. */
-  club: string;
+  /** The item equipped when it was made ('' for none), so a score is a score with a given item. */
+  item: string;
 }
 
 export interface Save {
   coins: number;
   gems: number;
-  /** The clubs owned, the starting putter always among them. */
+  /** The ids of the items owned, each of them one the shop sells. */
   owned: string[];
-  /** The club in hand: always one owned. */
-  club: string;
+  /** The item equipped, one at a time: '' for none, and otherwise always one owned. */
+  item: string;
   /** The best score on each hole, by the hole's name. */
   best: Record<string, Best>;
 }
@@ -80,7 +80,7 @@ export function memoryStore(json: string | null = null): SaveStore & { json: str
   };
 }
 
-const fresh = (): Save => ({ coins: 0, gems: 0, owned: [STARTING_CLUB], club: STARTING_CLUB, best: {} });
+const fresh = (): Save => ({ coins: 0, gems: 0, owned: [], item: '', best: {} });
 
 /** A count from a save: a whole number, not below nought, or the default. */
 function count(v: unknown, or: number): number {
@@ -101,17 +101,20 @@ function read(json: string | null): Save {
   const from = raw as Record<string, unknown>;
   save.coins = count(from.coins, save.coins);
   save.gems = count(from.gems, save.gems);
-  const known = new Set(CLUBS.map((c) => c.id));
+  // an id the shop no longer sells (an old save's putters, an item since withdrawn) is dropped, and so is a repeat
   if (Array.isArray(from.owned))
     for (const id of from.owned)
-      if (typeof id === 'string' && known.has(id) && !save.owned.includes(id)) save.owned.push(id);
-  if (typeof from.club === 'string' && save.owned.includes(from.club)) save.club = from.club;
+      if (typeof id === 'string' && itemById(id) && !save.owned.includes(id)) save.owned.push(id);
+  if (typeof from.item === 'string' && save.owned.includes(from.item)) save.item = from.item;
   if (typeof from.best === 'object' && from.best !== null && !Array.isArray(from.best))
     for (const [hole, b] of Object.entries(from.best as Record<string, unknown>)) {
       if (typeof b !== 'object' || b === null) continue;
-      const { strokes, club } = b as Record<string, unknown>;
+      const { strokes, item, club } = b as Record<string, unknown>;
       if (count(strokes, 0) < 1) continue;
-      save.best[hole] = { strokes: strokes as number, club: typeof club === 'string' ? club : STARTING_CLUB };
+      // a best made with a putter, or with an item since withdrawn, was made with none the shop sells now; the old
+      // `club` is read as the item it has become
+      const made = typeof item === 'string' ? item : club;
+      save.best[hole] = { strokes: strokes as number, item: typeof made === 'string' && itemById(made) ? made : '' };
     }
   return save;
 }

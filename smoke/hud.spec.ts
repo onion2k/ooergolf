@@ -66,7 +66,7 @@ for (const [where, device] of [
         seed: 11,
         paused: true,
         screen: true,
-        save: { coins: 130, gems: 1, owned: ['putter', 'brass'], club: 'brass' },
+        save: { coins: 130, gems: 1, owned: ['glow', 'rainbow'], item: 'glow' },
       });
       found.push(await faults(page, 'the start screen'));
       await page.evaluate(() => {
@@ -263,7 +263,7 @@ for (const [where, device] of [
       expect(problems).toEqual([]);
     });
 
-    test("the purse on a hole of golf is the shop's button and nothing to count, and on minigolf has its coins and gems", async ({
+    test('the purse on a hole of golf has its coins and gems as on minigolf, since golf pays, and the shop opens from it', async ({
       page,
     }) => {
       const problems = watch(page);
@@ -286,26 +286,18 @@ for (const [where, device] of [
         window.game!.step(60);
       });
       await settle();
-      await expect(page.locator('#purse .coin')).toBeHidden();
-      await expect(page.locator('#purse .gem')).toBeHidden();
-      await expect(page.locator('#shopOpen')).toBeVisible();
-      const golf = (await page.locator('#purse').boundingBox())!;
-      expect(golf.width, 'a purse of the button alone is the narrower').toBeLessThan(minigolf.width - 60);
-      // the panel is the button and its edge and no more, so it is as high as it was
-      expect(golf.height).toBeCloseTo(minigolf.height, 0);
-      // the shop opens from it, and is the shop it always was
-      await page.locator('#shopOpen').click();
-      await expect(page.locator('#shop')).toBeVisible();
-      await expect(page.locator('#shopClubs .club')).not.toHaveCount(0);
-      await page.locator('#shopClose').click();
-      // and the next minigolf course has the coins and gems back
-      await page.evaluate(() => {
-        window.game!.chooseCourse('The Meadow');
-        window.game!.step(60);
-      });
-      await settle();
       await expect(page.locator('#purse .coin')).toBeVisible();
       await expect(page.locator('#purse .gem')).toBeVisible();
+      await expect(page.locator('#coins')).toHaveText('130');
+      await expect(page.locator('#shopOpen')).toBeVisible();
+      const golf = (await page.locator('#purse').boundingBox())!;
+      expect(golf.width, 'the same purse on golf').toBeCloseTo(minigolf.width, 0);
+      expect(golf.height).toBeCloseTo(minigolf.height, 0);
+      // the shop opens from it
+      await page.locator('#shopOpen').click();
+      await expect(page.locator('#shop')).toBeVisible();
+      await expect(page.locator('#shopItems .item')).not.toHaveCount(0);
+      await page.locator('#shopClose').click();
       expect(problems).toEqual([]);
     });
 
@@ -382,6 +374,131 @@ for (const [where, device] of [
       });
       await expect(page.locator('#pin')).toBeHidden();
       await expect(page.locator('#holeMap')).toBeHidden();
+      expect(problems).toEqual([]);
+    });
+
+    test('the Retake button: up only with the Mulligan item held, a stroke taken, the retake unused and the hole in play; a thumb high, clear of the other panels and the edges, and pressed it takes the stroke back', async ({
+      page,
+    }) => {
+      const problems = watch(page);
+      await start(page, { seed: 11, paused: true, screen: true, save: { owned: ['mulligan'], item: 'mulligan' } });
+      const settle = () =>
+        page.evaluate(() => {
+          for (const a of document.getAnimations()) a.finish();
+        });
+      const box = async (sel: string) => (await page.locator(sel).boundingBox())!;
+      const apart = (a: { x: number; y: number; width: number; height: number }, b: typeof a) =>
+        a.x + a.width <= b.x || b.x + b.width <= a.x || a.y + a.height <= b.y || b.y + b.height <= a.y;
+      // under the start screen there is none
+      await expect(page.locator('#mulligan')).toBeHidden();
+      for (const course of ['The Meadow', 'The Links']) {
+        await page.evaluate((name) => {
+          window.game!.chooseCourse(name);
+          window.game!.step(60);
+        }, course);
+        await settle();
+        // before a stroke: put away, and so not to be pressed
+        await expect(page.locator('#mulligan'), `${course}: none before a stroke`).toBeHidden();
+        expect(await page.evaluate(() => window.game!.motions().retake)).toEqual({ shown: false, enabled: false });
+        await page.evaluate(() => {
+          window.game!.shoot(Math.PI / 2, 0.3);
+          window.game!.step(4);
+        });
+        await settle();
+        await expect(page.locator('#mulligan'), `${course}: up after a stroke`).toBeVisible();
+        await expect(page.locator('#mulligan')).toBeEnabled();
+        await expect(page.locator('#mulligan')).toHaveAccessibleName(/Retake the last stroke/);
+        const r = await read(page);
+        expect(r.outside, `${course}: nothing past the screen`).toEqual([]);
+        expect(r.scrollWidth).toBeLessThanOrEqual(page.viewportSize()!.width);
+        expect(r.texts.filter((t) => t.ratio < CONTRAST).map((t) => `"${t.text}" ${t.ratio}:1`)).toEqual([]);
+        expect(r.buttons.find((b) => b.text === 'Retake')!.height).toBeGreaterThanOrEqual(THUMB);
+        // clear of every other panel that is up, and inside the screen
+        const mine = await box('#retakePanel');
+        for (const other of ['#viewMode', '#purse', '#bag', '#holePanel', '#help', '#stats', '#strokes', '#holeChip'])
+          if (await page.locator(other).isVisible()) expect(apart(mine, await box(other)), `${other}`).toBe(true);
+        expect(mine.x).toBeGreaterThanOrEqual(0);
+        expect(mine.x + mine.width).toBeLessThanOrEqual(page.viewportSize()!.width);
+        expect(mine.y).toBeGreaterThanOrEqual(0);
+        expect(mine.y + mine.height).toBeLessThanOrEqual(page.viewportSize()!.height);
+        // pressed, it takes the stroke back, once
+        await page.locator('#mulligan').click();
+        await page.evaluate(() => window.game!.step(2));
+        await settle();
+        expect(await page.evaluate(() => window.game!.state().strokes)).toBe(0);
+        expect(await page.evaluate(() => window.game!.state().mulliganUsed)).toBe(true);
+        await expect(page.locator('#mulligan'), `${course}: used, and gone`).toBeHidden();
+        // a new round gives it back
+        await page.evaluate(() => window.game!.newRound());
+      }
+      expect(problems).toEqual([]);
+    });
+
+    test('the cosmetic items through the page: the rainbow flag is six strips on a hole begun with it, the confetti cup throws more, and the glow ball leaves a trail only while the ball goes and the picture has the room', async ({
+      page: first,
+    }) => {
+      const watched = [watch(first)];
+      // each begin is a page of its own: `start` adds an init script that writes the save once a session, and scripts
+      // added to one page pile up, so the first save would be the only one a second begin in the same page ever wrote
+      let page = first;
+      const play = async (item: string, rung = 0) => {
+        if (page !== first) await page.close();
+        page = await first.context().newPage();
+        watched.push(watch(page));
+        await page.setViewportSize(first.viewportSize()!);
+        await start(page, { seed: 11, paused: true, rung, save: { owned: item ? [item] : [], item } });
+        await page.evaluate(() => window.game!.step(10));
+        return page.evaluate(() => window.game!.motions());
+      };
+      const plain = await play('');
+      expect([plain.strips, plain.trail, plain.confetti], 'none of the three without an item').toEqual([1, 0, 0]);
+      expect((await play('rainbow')).strips).toBe(6);
+      // the glow ball: nothing at rest, a trail once the ball goes, fading away at rest again, and none on the lowest rung
+      await play('glow');
+      expect(await page.evaluate(() => window.game!.motions().trail)).toBe(0);
+      await page.evaluate(() => {
+        window.game!.shoot(Math.PI / 2, 0.6);
+        // a frame at a time: the trail takes one place a frame drawn, and `step(20)` draws only the last
+        for (let f = 0; f < 20; f++) window.game!.step(1);
+      });
+      const trailing = await page.evaluate(() => window.game!.motions().trail);
+      expect(trailing).toBeGreaterThan(3);
+      expect(trailing).toBeLessThanOrEqual(48);
+      await page.evaluate(() => window.game!.step(600));
+      expect(await page.evaluate(() => window.game!.motions().trail), 'faded away once the ball has stopped').toBe(0);
+      await play('glow', 3);
+      await page.evaluate(() => {
+        window.game!.shoot(Math.PI / 2, 0.6);
+        // a frame at a time: the trail takes one place a frame drawn, and `step(20)` draws only the last
+        for (let f = 0; f < 20; f++) window.game!.step(1);
+      });
+      expect(await page.evaluate(() => window.game!.motions().trail), 'none on the lowest rung').toBe(0);
+      // the confetti cup throws more than the plain one, off the same shot
+      const thrown = async (item: string) => {
+        await play(item);
+        await holeOut(page);
+        await page.evaluate(() => window.game!.step(2));
+        return page.evaluate(() => window.game!.motions().confetti);
+      };
+      const some = await thrown('');
+      const more = await thrown('confetti');
+      expect(some).toBeGreaterThan(0);
+      expect(more).toBeGreaterThanOrEqual(some * 2.4);
+      expect(more).toBeLessThanOrEqual(1024);
+      expect(watched.flat()).toEqual([]);
+    });
+
+    test('the Retake button is not there without the Mulligan item, however many strokes are taken', async ({
+      page,
+    }) => {
+      const problems = watch(page);
+      await start(page, { seed: 11, paused: true, save: { owned: ['glow'], item: 'glow' } });
+      await page.evaluate(() => {
+        window.game!.shoot(Math.PI / 2, 0.3);
+        window.game!.step(4);
+      });
+      await expect(page.locator('#mulligan')).toBeHidden();
+      expect(await page.evaluate(() => window.game!.motions().retake)).toEqual({ shown: false, enabled: false });
       expect(problems).toEqual([]);
     });
 

@@ -11,6 +11,7 @@
  * comes from the landing's `keep`, the share of its speed along the ground that it keeps when it comes down (a
  * real ball's impact takes most of it), with a moderate roll after, which a ball rolls down a steep slope past.
  */
+import { ITEM_FIGURES, type Effects } from './items';
 
 /**
  * The kinds of ground, the byte a tile of a golf hole names; nought is none, the minigolf's own grass. `cut` is the short
@@ -51,6 +52,18 @@ export const SURFACES: readonly Surface[] = [
   { name: 'sand', roll: 60, keep: 0.03, bounce: 0.03, power: 0.66, loft: 6, wild: 1.25 },
   { name: 'first cut', roll: 23, keep: 0.36, bounce: 0.3, power: 0.97, loft: 0, wild: 1.1 },
 ];
+
+/** The sand as the sand wedge has it: only what a club takes from it changes, and how the ball lands and rolls on it does not. */
+const WEDGE_SAND: Surface = { ...SURFACES[LIE.sand], ...ITEM_FIGURES.wedge };
+
+/**
+ * The surface a club is struck from at `lie`, which is the table's own unless the sand wedge is held and the lie is sand:
+ * read by the strike, the aim's carry, the time in the air and the scatter alike, so that the marker, the preview and the
+ * shot agree. The landing and the roll read `SURFACES` itself.
+ */
+export function surfaceFor(lie: Lie, effects: Effects): Surface {
+  return lie === LIE.sand && effects.has('wedge') ? WEDGE_SAND : SURFACES[lie];
+}
 
 /**
  * How fast the putting greens run, as the steady slowing of a ball rolling on one, in yards a second a second: less is

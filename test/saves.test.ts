@@ -19,7 +19,7 @@ const files = readdirSync(DIR)
 const read = (file: string) => readFileSync(new URL(file, DIR), 'utf8');
 
 /** A save with nothing in it yet, as every field's default makes it. */
-const FRESH = { coins: 0, gems: 0, owned: ['putter'], club: 'putter', best: {} };
+const FRESH = { coins: 0, gems: 0, owned: [], item: '', best: {} };
 
 /**
  * What each save loads as. The first is the template's stub's, a bank the
@@ -32,9 +32,17 @@ const KEPT: Record<string, Record<string, unknown>> = {
   '03-shop.json': {
     coins: 145,
     gems: 2,
-    owned: ['putter', 'brass'],
-    club: 'brass',
-    best: { Straight: { strokes: 1, club: 'putter' }, 'Dog-leg': { strokes: 2, club: 'brass' } },
+    // the putters are not sold any more: neither the ones owned nor the one in hand nor a best's club is kept
+    owned: [],
+    item: '',
+    best: { Straight: { strokes: 1, item: '' }, 'Dog-leg': { strokes: 2, item: '' } },
+  },
+  '04-items.json': {
+    coins: 310,
+    gems: 3,
+    owned: ['glow', 'magnet', 'glove'],
+    item: 'magnet',
+    best: { Straight: { strokes: 1, item: 'glove' }, 'Dog-leg': { strokes: 2, item: '' } },
   },
 };
 
@@ -72,19 +80,19 @@ describe('saves from every shape the game has written', () => {
     expect(new Progress(memoryStore('not json')).save).toEqual(FRESH);
     expect(new Progress(memoryStore('[1, 2]')).save).toEqual(FRESH);
     expect(new Progress(memoryStore('{"bank": "lots"}')).save).toEqual(FRESH);
-    // coins that are not a whole number of them, a club not owned, a club no one sells, a best that is nonsense
+    // coins that are not a whole number of them, an item not owned, an item no one sells, a best that is nonsense
     const odd = new Progress(
       memoryStore(
         JSON.stringify({
           coins: -4,
           gems: 1.5,
-          owned: ['putter', 'unheard of', 7],
-          club: 'gold',
-          best: { Straight: { strokes: 0, club: 'putter' }, 'Dog-leg': 'two', Nowhere: { strokes: 3 } },
+          owned: ['glow', 'glow', 'unheard of', 7],
+          item: 'glove',
+          best: { Straight: { strokes: 0, item: 'glow' }, 'Dog-leg': 'two', Nowhere: { strokes: 3 } },
         }),
       ),
     ).save;
-    expect(odd).toEqual({ ...FRESH, best: { Nowhere: { strokes: 3, club: 'putter' } } });
+    expect(odd).toEqual({ ...FRESH, owned: ['glow'], best: { Nowhere: { strokes: 3, item: '' } } });
   });
 
   it('keeps the best of a hole no course has any more, The Range’s among them, and the rest of the save, and plays on', () => {
@@ -92,14 +100,14 @@ describe('saves from every shape the game has written', () => {
     const json = JSON.stringify({
       coins: 60,
       gems: 1,
-      owned: ['putter', 'brass'],
-      club: 'brass',
-      best: { 'Pitch and Putt': { strokes: 2, club: 'putter' }, Straight: { strokes: 1, club: 'putter' } },
+      owned: ['glow', 'brass'],
+      item: 'glow',
+      best: { 'Pitch and Putt': { strokes: 2, club: 'putter' }, Straight: { strokes: 1, item: 'glow' } },
     });
     const save = new Progress(memoryStore(json)).save;
-    expect(save.best['Pitch and Putt']).toEqual({ strokes: 2, club: 'putter' });
-    expect(save).toMatchObject({ coins: 60, gems: 1, owned: ['putter', 'brass'], club: 'brass' });
-    expect(save.best.Straight).toEqual({ strokes: 1, club: 'putter' });
+    expect(save.best['Pitch and Putt']).toEqual({ strokes: 2, item: '' });
+    expect(save).toMatchObject({ coins: 60, gems: 1, owned: ['glow'], item: 'glow' });
+    expect(save.best.Straight).toEqual({ strokes: 1, item: 'glow' });
     const game = new Game(new Progress(memoryStore(json)), {}, { random: seeded(7) });
     for (let f = 0; f < 300; f++) game.step(1 / 60);
     expect(checkInvariants(game)).toEqual([]);

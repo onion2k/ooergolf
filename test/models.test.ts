@@ -17,6 +17,7 @@ import {
   BUNKER,
   CUP,
   FLAG_COLOURS,
+  RAINBOW,
   FLOWER_COLOURS,
   PALETTE,
   PATTERN,
@@ -73,6 +74,7 @@ function catalogue(): [string, Model][] {
     ['collar', collar(9, 3)],
     ['flag', flag(FLAG_COLOURS.red)],
     ['tall flag', flag(FLAG_COLOURS.yellow, { height: 12 })],
+    ['rainbow flag', flag(FLAG_COLOURS.red, { rainbow: true })],
     ['tee markers', teeMarkers(4)],
     ['ball', golfBall(1)],
     ['bumper', bumper(1.2)],
@@ -288,7 +290,16 @@ function points(mesh: Mesh): [number, number, number][] {
  * surface turns and meet at a crease only at a bevel's edge. Every other part
  * is flat-shaded, a face at a time.
  */
-const SMOOTH = new Set(['ball', 'liner', 'rim', 'pole', 'knob', 'flag', 'markers']);
+const SMOOTH = new Set([
+  'ball',
+  'liner',
+  'rim',
+  'pole',
+  'knob',
+  'flag',
+  ...[0, 1, 2, 3, 4, 5].map((k) => `flag${k}`),
+  'markers',
+]);
 
 /**
  * The parts that are round, by model, and so smooth-shaded: a vertex shared
@@ -637,6 +648,47 @@ describe('the cup and the flag', () => {
     const tall = flag(FLAG_COLOURS.blue, { height: 12 });
     expect(bounds(everyPart(tall)).max[2]).toBeCloseTo(12, 5);
     expect(partNamed(flag(FLAG_COLOURS.red), 'flag').material).not.toEqual(cloth.material);
+  });
+
+  it('flies the rainbow flag in six strips, top to bottom, each its own colour, over the very cloth the plain flag has', () => {
+    const plain = flag(FLAG_COLOURS.red),
+      rainbow = flag(FLAG_COLOURS.red, { rainbow: true });
+    // the plain flag is as it was: three parts, its cloth one, named as the scene finds it
+    expect(plain.parts.map((p) => p.name)).toEqual(['pole', 'knob', 'flag']);
+    expect(plain.parts.map((p) => p.mesh.indices.length / 3)).toEqual([40, 100, 80]);
+    expect(flag(FLAG_COLOURS.red, { rainbow: false }).parts.map((p) => p.mesh.indices.length)).toEqual(
+      plain.parts.map((p) => p.mesh.indices.length),
+    );
+    expect(rainbow.parts.map((p) => p.name)).toEqual(['pole', 'knob', ...RAINBOW.map((_, k) => `flag${k}`)]);
+    expect(RAINBOW).toHaveLength(6);
+    expect(new Set(RAINBOW.map((c) => c.join())).size, 'six colours').toBe(6);
+    // the pole and its knob are the same
+    for (const name of ['pole', 'knob']) expect(partNamed(rainbow, name).mesh).toEqual(partNamed(plain, name).mesh);
+    const strips = RAINBOW.map((c, k) => {
+      const part = partNamed(rainbow, `flag${k}`);
+      expect(part.material.slice(0, 3), `strip ${k}`).toEqual([...c]);
+      expect(part.pattern, 'matte, no pattern').toBeUndefined();
+      return bounds([part]);
+    });
+    // each below the last, meeting it and not overlapping it, and together the cloth's whole height and length
+    // (at the pole, where they are full height: out at the tip the cloth narrows to a point they all share)
+    const topAtPole = RAINBOW.map((_, k) =>
+      Math.max(
+        ...points(partNamed(rainbow, `flag${k}`).mesh)
+          .filter(([x]) => x < 0.2)
+          .map((p) => p[2]),
+      ),
+    );
+    for (let k = 1; k < 6; k++) {
+      expect(topAtPole[k], `strip ${k} under strip ${k - 1}`).toBeLessThan(topAtPole[k - 1]);
+    }
+    const whole = bounds([partNamed(plain, 'flag')]);
+    expect(Math.max(...strips.map((b) => b.max[2]))).toBeCloseTo(whole.max[2], 5);
+    expect(Math.min(...strips.map((b) => b.min[2]))).toBeCloseTo(whole.min[2], 5);
+    expect(Math.max(...strips.map((b) => b.max[0]))).toBeCloseTo(whole.max[0], 5);
+    expect(Math.min(...strips.map((b) => b.min[1]))).toBeCloseTo(whole.min[1], 5);
+    expect(Math.max(...strips.map((b) => b.max[1]))).toBeCloseTo(whole.max[1], 5);
+    expect(triangles(rainbow)).toBeLessThanOrEqual(BUDGET['rainbow flag']);
   });
 
   it('sets the tee markers either side of the tee, as far apart as asked', () => {
@@ -1201,6 +1253,7 @@ describe('every model keeps to its triangle budget', () => {
       ['cup', cup(3)],
       ['collar', collar(12, 3)],
       ['flag', flag(FLAG_COLOURS.red, { height: 12 })],
+      ['rainbow flag', flag(FLAG_COLOURS.red, { height: 12, rainbow: true })],
       ['teeMarkers', teeMarkers(6)],
       ['ball', golfBall(KIND_RADIUS[BALL])],
       ['bumper', bumper(3, { height: 2 })],

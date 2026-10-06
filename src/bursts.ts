@@ -40,16 +40,40 @@ export function strikePuff(x: number, y: number, power: number, ground: 'grass' 
   ];
 }
 
-/** Confetti up out of the cup at (x, y), and sparkles with it: more of both for a hole in one. */
-export function cupBurst(x: number, y: number, holeInOne: boolean): Emit[] {
-  const more = holeInOne ? 2.5 : 1;
+/**
+ * The confetti cup's palette: the six colours of the rainbow, as bright as the plastic's, in the order the rainbow flag
+ * flies them.
+ */
+const RAINBOW_CONFETTI: [number, number, number][] = [
+  [1, 0.25, 0.2],
+  [1, 0.55, 0.15],
+  [1, 0.85, 0.15],
+  [0.35, 0.9, 0.35],
+  [0.25, 0.55, 1],
+  [0.7, 0.35, 1],
+];
+
+/**
+ * What the confetti cup changes of a burst: two and a half times the pieces, living 2.6 seconds and not 1.8, thrown over
+ * eight units and not five, in the rainbow. The most a hole in one throws is 616 pieces, which with a puff or a splash is
+ * well inside the renderer's ring of 1024.
+ */
+const BIG = { more: 2.5, life: 2.6, spread: 8 } as const;
+
+/**
+ * Confetti up out of the cup at (x, y), and sparkles with it: more of both for a hole in one. The `confetti` style is the
+ * confetti cup's, bigger and longer; the plain call, and the plain style, are what they always were.
+ */
+export function cupBurst(x: number, y: number, holeInOne: boolean, style: 'plain' | 'confetti' = 'plain'): Emit[] {
+  const big = style === 'confetti';
+  const more = (holeInOne ? 2.5 : 1) * (big ? BIG.more : 1);
   return [
-    ...CONFETTI.map((colour): Emit => ({
+    ...(big ? RAINBOW_CONFETTI : CONFETTI).map((colour): Emit => ({
       position: [x, y, 0.3],
       velocity: [0, 0, 12],
-      spread: 5,
+      spread: big ? BIG.spread : 5,
       count: Math.round(14 * more),
-      life: 1.8,
+      life: big ? BIG.life : 1.8,
       lifeSpread: 0.5,
       size: 0.28,
       growth: 0,
@@ -61,9 +85,9 @@ export function cupBurst(x: number, y: number, holeInOne: boolean): Emit[] {
     {
       position: [x, y, 0.5],
       velocity: [0, 0, 7],
-      spread: 5,
+      spread: big ? BIG.spread : 5,
       count: Math.round(14 * more),
-      life: 0.7,
+      life: big ? 1.4 : 0.7,
       lifeSpread: 0.3,
       size: 0.08,
       growth: 0,

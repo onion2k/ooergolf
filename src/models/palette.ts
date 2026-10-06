@@ -82,6 +82,11 @@ export const PALETTE = {
     pink: shown(0.96, 0.22, 0.58),
     teal: shown(0.15, 0.76, 0.72),
   },
+  /**
+   * The glow ball's trail, in the colour of its swatch in the shop: a soft mint, drawn as a sprite and so given as the
+   * screen shows it, not as linear light.
+   */
+  trail: [0.55, 0.95, 0.75] as Colour,
   /** White plastic, a little warm, since a pure white glares under a toon sun. */
   cream: shown(0.97, 0.94, 0.86),
 
@@ -132,6 +137,19 @@ export const PALETTE = {
 } as const satisfies Record<string, Colour | Record<string, Colour>>;
 
 /** The colours a flag comes in. */
+/**
+ * The rainbow flag's six strips, from the top of the cloth down: red, orange, yellow, green, blue and violet, each a matte
+ * plastic of the toy's own, so a strip is a colour of the course and not a new one.
+ */
+export const RAINBOW: readonly Colour[] = [
+  PALETTE.plastic.red,
+  PALETTE.plastic.orange,
+  PALETTE.plastic.yellow,
+  PALETTE.plastic.lime,
+  PALETTE.plastic.blue,
+  PALETTE.plastic.purple,
+];
+
 export const FLAG_COLOURS = {
   red: PALETTE.plastic.red,
   yellow: PALETTE.plastic.yellow,

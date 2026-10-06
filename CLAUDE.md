@@ -656,7 +656,7 @@ angle, roll)` is how far the putter's hardest putt rolls along an angle before t
   roll of 20: it is the slope the ground holds a ball on, which the generator holds every Links hole's hills to, so lowering it
   would make every hole's hills gentler, and "a little less rolling friction" is the greens' speed and the landing's `keep`
   and `bounce` instead; the first-landing carry never moves with any of it, so the ring is true); `landed(x, y, speed, first)` tells of
-  it. Golf pays no coins, and the rail is a wall to a ball in the air.
+  it. Golf pays coins as minigolf does (`PAY`, and the shop's items work on both), and the rail is a wall to a ball in the air.
 - `src/shaping.ts` is what a golf shot has besides its aim and power, and what the air does to it: a **shape** (the
   player's choice per lofted shot of straight, draw or fade: -1, 0, +1, a heading that turns in the air at
   `curveRate(shape, loft)` radians a second, positive a fade, to the right as seen from behind the ball, a pure
@@ -834,7 +834,7 @@ angle, roll)` is how far the putter's hardest putt rolls along an angle before t
   has no chip and the panel as it was. The bag's clubs are round (`--club` across, 44 on a desk and as many as eight
   fit across a phone's width, 35.9 at 360, which is why `CLUB_LEAST` in `smoke/panels.ts` is not a thumb), the shape
   button carries an arrow in the stylesheet (a mask, so `textContent` is still the words: up for straight, curving left
-  for a draw and right for a fade), and a golf hole's purse is the shop's button alone (`data-golf`: golf pays nothing).
+  for a draw and right for a fade), and the purse shows coins and gems on golf as on minigolf.
 - `src/noise.ts` makes ground from noise: `gradientNoise(seed)` is Perlin's,
   and `noiseGround(layout, { seed, feel, steepness })` a hole's heights from
   it, the same for a seed every time, never below nought, with optional
@@ -888,10 +888,14 @@ angle, roll)` is how far the putter's hardest putt rolls along an angle before t
   boxes and belts. `arena.ts` reads a map into a layout, and holds
   the kinds of body, the hardest shot and how the ball rolls. Each hole is a
   world of its own, made when it begins: nothing may keep `game.world`.
-- The clubs, what they cost and what a hole pays are content in `clubs.ts`.
-  The save (`progress.ts`) holds coins, gems, the clubs owned, the club in
-  hand and the best score on each hole with the club it was made with;
-  `Game` pays into it when a hole is done, and buys and equips from it.
+- The shop's items, what they cost and what a hole pays are content in `items.ts` (`ITEMS`, eighteen, `ITEM_FIGURES` holds every
+  figure, `Effects.has(id)` asks whether one is held). One is worn at a time or none; each is an exact no-op when absent, draws no
+  chance, and is read through `game.effects` so the preview, the autopilot's rehearsal and the shot agree. Play items: grip, glove,
+  spin, curve, sock, wedge, sticky, slow (golf greens only), magnet, rubber, waders (first water or out of bounds loss a hole is
+  free), mulligan (`Game.mulligan()`, one a round, the page's Retake button), penny (consumable), ghost (`Preview.rest`), reader.
+  Cosmetics: glow (`trail.ts`), confetti (`cupBurst` style), rainbow (`flag` strips). Magnet, rubber, slow, ghost, reader and rainbow
+  take hold at the next hole. The save (`progress.ts`) holds coins, gems, the items owned, the one worn and the best score on each hole
+  with the item it was made with; `Game` pays into it when a hole is done (golf too), and buys and equips from it.
   Every save shape is in `test/saves/`. The save
   lives in `progress.ts`. Chance comes from `random.ts`, handed in.
 - `src/physics.ts` is the game's side of artshape-physics, and nothing else
@@ -1092,10 +1096,7 @@ each step, and a gate handed what it needs in the same change:
   ball hidden behind a tree or a rail, and the map turning with the camera are not there, and how the held view feels after a big turn to the
   aim, desk and phone, is for the user to judge by playing. The overhead view draws no grass on most holes (it stands past the rings), and
   has no new rung on the ladder, since it costs a frame less than the standard view. The overhead view is fitted to the screen and not to what the panels leave of it: on a phone the far end of a long hole is under the chips and its tee under the bag, and on a desk the tee is under the bag; the pictures `overhead-links` and `phone-overhead-meadow` show it, and whether to fit it inside the safe area is for the user to say.
-- A shop that shows how far each putter reaches. It shows each one's
-  hardest speed, 40 to 48, and under the green's steady slowing a little
-  more speed goes a good deal further: the gold rolls 72 units to the
-  putter's 50.
+- Slow roll does nothing on minigolf (its roll is a constant); the autopilot takes no item and never uses the mulligan.
 
 ## Rules for the code
 

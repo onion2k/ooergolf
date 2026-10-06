@@ -21,6 +21,7 @@ import { Autopilot } from '../src/autopilot';
 import { COURSE, COURSES } from '../src/course';
 import { Game } from '../src/game';
 import { Previewer } from '../src/preview';
+import { TRAIL, Trail } from '../src/trail';
 import { Progress, memoryStore } from '../src/progress';
 import { seeded } from '../src/random';
 import { PLAYER } from './pace';
@@ -36,7 +37,7 @@ export const WATCH: Partial<Record<string, { ceiling: number; steady?: boolean }
   bodies: { ceiling: BODY_CAPACITY },
   slots: { ceiling: BODY_CAPACITY },
   // a best is kept for each hole by its name and is written and never read, so the save only grows, a hole at a time, to
-  // every hole of every course done with every club owned: about 42 bytes a hole, 1,915 for the forty-three there were
+  // every hole of every course done with every item owned: about 42 bytes a hole, 1,915 for the forty-three there were
   // and about 2,380 for six courses of nine and four of them of the minigolf; 3,000 leaves room for a few holes beyond
   'save bytes': { ceiling: 3_000 },
   // emptied at every new round: never more than a score a hole
@@ -44,6 +45,13 @@ export const WATCH: Partial<Record<string, { ceiling: number; steady?: boolean }
   // the bodies in the rehearsal a golf hole's shots are previewed in: the ball, however many shots are tried, and the
   // rehearsal of a hole let go of when the next begins
   'preview bodies': { ceiling: 1 },
+  // the glow ball's trail: a ring of 48 places made once for the page, never grown, so its places are never more than that and
+  // the bytes its arrays hold (a float each for x, y and z, and a double for the time) are as they were made
+  'trail places': { ceiling: TRAIL.most },
+  'trail ring bytes': { ceiling: TRAIL.most * (3 * 4 + 8) },
+  // the buffers the ghost shot's path is written into, in each of the two previews a golf hole's previewer holds (the flight's
+  // and the putt's roll), made once with the previewer and let go of with the hole: about 8 kB each, a little over 16 in all
+  'preview rest bytes': { ceiling: 20_000 },
   // the catch-all for what is leaking and has no name here; noisy, so it is given a lot of room
   'heap MB': { ceiling: 300, steady: true },
 };
@@ -136,9 +144,16 @@ export function leakRun({ seed, minutes, golf }: LeakOptions): LeakRun {
     // and a shot tried from where the ball lies now and then, as a held drag does
     let previewer: Previewer | null = null;
     let previewed: object | null = null;
+    // the glow ball's trail, written as the page writes it, for every ball that moves: the most places it held in the minute
+    const trail = new Trail();
+    let held = 0;
     for (let minute = 0; minute < minutes; minute++) {
       for (let f = 0; f < 3600; f++) {
         pilot.step(DT);
+        const { world, ball } = game;
+        if (world.alive[ball] && Math.hypot(world.vx[ball], world.vy[ball], world.vz[ball]) > TRAIL.moving)
+          trail.record(game.t, world.x[ball], world.y[ball], world.z[ball]);
+        held = Math.max(held, trail.count);
         if (!game.layout.golf) continue;
         if (previewed !== game.def) {
           previewer = new Previewer(game);
@@ -153,7 +168,20 @@ export function leakRun({ seed, minutes, golf }: LeakOptions): LeakRun {
           );
       }
       for (const [key, n] of Object.entries(sizes(game))) (samples[key] ??= []).push(n);
-      if (previewer) (samples['preview bodies'] ??= []).push(previewer.bodies);
+      if (previewer) {
+        (samples['preview bodies'] ??= []).push(previewer.bodies);
+        // the ghost shot's buffers, in both of the previewer's previews, as made
+        const bytes = [previewer.result, previewer.rolled].reduce(
+          (n, p) => n + p.rest.points.byteLength + p.rest.length.byteLength,
+          0,
+        );
+        (samples['preview rest bytes'] ??= []).push(bytes);
+      }
+      (samples['trail places'] ??= []).push(held);
+      (samples['trail ring bytes'] ??= []).push(
+        trail.x.byteLength + trail.y.byteLength + trail.z.byteLength + trail.at.byteLength,
+      );
+      held = 0;
     }
     return {
       seed,

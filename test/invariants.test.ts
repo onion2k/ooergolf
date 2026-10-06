@@ -84,7 +84,7 @@ describe('what must always hold', () => {
     expect(checkInvariants(game).join('\n')).toMatch(/99 strokes on hole 1, over its limit/);
   });
 
-  it('reports coins and gems that are not counts, a club no one sells, and a club in hand not owned', () => {
+  it('reports coins and gems that are not counts, an item no one sells, one owned twice, and an item equipped not owned', () => {
     const { game } = newGame();
     const save = game.progress.save;
     save.coins = -1;
@@ -92,13 +92,15 @@ describe('what must always hold', () => {
     expect(checkInvariants(game).join('\n')).toMatch(/the coins are -1[\s\S]*the gems are 0.5/);
     save.coins = save.gems = 0;
     save.owned.push('stolen');
-    expect(checkInvariants(game).join('\n')).toMatch(/a club no one sells is owned: stolen/);
+    expect(checkInvariants(game).join('\n')).toMatch(/an item no one sells is owned: stolen/);
     save.owned.pop();
-    save.club = 'gold';
-    expect(checkInvariants(game).join('\n')).toMatch(/the club in hand, gold, is not owned/);
-    save.club = 'putter';
+    save.owned.push('glow', 'glow');
+    expect(checkInvariants(game).join('\n')).toMatch(/an item is owned twice/);
     save.owned.length = 0;
-    expect(checkInvariants(game).join('\n')).toMatch(/the starting putter is not owned/);
+    save.item = 'glove';
+    expect(checkInvariants(game).join('\n')).toMatch(/the item equipped, glove, is not owned/);
+    save.item = '';
+    expect(checkInvariants(game)).toEqual([]);
   });
 
   it('reports a ball inside something that moves', () => {
@@ -166,19 +168,21 @@ describe('what must always hold', () => {
   });
 
   it('holds the ball to the club that struck it, not to one put in hand while it rolls', () => {
-    const { game } = newGame();
-    game.progress.save.owned.push('gold');
-    game.equip('gold');
-    const gold = game.hardest;
-    expect(gold, 'a club harder than the putter').toBeGreaterThan(HARDEST_SHOT);
+    const { game } = golfGame(field('f'));
+    game.pick('driver');
+    const driver = game.hardest;
     game.shoot(0, 1);
-    expect(game.equip('putter')).toBe(true);
-    expect(game.hardest).toBe(HARDEST_SHOT);
-    // thrown by a post faster than any the putter could have been, but no faster than the gold's
-    game.world.vx[game.ball] = gold * FASTEST * 0.99;
-    expect(gold * FASTEST * 0.99, 'past what the putter allows').toBeGreaterThan(HARDEST_SHOT * FASTEST);
-    expect(checkInvariants(game), 'struck by the gold, and going as a post may throw what the gold struck').toEqual([]);
-    game.world.vx[game.ball] = gold * FASTEST * 1.01;
+    expect(game.pick('putter')).toBe(true);
+    expect(game.hardest).toBeLessThan(driver);
+    // on the ground at a speed the driver may have given it, and the putter could not
+    const speed = driver * FASTEST * 0.99;
+    expect(speed, 'past what the putter allows').toBeGreaterThan(game.hardest * FASTEST);
+    game.world.z[game.ball] = game.world.floorAt(game.world.x[game.ball], game.world.y[game.ball]) + 1;
+    game.world.vx[game.ball] = speed;
+    game.world.vy[game.ball] = 0;
+    game.world.vz[game.ball] = 0;
+    expect(checkInvariants(game).join('\n')).not.toMatch(/faster than a post and a slope may make it/);
+    game.world.vx[game.ball] = driver * FASTEST * 1.01;
     expect(checkInvariants(game).join('\n')).toMatch(/faster than a post and a slope may make it/);
   });
 

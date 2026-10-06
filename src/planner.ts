@@ -11,7 +11,8 @@
  */
 import { fromTrees, lieAt, type Layout } from './arena';
 import type { BagClub } from './bag';
-import { DISPERSION, maxScatter } from './flight';
+import { lossOf, maxScatter } from './flight';
+import type { Effects } from './items';
 import type { Game } from './game';
 import type { Route } from './route';
 import { LIE } from './surfaces';
@@ -42,6 +43,11 @@ export class Rehearsal {
   /** `game` is a rehearsal (`Game.rehearsal`), and is only ever tried in. */
   constructor(private readonly game: Game) {}
 
+  /** What the item in hand does to the game this rehearses, which a swing's scatter and its loss are read through. */
+  get effects(): Effects {
+    return this.game.effects;
+  }
+
   /** The shot struck from where a ball lies at `from`, with `club`, toward `angle`, at `power`, struck true: what came of it. */
   shot(from: { x: number; y: number }, club: string, angle: number, power: number, shape = 0, spin = 0): Trial {
     const g = this.game;
@@ -52,8 +58,14 @@ export class Rehearsal {
     g.setSpin(spin);
     if (!g.shoot(angle, power)) return { x: from.x, y: from.y, holed: false, lost: true };
     for (let f = 0; f < LONGEST / DT && g.phase === 'play' && !g.ready; f++) g.step(DT);
-    // a ball lost in water is put back and a stroke added, which is the only way a second stroke is counted here
-    return { x: g.world.x[g.ball], y: g.world.y[g.ball], holed: g.phase !== 'play', lost: g.strokes > 1 };
+    // a ball lost in water is put back and a stroke added, which is the only way a second stroke is counted here; the waders take
+    // the stroke and not the loss, which they tell of by being used
+    return {
+      x: g.world.x[g.ball],
+      y: g.world.y[g.ball],
+      holed: g.phase !== 'play',
+      lost: g.strokes > 1 || g.wadersUsed,
+    };
   }
 }
 
@@ -220,8 +232,8 @@ export function choose(
     let e = cand.main;
     // a club with no scatter is as good struck a little off as struck true, and a ball lost is lost already
     if (!r.trial.lost && c.club.spread > 0) {
-      const delta = 0.5 * maxScatter(c.club, lie, r.power);
-      const short = r.power * (1 - DISPERSION.loss * r.power);
+      const delta = 0.5 * maxScatter(c.club, lie, r.power, rehearsal.effects);
+      const short = r.power * (1 - lossOf(rehearsal.effects) * r.power);
       const off = [
         rehearsal.shot(from, c.club.id, r.angle - delta, r.power),
         rehearsal.shot(from, c.club.id, r.angle + delta, r.power),

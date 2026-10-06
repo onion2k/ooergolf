@@ -389,6 +389,13 @@ test('the round finished to the card, and begun again from its button', async ({
     wind: null,
     controls: { shown: false, shape: 0, shapeText: 'Shape: Straight', spin: 0, spinText: 'Spin: Flat' },
     arrows: { shown: false, count: 0 },
+    // the items' own: no glow trail without the item, one strip of cloth without the rainbow, no Retake without the
+    // Mulligan, and the particles the last holing threw, which are kept to be read until the next holing (not put to nought
+    // at a new hole): 84 is the plain cup's, 14 for each of five confetti colours and the sparkle, off a hole not in one
+    trail: 0,
+    strips: 1,
+    retake: { shown: false, enabled: false },
+    confetti: 84,
   });
   expect(card.glints).toBeLessThanOrEqual(1);
   await page.locator('#again').click();
@@ -549,9 +556,10 @@ test('a hole of golf played with the bag: a club chosen by its button, struck in
   expect(done.phase, 'holed or picked up').toBe('done');
   expect(done.card.length).toBe(1);
   expect(done.card[0]).toBeLessThanOrEqual(done.par + 5);
-  // a round of golf pays nothing into the shop's coins
-  expect(done.coins).toBe(purse);
-  await expect(page.locator('#coins')).toHaveText(String(purse));
+  // a round of golf pays into the shop's coins as minigolf does: a hole holed pays, and one picked up pays nothing
+  if (done.card[0] < done.par + 5) expect(done.coins, 'the hole paid').toBeGreaterThan(purse);
+  else expect(done.coins).toBe(purse);
+  await expect(page.locator('#coins')).toHaveText(String(done.coins));
   await expect(page.locator('#toast')).toBeVisible();
   expect(problems).toEqual([]);
 });

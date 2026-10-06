@@ -32,7 +32,7 @@ import {
   type Layout,
 } from './arena';
 import { CUP } from './course';
-import { GREEN, greenArrows, leansOnMinigolf } from './green';
+import { GREEN, greenArrows, leansOnMinigolf, READER, type Arrow } from './green';
 import { place, placeOnSlope } from './matrix';
 import { ball, plane } from './meshes';
 import {
@@ -105,6 +105,8 @@ export const ROUGH_DEPTH = 3;
 const STRIPE_ROWS = 2;
 /** How far apart the tee's markers stand. */
 const TEE_SPACING = 5;
+/** Whether a part of the flag's model is its cloth: the plain `flag`, or one of the rainbow's strips `flag0` to `flag5`; the pole and knob are not. */
+const isCloth = (name: string) => name.startsWith('flag');
 /**
  * The green's grain: a fine speckle of darker turf, drawn in world units by
  * the renderer's pattern, so it is the same size everywhere on every hole.
@@ -164,6 +166,8 @@ export const PALETTE = {
    * quieter and louder respectively.
    */
   arc: [0.99, 0.97, 0.9, 0.5],
+  /** The ghost shot's continuation and its ring: a pale blue-white, the item's own swatch, apart from the arc's cream and the marker's yellow. */
+  ghost: [0.78, 0.86, 1, 0.5],
   ringWater: [...COLOURS.plastic.blue, 0.4],
   ringOut: [...COLOURS.plastic.red, 0.4],
   ringHoled: [...COLOURS.plastic.lime, 0.4],
@@ -213,6 +217,8 @@ const spreadMesh = () => (spreadRing ??= built((b) => annulus(b, at(0, 0, 0), 48
  * scales them for how far back the camera stands (`markScale`), so they are as easy to see from a drive's view as from a putt's.
  */
 export const ARC = { dots: 28, radius: 0.42, knock: 0.9, ring: 1.35 } as const;
+/** How many dots the ghost shot's continuation is drawn with: fewer than the flight's, since it lies along the ground. */
+export const GHOST_DOTS = 20;
 /** The least a mark of the preview is lifted off the ground, in yards at the home view, so it is not fighting the turf. */
 export const RING_LIFT = 0.12;
 /** How many points round a mark's edge the ground is sampled at, to find how far it must be lifted to clear it. */
@@ -276,16 +282,19 @@ export interface ArrowMark {
  * edge of it is in a rise. None for a level green, and for a hole of minigolf that is level; one for each tile of floor that leans on one that is not.
  */
 export function arrowMarks(layout: Layout): ArrowMark[] {
-  return greenArrows(layout).map((a) => {
-    const steep = Math.hypot(a.slopeX, a.slopeY);
-    const length = ARROWS.shortest + (ARROWS.longest - ARROWS.shortest) * Math.min(1, steep / GREEN.steepest);
-    const yaw = Math.atan2(-a.slopeY, -a.slopeX);
-    // an arrow's own half length and half width, as the model has them, for the ring's way of finding the lift
-    const half = length / 2;
-    const lift =
-      ringLift(layout, a.x, a.y, a.slopeX, a.slopeY, half, half * 0.4, yaw) * Math.hypot(a.slopeX, a.slopeY, 1);
-    return { x: a.x, y: a.y, yaw, length, slopeX: a.slopeX, slopeY: a.slopeY, lift };
-  });
+  return greenArrows(layout).map((a) => markOf(layout, a));
+}
+
+/** One arrow of a grid as it is drawn: which way it points, how long it is for how steep the ground, and how far it is lifted. */
+function markOf(layout: Layout, a: Arrow): ArrowMark {
+  const steep = Math.hypot(a.slopeX, a.slopeY);
+  const length = ARROWS.shortest + (ARROWS.longest - ARROWS.shortest) * Math.min(1, steep / GREEN.steepest);
+  const yaw = Math.atan2(-a.slopeY, -a.slopeX);
+  // an arrow's own half length and half width, as the model has them, for the ring's way of finding the lift
+  const half = length / 2;
+  const lift =
+    ringLift(layout, a.x, a.y, a.slopeX, a.slopeY, half, half * 0.4, yaw) * Math.hypot(a.slopeX, a.slopeY, 1);
+  return { x: a.x, y: a.y, yaw, length, slopeX: a.slopeX, slopeY: a.slopeY, lift };
 }
 
 /** The rough, as one great square out past the fog. */
@@ -397,6 +406,12 @@ export class Scene {
   /** The green's arrows of this hole, the entry that places them, and whether the page has them shown: set by `setArrows`. */
   private arrows: Entry | null = null;
   private arrowsOn = false;
+  /** The break reader's pool of arrows round the ball, when the hole was begun with the item, and how many are drawn. */
+  private reading: { entry: Entry; layout: Layout } | null = null;
+  /** The ghost shot's dots and ring, when the hole was begun with the item. */
+  private ghosting: { dots: Entry; ring: Entry } | null = null;
+  /** How many pieces the flag's cloth is drawn in: one, or six on a hole begun with the rainbow flag; none before a hole. */
+  private strips = 0;
   /** The shot in hand as the page last handed it, and how much bigger its marks are drawn for the view, and which way it is aimed. */
   private shot: { preview: Preview; scale: number } | null = null;
   /** What the last frame placed of its preview, for the page to read back: the arc, the ring, the spread and the knock. */
@@ -417,7 +432,7 @@ export class Scene {
   holedAt = -Infinity;
 
   /** What does not move on this hole, which is called `name`, with what stands still of what moves on it. */
-  static(layout: Layout, name = '', obstacles?: Obstacles): GameGroup[] {
+  static(layout: Layout, name = '', obstacles?: Obstacles, cupRadius: number = CUP.radius): GameGroup[] {
     this.layout = layout;
     const { cols, cup: at, tee } = layout;
     const cupTile = tileAt(layout, at.x, at.y);
@@ -451,7 +466,7 @@ export class Scene {
     const { z: cupZ, ...round } = cupGround(layout);
     const atCup = new Float32Array(16);
     place(atCup, 0, at.x, at.y, cupZ);
-    const [collarPart] = collar(TILE, CUP.radius, { ...round, pieces: GROUND.pieces }).parts;
+    const [collarPart] = collar(TILE, cupRadius, { ...round, pieces: GROUND.pieces }).parts;
     const flagAt = new Float32Array(16);
     place(flagAt, 0, at.x, at.y, cupZ);
     const teeAt = new Float32Array(16);
@@ -499,9 +514,9 @@ export class Scene {
             ...look(PALETTE.oobGround),
           }
         : { mesh: plane(ROUGH_SIZE), matrices: rough, ...look(PALETTE.rough) },
-      ...groups(cup(CUP.radius, round), atCup),
+      ...groups(cup(cupRadius, round), atCup),
       // the pin and its knob stand still; the flag's cloth swings in the breeze, and is among what moves
-      ...groups({ parts: flag(FLAG_COLOURS.red).parts.filter((p) => p.name !== 'flag') } as Model, flagAt),
+      ...groups({ parts: flag(FLAG_COLOURS.red).parts.filter((p) => !isCloth(p.name)) } as Model, flagAt),
       ...groups(teeMarkers(TEE_SPACING), teeAt),
       ...this.scenery(scatter(layout, name)),
       ...this.dressing(layout, name),
@@ -796,7 +811,13 @@ export class Scene {
    * this hole: a barrier's, a windmill's blades, a conveyor's chevrons. Made
    * again for each hole; the ball is group 0 and the aim group 1.
    */
-  dynamic(obstacles?: Obstacles, layout?: Layout, name = '', wind: Wind = STILL): GameGroup[] {
+  dynamic(
+    obstacles?: Obstacles,
+    layout?: Layout,
+    name = '',
+    wind: Wind = STILL,
+    items: { ghost?: boolean; reader?: boolean; rainbow?: boolean } = {},
+  ): GameGroup[] {
     // the ball, round and smooth, with one band round its middle so its roll is seen
     const [br, bg, bb, brough] = PALETTE.ball;
     const [theBall] = golfBall(KIND_RADIUS[BALL], { colour: [br, bg, bb], band: PALETTE.ballBand }).parts;
@@ -812,6 +833,9 @@ export class Scene {
     this.drawnShot = null;
     this.arrows = null;
     this.arrowsOn = false;
+    this.reading = null;
+    this.ghosting = null;
+    this.strips = 0;
     const pool = (model: { parts: Model['parts'] }, write: (out: Float32Array, t: number) => void, count = 1) => {
       const matrices = new Float32Array(16 * count);
       for (const part of model.parts) {
@@ -821,7 +845,9 @@ export class Scene {
     };
     if (layout) {
       const { cup } = layout;
-      const cloth = flag(FLAG_COLOURS.red).parts.filter((p) => p.name === 'flag');
+      // the cloth: one part, or the rainbow's six strips on a hole begun with the item, each moved as the one is
+      const cloth = flag(FLAG_COLOURS.red, { rainbow: items.rainbow === true }).parts.filter((p) => isCloth(p.name));
+      this.strips = cloth.length;
       // the flag flies downwind, and the trees lean with it, in the same gusts the grass bends in; and it waggles as the
       // ball drops
       const cupZ = heightAt(layout, cup.x, cup.y);
@@ -895,6 +921,9 @@ export class Scene {
       out.push({ mesh: markMesh(), matrices, count: 0, albedo: [mr, mg, mb], roughness: mrough });
       this.shotGroups(layout, out);
       this.arrowGroups(layout, out);
+      // what the items that show more add, each only on a hole begun with it, so a hole without them has the groups it had
+      if (items.reader) this.readerGroup(layout, out);
+      if (items.ghost) this.ghostGroups(layout, out);
     } else if (layout && leansOnMinigolf(layout)) {
       // a hole of minigolf whose ground leans shows its break as golf's green does: the putt's roll and the arrows. A level
       // hole has neither, and the groups it always had
@@ -939,15 +968,111 @@ export class Scene {
     out.push(group(ARROW.parts[0], matrices, 0));
   }
 
+  /**
+   * The break reader's arrows round the ball, a pool of `READER.most` placements made once for the hole, which
+   * `setReaderArrows` writes when the ball comes to rest: the last of the hole's groups but the ghost's.
+   */
+  private readerGroup(layout: Layout, out: GameGroup[]) {
+    const matrices = new Float32Array(16 * READER.most);
+    const entry: Entry = { matrices, count: 0, write: () => undefined };
+    this.moving.push(entry);
+    this.reading = { entry, layout };
+    out.push(group(ARROW.parts[0], matrices, 0));
+  }
+
+  /**
+   * The arrows the break reader shows over the ground near the ball, placed now (the ball has come to rest, and they are
+   * worked out once for it), or none with null: ignored on a hole begun without the item.
+   */
+  setReaderArrows(arrows: readonly Arrow[] | null) {
+    const r = this.reading;
+    if (!r) return;
+    const n = arrows ? Math.min(arrows.length, READER.most) : 0;
+    for (let k = 0; k < n; k++) {
+      const m = markOf(r.layout, arrows![k]);
+      placeOnSlope(
+        r.entry.matrices,
+        k,
+        m.x,
+        m.y,
+        heightAt(r.layout, m.x, m.y),
+        m.slopeX,
+        m.slopeY,
+        m.yaw,
+        m.length,
+        m.length,
+        m.lift,
+      );
+    }
+    r.entry.count = n;
+  }
+
   /** Whether the green's arrows are shown, from the next frame: while the ball rests on the green or the first cut. */
   setArrows(on: boolean) {
     this.arrowsOn = on;
   }
 
+  /** How many strips the flag's cloth is in on this hole: for the test API. */
+  flagStrips(): number {
+    return this.strips;
+  }
+
   /** How the arrows were drawn by the last frame, read back from what it wrote: whether any, and how many. */
-  arrowsDrawn(): { shown: boolean; count: number } {
-    const n = this.arrows?.count ?? 0;
-    return { shown: n > 0, count: n };
+  arrowsDrawn(): { shown: boolean; count: number; reader?: number } {
+    const reader = this.reading?.entry.count ?? 0;
+    const n = (this.arrows?.count ?? 0) + reader;
+    // the reader's own count is there only on a hole begun with the item, so every other hole reads as it always did
+    return this.reading ? { shown: n > 0, count: n, reader } : { shown: n > 0, count: n };
+  }
+
+  /**
+   * The ghost shot's marks: a line of dots along the ball's path on from its first landing to where it rests, and a ring
+   * where it rests, each its own colour (the ghost's pale one) and apart from the first landing's ring, and each written
+   * from the preview the page last handed in and drawn for none. Only on a hole begun with the item.
+   */
+  private ghostGroups(layout: Layout, out: GameGroup[]) {
+    const tmp = [0, 0, 0];
+    const slope: [number, number] = [0, 0];
+    const dots: Entry = {
+      matrices: new Float32Array(16 * GHOST_DOTS),
+      count: 0,
+      write: (m) => {
+        const s = this.shot;
+        dots.count = 0;
+        const r = s?.preview.rest;
+        if (!s || !r || !r.shown || r.n < 2) return;
+        const size = ARC.radius * 0.8 * s.scale;
+        const total = r.length[r.n - 1];
+        for (let k = 0; k < GHOST_DOTS; k++) {
+          r.along((total * (k + 1)) / (GHOST_DOTS + 1), tmp);
+          place(m, k, tmp[0], tmp[1], tmp[2], 0, size);
+        }
+        dots.count = GHOST_DOTS;
+      },
+    };
+    const ring: Entry = {
+      matrices: new Float32Array(16),
+      count: 0,
+      write: (m) => {
+        const s = this.shot;
+        ring.count = 0;
+        const p = s?.preview;
+        const r = p?.rest;
+        if (!s || !p || !r || !r.shown || p.n < 2 || r.n < 2) return;
+        const size = MARK.radius * ARC.ring * 0.8 * s.scale;
+        slopeInto(layout, r.x, r.y, slope);
+        const lift = ringLift(layout, r.x, r.y, slope[0], slope[1], size, size, 0) * Math.hypot(slope[0], slope[1], 1);
+        placeOnSlope(m, 0, r.x, r.y, heightAt(layout, r.x, r.y), slope[0], slope[1], 0, size, size, lift);
+        ring.count = 1;
+      },
+    };
+    this.moving.push(dots, ring);
+    this.ghosting = { dots, ring };
+    const [gr, gg, gb, grough] = PALETTE.ghost;
+    out.push(
+      { mesh: ball(ARC.radius, 4, 8), matrices: dots.matrices, count: 0, albedo: [gr, gg, gb], roughness: grough },
+      { mesh: markMesh(), matrices: ring.matrices, count: 0, albedo: [gr, gg, gb], roughness: grough },
+    );
   }
 
   /**
@@ -1067,9 +1192,23 @@ export class Scene {
     ring: { x: number; y: number; radius: number; colour: [number, number, number] } | null;
     spread: { x: number; y: number; across: number; along: number; heading: number } | null;
     knock: { x: number; y: number } | null;
+    /** The ghost shot's continuation: how many dots, and the ring where the ball rests; null when none is drawn. */
+    rest: { dots: number; ring: { x: number; y: number; radius: number } } | null;
   } {
     const d = this.drawnShot;
-    if (!d) return { arc: 0, ring: null, spread: null, knock: null };
+    const g = this.ghosting;
+    const rest =
+      g && g.dots.count && g.ring.count
+        ? {
+            dots: g.dots.count,
+            ring: {
+              x: g.ring.matrices[12],
+              y: g.ring.matrices[13],
+              radius: Math.hypot(g.ring.matrices[0], g.ring.matrices[1], g.ring.matrices[2]),
+            },
+          }
+        : null;
+    if (!d) return { arc: 0, ring: null, spread: null, knock: null, rest };
     const m = (e: Entry) => e.matrices;
     return {
       arc: d.arc.count,
@@ -1092,6 +1231,7 @@ export class Scene {
           }
         : null,
       knock: d.knock.count ? { x: m(d.knock)[12], y: m(d.knock)[13] } : null,
+      rest,
     };
   }
 

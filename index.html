@@ -188,6 +188,7 @@
   }
   #purse:not([hidden]),
   #viewMode:not([hidden]),
+  #retakePanel:not([hidden]),
   #bag:not([hidden]),
   #card:not([hidden]),
   #shop:not([hidden]),
@@ -446,14 +447,6 @@
   #purse:not([hidden]) {
     display: flex;
   }
-  /* golf pays no coins and no gems, so its purse is the button to the shop, which is for clubs to come, and nothing to count */
-  #purse[data-golf] {
-    padding: 6px;
-  }
-  #purse[data-golf] .coin,
-  #purse[data-golf] .gem {
-    display: none;
-  }
   #purse .coin,
   #purse .gem {
     display: inline-flex;
@@ -692,7 +685,7 @@
     font-weight: 600;
     color: var(--ink-soft);
   }
-  .club {
+  .item {
     display: grid;
     grid-template-columns: 34px 1fr auto;
     align-items: center;
@@ -701,14 +694,17 @@
     border-top: 2px solid var(--mist);
     font-weight: 800;
   }
-  .club small {
+  .item small {
     display: block;
     font-size: 13px;
     font-weight: 600;
     color: var(--ink-soft);
   }
-  /* each putter's head as a little toy ball of its colour */
-  .club .swatch {
+  .item small.price {
+    font-weight: 800;
+  }
+  /* each item's swatch as a little toy ball of its colour */
+  .item .swatch {
     width: 34px;
     height: 34px;
     border-radius: 50%;
@@ -717,12 +713,12 @@
       inset 4px 4px 0 rgba(255, 255, 255, 0.4),
       0 0 0 2px rgba(20, 32, 72, 0.12);
   }
-  .club button {
+  .item button {
     min-width: 88px;
     padding: 0 16px;
   }
-  /* the club in hand is not a button to press but a badge */
-  .panel .club button.held:disabled {
+  /* the item equipped is not a button to press but a badge */
+  .panel .item button.held:disabled {
     color: var(--leaf-ink);
     background: var(--leaf-tint);
     box-shadow: inset 0 0 0 2px var(--leaf);
@@ -967,6 +963,24 @@
       inset 0 0 0 3px var(--sky),
       0 0 0 var(--sky-deep);
   }
+
+  /*
+   * the Mulligan item's Retake, one pill in a panel of its own above the view's buttons at the bottom right (and under them
+   * on a phone, where they are at the top), shown only while pressing it would do something: the item held, a stroke taken,
+   * the round's retake unused and the hole in play
+   */
+  #retakePanel {
+    position: fixed;
+    right: 16px;
+    bottom: calc(16px + 40px + 68px + 10px + env(safe-area-inset-bottom, 0px));
+    padding: 4px;
+    border-radius: 999px;
+    transform-origin: bottom right;
+  }
+  #retakePanel button {
+    min-width: 88px;
+    padding: 0 16px;
+  }
   @media (max-width: 600px) {
     /* the map stands under the hole's chip at the left edge, as the switch stands under the shop at the right */
     #holePanel {
@@ -983,6 +997,16 @@
      * stand clear of the hole's panel on the narrowest phone (the Aim and Look pills, which were three with the flag, went with Look)
      */
     #viewMode button {
+      min-width: 52px;
+      padding: 0 10px;
+    }
+    /* the retake under the switch, at the top right, and as narrow as its word */
+    #retakePanel {
+      top: calc(16px + 64px + 10px + 60px + 10px + env(safe-area-inset-top, 0px));
+      bottom: auto;
+      transform-origin: top right;
+    }
+    #retakePanel button {
       min-width: 52px;
       padding: 0 10px;
     }
@@ -1195,6 +1219,11 @@
     }
     #viewMode #viewFlag {
       min-width: 44px;
+    }
+    #retakePanel {
+      right: calc(16px + env(safe-area-inset-right, 0px));
+      top: calc(16px + 64px + 10px + 60px + 10px + env(safe-area-inset-top, 0px));
+      bottom: auto;
     }
     #help {
       display: none;
@@ -1505,8 +1534,8 @@
 </div>
 <div class="panel" id="shop" hidden>
   <h2>The pro shop</h2>
-  <p>A finer putter strikes harder, and its aim reaches further.</p>
-  <div id="shopClubs"></div>
+  <p>Wear one item at a time. Coins and gems come from holes played, on any course.</p>
+  <div id="shopItems"></div>
   <button id="shopClose">Back to the course</button>
 </div>
 <div class="panel" id="start" hidden>
@@ -1538,6 +1567,11 @@
         stroke-linejoin="round"
       />
     </svg>
+  </button>
+</div>
+<div class="panel" id="retakePanel" hidden>
+  <button id="mulligan" type="button" aria-label="Retake the last stroke: your Mulligan, one a round" disabled>
+    Retake
   </button>
 </div>
 <div class="panel" id="help" hidden>drag back and let go to putt</div>

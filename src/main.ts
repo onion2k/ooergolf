@@ -14,18 +14,17 @@ import { markScale, safeBox } from './aimview';
 import { framingProblems } from './invariants';
 import { CLIP, CameraRig, LEAD, TILT, overheadFit, standOf, tallOf } from './camera';
 import { Director } from './director';
-import { CLUBS } from './clubs';
+import { ITEMS } from './items';
 import { createApi } from './debug';
 import { frameCost } from './frame-cost';
-import { COURSES, CUP } from './course';
+import { COURSES } from './course';
 import { Game, type GameEvents } from './game';
 import { Hud } from './hud';
 import { uiScale } from './uiscale';
 import { mapInto, mapSize, paintMap, type MapSize } from './holemap';
 import { Previewer, type Preview } from './preview';
-import { breakOf, leansOnMinigolf } from './green';
+import { breakAids, breakOf, leansOnMinigolf, readerArrows } from './green';
 import { greensText, landingText, pinReadout, pinText, puttText, windArrow } from './readout';
-import { LIE } from './surfaces';
 import { daylight } from './look';
 import { Progress } from './progress';
 import { seeded } from './random';
@@ -41,6 +40,9 @@ import { Squash, squashInto, squashOf } from './squash';
 import { waggle } from './sway';
 import { EFFECT_STRIDE } from 'artshape-render/game/renderer';
 import { Governor, RUNGS } from './quality';
+import { PALETTE } from './models/palette';
+import { retakeShown } from './retake';
+import { SPRITE_FLOATS, TRAIL, Trail, trailDrawn, trailInto } from './trail';
 import { HeldView, groundAt } from './shot';
 import { between } from './frames';
 
@@ -138,6 +140,10 @@ async function main() {
       flag() {
         faceFlag();
       },
+      // the Retake button: the Mulligan item's free retake, which the game says whether it took (and tells of, through `mulliganed`)
+      retake() {
+        game?.mulligan();
+      },
       // a club of the bag chosen on a golf hole
       club(id) {
         if (game?.pick(id)) {
@@ -155,8 +161,10 @@ async function main() {
         if (game) hud.setShaping(game.shape, game.spin);
       },
     },
-    CLUBS,
+    ITEMS,
   );
+  /** Whether the waders took the loss being told of, which the word for it says: set just before it, and read by it. */
+  let wadedNow = false;
   const showPurse = () => game && hud.setPurse(game.progress.save);
   const scene = new Scene();
   const rig = new CameraRig();
@@ -176,12 +184,18 @@ async function main() {
     glints: 0,
     sparkles: 0,
     kicks: 0,
+    // the glow ball's sprites the last frame drew, and the particles the last holing threw up from the cup
+    trail: 0,
+    confetti: 0,
     puff: null as 'sand' | 'grass' | null,
     // the grass pressed flat this frame round a ball lying in the rough, as it was asked of the renderer
     press: null as { x: number; y: number; radius: number } | null,
     // whether the renderer took it: it does not where the field has no trample, or off it
     took: false,
   };
+  /** The glow ball's trail: a ring made once and the sprites it is written into each frame, used only with the item held. */
+  const trail = new Trail();
+  const trailSprites = new Float32Array(TRAIL.most * SPRITE_FLOATS);
   /** When each kicker of this hole was last hit, in game time: a kicker a hole, made as the hole begins, so never more than it has. */
   let kickedAt: number[] = [];
   /** The disc of grass pressed round a ball at rest in the rough, written each frame: nothing is made. */
@@ -211,6 +225,10 @@ async function main() {
   let shownPreview: Preview | null = null;
   /** Where the ball was when the putt's break was last read, so a loop of a hundred and more steps is run once for a ball at rest and never in a frame. */
   const putted = { x: NaN, y: NaN };
+  /** Which arrows the putt's words were last worked out for, so the reader's club chosen at rest has them said again. */
+  let puttedFor: 'green' | 'near' | null = null;
+  /** Where the ball was when the break reader's arrows were last placed round it, so they are placed once for a ball at rest. */
+  const read = { x: NaN, y: NaN };
   /** The camera's four corners on the ground, made once, and the ground a point of the map is worked out from. */
   const corners: [number, number][] = [
     [0, 0],
@@ -251,6 +269,7 @@ async function main() {
     // a hole begun: drawn afresh, the sun's shadow fitted to it, and the camera on its tee
     started(index, par) {
       if (!game) return;
+      const held = game;
       const { layout } = game;
       kickedAt = layout.kickers.map(() => -Infinity);
       const { name } = game.course[index];
@@ -261,8 +280,15 @@ async function main() {
       windNow.speed = layout.golf ? blowing.speed : 0;
       // the hole's own wind, which the grass bends in and the flag and the trees follow
       const wind = windOf(name);
-      renderer.setStatic(scene.static(layout, name, game.obstacles));
-      renderer.setDynamic(scene.dynamic(game.obstacles, layout, name, wind));
+      renderer.setStatic(scene.static(layout, name, game.obstacles, game.cup.radius));
+      // the items that show more are drawn on the holes begun with them, which is where their previews are made too
+      renderer.setDynamic(
+        scene.dynamic(game.obstacles, layout, name, wind, {
+          ghost: game.effects.has('ghost'),
+          reader: game.effects.has('reader'),
+          rainbow: game.effects.has('rainbow'),
+        }),
+      );
       // the hole's rough, round the painted green
       grown = renderer.setGrass(fieldOf(layout, name, clearings(layout, name)), grassOptionsOf(layout));
       // nothing is pressed on a new hole: the grass stands as it was grown
@@ -292,16 +318,18 @@ async function main() {
       hud.setGreens(layout.golf ? greensText(game.def.greens) : null);
       hud.setPutt(null);
       putted.x = NaN;
+      read.x = NaN;
       scene.setArrows(false);
       hud.setShaping(game.shape, game.spin);
       // a hole is begun aiming, and the view eases home to the tee's over the glide
       backToAim?.();
       squash.clear();
+      trail.clear();
       hud.started({ index, count: game.course.length, name: game.course[index].name, par });
       // the bag on a golf hole, with the driver in hand, and none on a hole of minigolf
       hud.setBag(
         layout.golf
-          ? BAG.map((c) => ({ id: c.id, name: c.name, label: c.label, carry: carryOf(c, 1), loft: c.loft }))
+          ? BAG.map((c) => ({ id: c.id, name: c.name, label: c.label, carry: carryOf(held.club(c), 1), loft: c.loft }))
           : null,
         game.inHand.id,
       );
@@ -332,11 +360,26 @@ async function main() {
       const k = kickerAt(game.layout, x, y, KIND_RADIUS[BALL] + 0.25);
       if (k >= 0) kickedAt[k] = game.t;
     },
+    // the waders took the loss that is about to be told of: the next word for it says it cost nothing
+    waded() {
+      wadedNow = true;
+    },
+    // the mulligan: the stroke undone, and the ball back where it was struck from, which is round again
+    mulliganed() {
+      hud.setStrokes(game?.strokes ?? 0);
+      hud.mulligan();
+      squash.clear();
+      trail.clear();
+    },
+    // the penny used up: the purse and the shop show it gone
+    spent: showPurse,
     // into the water: a splash where it went in, and a word, and the stroke it cost; the ball put back is round
     splash(x, y) {
       hud.setStrokes(game?.strokes ?? 0);
-      hud.splash();
+      hud.splash(wadedNow);
+      wadedNow = false;
       squash.clear();
+      trail.clear();
       // a splash up, and a ring spreading over the water from where it went in
       if (game) scene.splashedAt(x, y, game.t);
       for (const e of splash(x, y)) renderer.emit(e);
@@ -344,15 +387,27 @@ async function main() {
     // out of bounds: a word for it, and the stroke it cost; the ball put back is round
     outOfBounds() {
       hud.setStrokes(game?.strokes ?? 0);
-      hud.outOfBounds();
+      hud.outOfBounds(wadedNow);
+      wadedNow = false;
       squash.clear();
+      trail.clear();
     },
     // in the cup: confetti out of it, the flag waggling and its gold flashing, from the moment it dropped
     holed(strokes, par) {
       hud.done(strokes, par, false);
       if (!game) return;
       scene.holedAt = game.t;
-      for (const e of cupBurst(game.layout.cup.x, game.layout.cup.y, strokes === 1)) renderer.emit(e);
+      // the confetti cup throws more, for longer, in the rainbow's colours
+      drawn.confetti = 0;
+      for (const e of cupBurst(
+        game.layout.cup.x,
+        game.layout.cup.y,
+        strokes === 1,
+        game.effects.has('confetti') ? 'confetti' : 'plain',
+      )) {
+        renderer.emit(e);
+        drawn.confetti += e.count;
+      }
     },
     pickedUp: (strokes, par) => hud.done(strokes, par, true),
     finished: () => game && hud.finished(game.course, game.card),
@@ -513,7 +568,17 @@ async function main() {
         if (flying) {
           const p = previewer.run({ x, y }, inHand, flying.angle, flying.power, shape, spin);
           hud.setLanding(
-            p.n ? landingText({ carry: p.carry, end: p.end, lie: p.lie, hit: p.hit !== null, shape, spin }) : null,
+            p.n
+              ? landingText({
+                  carry: p.carry,
+                  end: p.end,
+                  lie: p.lie,
+                  hit: p.hit !== null,
+                  shape,
+                  spin,
+                  ...(p.rest.shown && p.rest.settled ? { rest: p.rest.carry } : {}),
+                })
+              : null,
           );
         } else previewer.roll({ x, y }, inHand, aimed.angle, aimed.power);
       }
@@ -536,14 +601,28 @@ async function main() {
     }
     // the green's arrows are shown, and the putt's break said, while the ball rests on the putting green or the first cut of a
     // hole being played; the break is worked out when the ball comes to rest and never again for it
+    // (the break reader shows them off the green too, round the ball, for a putter in hand)
     const lie = lieAt(layout, x, y);
-    const resting = played.ready && played.phase === 'play' && (lie === LIE.green || lie === LIE.cut);
-    scene.setArrows(resting);
-    if (resting && played.def.greens !== undefined) {
-      if (putted.x !== x || putted.y !== y) {
+    const aids = breakAids(lie, inHand.loft, played.effects.has('reader'), played.def.greens !== undefined);
+    const rested = played.ready && played.phase === 'play';
+    scene.setArrows(rested && aids.arrows === 'green');
+    const nearBall = rested && aids.arrows === 'near';
+    if (nearBall) {
+      if (read.x !== x || read.y !== y) {
+        read.x = x;
+        read.y = y;
+        scene.setReaderArrows(readerArrows(layout, x, y));
+      }
+    } else if (!Number.isNaN(read.x)) {
+      read.x = NaN;
+      scene.setReaderArrows(null);
+    }
+    if (rested && aids.words) {
+      if (putted.x !== x || putted.y !== y || puttedFor !== aids.arrows) {
         putted.x = x;
         putted.y = y;
-        hud.setPutt(puttText(breakOf(layout, x, y, played.def.greens)));
+        puttedFor = aids.arrows;
+        hud.setPutt(puttText(breakOf(layout, x, y, played.greens)));
       }
     } else if (!Number.isNaN(putted.x)) {
       putted.x = NaN;
@@ -646,7 +725,7 @@ async function main() {
     // a putt, on a golf hole or a hole of minigolf, is aimed by its dots as it always was
     const flying = golf && previewer !== null && played.ready && played.inHand.loft > 0 ? input.aim : null;
     const reach = golf
-      ? carryFrom(played.inHand, 1, lieAt(played.layout, world.x[ball], world.y[ball])) / AIM_REACH
+      ? carryFrom(played.inHand, 1, lieAt(played.layout, world.x[ball], world.y[ball]), played.effects) / AIM_REACH
       : rollsFor(played.hardest) / rollsFor(HARDEST_SHOT);
     // and a putt on a hole whose greens are set is drawn as its roll as well, so the break is seen as a curve across the green
     const rolling =
@@ -674,12 +753,32 @@ async function main() {
     // the grass's wind and its track keep game time, as everything else that moves does
     renderer.time = played.t;
     shine();
+    glowTrail();
+  }
+
+  /**
+   * The glow ball's trail: the ball's place stamped into the ring as it moves and the ring written out as sprites, each
+   * frame, with the item held and the picture on a rung that draws particles (the renderer gives sprites up with them, and
+   * the lowest rungs have no room for the glow). Without the item nothing is written, and what was drawn is put away once.
+   */
+  function glowTrail() {
+    const { world, ball } = played;
+    if (!trailDrawn(played.effects.has('glow'), RUNGS[governor.rung])) {
+      trail.clear();
+      if (drawn.trail) renderer.setSprites(trailSprites, (drawn.trail = 0));
+      return;
+    }
+    // only a ball that is going leaves a place: one at rest on the tee would glow there for as long as time stood still
+    if (world.alive[ball] && Math.hypot(world.vx[ball], world.vy[ball], world.vz[ball]) > TRAIL.moving)
+      trail.record(played.t, world.x[ball], world.y[ball], world.z[ball]);
+    drawn.trail = trailInto(trailSprites, trail, played.t, KIND_RADIUS[BALL], PALETTE.trail);
+    renderer.setSprites(trailSprites, drawn.trail);
   }
 
   /** The gold that glints: round the cup's rim, and the knob on the pin. */
   const glinting = (): [number, number, number][] => {
     const { cup } = played.layout;
-    const rim = CUP.radius + 0.15;
+    const rim = played.cup.radius + 0.15;
     // on the ground the cup is cut in, however high that stands, and all round its rim where it slopes
     const on = (x: number, y: number) => heightAt(played.layout, x, y);
     return [
@@ -831,6 +930,16 @@ async function main() {
   function draw(dt: number): number {
     // the far plane is further while the view from above is up, so the whole of a big hole is inside it
     cam.far = rig.farPlane;
+    // the Retake button is up while pressing it would do something: the page tells the hud, which does not read the game
+    hud.setRetake(
+      retakeShown({
+        held: played.effects.has('mulligan'),
+        strokes: played.strokes,
+        used: played.mulliganUsed,
+        phase: played.phase,
+        choosing,
+      }),
+    );
     rig.place(cam, played.t);
     cam.update();
     upload();
@@ -976,6 +1085,10 @@ async function main() {
       arrows: scene.arrowsDrawn(),
       // only while one is lit, so a hole with none, and every moment none is hit, reads as it always did
       ...(drawn.kicks ? { kicks: drawn.kicks } : {}),
+      trail: drawn.trail,
+      confetti: drawn.confetti,
+      strips: scene.flagStrips(),
+      retake: hud.retakeDrawn(),
     }),
     course: () => courseName,
     choosing: () => choosing,

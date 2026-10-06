@@ -13,6 +13,7 @@ import { BALL, KIND_RADIUS, tileAt, type Ground } from './arena';
 import type { BagClub } from './bag';
 import { LEAD, TILT, VIEW, phoneOf, standOf, tallOf } from './camera';
 import { carryFrom } from './flight';
+import { NO_EFFECTS, type Effects } from './items';
 import { windReach } from './shaping';
 import type { Lie } from './surfaces';
 
@@ -24,8 +25,10 @@ export const LANDS_PAST = 1.045;
  * much further as a tailwind of `wind` miles an hour carries a lofted club, so the ring of a downwind shot is on the
  * screen too. The one place it is worked out, for the page and the fuzzer alike.
  */
-export function reachOf(club: BagClub, lie: Lie, wind: number): number {
-  return carryFrom(club, 1, lie) * LANDS_PAST + (club.loft > 0 ? windReach(club, 1, wind) : 0);
+export function reachOf(club: BagClub, lie: Lie, wind: number, effects: Effects = NO_EFFECTS): number {
+  return (
+    carryFrom(club, 1, lie, effects) * LANDS_PAST + (club.loft > 0 ? windReach(club, 1, wind, undefined, effects) : 0)
+  );
 }
 
 /**

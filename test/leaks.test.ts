@@ -10,23 +10,25 @@ import { setFlagsFromString } from 'node:v8';
 import { describe, expect, it } from 'vitest';
 import { GOLF_COURSES, WATCH, grew, sizes, trouble } from '../scripts/leaks';
 import { BALL } from '../src/arena';
-import { CLUBS } from '../src/clubs';
+import { ITEMS } from '../src/items';
 import { COURSES } from '../src/course';
 import { golfHole, laneOf } from '../src/golf';
+import { Previewer } from '../src/preview';
 import { Progress, memoryStore } from '../src/progress';
+import { TRAIL, Trail } from '../src/trail';
 import { newGame } from './helpers';
 
 describe('what must stay bounded', () => {
-  it('holds a save with every club and a best on every hole of every course under its ceiling, however many courses there are', () => {
+  it('holds a save with every item and a best on every hole of every course under its ceiling, however many courses there are', () => {
     // a best is kept for each hole by its name, so the save grows a hole at a time as the courses are played: the most it
-    // could ever be is every club owned and every hole of every course done
+    // could ever be is every item owned and every hole of every course done
     const progress = new Progress(memoryStore(null));
-    progress.save.owned = CLUBS.map((c) => c.id);
-    progress.save.club = CLUBS[CLUBS.length - 1].id;
+    progress.save.owned = ITEMS.map((i) => i.id);
+    progress.save.item = ITEMS[ITEMS.length - 1].id;
     progress.save.coins = 999_999;
     progress.save.gems = 999;
     const holes = COURSES.flatMap((c) => c.holes);
-    for (const hole of holes) progress.save.best[hole.name] = { strokes: 10, club: CLUBS[CLUBS.length - 1].id };
+    for (const hole of holes) progress.save.best[hole.name] = { strokes: 10, item: ITEMS[ITEMS.length - 1].id };
     expect(holes.length, 'a hole of each').toBeGreaterThanOrEqual(27);
     const bytes = JSON.stringify(progress.save).length;
     expect(bytes, `${bytes} bytes for ${holes.length} holes`).toBeLessThan(WATCH['save bytes']!.ceiling);
@@ -45,6 +47,22 @@ describe('what must stay bounded', () => {
     game.world.spawn(BALL, 0, 0, 2);
     expect(sizes(game).bodies).toBe(2);
     expect(sizes(game).slots).toBe(2);
+  });
+
+  it("names the glow ball's trail ring and the ghost shot's rest buffers, each under a ceiling it is made to", () => {
+    const trail = new Trail();
+    for (let i = 0; i < 1000; i++) trail.record(i / 60, i, 0, 0.3);
+    expect(trail.count, 'a ring of 48 however long the ball goes').toBe(TRAIL.most);
+    expect(WATCH['trail places']!.ceiling).toBe(48);
+    const bytes = trail.x.byteLength + trail.y.byteLength + trail.z.byteLength + trail.at.byteLength;
+    expect(bytes).toBeLessThanOrEqual(WATCH['trail ring bytes']!.ceiling);
+    const previewer = new Previewer(newGame().game);
+    const rest = [previewer.result, previewer.rolled].reduce(
+      (n, p) => n + p.rest.points.byteLength + p.rest.length.byteLength,
+      0,
+    );
+    expect(rest, "both previews' buffers").toBeLessThanOrEqual(WATCH['preview rest bytes']!.ceiling);
+    expect(rest).toBeGreaterThan(10_000);
   });
 
   it('knows a size that grows from one that wanders', () => {

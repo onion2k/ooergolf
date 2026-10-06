@@ -137,7 +137,7 @@ test('writes its save, and boots again from it', async ({ page }) => {
   const problems = watch(page);
   await start(page);
   const written = await page.evaluate(() => window.game!.save());
-  expect(written).toBe('{"coins":0,"gems":0,"owned":["putter"],"club":"putter","best":{}}');
+  expect(written).toBe('{"coins":0,"gems":0,"owned":[],"item":"","best":{}}');
   expect(await page.evaluate(() => localStorage.getItem('ooergolf-save-v1'))).toBe(written);
   await page.reload();
   await expect.poll(() => page.evaluate(() => window.game?.ready ?? false), { timeout: 60_000 }).toBe(true);
@@ -148,36 +148,37 @@ test('writes its save, and boots again from it', async ({ page }) => {
 test("boots from the stub's save, which has a bank the game no longer knows", async ({ page }) => {
   const problems = watch(page);
   await start(page, { save: { bank: 7, banked: 7 } });
-  expect(await page.evaluate(() => window.game!.save())).toBe(
-    '{"coins":0,"gems":0,"owned":["putter"],"club":"putter","best":{}}',
-  );
+  expect(await page.evaluate(() => window.game!.save())).toBe('{"coins":0,"gems":0,"owned":[],"item":"","best":{}}');
   expect(await page.evaluate(() => window.game!.invariants())).toEqual([]);
   expect(problems).toEqual([]);
 });
 
-test('the shop sells a club to a player who can pay, puts it in hand, and a reload keeps it', async ({ page }) => {
+test('the shop sells an item to a player who can pay, equips it one at a time, and a reload keeps it', async ({
+  page,
+}) => {
   const problems = watch(page);
-  await start(page, { seed: 1, paused: true, save: { coins: 45, gems: 0 } });
-  await expect(page.locator('#coins')).toHaveText('45');
+  await start(page, { seed: 1, paused: true, save: { coins: 75, gems: 0 } });
+  await expect(page.locator('#coins')).toHaveText('75');
   await page.locator('#shopOpen').click();
   await expect(page.locator('#shop')).toBeVisible();
-  // the silver putter is more than the purse holds, and says so
-  await expect(page.locator('[data-club=silver] button')).toBeDisabled();
-  await page.locator('[data-club=brass] button').click();
-  await expect(page.locator('#coins')).toHaveText('5');
-  await expect(page.locator('[data-club=brass] button')).toHaveText('Use');
-  await page.locator('[data-club=brass] button').click();
-  await expect(page.locator('[data-club=brass] button')).toHaveText('In hand');
+  // the power glove is more than the purse holds, and says so
+  await expect(page.locator('[data-item=glove] button')).toBeDisabled();
+  await page.locator('[data-item=glow] button').click();
+  await expect(page.locator('#coins')).toHaveText('15');
+  await expect(page.locator('[data-item=glow] button')).toHaveText('Equip');
+  await page.locator('[data-item=glow] button').click();
+  await expect(page.locator('[data-item=glow] button')).toHaveText('Equipped');
+  // one at a time: the row for none is the way to take it off
+  await expect(page.locator('[data-item=""] button')).toHaveText('Equip');
   const state = await page.evaluate(() => window.game!.state());
-  expect(state.club).toBe('brass');
-  expect(state.hardest).toBe(42);
+  expect(state.item).toBe('glow');
   await page.locator('#shopClose').click();
   await expect(page.locator('#shop')).toBeHidden();
   await page.reload();
   await expect.poll(() => page.evaluate(() => window.game?.ready ?? false), { timeout: 60_000 }).toBe(true);
   const after = await page.evaluate(() => window.game!.state());
-  expect(after.club).toBe('brass');
-  expect(after.coins).toBe(5);
+  expect(after.item).toBe('glow');
+  expect(after.coins).toBe(15);
   expect(problems).toEqual([]);
 });
 

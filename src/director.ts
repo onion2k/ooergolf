@@ -179,6 +179,15 @@ export class Director {
   }
 
   /**
+   * What the aim view was worked out from: the club, the lie and the item equipped, since the glove, the wind sock and the
+   * rest change how far a shot reaches with the club and the lie as they were, and a view kept for the old reach would
+   * leave the new one off the top of the screen.
+   */
+  private keyOf(club: string, lie: number): string {
+    return `${club}|${lie}|${this.game?.item ?? ''}`;
+  }
+
+  /**
    * The camera sent to the view that shows where the club in hand comes down from the lie the ball is on, at the pace of an
    * ease, or at once for the very first view. Never worked out from a drag, which would move the ground under the finger.
    */
@@ -187,8 +196,8 @@ export class Director {
     if (!game?.layout.golf) return;
     const { world, ball, layout, inHand } = game;
     const lie = lieAt(layout, world.x[ball], world.y[ball]);
-    this.aimedFor = `${inHand.id}|${lie}`;
-    this.rig.aimAt(aimView(reachOf(inHand, lie, game.wind.speed), this.aspect, this.height), now);
+    this.aimedFor = this.keyOf(inHand.id, lie);
+    this.rig.aimAt(aimView(reachOf(inHand, lie, game.wind.speed, game.effects), this.aspect, this.height), now);
   }
 
   /**
@@ -242,7 +251,7 @@ export class Director {
     const { world, ball, layout, inHand } = game;
     const [x, y, t] = [world.x[ball], world.y[ball], Math.PI / 2 - this.rig.headed];
     const reach = layout.golf
-      ? reachOf(inHand, lieAt(layout, x, y), game.wind.speed)
+      ? reachOf(inHand, lieAt(layout, x, y), game.wind.speed, game.effects)
       : reachOnMinigolf(layout, x, y, t, rollsFor(game.hardest));
     out.x = x + reach * Math.cos(t);
     out.y = y + reach * Math.sin(t);
@@ -263,7 +272,7 @@ export class Director {
       if (!game.ready) this.aimedFor = '';
       else {
         const { world, ball, layout, inHand } = game;
-        if (this.aimedFor !== `${inHand.id}|${lieAt(layout, world.x[ball], world.y[ball])}`) this.aimFor(false);
+        if (this.aimedFor !== this.keyOf(inHand.id, lieAt(layout, world.x[ball], world.y[ball]))) this.aimFor(false);
       }
     } else if (!game.ready) this.worked.x = Number.NaN;
     // a camera a test has left where it put it is not sent to a view that frames the reach, which would zoom it out
@@ -413,7 +422,7 @@ export class Director {
     const t = Math.PI / 2 - heading;
     const golf = layout.golf;
     const reach = golf
-      ? reachOf(inHand, lieAt(layout, x, y), game.wind.speed)
+      ? reachOf(inHand, lieAt(layout, x, y), game.wind.speed, game.effects)
       : reachOnMinigolf(layout, x, y, t, rollsFor(game.hardest));
     if (Math.hypot(dx, dy) > reach) return false;
     const view =

@@ -12,7 +12,8 @@
 import { strikeSpeed } from './arena';
 import { carrying, type BagClub } from './bag';
 import type { Random } from './random';
-import { SURFACES, type Lie } from './surfaces';
+import { ITEM_FIGURES, NO_EFFECTS, scaled, type Effects } from './items';
+import { surfaceFor, type Lie } from './surfaces';
 
 /** What a mishit loses: at most this share of the speed, at full power, and less the gentler the drag. */
 export const DISPERSION = { loss: 0.08 } as const;
@@ -24,9 +25,21 @@ export interface Launch {
   vz: number;
 }
 
+/** The most speed a mishit loses at full power: `DISPERSION.loss`, and half of it with the steady grip. */
+export function lossOf(effects: Effects = NO_EFFECTS): number {
+  return DISPERSION.loss * scaled(effects, 'grip', ITEM_FIGURES.grip.loss);
+}
+
 /** The furthest, in radians, that a swing of `power` from `lie` may miss its aim, either way. */
-export function maxScatter(club: BagClub, lie: Lie, power: number): number {
-  return (club.spread * SURFACES[lie].wild * Math.max(0, Math.min(1, power)) * Math.PI) / 180;
+export function maxScatter(club: BagClub, lie: Lie, power: number, effects: Effects = NO_EFFECTS): number {
+  return (
+    (club.spread *
+      surfaceFor(lie, effects).wild *
+      scaled(effects, 'grip', ITEM_FIGURES.grip.scatter) *
+      Math.max(0, Math.min(1, power)) *
+      Math.PI) /
+    180
+  );
 }
 
 /** A number from minus one to one that is most likely nought, from two draws: bounded, so a limit on it is a fact. */
@@ -39,14 +52,21 @@ function triangle(random: Random): number {
  * of chance, or none for a club with no spread: two for the angle it misses by, and two for the speed it loses, of
  * which half the swings lose nothing.
  */
-export function strike(club: BagClub, power: number, angle: number, lie: Lie, random: Random): Launch {
-  const surface = SURFACES[lie];
+export function strike(
+  club: BagClub,
+  power: number,
+  angle: number,
+  lie: Lie,
+  random: Random,
+  effects: Effects = NO_EFFECTS,
+): Launch {
+  const surface = surfaceFor(lie, effects);
   const p = Math.max(0, Math.min(1, power));
   let speed = strikeSpeed(p, club.hardest) * surface.power;
   let aim = angle;
   if (club.spread > 0) {
-    aim += triangle(random) * maxScatter(club, lie, p);
-    speed *= 1 - Math.max(0, triangle(random)) * DISPERSION.loss * p;
+    aim += triangle(random) * maxScatter(club, lie, p, effects);
+    speed *= 1 - Math.max(0, triangle(random)) * lossOf(effects) * p;
   }
   // the sand's lip stands the ball up; the putter's loft is none, and stays none
   const loft = club.loft > 0 ? ((club.loft + surface.loft) * Math.PI) / 180 : 0;
@@ -55,8 +75,8 @@ export function strike(club: BagClub, power: number, angle: number, lie: Lie, ra
 }
 
 /** How far a shot of `power` carries on the level from `lie`, with no scatter: what the aim's marker shows. */
-export function carryFrom(club: BagClub, power: number, lie: Lie): number {
-  const surface = SURFACES[lie];
+export function carryFrom(club: BagClub, power: number, lie: Lie, effects: Effects = NO_EFFECTS): number {
+  const surface = surfaceFor(lie, effects);
   const speed = strikeSpeed(Math.max(0, Math.min(1, power)), club.hardest) * surface.power;
   return carrying(speed, club.loft > 0 ? club.loft + surface.loft : 0);
 }

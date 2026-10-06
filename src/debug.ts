@@ -16,7 +16,7 @@ import type { Antialias } from 'artshape-render/game/renderer';
 import { KIND_NAME, TILE, type Layout } from './arena';
 import { Autopilot, type Plan } from './autopilot';
 import { BAG, carryOf } from './bag';
-import { CUP, type HoleDef } from './course';
+import type { HoleDef } from './course';
 import { greenArrows, speedName } from './green';
 import type { Game } from './game';
 import { checkInvariants } from './invariants';
@@ -48,9 +48,12 @@ export interface GameState {
   card: number[];
   coins: number;
   gems: number;
-  /** The club in hand, and those owned. */
-  club: string;
+  /** The item equipped ('' for none), and the items owned. */
+  item: string;
   owned: string[];
+  /** Whether the waders have saved a stroke on this hole, and whether this round's mulligan has been taken. */
+  wadersUsed: boolean;
+  mulliganUsed: boolean;
   /** The hardest the club in hand strikes. */
   hardest: number;
   /** The course being played, and whether the start screen is up to choose one. */
@@ -175,10 +178,12 @@ export interface GameApi {
   chooseCourse(name: string): void;
   /** A new round, as the card's button asks for. */
   newRound(): void;
-  /** A club bought, as the shop's button does; whether it was. */
+  /** An item bought, as the shop's button does; whether it was. */
   buy(id: string): boolean;
-  /** A club owned put in hand; whether it was. */
+  /** An item owned put on, or none with the empty id; whether it was. */
   equip(id: string): boolean;
+  /** The mulligan: the last stroke undone and the ball back where it was struck from; whether it did anything. */
+  mulligan(): boolean;
   /** The save written now, and what it is. */
   save(): string;
 
@@ -311,6 +316,8 @@ export interface Motions {
     ring: { x: number; y: number; radius: number; colour: [number, number, number] } | null;
     spread: { x: number; y: number; across: number; along: number; heading: number } | null;
     knock: { x: number; y: number } | null;
+    /** The ghost shot's continuation as drawn: how many dots, and the ring where the ball rests; null with none. */
+    rest: { dots: number; ring: { x: number; y: number; radius: number } } | null;
     end: 'landed' | 'holed' | 'water' | 'out';
     carry: number;
     lie: number;
@@ -332,9 +339,17 @@ export interface Motions {
    * The arrows over the putting green as the last frame wrote them: whether they are shown (the ball at rest on the green
    * or the first cut) and how many are drawn; nought on a hole whose green is level.
    */
-  arrows: { shown: boolean; count: number };
+  arrows: { shown: boolean; count: number; reader?: number };
   /** How many kickers the last frame lit with a flash, as a ball hit them; absent while none is lit, so the rest reads as it did. */
   kicks?: number;
+  /** The glow ball's trail: how many sprites the last frame drew; nought without the item, at rest and on the lowest rung. */
+  trail: number;
+  /** The particles the last holing threw up from the cup: nought before one, kept as it was at a new hole until the next holing, and more with the confetti cup. */
+  confetti: number;
+  /** How many strips the flag's cloth is drawn in on this hole: one, or six on a hole begun with the rainbow flag. */
+  strips: number;
+  /** The Retake button as drawn: whether it is up on the course, and whether it can be pressed. */
+  retake: { shown: boolean; enabled: boolean };
 }
 
 /** The grass a frame drew, and the wind it bent in. */
@@ -427,8 +442,10 @@ export function createApi(host: DebugHost): GameApi {
         card: [...game.card],
         coins: game.progress.save.coins,
         gems: game.progress.save.gems,
-        club: game.progress.save.club,
+        item: game.progress.save.item,
         owned: [...game.progress.save.owned],
+        wadersUsed: game.wadersUsed,
+        mulliganUsed: game.mulliganUsed,
         hardest: game.hardest,
         course: host.course(),
         choosing: host.choosing(),
@@ -471,7 +488,7 @@ export function createApi(host: DebugHost): GameApi {
     content: () => ({
       floor: { ...game.layout.bounds },
       tee: { ...game.layout.tee },
-      cup: { ...game.layout.cup, radius: CUP.radius },
+      cup: { ...game.layout.cup, radius: game.cup.radius },
       hardest: game.hardest,
       holes: game.course.map((h) => ({ name: h.name, par: h.par })),
       sand: sandTiles(game.layout),
@@ -501,7 +518,11 @@ export function createApi(host: DebugHost): GameApi {
       return game.shoot(angle, power);
     },
     club: (id) => game.pick(id),
-    bag: () => BAG.map((c) => ({ id: c.id, name: c.name, loft: c.loft, hardest: c.hardest, carry: carryOf(c, 1) })),
+    bag: () =>
+      BAG.map((c) => {
+        const held = game.club(c);
+        return { id: c.id, name: c.name, loft: c.loft, hardest: held.hardest, carry: carryOf(held, 1) };
+      }),
     suggest: () => (game.ready ? new Autopilot(game).plan() : null),
     startHole: (index) => game.startAt(index),
     playCourse: (holes) => game.playCourse(holes),
@@ -509,6 +530,7 @@ export function createApi(host: DebugHost): GameApi {
     newRound: () => game.newRound(),
     buy: (id) => game.buy(id),
     equip: (id) => game.equip(id),
+    mulligan: () => game.mulligan(),
     aiming: () => host.aiming(),
     map: () => host.map(),
     view: () => host.view(),

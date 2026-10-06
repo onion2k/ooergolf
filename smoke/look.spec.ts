@@ -516,7 +516,7 @@ test.describe('what it looks like', () => {
     await start(page, {
       seed: 11,
       paused: true,
-      save: { coins: 130, gems: 1, owned: ['putter', 'brass'], club: 'brass' },
+      save: { coins: 130, gems: 1, owned: ['glow', 'rainbow'], item: 'glow' },
     });
     await page.evaluate(() => window.game!.step(60));
     await hideStats(page);
@@ -1045,7 +1045,7 @@ test.describe('what it looks like', () => {
       await start(page, {
         seed: 11,
         paused: true,
-        save: { coins: 130, gems: 1, owned: ['putter', 'brass'], club: 'brass' },
+        save: { coins: 130, gems: 1, owned: ['glow', 'rainbow'], item: 'glow' },
       });
       await page.evaluate(() => window.game!.step(60));
       await page.locator('#shopOpen').click();
@@ -1505,4 +1505,188 @@ test('The Mill Race with its windmill listed first, from its tee: the barrier on
   await hideStats(page);
   await expect(page.locator('#view')).toHaveScreenshot('mill-race-swapped.png', TOLERANCE);
   expect(problems).toEqual([]);
+});
+
+/**
+ * What the shop's items draw: the glow ball's trail, the confetti cup, the rainbow flag, the ghost shot's carry-on, the
+ * break reader's arrows off the green and the Retake button. Each is set from a save that owns and equips the item, with the
+ * game paused and seeded, and stepped a frame at a time where the picture needs the frames before it (a trail is made of the
+ * frames that came first, and `step(n)` draws only once, after the n).
+ */
+test.describe("the shop's items", () => {
+  /** A save that owns one item and has it on, with coins to spare. */
+  const holding = (item: string) => ({ coins: 200, gems: 1, owned: [item], item });
+
+  /** The autopilot's shots from the tee of the hole in play, until the ball is in the cup: stops on the first frame of the confetti. */
+  async function holeIt(page: Page) {
+    await page.evaluate(() => {
+      const g = window.game!;
+      for (let s = 0; s < 30 && g.state().phase === 'play' && g.motions().confetti === 0; s++) {
+        const shot = g.suggest();
+        if (shot) g.shoot(shot.angle, shot.power);
+        for (let f = 0; f < 900 && g.motions().confetti === 0 && !g.state().ready; f++) g.step(1);
+      }
+    });
+  }
+
+  test('the glow ball rolling on minigolf: its trail behind it, a few frames after the stroke', async ({ page }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true, save: holding('glow') });
+    await page.evaluate(() => {
+      const g = window.game!;
+      g.step(60);
+      const shot = g.suggest()!;
+      g.shoot(shot.angle, shot.power);
+      g.followShots('always');
+      for (let f = 0; f < 24; f++) g.step(1);
+    });
+    expect(await page.evaluate(() => window.game!.motions().trail), 'the trail is drawn').toBeGreaterThan(2);
+    await hideStats(page);
+    await expect(page.locator('#view')).toHaveScreenshot('items-glow-trail.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
+  test('the glow ball in the air on a drive: its trail along the flight', async ({ page }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true, save: holding('glow') });
+    await page.evaluate(() => {
+      const g = window.game!;
+      g.chooseCourse('The Links');
+      g.startHole(0);
+      g.step(300);
+      g.followShots('always');
+      const shot = g.suggest()!;
+      g.shoot(shot.angle, shot.power, 'driver');
+      for (let f = 0; f < 50; f++) g.step(1);
+    });
+    expect(await page.evaluate(() => window.game!.motions().trail), 'the trail is drawn').toBeGreaterThan(2);
+    await hideStats(page);
+    await expect(page.locator('#view')).toHaveScreenshot('items-glow-trail-drive.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
+  test('the confetti cup a few frames after a hole is holed, close on the cup', async ({ page }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true, save: holding('confetti') });
+    await page.evaluate(() => window.game!.step(60));
+    await holeIt(page);
+    await page.evaluate(() => {
+      const g = window.game!;
+      const { cup } = g.content();
+      g.look(cup.x, cup.y - 4, 14);
+      for (let f = 0; f < 8; f++) g.step(1);
+    });
+    expect(await page.evaluate(() => window.game!.motions().confetti), 'confetti was thrown').toBeGreaterThan(0);
+    await hideStats(page);
+    await expect(page.locator('#view')).toHaveScreenshot('items-confetti.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
+  test('the rainbow flag close to, on the cup, its cloth in the wind', async ({ page }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true, save: holding('rainbow') });
+    await page.evaluate(() => {
+      const g = window.game!;
+      g.step(75);
+      const { cup } = g.content();
+      g.look(cup.x, cup.y - 3, 12);
+      g.step(40);
+    });
+    expect(await page.evaluate(() => window.game!.motions().strips), 'the cloth is in strips').toBe(6);
+    await hideStats(page);
+    await expect(page.locator('#view')).toHaveScreenshot('items-rainbow-flag.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
+  test('the ghost shot: a drive part-pulled on Water Carry, its line carried on past the first landing to the ring where it rests', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true, save: holding('ghost') });
+    await page.evaluate(() => {
+      window.game!.chooseCourse('The Links');
+      window.game!.startHole(1);
+      window.game!.step(300);
+    });
+    await pullDown(page, 0.5);
+    const shot = await page.evaluate(() => window.game!.motions().shot);
+    expect(shot?.rest, 'the carry-on is drawn').not.toBeNull();
+    await hideStats(page);
+    await expect(page).toHaveScreenshot('items-ghost-shot.png', TOLERANCE);
+    await page.mouse.up();
+    expect(problems).toEqual([]);
+  });
+
+  test('the break reader: a putt aimed from the fairway, the arrows over the green and the words in the panel', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    const hole = puttingHole(12);
+    const layout = layoutOf(hole.map, Float32Array.from(hole.terrain));
+    // the fairway tile nearest the cup that is south of it, so the cup is ahead of the ball
+    let at = { x: 0, y: 0, far: Infinity };
+    for (let t = 0; t < layout.cols * layout.rows; t++) {
+      if (layout.lie[t] !== LIE.fairway || layout.solid[t] || layout.oob[t]) continue;
+      const x = layout.originX + ((t % layout.cols) + 0.5) * 3;
+      const y = layout.originY + (Math.floor(t / layout.cols) + 0.5) * 3;
+      const far = Math.hypot(x - layout.cup.x, y - layout.cup.y);
+      if (y < layout.cup.y - 8 && far < at.far) at = { x, y, far };
+    }
+    expect(at.far, 'a fairway tile was found').toBeLessThan(40);
+    await start(page, { seed: 11, paused: true, save: holding('reader') });
+    await page.evaluate(
+      ([h, p]) => {
+        const g = window.game!;
+        const def = h as { terrain: number[] };
+        g.playCourse([{ ...def, terrain: Float32Array.from(def.terrain) } as never]);
+        g.step(30);
+        g.lay((p as { x: number }).x, (p as { y: number }).y);
+        for (let f = 0; f < 300 && !g.state().ready; f++) g.step(1);
+        g.club('putter');
+        g.step(120);
+      },
+      [hole, at],
+    );
+    const arrows = await page.evaluate(() => window.game!.motions().arrows);
+    expect(arrows.shown, 'the arrows are up off the green').toBe(true);
+    await aim(page, 0.5);
+    await hideStats(page);
+    await expect(page).toHaveScreenshot('items-reader-fairway.png', TOLERANCE);
+    await page.mouse.up();
+    expect(problems).toEqual([]);
+  });
+
+  /** One stroke taken with the Mulligan in hand, and the ball at rest: the Retake button is up. */
+  async function afterAStroke(page: Page) {
+    await start(page, { seed: 11, paused: true, save: holding('mulligan') });
+    await page.evaluate(() => {
+      const g = window.game!;
+      g.step(60);
+      const shot = g.suggest()!;
+      g.shoot(shot.angle, shot.power * 0.5);
+      for (let f = 0; f < 900 && !g.state().ready; f++) g.step(1);
+      g.step(60);
+    });
+    const retake = await page.evaluate(() => window.game!.motions().retake);
+    expect(retake, 'the Retake button is up and can be pressed').toEqual({ shown: true, enabled: true });
+    await hideStats(page);
+  }
+
+  test('the Retake button on a desk, after a stroke with the Mulligan equipped', async ({ page }) => {
+    const problems = watch(page);
+    await afterAStroke(page);
+    await expect(page).toHaveScreenshot('items-retake.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
+  test.describe('on a phone', () => {
+    test.use({ viewport: { width: 400, height: 860 }, hasTouch: true, isMobile: true });
+
+    test('the Retake button on a phone, after a stroke with the Mulligan equipped', async ({ page }) => {
+      const problems = watch(page);
+      await afterAStroke(page);
+      await expect(page).toHaveScreenshot('phone-items-retake.png', TOLERANCE);
+      expect(problems).toEqual([]);
+    });
+  });
 });

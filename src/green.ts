@@ -55,6 +55,62 @@ export function greenArrows(layout: Layout): Arrow[] {
   return arrows;
 }
 
+/**
+ * What the break reader shows off the green: the arrows over the ground near the ball, which the ball is putted over. `radius`
+ * is how far from the ball a tile's middle may be, in yards (seven tiles, so the arrows fill a screen's worth of the
+ * ground round it and no more), and `most` the most arrows there are, the nearest kept, so a frame writes a bounded pool.
+ */
+export const READER = { radius: 21, most: 128 } as const;
+
+/**
+ * The arrows the break reader puts over the ground round a ball at (x, y) of a golf hole: one for each tile within
+ * `READER.radius` of it that a ball is played from (not rock, water or out of bounds, and not the green's own tiles only,
+ * as `greenArrows` has it) whose slope is more than a hair, the nearest `READER.most` of them. Worked out when the ball comes
+ * to rest, never in a frame. None on a hole of minigolf, whose ground leans everywhere the arrows already stand.
+ */
+export function readerArrows(layout: Layout, x: number, y: number): Arrow[] {
+  const found: (Arrow & { d: number })[] = [];
+  if (!layout.golf) return found;
+  const reach = Math.ceil(READER.radius / TILE);
+  const c0 = Math.floor((x - layout.originX) / TILE),
+    r0 = Math.floor((y - layout.originY) / TILE);
+  for (let r = r0 - reach; r <= r0 + reach; r++) {
+    for (let c = c0 - reach; c <= c0 + reach; c++) {
+      if (c < 0 || r < 0 || c >= layout.cols || r >= layout.rows) continue;
+      const t = r * layout.cols + c;
+      if (layout.solid[t] || layout.water[t] || layout.oob[t]) continue;
+      const ax = layout.originX + (c + 0.5) * TILE,
+        ay = layout.originY + (r + 0.5) * TILE;
+      const d = Math.hypot(ax - x, ay - y);
+      if (d > READER.radius) continue;
+      const [slopeX, slopeY] = slopeAt(layout, ax, ay);
+      if (Math.hypot(slopeX, slopeY) > HAIR) found.push({ x: ax, y: ay, slopeX, slopeY, d });
+    }
+  }
+  if (found.length > READER.most) {
+    found.sort((a, b) => a.d - b.d);
+    found.length = READER.most;
+  }
+  return found.map(({ d: _d, ...a }) => a);
+}
+
+/**
+ * What the page shows of the break for a ball lying on `lie` with a club of `loft` in hand: the arrows (the green's own, on
+ * the putting green and the first cut as they always were, or the ones near the ball, which only the break reader shows
+ * and only for a putter, off the green), and the words, which want a hole that has set its greens' speed. One place, so
+ * the page only does what this says.
+ */
+export function breakAids(
+  lie: number,
+  loft: number,
+  reader: boolean,
+  greensSet: boolean,
+): { arrows: 'green' | 'near' | null; words: boolean } {
+  const onGreen = lie === LIE.green || lie === LIE.cut;
+  const reads = reader && loft === 0;
+  return { arrows: onGreen ? 'green' : reads ? 'near' : null, words: greensSet && (onGreen || reads) };
+}
+
 /** Whether a hole of minigolf has ground that leans, so that it shows the break as golf does: false for a golf hole, which always does, and for every level hole. */
 export function leansOnMinigolf(layout: Layout): boolean {
   return !layout.golf && greenArrows(layout).length > 0;

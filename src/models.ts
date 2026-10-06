@@ -14,7 +14,7 @@
  */
 export type { Colour, Material, Model, Part, Pattern, V3 } from './models/part';
 export { PATTERN, bounds, group, triangles } from './models/part';
-export { FLAG_COLOURS, FLOWER_COLOURS, PALETTE, PENNANT_COLOURS, ROUGH } from './models/palette';
+export { FLAG_COLOURS, FLOWER_COLOURS, PALETTE, PENNANT_COLOURS, RAINBOW, ROUGH } from './models/palette';
 export { CUP, breakArrow, collar, cup, flag, golfBall, teeMarkers } from './models/course';
 export type { Conveyor, Footprint, Pond, Windmill } from './models/obstacles';
 export {
@@ -55,6 +55,8 @@ export const BUDGET = {
   cup: 380,
   collar: 40,
   flag: 240,
+  /** The rainbow flag: the pole and knob of the flag, and six strips of cloth of eighty triangles less their inner edges. */
+  'rainbow flag': 640,
   teeMarkers: 300,
   ball: 1000,
   rail: 200,

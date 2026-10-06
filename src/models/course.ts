@@ -13,7 +13,7 @@
  * ball would show their facets at every glance.
  */
 import { MeshBuilder, type Mesh } from 'artshape-render/mesh/types';
-import { PALETTE, ROUGH } from './palette';
+import { PALETTE, RAINBOW, ROUGH } from './palette';
 import { PATTERN, matte, type Colour, type Model, type V3 } from './part';
 import { at, ballProfile, built, lathe, lifted, type Turned } from './shapes';
 import { face, tri } from '../meshes';
@@ -157,9 +157,11 @@ export function collar(
  * The pin and its flag: a round pole, banded, from the bottom of the cup up
  * to `height` above the grass, a gold ball on its top, and a pennant of
  * `colour` flying from just under it toward +X in soft folds. The game turns
- * the whole of it about Z to set which way the flag flies.
+ * the whole of it about Z to set which way the flag flies. With `rainbow`, the cloth is six strips of the rainbow's
+ * colours, from the top down, parts named `flag0` to `flag5`, which together are the very cloth of the plain flag (one
+ * part named `flag`, in `colour`, which is what it is without the option).
  */
-export function flag(colour: Colour, { height = 9, depth = CUP.depth, radius = 0.12 } = {}): Model {
+export function flag(colour: Colour, { height = 9, depth = CUP.depth, radius = 0.12, rainbow = false } = {}): Model {
   const knob = 0.28;
   const top = height - knob * 2 - 0.08;
   const [long, deep] = [3.4, 2.4];
@@ -190,7 +192,14 @@ export function flag(colour: Colour, { height = 9, depth = CUP.depth, radius = 0
         material: matte(PALETTE.gold, ROUGH.metal),
         mesh: built((b) => lathe(b, at(0, 0, 0), sides, ballProfile(knob, 6, height - knob))),
       },
-      { name: 'flag', material: matte(colour, 0.45), mesh: cloth(radius * 0.5, top, long, deep) },
+      ...(rainbow
+        ? RAINBOW.map((c, k) => ({
+            name: `flag${k}`,
+            material: matte(c, 0.45),
+            // the top strip is the first; each is a closed solid of its own, hemmed all round
+            mesh: cloth(radius * 0.5, top, long, deep, [1 - (k + 1) / RAINBOW.length, 1 - k / RAINBOW.length]),
+          }))
+        : [{ name: 'flag', material: matte(colour, 0.45), mesh: cloth(radius * 0.5, top, long, deep) }]),
     ],
     moving: [],
   };
@@ -211,7 +220,14 @@ const CLOTH = { fold: 0.34, waves: 1.15, thick: 0.07, pieces: 10 } as const;
  * Two faces a cloth's thickness apart, and its hem round its edge, so it is a
  * closed solid lit on both sides.
  */
-function cloth(x0: number, top: number, long: number, deep: number): Mesh {
+function cloth(
+  x0: number,
+  top: number,
+  long: number,
+  deep: number,
+  /** The part of the cloth's depth to make, from its foot (nought) to its top (one): all of it, or a strip. */
+  [v0, v1]: readonly [number, number] = [0, 1],
+): Mesh {
   const { fold, waves, thick, pieces } = CLOTH;
   const tipZ = top - deep * 0.55;
   // how far the cloth stands off flat along its length, and how steeply, both nought at the pole
@@ -223,7 +239,8 @@ function cloth(x0: number, top: number, long: number, deep: number): Mesh {
   const point = (u: number, v: number, side: number): V3 => {
     const hi = top + (tipZ - top) * u,
       lo = top - deep + (tipZ - (top - deep)) * u;
-    return [x0 + long * u, off(u) + (side * thick) / 2, lo + (hi - lo) * v];
+    const w = v0 + (v1 - v0) * v;
+    return [x0 + long * u, off(u) + (side * thick) / 2, lo + (hi - lo) * w];
   };
   const us = Array.from({ length: pieces + 1 }, (_, i) => i / pieces);
   // each face, its corners sharing the face's normal where the cloth turns, the tip a single point

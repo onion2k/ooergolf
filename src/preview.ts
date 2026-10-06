@@ -10,7 +10,7 @@
  */
 import { lieAt, slopeAt, type Layout } from './arena';
 import type { BagClub } from './bag';
-import { DISPERSION, maxScatter } from './flight';
+import { lossOf, maxScatter } from './flight';
 import type { Game, GameEvents } from './game';
 import type { Lie } from './surfaces';
 
@@ -19,6 +19,76 @@ const FRAME = 1 / 60;
 const FRAMES = 720;
 /** How many frames apart the points of a putt's roll are taken: it is a path along the ground that bends slowly, and a point a frame would be five hundred for no more to see. */
 const ROLL_EVERY = 3;
+
+/** The point `s` yards along a path of `n` points with their lengths, written into `out` as x, y, z: the start before it, the end after it. */
+function pointAlong(
+  points: Float32Array,
+  length: Float32Array,
+  n: number,
+  s: number,
+  out: number[] | Float32Array,
+): void {
+  const last = n - 1;
+  if (last < 0) return;
+  // the first of the lengths that is at least `s`, the last if none is
+  let lo = 0,
+    hi = last;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (length[mid] >= s) hi = mid;
+    else lo = mid + 1;
+  }
+  const k = Math.max(0, Math.min(last, lo));
+  const a = Math.max(0, k - 1);
+  const span = length[k] - length[a];
+  const u = span > 0 ? Math.max(0, Math.min(1, (s - length[a]) / span)) : 1;
+  for (let c = 0; c < 3; c++) out[c] = points[a * 3 + c] + (points[k * 3 + c] - points[a * 3 + c]) * u;
+}
+
+/**
+ * How long the ghost shot follows the ball on after its first landing, in frames, and how many frames apart the points of its
+ * path are. A ball rolls down a slope for as long as it rolls, so the path is bounded and not left to end: 1500 frames is
+ * twenty-five seconds, the autopilot's own `LONGEST` for a trial, which no shot on any course comes near, and a point
+ * every three frames is a line of at most 500, as a putt's roll is drawn.
+ */
+export const GHOST_FRAMES = 1500;
+export const GHOST_EVERY = 3;
+
+/**
+ * What the ghost shot adds to a preview: the flight carried on past where it first came down, to where the ball comes to
+ * rest. Nothing of it unless the item is held (`shown` is false and `n` nought), and the first landing's own fields are never
+ * changed by it. A ball lost in the water or out of bounds, or dropped in the cup, has no rest beyond where that happened,
+ * and `end` says so. Written into buffers made once.
+ */
+export class Rest {
+  /** Whether there is a rest to show: the item was held and the shot was a flight that came down. */
+  shown = false;
+  /** How many points of `points` are the path from the first landing to the rest (none for a ball that was lost at the landing). */
+  n = 0;
+  readonly points = new Float32Array((GHOST_FRAMES / GHOST_EVERY + 3) * 3);
+  readonly length = new Float32Array(GHOST_FRAMES / GHOST_EVERY + 3);
+  /** Where the ball comes to rest, how it ended, how far from the ball that is along the ground, and what ground it is. */
+  x = 0;
+  y = 0;
+  end: 'rest' | 'holed' | 'water' | 'out' = 'rest';
+  carry = 0;
+  lie: Lie = 0;
+  /** Whether the ball came to rest within `GHOST_FRAMES`; false for one still rolling when the path was cut off. */
+  settled = false;
+
+  /** The point `s` yards along the path from the first landing, as `Preview.along` has it. */
+  along(s: number, out: number[] | Float32Array): void {
+    pointAlong(this.points, this.length, this.n, s, out);
+  }
+
+  clear() {
+    this.shown = false;
+    this.n = 0;
+    this.end = 'rest';
+    this.carry = 0;
+    this.settled = false;
+  }
+}
 
 /**
  * What the flight came to: the ball came down, dropped in the cup, went into the water, or came down out of bounds (where
@@ -36,6 +106,8 @@ export class Preview {
   readonly points = new Float32Array((FRAMES + 2) * 3);
   readonly length = new Float32Array(FRAMES + 2);
   end: Ending = 'landed';
+  /** Where the ball comes to rest after it, for the ghost shot: see `Rest`. */
+  readonly rest = new Rest();
   /** Where it came down, went in or dropped: the ring's middle, and how high the ball was there. */
   x = 0;
   y = 0;
@@ -66,25 +138,7 @@ export class Preview {
 
   /** The point `s` yards along the flight, written into `out` as x, y, z: the start before it, the end after it. */
   along(s: number, out: number[] | Float32Array): void {
-    const last = this.n - 1;
-    if (last < 0) return;
-    const k = Math.max(0, Math.min(last, Preview.after(this.length, this.n, s)));
-    const a = Math.max(0, k - 1);
-    const span = this.length[k] - this.length[a];
-    const u = span > 0 ? Math.max(0, Math.min(1, (s - this.length[a]) / span)) : 1;
-    for (let c = 0; c < 3; c++) out[c] = this.points[a * 3 + c] + (this.points[k * 3 + c] - this.points[a * 3 + c]) * u;
-  }
-
-  /** The first of the `n` lengths that is at least `s`, the last if none is. */
-  private static after(length: Float32Array, n: number, s: number): number {
-    let lo = 0,
-      hi = n - 1;
-    while (lo < hi) {
-      const mid = (lo + hi) >> 1;
-      if (length[mid] >= s) hi = mid;
-      else lo = mid + 1;
-    }
-    return lo;
+    pointAlong(this.points, this.length, this.n, s, out);
   }
 
   /** Emptied for the next shot. */
@@ -93,6 +147,7 @@ export class Preview {
     this.rolled = false;
     this.knocked = false;
     this.end = 'landed';
+    this.rest.clear();
     this.carry = 0;
     this.heading = 0;
     this.footprint.across = this.footprint.along = 0;
@@ -115,8 +170,6 @@ export class Previewer {
   /** The roll of the last putt tried, a result of its own so that trying a putt never writes over a flight: made once, written over. */
   readonly rolled = new Preview();
   private readonly rehearsal: Game;
-  /** The game played, whose putter in the shop's hand a roll on minigolf is struck with. */
-  private readonly played: Game;
   /** What the rehearsal told of the shot in hand. */
   /** Whether the rehearsal is rolling a putt, whose knocks on the ground are the ball's own and not a flight's. */
   private rolling = false;
@@ -155,7 +208,6 @@ export class Previewer {
           this.result.knockedAt(x, y, this.rehearsal.world.z[this.rehearsal.ball]);
       },
     };
-    this.played = game;
     this.rehearsal = game.rehearsal(events);
   }
 
@@ -195,7 +247,75 @@ export class Previewer {
       push(world.x[ball], world.y[ball], world.z[ball]);
     }
     this.finish(this.result, layout, from, club, angle, power);
+    // the ghost shot follows the ball on from its first landing, only where it is held: the flight above is what it was
+    if (this.rehearsal.effects.has('ghost')) this.carryOn(p, from);
     return p;
+  }
+
+  /**
+   * The ghost shot: the rehearsal let run on from the first landing until the ball is ready again, drops in the cup, is lost
+   * or the frames are used up (`GHOST_FRAMES`), a point of its path every `GHOST_EVERY` frames, written into `p.rest`. Done after
+   * the flight has been read, so nothing of it moves, and it ends where the game itself puts the ball, being the game.
+   */
+  private carryOn(p: Preview, from: { x: number; y: number }) {
+    const r = p.rest;
+    const g = this.rehearsal;
+    const { world, ball, layout } = g;
+    // a ball lost or holed at its first landing has no rest past it
+    if (p.end !== 'landed' || !this.told.landed) {
+      r.shown = true;
+      r.end = p.end === 'landed' ? 'rest' : p.end;
+      r.x = p.x;
+      r.y = p.y;
+      r.carry = p.carry;
+      r.lie = p.lie;
+      r.settled = true;
+      return;
+    }
+    const told = this.told;
+    const push = (x: number, y: number, z: number) => {
+      const k = r.n++;
+      r.points[k * 3] = x;
+      r.points[k * 3 + 1] = y;
+      r.points[k * 3 + 2] = z;
+      r.length[k] = k
+        ? r.length[k - 1] + Math.hypot(x - r.points[k * 3 - 3], y - r.points[k * 3 - 2], z - r.points[k * 3 - 1])
+        : 0;
+    };
+    r.shown = true;
+    push(p.x, p.y, p.z);
+    let how: 'rest' | 'holed' | 'water' | 'out' = 'rest';
+    let settled = false;
+    for (let f = 0; f < GHOST_FRAMES; f++) {
+      g.step(FRAME);
+      if (told.splash || told.out) {
+        how = told.splash ? 'water' : 'out';
+        settled = true;
+        break;
+      }
+      if (g.phase !== 'play') {
+        how = 'holed';
+        settled = true;
+        break;
+      }
+      if (g.ready) {
+        settled = true;
+        break;
+      }
+      if (f % GHOST_EVERY === GHOST_EVERY - 1) push(world.x[ball], world.y[ball], world.z[ball]);
+    }
+    r.end = how;
+    r.settled = settled;
+    if (how === 'holed') [r.x, r.y] = [layout.cup.x, layout.cup.y];
+    else if (how === 'rest') [r.x, r.y] = [world.x[ball], world.y[ball]];
+    else [r.x, r.y] = [told.x, told.y];
+    const z = how === 'holed' ? world.z[ball] : how === 'rest' ? world.z[ball] : told.z;
+    // the last point of the path is the rest itself, which the frame it was found in went a little past
+    const last = r.n - 1;
+    const gap = Math.hypot(r.x - r.points[last * 3], r.y - r.points[last * 3 + 1], z - r.points[last * 3 + 2]);
+    if (gap > 1e-6 && r.n < r.points.length / 3) push(r.x, r.y, z);
+    r.carry = Math.hypot(r.x - from.x, r.y - from.y);
+    r.lie = lieAt(layout, r.x, r.y);
   }
 
   /**
@@ -216,8 +336,6 @@ export class Previewer {
     this.rolling = true;
     g.trial(from.x, from.y);
     g.pick(club.id);
-    // a hole of minigolf is putted with the shop's putter, which the rehearsal has its own save for: the one in hand now
-    if (!g.layout.golf) g.progress.save.club = this.played.progress.save.club;
     g.setShape(0);
     g.setSpin(0);
     if (!g.shoot(angle, power)) return p;
@@ -296,8 +414,9 @@ export class Previewer {
     // the square of
     // (a putt has none: it never scatters)
     if (p.rolled) return;
-    const spread = maxScatter(club, lieAt(layout, from.x, from.y), power);
-    const shortest = p.carry * (1 - DISPERSION.loss * Math.min(1, power)) ** 2;
+    const { effects } = this.rehearsal;
+    const spread = maxScatter(club, lieAt(layout, from.x, from.y), power, effects);
+    const shortest = p.carry * (1 - lossOf(effects) * Math.min(1, power)) ** 2;
     p.footprint.across = p.carry * Math.sin(spread);
     p.footprint.along = (p.carry - shortest) / 2;
   }

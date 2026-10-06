@@ -39,6 +39,7 @@ import {
   BUMPER,
   KINDS,
   KIND_NAME,
+  HARDEST_SHOT,
   KNOCK,
   PHYSICS,
   fromPosts,
@@ -55,11 +56,12 @@ import {
 } from './arena';
 import { TILT, VIEW, type CameraRig } from './camera';
 import type { Plan } from './autopilot';
-import { BAG, carrying, type BagClub } from './bag';
-import { CLUBS } from './clubs';
+import { BAG, bagClub, carrying, type BagClub } from './bag';
+import { CUP } from './course';
+import { ITEM_FIGURES, itemById } from './items';
 import { LIMIT_OVER_PAR, fastest, type Game } from './game';
 import type { Preview } from './preview';
-import { GREEN, breakOf, greenArrows, leansOnMinigolf, type Arrow, type Break } from './green';
+import { GREEN, READER, breakOf, greenArrows, leansOnMinigolf, readerArrows, type Arrow, type Break } from './green';
 import { GREENS, LANDING, LIE, SURFACES } from './surfaces';
 import { BARRIER, WINDMILL, flipperYaw, type Obstacles } from './obstacles';
 import { WIND, windPush, windReach } from './shaping';
@@ -223,11 +225,18 @@ export function groundProblems(layout: Layout, { slope: leans = true }: { slope?
  * numbers, stands on a tile of putting green (on a hole of minigolf, a tile of its floor: not rail and not water), and there
  * are no more of them than the green has tiles.
  */
-export function arrowProblems(layout: Layout, arrows: readonly Arrow[] = greenArrows(layout)): string[] {
+export function arrowProblems(
+  layout: Layout,
+  arrows: readonly Arrow[] = greenArrows(layout),
+  { anywhere = false }: { anywhere?: boolean } = {},
+): string[] {
   const out: string[] = [];
   let tiles = 0;
+  // the break reader's arrows stand on any ground a ball is played from, not the green's alone, and are no more than its bound
   const onGreen = (t: number, x: number, y: number) =>
-    !layout.solid[t] && (layout.golf ? lieAt(layout, x, y) === LIE.green : !layout.water[t]);
+    anywhere
+      ? !layout.solid[t] && !layout.water[t] && !layout.oob[t]
+      : !layout.solid[t] && (layout.golf ? lieAt(layout, x, y) === LIE.green : !layout.water[t]);
   for (let t = 0; t < layout.cols * layout.rows; t++)
     if (
       onGreen(
@@ -249,6 +258,8 @@ export function arrowProblems(layout: Layout, arrows: readonly Arrow[] = greenAr
       );
   }
   if (arrows.length > tiles) out.push(`${arrows.length} arrows, more arrows than the green has tiles, ${tiles}`);
+  if (anywhere && arrows.length > READER.most)
+    out.push(`${arrows.length} reader arrows, over the ${READER.most} it may have`);
   return out;
 }
 
@@ -265,7 +276,7 @@ export function breakProblems(game: Game, given?: Break): string[] {
   if (!world.alive[ball]) return out;
   const x = world.x[ball],
     y = world.y[ball];
-  const b = given ?? breakOf(layout, x, y, game.def.greens);
+  const b = given ?? breakOf(layout, x, y, game.greens);
   if (!Number.isFinite(b.across)) out.push(`the break's across is ${b.across}`);
   if (!Number.isFinite(b.rise)) out.push(`the break's rise is ${b.rise}`);
   const far = Math.hypot(layout.cup.x - x, layout.cup.y - y);
@@ -333,6 +344,12 @@ export function checkInvariants(game: Game): string[] {
   if (layout.golf) {
     report('the ground', [...groundProblems(layout, { slope: greens !== undefined }), ...arrowProblems(layout)]);
     report('the break', breakProblems(game));
+    // the break reader's arrows round the ball are held to the ground a ball is played from, and to their bound
+    if (game.effects.has('reader') && world.alive[game.ball])
+      report(
+        'the ground',
+        arrowProblems(layout, readerArrows(layout, world.x[game.ball], world.y[game.ball]), { anywhere: true }),
+      );
   } else {
     report('the ground', groundProblems(layout));
     // a hole of minigolf whose ground leans shows the arrows and the break golf's green does, and is held to the same
@@ -439,15 +456,52 @@ export function checkInvariants(game: Game): string[] {
   const save = game.progress.save;
   for (const key of ['coins', 'gems'] as const)
     if (!Number.isInteger(save[key]) || save[key] < 0) out.push(`the ${key} are ${save[key]}`);
-  const sold = new Set(CLUBS.map((c) => c.id));
-  for (const id of save.owned) if (!sold.has(id)) out.push(`a club no one sells is owned: ${id}`);
-  if (!save.owned.includes(CLUBS[0].id)) out.push('the starting putter is not owned');
-  if (!save.owned.includes(save.club)) out.push(`the club in hand, ${save.club}, is not owned`);
-  if (layout.golf && !BAG.includes(game.inHand))
+  for (const id of save.owned) if (!itemById(id)) out.push(`an item no one sells is owned: ${id}`);
+  if (new Set(save.owned).size !== save.owned.length) out.push('an item is owned twice');
+  if (save.item !== '' && !save.owned.includes(save.item)) out.push(`the item equipped, ${save.item}, is not owned`);
+  // the bag's own club, or its copy as the power glove has it
+  if (layout.golf && !BAG.some((c) => game.club(c) === game.inHand))
     out.push(`the club in hand on a golf hole, ${game.inHand.id}, is not in the bag`);
+  report('an item', itemProblems(game));
   out.push(...bumperProblems(game));
   out.push(...boxProblems(game));
   report('a flipper', flipperProblems(game.obstacles));
+  return out;
+}
+
+/**
+ * What is wrong with what the item equipped has done to the game, which is fixed as a hole begins or read as the ball is
+ * struck: at most one item is on (the save holds the one id, so it is a string and nothing else), the club in hand is the bag's
+ * as the power glove has it (8% harder with it, as it was without), and on minigolf the hardest shot is the course's as
+ * the glove has it, so the speed ceilings that follow the hardest follow the item too; the cup is the course's or the
+ * magnet's, and the rail's bounce is the course's or the rubber ball's; and the waders and the retake are each used or
+ * not, and no more than once, which a flag can only be.
+ */
+export function itemProblems(game: Game): string[] {
+  const out: string[] = [];
+  const save = game.progress.save;
+  if (typeof save.item !== 'string') out.push(`the item equipped is ${JSON.stringify(save.item)}, not one id`);
+  const glove = game.effects.has('glove') ? ITEM_FIGURES.glove.hardest : 1;
+  const close = (a: number, b: number) => Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(b));
+  if (game.layout.golf) {
+    const own = bagClub(game.inHand.id).hardest * glove;
+    if (!close(game.inHand.hardest, own))
+      out.push(
+        `the ${game.inHand.id} in hand strikes at most ${game.inHand.hardest}, where the bag's with ${glove === 1 ? 'no glove' : 'the glove'} is ${own}`,
+      );
+  }
+  if (!close(game.hardest, game.layout.golf ? game.inHand.hardest : HARDEST_SHOT * glove))
+    out.push(`the hardest shot is ${game.hardest}, which the item held (${save.item || 'none'}) does not make it`);
+  if (game.cup.radius !== CUP.radius && game.cup.radius !== ITEM_FIGURES.magnet.radius)
+    out.push(`the cup is ${game.cup.radius} across, neither the course's ${CUP.radius} nor the magnet's`);
+  if (game.bounceScale !== 1 && game.bounceScale !== ITEM_FIGURES.rubber.bounce)
+    out.push(`the rail and the posts return ${game.bounceScale} times what they did, which only the rubber ball does`);
+  // read as what they may come to be and not as what they are typed, since a count that crept past one would be a number
+  for (const [what, used] of [
+    ['waders', game.wadersUsed],
+    ['retake', game.mulliganUsed],
+  ] as [string, unknown][])
+    if (typeof used !== 'boolean') out.push(`the ${what} are used ${String(used)} times, not nought or one`);
   return out;
 }
 
@@ -550,14 +604,46 @@ export function previewProblems(game: Game, from: { x: number; y: number }, club
   // where it left), and what a fall from the highest ground adds to it, and a little for the ball's own size
   const fall = highestTerrain(game.layout) + 5;
   // and the most a tailwind of the strongest hole carries it further
-  const blown = windReach(club, 1, WIND.most) * 1.1 + 5;
+  // (the club as the game strikes it: a power glove makes it harder, and the club handed in may be the bag's own)
+  const held = game.club(bagClub(club.id));
+  const blown = windReach(held, 1, WIND.most) * 1.1 + 5;
   const most =
-    carrying(club.hardest, club.loft) * 1.06 + club.hardest * Math.sqrt((2 * fall) / PHYSICS.gravity) + 10 + blown;
+    carrying(held.hardest, held.loft) * 1.06 + held.hardest * Math.sqrt((2 * fall) / PHYSICS.gravity) + 10 + blown;
   if (!(p.carry >= 0 && p.carry <= most))
     out.push(`the flight carries ${p.carry}, which the ${club.id} cannot (at most ${most.toFixed(0)})`);
   const { across, along: length } = p.footprint;
   if (!(across >= 0 && length >= 0 && length <= p.carry / 2 + 1e-6 && across <= p.carry))
     out.push(`the spread is ${across} across and ${length} along, for a carry of ${p.carry}`);
+  out.push(...restProblems(game, p));
+  return out;
+}
+
+/**
+ * What is wrong with the ghost shot's rest, the flight carried on past the first landing to where the ball comes to rest:
+ * nothing when there is none shown; otherwise it is numbers, begins where the flight came down, ends where it says it rests,
+ * its lengths grow, it stays on the hole, and it is no more points than its pool holds.
+ */
+export function restProblems(game: Game, p: Preview): string[] {
+  const out: string[] = [];
+  const r = p.rest;
+  if (!r.shown) return out;
+  if (r.n > r.points.length / 3) out.push(`the rest has ${r.n} points, more than its buffer holds`);
+  if (![r.x, r.y, r.carry].every(Number.isFinite)) out.push(`the rest is at ${r.x},${r.y}, not a place`);
+  if (r.n === 0) return out;
+  for (let k = 0; k < r.n; k++) {
+    for (let c = 0; c < 3; c++)
+      if (!Number.isFinite(r.points[k * 3 + c])) {
+        out.push(`a point of the rest is not a number: ${k}`);
+        return out;
+      }
+    if (k && r.length[k] < r.length[k - 1] - 1e-4) out.push(`the rest's length goes backwards at ${k}`);
+  }
+  if (Math.hypot(r.points[0] - p.x, r.points[1] - p.y) > 0.6)
+    out.push(`the rest does not begin where the flight came down: ${r.points[0]},${r.points[1]} from ${p.x},${p.y}`);
+  const last = (r.n - 1) * 3;
+  if (Math.hypot(r.points[last] - r.x, r.points[last + 1] - r.y) > 0.6)
+    out.push(`the rest ends at ${r.points[last]},${r.points[last + 1]}, not where it says it rests, ${r.x},${r.y}`);
+  if (tileAt(game.layout, r.x, r.y) < 0) out.push(`the rest is off the hole, at ${r.x},${r.y}`);
   return out;
 }
 

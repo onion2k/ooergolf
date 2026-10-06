@@ -139,7 +139,7 @@ fixed, and no baseline is moved to make it green.
     src/readout.ts     the pin's distance and rise, and where a shot comes down, in words
     src/holemap.ts     a hole's ground painted from above, to sit over the course
     src/autopilot.ts   the game played by itself, for the gates and for par
-    src/clubs.ts       the clubs, what they cost, and what a hole pays
+    src/items.ts       the shop's items, what they cost, and what a hole pays
     src/hud.ts         the words over the course, the card and the shop
     src/progress.ts    the save, and where it is kept
     src/physics.ts     the game's side of artshape-physics

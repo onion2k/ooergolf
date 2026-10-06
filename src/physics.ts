@@ -85,7 +85,9 @@ export const THE_CUP = 0;
  * the inside of the cup's rim was, a lap as long as the physics' sleep
  * window, and hung in its mouth; it banks off a rail of tiles as off one
  * flat wall; and a fast one is looked at every half radius it goes, so no
- * shot passes through the rail or a blade.
+ * shot passes through the rail or a blade. `bounce` is how many times as hard
+ * the rail, the posts and the kickers send a ball back (the rubber ball's),
+ * and one leaves them as they were; trees and moving barriers are not scaled.
  */
 export function makeWorld(
   layout: Layout,
@@ -93,6 +95,7 @@ export function makeWorld(
   random: Random,
   belted: ReadonlySet<number> = new Set(),
   greens?: number,
+  bounce = 1,
 ): World {
   const { cols, rows, solid } = layout;
   // a belt carries what lies on it at its own speed, and the green's steady slowing would hold it back to a third of it
@@ -126,7 +129,7 @@ export function makeWorld(
     // a step is met as a change of floor and not as a ledge with an edge: with v0.8.0's edges a ball climbs a riser only
     // with speed, and Up and Over's stairs took two strokes more on the median
     tuning: {
-      wallRestitution: BOUNCE.rail,
+      wallRestitution: BOUNCE.rail * bounce,
       sleepInAir: false,
       sleepSpeed: 2,
       smoothWalls: true,
@@ -142,7 +145,7 @@ export function makeWorld(
     y: p.y,
     radius: BUMPER.radius,
     top: heightAt(layout, p.x, p.y) + BUMPER.height,
-    restitution: BUMPER.restitution,
+    restitution: BUMPER.restitution * bounce,
   }));
   // and each tree's trunk, a post too, as high as the canopy's base, which is all the physics can be given of a tree:
   // the canopy over it is the game's own to test
@@ -162,7 +165,7 @@ export function makeWorld(
       y: k.y,
       radius: KICKER.radius,
       top: heightAt(layout, k.x, k.y) + KICKER.height,
-      restitution: KICKER.restitution,
+      restitution: KICKER.restitution * bounce,
     })),
   );
   return world;

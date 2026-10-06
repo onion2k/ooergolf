@@ -4,8 +4,10 @@
  * tried in `landing.test.ts`; this is the round of golf they are played in.
  */
 import { describe, expect, it } from 'vitest';
+import { HARDEST_SHOT } from '../src/arena';
 import { BAG, PUTTER, bagClub, carryOf } from '../src/bag';
 import type { HoleDef } from '../src/course';
+import { paid } from '../src/items';
 import { checkInvariants, landingProblems } from '../src/invariants';
 import { seeded } from '../src/random';
 import { LANDING } from '../src/surfaces';
@@ -48,8 +50,8 @@ describe('the club in hand', () => {
       game.pick(club.id);
       expect(game.hardest).toBe(club.hardest);
     }
-    // a hole of minigolf has the shop's putter, as it always had
-    expect(newGame(1).game.hardest).toBe(40);
+    // a hole of minigolf has the course's putter, as it always had
+    expect(newGame(1).game.hardest).toBe(HARDEST_SHOT);
   });
 
   it('is kept from one shot to the next on a hole, and the driver again at the next tee', () => {
@@ -121,10 +123,9 @@ describe('a shot at golf', () => {
     expect(game.world.z[game.ball]).toBeCloseTo(1, 1);
   });
 
-  it('is scored, and pays nothing into the shop: a round of golf is not paid for in coins', () => {
+  it('is scored, and pays into the shop as a hole of minigolf does: a hole in one pays its coins and its gem', () => {
     const hole = field('g');
     const { game, told } = golfGame(hole);
-    const purse = { coins: game.progress.save.coins, gems: game.progress.save.gems };
     game.pick('putter');
     // a putt from six units to the cup, arriving slow enough to drop
     game.place(game.layout.cup.x + 6, game.layout.cup.y);
@@ -133,9 +134,11 @@ describe('a shot at golf', () => {
     expect(game.phase).toBe('done');
     expect(told.filter((t) => t.startsWith('holed ')).length).toBe(1);
     expect(game.card).toEqual([1]);
-    expect(game.progress.save.coins).toBe(purse.coins);
-    expect(game.progress.save.gems).toBe(purse.gems);
-    expect(told.find((t) => t.startsWith('paid '))).toBe('paid 0 0');
+    const due = paid(1, hole.par, false);
+    expect(game.progress.save.coins).toBe(due.coins);
+    expect(game.progress.save.gems).toBe(due.gems);
+    expect(due.gems).toBe(1);
+    expect(told.find((t) => t.startsWith('paid '))).toBe(`paid ${due.coins} ${due.gems}`);
     // the best of a hole is still kept, by its name
     expect(game.progress.save.best[hole.name].strokes).toBe(1);
   });
