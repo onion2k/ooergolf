@@ -58,10 +58,11 @@ export class Director {
   /** The club and the lie the camera was last sent to look at a shot from, so it is sent again only when one changes. */
   private aimedFor = '';
   /**
-   * Where the minigolf aim view was last worked out for: the ball's place and the way it faces, so it is worked out again
-   * only when one changes (nothing is made); not a number while the ball is not ready or the screen has changed.
+   * Where the minigolf aim view was last worked out for: the ball's place, the way it faces and how far the putter in hand
+   * rolls, so it is worked out again only when one changes (nothing is made); not a number while the ball is not ready or
+   * the screen has changed. A putter equipped is a longer reach with the ball and the heading where they were.
    */
-  private readonly worked = { x: Number.NaN, y: Number.NaN, t: Number.NaN };
+  private readonly worked = { x: Number.NaN, y: Number.NaN, t: Number.NaN, roll: Number.NaN };
   /** Whether the camera was last sent to a view stood back from home on minigolf, so that it is sent home again when the reach fits there. */
   private stood = false;
   /** What the camera's tosses are made from, with the hole and the stroke: the page's own at boot, and a test's or the fuzzer's by `setSeed`. */
@@ -173,9 +174,10 @@ export class Director {
     const { world, ball, layout } = game;
     const { rig, worked } = this;
     const [x, y, t] = [world.x[ball], world.y[ball], Math.PI / 2 - rig.headed];
-    if (x === worked.x && y === worked.y && t === worked.t) return;
-    [worked.x, worked.y, worked.t] = [x, y, t];
-    const reach = reachOnMinigolf(layout, x, y, t, rollsFor(game.hardest));
+    const roll = rollsFor(game.hardest);
+    if (x === worked.x && y === worked.y && t === worked.t && roll === worked.roll) return;
+    [worked.x, worked.y, worked.t, worked.roll] = [x, y, t, roll];
+    const reach = reachOnMinigolf(layout, x, y, t, roll);
     if (fitsHome(reach, this.aspect, this.height)) {
       const floor = floorFor(reach, this.aspect, this.height, TILT.home, LEAD);
       if (this.stood) {

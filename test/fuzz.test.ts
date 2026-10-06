@@ -141,7 +141,7 @@ describe('the fuzzer', () => {
     let lane = 0,
       island = 0;
     for (const [name, seeds] of [
-      ['The Fells', [1, 2, 3, 4]],
+      ['The Fells', [1, 2, 3, 4, 11]],
       ['The Isles', [1, 2, 3, 4]],
     ] as const) {
       const holes = COURSES.find((c) => c.name === name)!.holes;

@@ -749,17 +749,29 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
         !rig.easing(game.t) &&
         Math.hypot(rig.target[0] - ballAt.x, rig.target[1] - ballAt.y) <= 0.05
       ) {
-        rig.place(cam, game.t);
-        cam.update();
-        const m = cam.viewProjection;
         const [cx, cy, cz] = [layout.cup.x, layout.cup.y, heightAt(layout, layout.cup.x, layout.cup.y)];
-        const w = m[3] * cx + m[7] * cy + m[11] * cz + m[15];
-        const nx = (m[0] * cx + m[4] * cy + m[8] * cz + m[12]) / w,
-          ny = (m[1] * cx + m[5] * cy + m[9] * cz + m[13]) / w;
+        const cupAt = (): [number, number] => {
+          rig.place(cam, game.t);
+          cam.update();
+          const m = cam.viewProjection;
+          const w = m[3] * cx + m[7] * cy + m[11] * cz + m[15];
+          return [(m[0] * cx + m[4] * cy + m[8] * cz + m[12]) / w, (m[1] * cx + m[5] * cy + m[9] * cz + m[13]) / w];
+        };
         const box = safeBox(cam.aspect, SCREEN.h);
-        if (!(Math.abs(nx) <= box.x + 0.02 && ny <= box.top + 0.02 && ny >= box.bottom - 0.02))
+        const inside = ([nx, ny]: [number, number]) =>
+          Math.abs(nx) <= box.x + 0.02 && ny <= box.top + 0.02 && ny >= box.bottom - 0.02;
+        const [nx, ny] = cupAt();
+        // the aim view frames a landing level with the ball, so a cup up a hill from it can stand above the box's top however the
+        // camera is turned: what is asked is that looking near the cup is no worse than looking straight at it, the camera turned
+        // to the cup's own heading for a moment and put back as it was
+        const turned = rig.azimuth;
+        rig.azimuth = heading;
+        const squarely = cupAt();
+        rig.azimuth = turned;
+        cupAt();
+        if (!inside([nx, ny]) && inside(squarely))
           told.push(
-            `the cup is in reach and the camera that looks near it has it at ${nx.toFixed(3)},${ny.toFixed(3)}, outside the safe box`,
+            `the cup is in reach and the camera that looks near it has it at ${nx.toFixed(3)},${ny.toFixed(3)}, outside the safe box, where facing it squarely has it at ${squarely[0].toFixed(3)},${squarely[1].toFixed(3)}`,
           );
       }
       const at = [rig.azimuth, rig.tilt, rig.distance, rig.lead];

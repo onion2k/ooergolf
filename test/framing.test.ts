@@ -267,8 +267,9 @@ describe('the ball and the furthest reach are on the screen', () => {
 
 describe('the minigolf aim view', () => {
   /** A director on a hole of minigolf, with the putter of the save in hand. */
-  function onMinigolf(hole: HoleDef, aspect = 1.6, height = 800, club = 'putter') {
-    const save = club === 'putter' ? null : JSON.stringify({ coins: 0, gems: 0, owned: [club], club });
+  function onMinigolf(hole: HoleDef, aspect = 1.6, height = 800, club = 'putter', owns: string[] = []) {
+    const save =
+      club === 'putter' && !owns.length ? null : JSON.stringify({ coins: 0, gems: 0, owned: [club, ...owns], club });
     const { game } = newGame(1, save, [hole]);
     const rig = new CameraRig();
     const director = new Director(rig);
@@ -307,6 +308,26 @@ describe('the minigolf aim view', () => {
       const box = safeBox(aspect, height);
       const [, ry] = ndc(cam, reach.x, reach.y, reach.z);
       expect(ry, `${aspect} by ${height}`).toBeLessThanOrEqual(box.top + 0.02);
+    }
+  });
+
+  it('is worked out again when a harder putter is put in hand, since the reach is its roll and the ball and the heading have not moved', () => {
+    for (const [aspect, height] of SCREENS) {
+      const { game, rig, director } = onMinigolf(OPEN, aspect, height, 'putter', ['gold']);
+      director.aiming({ angle: Math.PI / 2, power: 1 });
+      rest(director, rig);
+      const before = rig.distance;
+      expect(game.equip('gold')).toBe(true);
+      // the page tells the director nothing of an equip: the next frame has to see the reach is longer
+      rest(director, rig);
+      const cam = placed(rig, aspect);
+      const reach = { x: 0, y: 0, z: 0 };
+      expect(director.reachPoint(reach)).toBe(true);
+      const [, ry] = ndc(cam, reach.x, reach.y, reach.z);
+      expect(ry, `${aspect} by ${height}: the longer reach is on the screen`).toBeLessThanOrEqual(
+        safeBox(aspect, height).top + 0.02,
+      );
+      expect(rig.distance, `${aspect} by ${height}: stood further back for it`).toBeGreaterThan(before);
     }
   });
 
