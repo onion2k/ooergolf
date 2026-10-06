@@ -237,7 +237,8 @@ export class Director {
         if (this.aimedFor !== `${inHand.id}|${lieAt(layout, world.x[ball], world.y[ball])}`) this.aimFor(false);
       }
     } else if (!game.ready) this.worked.x = Number.NaN;
-    else this.aimOnMinigolf();
+    // a camera a test has parked is where the test put it: it is not sent to a view that frames the reach, which would zoom it out
+    else if (!parked) this.aimOnMinigolf();
     rig.settle(dt);
     const { world, ball } = game;
     if (!world.alive[ball] || parked) return;

@@ -331,6 +331,15 @@ describe('the minigolf aim view', () => {
     }
   });
 
+  it('leaves a camera a test has parked where it was put, on a hole of minigolf, and does not zoom it out to frame the reach', () => {
+    const { rig, director } = onMinigolf(OPEN, 1.6, 800, 'gold');
+    // parked as the test API's `look` parks it: close to, with no floor of its own
+    rig.aimAt({ distance: 30, tilt: TILT.home, lead: LEAD, floor: 0 }, true);
+    for (let f = 0; f < 120; f++) director.frame(DT, true);
+    expect(rig.distance).toBe(30);
+    expect(rig.aiming).toBe(false);
+  });
+
   it('does not move the camera on a hole of minigolf while the ball rolls: it follows as it always did', () => {
     const { game, rig, director } = onMinigolf(OPEN, 1.6, 800, 'gold');
     rest(director, rig);
