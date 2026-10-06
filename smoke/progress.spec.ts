@@ -600,6 +600,8 @@ test('a full drive is followed the whole way: the ball is in the middle of the s
     g.chooseCourse('The Links');
     g.startHole(0);
     g.step(75);
+    // a drive the camera follows up into the air (it is one stroke in five unless told, and this is a test of that follow)
+    g.followShots('always');
     g.shoot(Math.PI / 2, 1, 'driver');
     const out: { f: number; z: number; x: number; y: number }[] = [];
     for (let f = 0; f < 600 && !(f > 5 && g.state().ready); f++) {

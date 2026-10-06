@@ -695,7 +695,9 @@ test.describe('golf', () => {
       g.startHole(longest);
       g.step(120);
       const tee = await g.measureFrame(60);
-      // a drive in the air, the camera on it
+      // a drive in the air, the camera on it (as it follows, which is one stroke in five unless told: a measure of the frame in the
+      // air is a measure of the view that follows)
+      g.followShots('always');
       g.shoot(Math.PI / 2, 1, 'driver');
       g.step(40);
       const air = await g.measureFrame(60);
@@ -931,6 +933,7 @@ test.describe('golf on The Links', () => {
       g.startHole(6);
       g.step(120);
       const tee = await g.measureFrame(60);
+      g.followShots('always');
       g.shoot(Math.PI / 2, 1, 'driver');
       g.step(40);
       const air = await g.measureFrame(60);
@@ -1228,6 +1231,112 @@ test.describe('the framing', () => {
         }
         expect(problems).toEqual([]);
       });
+});
+
+test.describe('following the ball', () => {
+  const LONG = 6;
+  for (const screen of [
+    { name: 'a desk', width: 1280, height: 800 },
+    { name: 'a phone', width: 400, height: 860 },
+  ])
+    for (const mode of ['never', 'always'] as const)
+      test(`keeps a real drag's drive on the screen all the way on ${screen.name} when the camera is told ${mode}, and eases to the ball when it is at rest`, async ({
+        page,
+      }) => {
+        test.setTimeout(120_000);
+        await page.setViewportSize({ width: screen.width, height: screen.height });
+        const problems = watch(page);
+        await start(page, { seed: 11, paused: true });
+        await page.evaluate(
+          ([m, hole]) => {
+            const g = window.game!;
+            g.chooseCourse('The Links');
+            g.startHole(hole as number);
+            g.followShots(m as 'never' | 'always');
+            g.step(300);
+          },
+          [mode, LONG],
+        );
+        const ball = await page.evaluate(() => {
+          const b = window.game!.ball();
+          return window.game!.project(b.x, b.y, b.z);
+        });
+        // pulled back as far as the page goes, straight down: a drive up the hole, as hard as the screen lets it be
+        await drag(page, ball, { x: ball.x, y: screen.height - 2 });
+        expect((await page.evaluate(() => window.game!.state())).strokes, 'struck').toBe(1);
+        const samples = await page.evaluate(() => {
+          const g = window.game!;
+          const out: {
+            nx: number;
+            ny: number;
+            following: boolean;
+            ready: boolean;
+            box: { x: number; top: number; bottom: number };
+          }[] = [];
+          for (let k = 0; k < 120; k++) {
+            g.step(10);
+            const v = g.view();
+            out.push({
+              nx: v.framing.ball[0],
+              ny: v.framing.ball[1],
+              following: v.following,
+              ready: g.state().ready,
+              box: v.framing.box,
+            });
+            if (g.state().ready) break;
+          }
+          return out;
+        });
+        expect(samples.length, 'the ball was on its way for a while').toBeGreaterThan(5);
+        for (const [k, s] of samples.entries()) {
+          if (s.ready) continue;
+          expect(Math.abs(s.nx), `sample ${k} across`).toBeLessThanOrEqual(s.box.x + 0.02);
+          expect(s.ny, `sample ${k} up`).toBeLessThanOrEqual(s.box.top + 0.02);
+          expect(s.ny, `sample ${k} down`).toBeGreaterThanOrEqual(s.box.bottom - 0.02);
+        }
+        if (mode === 'always')
+          expect(
+            samples.every((s) => s.following),
+            'followed from the start',
+          ).toBe(true);
+        else expect(samples[0].following, 'held still at first').toBe(false);
+        // and the camera comes to the ball when it is at rest, the view settled and the rule held
+        await page.evaluate(() => window.game!.step(400));
+        const after = await page.evaluate(() => window.game!.view().framing);
+        expect(after.settled).toBe(true);
+        expect(after.problems).toEqual([]);
+        expect(problems).toEqual([]);
+      });
+
+  test('takes a held camera up the moment a drive would leave the screen, and lets go of it at the next hole', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true });
+    const result = await page.evaluate((hole) => {
+      const g = window.game!;
+      g.chooseCourse('The Links');
+      g.startHole(hole);
+      g.followShots('never');
+      g.step(300);
+      const before = g.view().following;
+      g.shoot(Math.PI / 2, 1, 'driver');
+      let latchedAt = -1;
+      for (let f = 0; f < 900 && !g.state().ready; f++) {
+        g.step(1);
+        if (latchedAt < 0 && g.view().following) latchedAt = f;
+      }
+      const during = g.view().following;
+      g.startHole(hole);
+      g.step(2);
+      return { before, latchedAt, during, after: g.view().following };
+    }, LONG);
+    expect(result.before).toBe(false);
+    expect(result.latchedAt, 'it took the ball up when it would have left').toBeGreaterThan(5);
+    expect(result.during).toBe(true);
+    expect(result.after, 'and a new hole clears it').toBe(false);
+    expect(problems).toEqual([]);
+  });
 });
 
 test.describe('the cup and the rail', () => {

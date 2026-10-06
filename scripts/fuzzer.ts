@@ -171,6 +171,8 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
           count(happened, name);
           if (name === 'started' && playing) count(visited, playing.def.name);
           if (name === 'started' && playing && directing) directing.started();
+          // a stroke struck: the camera is told, which has it follow the ball for one in five and hold still for the rest
+          if (name === 'struck' && playing && directing) directing.struck();
           if (name === 'knocked' && playing) told.push(...knockProblems(playing, ...(args as Knock)));
           // a stream is a belt: the ball is carried on it, and never lost
           if ((name === 'splash' || name === 'outOfBounds') && playing)
@@ -543,6 +545,8 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
     // (a desk's, on even seeds, and a phone's held upright on odd ones, which the framing is held on in each)
     const SCREEN = seed % 2 ? { w: 400, h: 860 } : { w: 1280, h: 800 };
     const rig = new CameraRig();
+    /** When the camera's time last ran ahead of the game's, in game time, by an action of the monkey's. */
+    let skewedAt = -Infinity;
     // the page's own camera director, which the flag button is pressed through here as there, and which sends the camera
     // where the aim view says in every frame of the game
     const director = new Director(rig);
@@ -594,6 +598,9 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
           return JSON.stringify([rig.azimuth, rig.tilt, rig.distance, rig.lead, rig.far]);
         };
         const before = rest();
+        // the camera's own clock ran ten seconds on without the game's: with a ball on its way it is not where the page's would be,
+        // and the ball is not asked to be on the screen for a few seconds, as the game catches the camera's time up
+        if (!game.ready) skewedAt = game.t;
         const bounds = game.layout.bounds;
         rig.setOverhead(true, { bounds, distance: overheadFit(bounds, rig.azimuth, cam.aspect) });
         input.setMode('overhead');
@@ -983,23 +990,26 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
     const reach = { x: 0, y: 0, z: 0 };
     const framing = (): string[] => {
       const { world, ball } = game;
-      if (!game.ready || input.aim !== null || !world.alive[ball] || game.phase !== 'play') return [];
-      if (rig.aiming || rig.turning || rig.blend > 0 || rig.easing(game.t)) return [];
+      if (game.t - skewedAt < TURN_TIME + 1) return [];
+      if (input.aim !== null || !world.alive[ball] || game.phase !== 'play') return [];
+      if (rig.blend > 0 || rig.easing(game.t)) return [];
+      const where = (p: string) =>
+        `${p} (${game.layout.golf ? 'golf' : 'minigolf'}, ${SCREEN.w} by ${SCREEN.h}, ${game.def.name}${director.following ? ', following' : ''})`;
+      const there = { x: world.x[ball], y: world.y[ball], z: world.z[ball] };
+      const box = safeBox(cam.aspect, SCREEN.h);
+      // a ball on its way, held still for or followed, is on the screen whatever the camera is doing but blending
+      if (!game.ready) {
+        rig.place(cam, game.t);
+        cam.update();
+        framed++;
+        return framingProblems(rig, cam, there, null, box).map(where);
+      }
+      if (rig.aiming || rig.turning) return [];
       if (Math.hypot(rig.target[0] - world.x[ball], rig.target[1] - world.y[ball]) > 0.05) return [];
       rig.place(cam, game.t);
       cam.update();
       framed++;
-      const there = { x: world.x[ball], y: world.y[ball], z: world.z[ball] };
-      const pr = framingProblems(
-        rig,
-        cam,
-        there,
-        director.reachPoint(reach) ? reach : null,
-        safeBox(cam.aspect, SCREEN.h),
-      );
-      return pr.map(
-        (p) => `${p} (${game.layout.golf ? 'golf' : 'minigolf'}, ${SCREEN.w} by ${SCREEN.h}, ${game.def.name})`,
-      );
+      return framingProblems(rig, cam, there, director.reachPoint(reach) ? reach : null, box).map(where);
     };
     const total = actions.reduce((n, [w]) => n + w, 0);
     const act = () => {

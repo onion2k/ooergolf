@@ -307,6 +307,8 @@ async function main() {
       );
     },
     struck(power, x, y) {
+      // one stroke in five has the camera follow the ball, and the rest hold the view where it stood
+      director.struck();
       hud.setStrokes(game?.strokes ?? 0);
       // the game puts the shape and the spin back to straight and flat as a shot is struck, and the buttons say so
       if (game) hud.setShaping(game.shape, game.spin);
@@ -881,6 +883,7 @@ async function main() {
     draw,
     frame: () => frames,
     setViewSeed: (n) => director.setSeed(n),
+    followShots: (mode) => director.followShots(mode),
     look(x, y, distance) {
       parked = true;
       rig.jump(x, y, heightAt(played.layout, x, y));
@@ -922,6 +925,7 @@ async function main() {
       turning: rig.turning,
       heading: rig.headed,
       flag: director.nearFlag(),
+      following: director.following,
       rung: governor.rung,
       held: governor.held,
       antialias: antialiasFor(renderer.look, renderer.economy),

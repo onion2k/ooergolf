@@ -220,6 +220,8 @@ export interface GameApi {
     heading: number;
     /** Where the flag button would turn the camera to from where the ball lies now (near the cup, never at it); null with the ball at the cup. */
     flag: number | null;
+    /** Whether the camera is following the ball for the stroke being played: one stroke in five by the view seed, or from the moment a ball held still would leave the screen. */
+    following: boolean;
     tilt: number;
     /** The words of the putt's break under the pin, as drawn (`Putt: aim 1.6 yd right, uphill 0.4 yd`); null when none is up. */
     putt: string | null;
@@ -238,6 +240,11 @@ export interface GameApi {
    * while a drag is held on the course, or with the ball at the cup.
    */
   faceFlag(): boolean;
+  /**
+   * Which strokes the camera follows the ball for: `drawn` (the default) is one in five by the view seed, the others held still and
+   * taken up from the moment the ball would leave the screen; `always` every one, as the camera did before; `never` none but those.
+   */
+  followShots(mode: 'drawn' | 'always' | 'never'): void;
   /** The camera parked looking at a point, `distance` back, at once, and not following the ball until `follow`. */
   look(x: number, y: number, distance?: number): void;
   /** The camera following the ball again. */
@@ -350,6 +357,8 @@ export interface DebugHost {
   frame(): number;
   /** The seed the camera's tosses are made from, as `seed` gives it. */
   setViewSeed(n: number): void;
+  /** Which strokes the camera follows the ball for. */
+  followShots(mode: 'drawn' | 'always' | 'never'): void;
   look(x: number, y: number, distance?: number): void;
   follow(): void;
   project(x: number, y: number, z: number): { x: number; y: number };
@@ -506,6 +515,7 @@ export function createApi(host: DebugHost): GameApi {
     orbit: (turn, tilt) => host.orbit(turn, tilt),
     overhead: (on) => host.overhead(on),
     faceFlag: () => host.faceFlag(),
+    followShots: (mode) => host.followShots(mode),
     save() {
       game.persist();
       return JSON.stringify(progress.save);

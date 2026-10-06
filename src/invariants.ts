@@ -127,7 +127,9 @@ function drawnAt(camera: Camera, x: number, y: number, z: number): [number, numb
  * The framing rule: the ball, and the furthest place a shot can reach where there is one (`reach`, or null when only the ball
  * is to be on the screen, as while it flies), are inside the safe box as the camera `camera`, placed by the rig, draws them,
  * to `FRAMING.tolerance`. It is held only when the view has settled: nothing is said while the rig is easing to an aim
- * view, turning, or blended toward the view from above, since the rule is of where it comes to and not of the way there.
+ * view, turning, or blended toward the view from above, since the rule is of where it comes to and not of the way there. The
+ * ball alone (`reach` null) is held to the box while the camera eases and turns too, since a ball in flight must always be
+ * seen; only the view from above, where the box is not the camera's concern, excuses it.
  * Whether the camera is gliding to a new tee, or parked by a test, is the caller's to say, as the rig does not know the time.
  * A reach past the top of the box is let go when the camera already stands as far back as it may (`atLimit`): a club that
  * goes further than the furthest view shows is the limit's, and the view is the best there is.
@@ -139,7 +141,9 @@ export function framingProblems(
   reach: { x: number; y: number; z: number } | null,
   box: SafeBox,
 ): string[] {
-  if (rig.blend > 0 || rig.aiming || rig.turning) return [];
+  // the ball alone (`reach` null: it is in flight, or the shot's reach is not to be shown) is held to the box whatever the camera
+  // is doing but blending to the view from above; the ball with its reach only once the view has settled
+  if (rig.blend > 0 || (reach && (rig.aiming || rig.turning))) return [];
   const out: string[] = [];
   const check = (what: string, p: { x: number; y: number; z: number }) => {
     const [nx, ny] = drawnAt(camera, p.x, p.y, p.z);

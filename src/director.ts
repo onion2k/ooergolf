@@ -7,7 +7,8 @@
  *
  * It also keeps the ball and the furthest a shot can reach on the screen (`aimview.ts`'s safe box): on a golf hole by the aim
  * view of the club, and on a hole of minigolf by one of the putter's reach along the aim, which is the home view exactly when
- * that fits there.
+ * that fits there. It follows the ball for one stroke in five and holds still for the rest, taking the ball up only when it
+ * would leave that box.
  *
  * It holds a fixed set of numbers and a string, never a list, and it never draws the game's chance.
  */
@@ -32,7 +33,20 @@ export const AIM_TURN = { least: 0.15 };
 export const NEAR_FLAG = { least: 0.1, most: 0.26 } as const;
 
 /** What a toss of the camera's is for, so two tosses of the same lie are not the one: which side of the flag, and how far off it. */
-export const SALT = { flag: 1, flagSize: 2 } as const;
+export const SALT = { flag: 1, flagSize: 2, follow: 3 } as const;
+
+/**
+ * The share of strokes the camera follows the ball for (a fifth): the rest it holds where it stood and lets the ball
+ * fly across the aim view, taking it up only if the ball would leave the screen. Which strokes is a hash of the view seed, the
+ * hole and the stroke, so it is the same every run and draws none of the game's chance.
+ */
+export const FOLLOW = { share: 0.2 } as const;
+
+/** Whether the camera follows the ball for each stroke as `FOLLOW` says, or for every one, or for none but those the ball would leave the screen in. */
+export type FollowShots = 'drawn' | 'always' | 'never';
+
+/** How many times the camera's pace is doubled, at most, to keep a ball on its way inside the safe box: more than the lag of the fastest ball needs. */
+const CATCH_UP_DOUBLINGS = 8;
 
 /** How many times the offset is halved toward `NEAR_FLAG.least` to keep a cup that is in reach on the screen. */
 const FIT_STEPS = 12;
@@ -52,6 +66,14 @@ export class Director {
   private stood = false;
   /** What the camera's tosses are made from, with the hole and the stroke: the page's own at boot, and a test's or the fuzzer's by `setSeed`. */
   private seed = 0;
+  /** Whether the stroke being played has the camera following the ball: drawn when it is struck, and latched on if the ball would leave the screen. */
+  private chasing = false;
+  /** Which strokes are followed: as `FOLLOW` says, or all, or none, which a test chooses. */
+  private mode: FollowShots = 'drawn';
+  /** The camera's turn and tilt as the latch reads them, written each frame and never made. */
+  private readonly seen = { azimuth: 0, tilt: 0 };
+  /** Where the ball is on the screen, as the latch reads it, written each frame and never made. */
+  private readonly ndc: [number, number] = [0, 0];
   /** Whether the camera has been put on a hole yet: the first has nowhere to glide from. */
   private looked = false;
 
@@ -68,6 +90,31 @@ export class Director {
    */
   setSeed(seed: number) {
     this.seed = seed;
+  }
+
+  /** Which strokes the camera follows the ball for, as a test chooses: the share `FOLLOW` says, all of them, or none (but where the ball would leave the screen). */
+  followShots(mode: FollowShots) {
+    this.mode = mode;
+  }
+
+  /** Whether the camera is following the ball for the stroke being played: drawn as it is struck, and on from the moment the ball would have left the screen. */
+  get following(): boolean {
+    return this.chasing;
+  }
+
+  /**
+   * A stroke struck: whether the camera follows the ball for it, one in five by a hash of the seed, the hole and the stroke
+   * (`FOLLOW`), or as `followShots` says. The rest it holds where it stood, and the ball flies across the view; see `frame`.
+   */
+  struck() {
+    const game = this.game;
+    if (!game) return;
+    this.chasing =
+      this.mode === 'always'
+        ? true
+        : this.mode === 'never'
+          ? false
+          : hashed(this.seed, game.hole, game.strokes, SALT.follow) < FOLLOW.share;
   }
 
   /** Told the shape and the height of the screen, which the aim view depends on: the view is worked out again. */
@@ -96,6 +143,7 @@ export class Director {
     rig.setGolf(layout.golf);
     this.aimedFor = '';
     this.worked.x = Number.NaN;
+    this.chasing = false;
     if (layout.golf) this.aimFor(!glide);
     this.looked = true;
   }
@@ -191,13 +239,57 @@ export class Director {
     rig.settle(dt);
     const { world, ball } = game;
     if (!world.alive[ball] || parked) return;
+    // a stroke the camera is not following: held where it stood while the ball is on its way, and taken up for the rest of the
+    // stroke from the moment the ball would leave the safe box; a ball at rest is gone to as ever
+    if (!this.chasing && !game.ready && !this.leaving(game)) return;
+    if (!game.ready) this.chasing = true;
     const ground = heightAt(game.layout, world.x[ball], world.y[ball]);
     // a lofted ball is followed up into the air as well as along, or it leaves the top of the screen at the top of its
     // flight; on the ground, and on every hole of minigolf, it is the ground that is looked at, as it always was
     const golf = game.layout.golf;
     const up = golf ? Math.max(0, world.z[ball] - ground - KIND_RADIUS[BALL]) : 0;
     const ease = golf ? catchUp(Math.hypot(world.vx[ball], world.vy[ball], world.vz[ball])) : undefined;
+    const [x0, y0, z0] = rig.target;
     rig.follow(world.x[ball], world.y[ball], dt, ground + up, ease);
+    // a ball on its way is never left off the safe box by the camera's lag: a ball struck toward the camera, or thrown, can be
+    // further from where the camera is looking than the pace allows for, and then the camera catches up quicker (twice as quick,
+    // and again, until the ball is inside), never looser than the box
+    if (!game.ready) {
+      let rate = ease ?? catchUp(0);
+      for (let n = 0; n < CATCH_UP_DOUBLINGS && this.leaving(game); n++) {
+        rig.target[0] = x0;
+        rig.target[1] = y0;
+        rig.target[2] = z0;
+        rate *= 2;
+        rig.follow(world.x[ball], world.y[ball], dt, ground + up, rate);
+      }
+    }
+  }
+
+  /**
+   * Whether the ball, where it is now, is off the safe box as the camera draws it as it stands: the latch of a stroke the
+   * camera is not following. Worked out from the view's own figures against where the camera is looking, nothing made.
+   */
+  private leaving(game: Game): boolean {
+    const { world, ball } = game;
+    const { rig } = this;
+    const { azimuth, tilt } = rig.view(game.t, this.seen);
+    const tall = tallOf(this.aspect);
+    const r = rig.golf ? Math.min(rig.distance * tall, standOf(this.aspect)) : rig.distance * tall;
+    const [dx, dy] = [world.x[ball] - rig.target[0], world.y[ball] - rig.target[1]];
+    const [sin, cos] = [Math.sin(azimuth), Math.cos(azimuth)];
+    const [nx, ny] = screenOf(
+      r,
+      tilt,
+      rig.lead,
+      this.aspect,
+      dx * sin + dy * cos,
+      dx * cos - dy * sin,
+      world.z[ball] - rig.target[2],
+      this.ndc,
+    );
+    const box = safeBox(this.aspect, this.height);
+    return !(Math.abs(nx) <= box.x && ny <= box.top && ny >= box.bottom);
   }
 
   /**

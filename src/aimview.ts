@@ -123,6 +123,7 @@ function screenY(r: number, tilt: number, lead: number, ahead: number, up: numbe
  * Where on the screen, each way from minus one to one, a point lands for a camera `r` back at `tilt` looking `lead` ahead of the
  * ball, on a screen of `aspect`: `ahead` yards ahead of the ball the way it faces, `across` to the right of that line and `up` above
  * the ball's ground. What `aimView` is worked from, with the across, which is what a camera turned off the line to a place needs.
+ * Written into `out` when one is given, so a frame's worth of them makes nothing.
  */
 export function screenOf(
   r: number,
@@ -132,13 +133,16 @@ export function screenOf(
   ahead: number,
   across: number,
   up: number,
+  out: [number, number] = [0, 0],
 ): [number, number] {
   const h = Math.tan((VIEW.fov * Math.PI) / 360);
   const dy = ahead - (lead - Math.sin(tilt) * r),
     dz = up - Math.cos(tilt) * r;
   const depth = dy * Math.sin(tilt) - dz * Math.cos(tilt);
   const above = dy * Math.cos(tilt) + dz * Math.sin(tilt);
-  return [across / (depth * h * Math.max(aspect, 0.1)), above / (depth * h)];
+  out[0] = across / (depth * h * Math.max(aspect, 0.1));
+  out[1] = above / (depth * h);
+  return out;
 }
 
 /**
