@@ -198,7 +198,11 @@ export interface GameApi {
     held: boolean;
     antialias: Antialias;
     swaying: boolean;
-    mode: 'aim' | 'look';
+    mode: 'aim' | 'overhead';
+    /** How far the view is blended up to the overhead view: nought is the normal view, one the view from above. */
+    blend: number;
+    /** The renderer's far plane, which is raised while the view is from above. */
+    farPlane: number;
     azimuth: number;
     tilt: number;
     /** The words of the putt's break under the pin, as drawn (`Putt: aim 1.6 yd right, uphill 0.4 yd`); null when none is up. */
@@ -206,8 +210,13 @@ export interface GameApi {
     /** The words for how fast the greens run, as drawn (`Fast greens`); null on a hole that has not set it. */
     greens: string | null;
   };
-  /** The camera turned by `turn` radians and tilted by `tilt` (a bigger tilt is a lower view), as a drag in Look does. */
+  /** The camera turned by `turn` radians and tilted by `tilt` (a bigger tilt is a lower view), as a test's own setter: a player cannot turn the view by hand, it turns to the aim. */
   orbit(turn: number, tilt: number): void;
+  /**
+   * The overhead view switched on or off as the button does (the other way to now, when not told): whether it is on after.
+   * Refused, and off, under the start screen.
+   */
+  overhead(on?: boolean): boolean;
   /**
    * The camera sent to face the cup from the ball, as the flag button does: false, and nothing done, under the start screen,
    * while a drag is held on the course, or with the ball at the cup.
@@ -340,6 +349,7 @@ export interface DebugHost {
   } | null;
   view(): ReturnType<GameApi['view']>;
   orbit(turn: number, tilt: number): void;
+  overhead(on?: boolean): boolean;
   faceFlag(): boolean;
   measureFrame(warmup?: number): Promise<number>;
   judge(gap: number, work: number): number;
@@ -475,6 +485,7 @@ export function createApi(host: DebugHost): GameApi {
     map: () => host.map(),
     view: () => host.view(),
     orbit: (turn, tilt) => host.orbit(turn, tilt),
+    overhead: (on) => host.overhead(on),
     faceFlag: () => host.faceFlag(),
     save() {
       game.persist();

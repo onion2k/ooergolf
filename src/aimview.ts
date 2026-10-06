@@ -47,7 +47,7 @@ export const AIM = {
 
 /**
  * What a phone held upright covers of the page, in pixels: the top, where the strokes panel, the coins and shop and the
- * Aim, Look and flag switch end (about 150) and a margin under them; and the bottom, where the bag's top is (about 166
+ * Overhead and flag switch end (about 150) and a margin under them; and the bottom, where the bag's top is (about 166
  * up from the foot) and a margin over it. On such a screen the landing ring and its spread are wanted below the first, and
  * the ball above the second, since the camera cannot stand back far enough to put the landing at the top of a page whose top
  * is words.

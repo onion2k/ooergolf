@@ -3,6 +3,7 @@ import { Camera } from 'artshape-render/gpu/camera';
 import { describe, expect, it } from 'vitest';
 import { layoutOf } from '../src/arena';
 import {
+  CLIP,
   CameraRig,
   GLIDE,
   LEAD,
@@ -831,5 +832,75 @@ describe('the overhead view', () => {
     const wide = { minX: -300, minY: -50, maxX: 300, maxY: 50 };
     expect(overheadFit(wide, 0, 0.465)).toBeGreaterThan(overheadFit(wide, 0, 1.6));
     expect(overheadFit({ minX: 0, minY: 0, maxX: 1e6, maxY: 1e6 }, 0, 1.6)).toBe(OVERHEAD.far);
+  });
+});
+
+/**
+ * The renderer's far plane: the page set it to 800 for good, which cuts the overhead view's ground off where it stands
+ * 868 to 948 back over the biggest holes, so it is the rig that says how far the plane must be.
+ */
+describe('the far plane', () => {
+  const ASPECTS = [1.6, 1.0, 400 / 860];
+  /** The depth along the camera's way, at which the ground at each edge of the screen and its middle is met, the deepest. */
+  function deepest(cam: Camera): number {
+    const [px, py, pz] = cam.position;
+    const f = [cam.target[0] - px, cam.target[1] - py, cam.target[2] - pz];
+    const fl = Math.hypot(f[0], f[1], f[2]);
+    let most = 0;
+    for (const nx of [-1, 0, 1])
+      for (const ny of [-1, 0, 1]) {
+        const g = groundAt(cam, nx, ny, 0);
+        if (!g) continue;
+        const depth = ((g[0] - px) * f[0] + (g[1] - py) * f[1] + (0 - pz) * f[2]) / fl;
+        most = Math.max(most, depth);
+      }
+    return most;
+  }
+
+  it('is the page’s 800 in the normal view, as it always was', () => {
+    const rig = new CameraRig();
+    expect(rig.farPlane).toBe(CLIP.far);
+    expect(CLIP.far).toBe(800);
+  });
+
+  it('reaches the ground at the edges of the screen while the view blends up to the overhead view and when it is there, at its furthest', () => {
+    for (const aspect of ASPECTS) {
+      const big = { minX: -400, minY: -500, maxX: 400, maxY: 500 };
+      // the furthest the view stands back: a hole too big to fit is held at `OVERHEAD.far`
+      for (const [box, label] of [
+        [big, 'a big hole'],
+        [{ minX: 0, minY: 0, maxX: 1e6, maxY: 1e6 }, 'a hole as far back as it goes'],
+      ] as const) {
+        const rig = new CameraRig();
+        const cam = new Camera();
+        cam.fov = rig.fov;
+        cam.aspect = aspect;
+        rig.setScreen(aspect);
+        rig.jump(0, 0);
+        rig.setOverhead(true, { bounds: box, distance: overheadFit(box, rig.azimuth, aspect) });
+        for (let f = 0; f < 240; f++) {
+          rig.settle(1 / 60);
+          rig.place(cam);
+          cam.update();
+          cam.far = rig.farPlane;
+          expect(deepest(cam), `${label} at ${aspect}, frame ${f}`).toBeLessThanOrEqual(rig.farPlane);
+        }
+        expect(rig.blend).toBe(1);
+        // and every figure the overhead fits asked for on a desk is well inside it
+        expect(rig.farPlane).toBeGreaterThanOrEqual(1.05 * rig.top.distance);
+      }
+    }
+  });
+
+  it('goes back to 800 when the overhead view is left, so the normal view keeps its depth precision', () => {
+    const rig = new CameraRig();
+    const box = { minX: -60, minY: -150, maxX: 60, maxY: 150 };
+    rig.setScreen(1.6);
+    rig.setOverhead(true, { bounds: box, distance: overheadFit(box, 0, 1.6) });
+    for (let f = 0; f < 240; f++) rig.settle(1 / 60);
+    expect(rig.farPlane).toBeGreaterThan(CLIP.far);
+    rig.setOverhead(false);
+    for (let f = 0; f < 240; f++) rig.settle(1 / 60);
+    expect(rig.farPlane).toBe(CLIP.far);
   });
 });

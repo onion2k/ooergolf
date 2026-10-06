@@ -1763,7 +1763,7 @@ test.describe('the flag button', () => {
     expect(problems).toEqual([]);
   });
 
-  test('it works whether a drag is Aim or Look and leaves the switch as it was; the button is not a toggle', async ({
+  test('it turns the view to face the cup and leaves the overhead button as it was; the flag is not a toggle, and is put away from overhead', async ({
     page,
   }) => {
     const problems = watch(page);
@@ -1771,23 +1771,34 @@ test.describe('the flag button', () => {
     await offToOneSide(page);
     const want = await toFace(page);
     await expect(page.locator('#viewFlag')).not.toHaveAttribute('aria-pressed', /.*/);
-    for (const mode of ['look', 'aim'] as const) {
-      await page.locator(mode === 'look' ? '#modeLook' : '#modeAim').click();
-      // turned away first, so there is a turn to make
-      await page.evaluate(() => {
-        window.game!.orbit(1.4, 0);
-        window.game!.step(1);
-      });
-      expect(gap((await view(page)).azimuth, want)).toBeGreaterThan(0.3);
-      await page.locator('#viewFlag').click();
-      await page.evaluate(() => window.game!.step(120));
-      const v = await view(page);
-      expect(gap(v.azimuth, want), `facing it in ${mode}`).toBeLessThan(1e-6);
-      expect(v.mode, `still ${mode}`).toBe(mode);
-      await expect(page.locator('#modeLook')).toHaveAttribute('aria-pressed', String(mode === 'look'));
-      await expect(page.locator('#modeAim')).toHaveAttribute('aria-pressed', String(mode === 'aim'));
-      await expect(page.locator('#viewFlag')).not.toHaveAttribute('aria-pressed', /.*/);
-    }
+    // turned away first, so there is a turn to make
+    await page.evaluate(() => {
+      window.game!.orbit(1.4, 0);
+      window.game!.step(1);
+    });
+    expect(gap((await view(page)).azimuth, want)).toBeGreaterThan(0.3);
+    await page.locator('#viewFlag').click();
+    await page.evaluate(() => window.game!.step(120));
+    const v = await view(page);
+    expect(gap(v.azimuth, want), 'facing it').toBeLessThan(1e-6);
+    expect(v.mode).toBe('aim');
+    await expect(page.locator('#viewOverhead')).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.locator('#viewFlag')).not.toHaveAttribute('aria-pressed', /.*/);
+
+    // from overhead there is no way to face the cup: the button is disabled, the API refuses, and the view stays as it was
+    await page.locator('#viewOverhead').click();
+    await page.evaluate(() => {
+      window.game!.orbit(1.4, 0);
+      window.game!.step(120);
+    });
+    const before = await view(page);
+    await expect(page.locator('#viewFlag')).toBeDisabled();
+    expect(await page.evaluate(() => window.game!.faceFlag()), 'refused through the API too').toBe(false);
+    await page.evaluate(() => window.game!.step(60));
+    const after = await view(page);
+    expect(after.turning).toBe(false);
+    expect(after.azimuth).toBe(before.azimuth);
+    expect(after.mode, 'still overhead').toBe('overhead');
     expect(problems).toEqual([]);
   });
 
@@ -1835,17 +1846,19 @@ test.describe('the flag button', () => {
     await start(page, { seed: 11, paused: true });
     await offToOneSide(page);
     const want = await toFace(page);
-    await page.locator('#modeLook').click();
     await page.locator('#viewFlag').click();
     await page.evaluate(() => window.game!.step(3));
     expect((await view(page)).turning).toBe(true);
-    await drag(page, { x: 300, y: 400 }, { x: 420, y: 400 });
-    await page.evaluate(() => window.game!.step(1));
+    // a player’s own turn, which there is no drag for any more: the camera orbit's setter does it as the drag did
+    await page.evaluate(() => {
+      window.game!.orbit(0.3, 0);
+      window.game!.step(1);
+    });
     const taken = await view(page);
-    expect(taken.turning, 'the drag ended the turn').toBe(false);
+    expect(taken.turning, 'their own turn ended it').toBe(false);
     await page.evaluate(() => window.game!.step(120));
     const later = await view(page);
-    expect(later.azimuth, 'and it stays where the drag left it').toBeCloseTo(taken.azimuth, 9);
+    expect(later.azimuth, 'and it stays where their turn left it').toBeCloseTo(taken.azimuth, 9);
     expect(gap(later.azimuth, want), 'not at the flag').toBeGreaterThan(0.05);
     expect(problems).toEqual([]);
   });
@@ -1950,11 +1963,11 @@ test.describe('the flag button', () => {
           expect(flag.height, 'a thumb high').toBeGreaterThanOrEqual(THUMB);
           expect(flag.width, 'a thumb wide').toBeGreaterThanOrEqual(THUMB);
           // as high as the pills beside it
-          expect(flag.height).toBeCloseTo((await box('#modeLook')).height, 0);
+          expect(flag.height).toBeCloseTo((await box('#viewOverhead')).height, 0);
           const panel = await box('#viewMode');
           expect(flag.x).toBeGreaterThanOrEqual(panel.x);
           expect(flag.x + flag.width).toBeLessThanOrEqual(panel.x + panel.width);
-          expect(apart(flag, await box('#modeLook')), 'beside Look, not on it').toBe(true);
+          expect(apart(flag, await box('#viewOverhead')), 'beside Overhead, not on it').toBe(true);
           const others = [...(touch ? [] : ['#help']), '#strokes', '#purse', ...(golf ? ['#bag', '#holePanel'] : [])];
           for (const other of others) {
             const o = await box(other);

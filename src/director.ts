@@ -112,7 +112,8 @@ export class Director {
    */
   faceFlag(held: boolean): boolean {
     const game = this.game;
-    if (!game || held) return false;
+    // from above there is no way to face the cup, and the button is put away there
+    if (!game || held || this.rig.overhead) return false;
     const to = facing({ x: game.world.x[game.ball], y: game.world.y[game.ball] }, game.layout.cup);
     if (to === null) return false;
     this.rig.turnTo(to);

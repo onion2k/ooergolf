@@ -18,8 +18,8 @@ export interface InputPorts {
   shoot(angle: number, power: number): void;
   /** The camera nearer for less than nought, further for more. */
   zoom(by: number): void;
-  /** The camera turned by `turn` radians and tilted by `tilt`: the world turning with a finger. */
-  orbit(turn: number, tilt: number): void;
+  /** The overhead view dragged by `dx` pixels across and `dy` down: the ground going with the finger. */
+  pan(dx: number, dy: number): void;
   /** Whether a screen is up over the course, which the pointers pass through: nothing is struck or moved. */
   blocked(): boolean;
 }
@@ -36,7 +36,7 @@ export class Input {
     return this.gesture.aim;
   }
 
-  /** Whether a drag is a shot, or turns the camera. */
+  /** Whether a drag is a shot, or pans the view from above. */
   get mode(): Mode {
     return this.gesture.mode;
   }
@@ -67,6 +67,6 @@ export class Input {
     if (this.ports.blocked()) return;
     if (g.kind === 'shoot') this.ports.shoot(g.shot.angle, g.shot.power);
     else if (g.kind === 'zoom') this.ports.zoom(g.by);
-    else if (g.kind === 'orbit') this.ports.orbit(g.turn, g.tilt);
+    else if (g.kind === 'pan') this.ports.pan(g.dx, g.dy);
   }
 }

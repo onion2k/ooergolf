@@ -150,6 +150,18 @@ describe('the flag', () => {
     expect(rig.azimuth).toBe(0);
   });
 
+  it('is refused from overhead, where there is no way to face the cup, and allowed again once it is left', () => {
+    const { game } = golfGame(field('f'));
+    const { rig, director } = directed(game);
+    director.started();
+    const bounds = game.layout.bounds;
+    rig.setOverhead(true, { bounds, distance: 400 });
+    expect(director.faceFlag(false)).toBe(false);
+    expect(rig.turning).toBe(false);
+    rig.setOverhead(false);
+    expect(director.faceFlag(false)).toBe(true);
+  });
+
   it('is refused with the ball at the cup, where there is no way to face', () => {
     const { game } = golfGame(field('f'));
     const { rig, director } = directed(game);

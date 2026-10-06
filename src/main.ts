@@ -11,7 +11,7 @@ import { GameRenderer, antialiasFor } from 'artshape-render/game/renderer';
 import { BALL, HARDEST_SHOT, KICKER, KIND_RADIUS, heightAt, kickerAt, lieAt, onSand, rollsFor } from './arena';
 import { BAG, PUTTER, carryOf } from './bag';
 import { markScale } from './aimview';
-import { CameraRig, LEAD, TILT, standOf, tallOf } from './camera';
+import { CLIP, CameraRig, LEAD, TILT, overheadFit, standOf, tallOf } from './camera';
 import { Director } from './director';
 import { CLUBS } from './clubs';
 import { createApi } from './debug';
@@ -75,7 +75,7 @@ async function main() {
   // before it is out of it, so a lighter one, as Miner has, and the bursts' own gravity scales it
   renderer.gravity = 30;
   renderer.camera.near = 2;
-  renderer.camera.far = 800;
+  renderer.camera.far = CLIP.far;
 
   // ---- the game, and what it says has happened ----
 
@@ -126,12 +126,12 @@ async function main() {
       },
       courses() {
         choosing = true;
+        setOverhead(false);
         hud.showStart(summaries);
       },
-      // the switch: what a drag on the course is from now on
-      mode(mode) {
-        input.setMode(mode);
-        hud.setMode(mode);
+      // the overhead button: the view from above on or off, and so what a drag on the course is
+      overhead(on) {
+        setOverhead(on);
       },
       // the flag: the camera turned to face the cup
       flag() {
@@ -419,13 +419,26 @@ async function main() {
     },
     shoot: (angle, power) => played.shoot(angle, power),
     zoom: (by) => rig.zoom(by),
-    orbit: (turn, tilt) => rig.orbit(turn, tilt),
+    // the view from above dragged: the ground goes with the finger, over the height of the canvas
+    pan: (dx, dy) => rig.pan(dx, dy, canvas.getBoundingClientRect().height),
     // nothing is struck through the start screen
     blocked: () => choosing,
   });
+  /**
+   * The view from above switched on or off, as the button does: on, fitted to the whole of the hole and a drag a pan that
+   * never strikes; off, the view as it was. Whether it is on. Not under the start screen, where there is no hole to look
+   * down on, and the rig refuses one that is not fitted to a hole.
+   */
+  function setOverhead(on: boolean): boolean {
+    if (on && choosing) return rig.overhead;
+    const bounds = played.layout.bounds;
+    const wanted = rig.setOverhead(on, on ? { bounds, distance: overheadFit(bounds, rig.azimuth, aspect) } : undefined);
+    input.setMode(wanted ? 'overhead' : 'aim');
+    hud.setOverhead(wanted);
+    return wanted;
+  }
   backToAim = () => {
-    input.setMode('aim');
-    hud.setMode('aim');
+    setOverhead(false);
   };
   /**
    * The camera turned to face the cup from the ball, the short way and eased, in either mode and on any hole; whether it
@@ -775,6 +788,8 @@ async function main() {
   }
   /** The frame drawn, and when it was begun, for the governor to measure the drawing against. */
   function draw(dt: number): number {
+    // the far plane is further while the view from above is up, so the whole of a big hole is inside it
+    cam.far = rig.farPlane;
     rig.place(cam, played.t);
     cam.update();
     upload();
@@ -869,11 +884,14 @@ async function main() {
       antialias: antialiasFor(renderer.look, renderer.economy),
       swaying: renderer.economy.wind !== false,
       mode: input.mode,
+      blend: rig.blend,
+      farPlane: cam.far,
       ...rig.view(played.t),
       putt: hud.puttDrawn().putt,
       greens: hud.puttDrawn().greens,
     }),
     orbit: (turn, tilt) => rig.orbit(turn, tilt),
+    overhead: (on) => setOverhead(on ?? !rig.overhead),
     faceFlag,
     measureFrame,
     judge,

@@ -85,10 +85,18 @@ const SETTLED = { distance: 0.25, tilt: 0.002, lead: 0.25, turn: 0.002 };
  * The overhead view, which is the hole seen whole from straight above, to be looked at and never aimed from. `tilt` is how
  * far from the vertical it looks (not nought, since the renderer's camera has the ground's up for its own and looking
  * exactly down is degenerate), `ease` the rate the view blends in and out at, `near` the nearest it may be zoomed to,
- * `far` the furthest (provisional until the cost of the view is measured on the biggest holes, and the renderer's far
- * plane, 800 in the page, must be raised to it), and `margin` how much more than the hole's bounds the fit shows.
+ * `far` the furthest (provisional until the cost of the view is measured on the biggest holes; the renderer's far
+ * plane follows it, `CLIP`), and `margin` how much more than the hole's bounds the fit shows.
  */
 export const OVERHEAD = { tilt: 0.05, ease: 4, near: 60, far: 1500, margin: 1.08 } as const;
+/**
+ * The renderer's far plane. It is `far` for every view the camera has had, and it is raised while the overhead view is on or
+ * blending, to `overhead` times how far back that view stands: the ground at the screen's far edge is met that much deeper
+ * than the camera is high while it swings up and over (a view tilted 45 degrees with half the lens above it sees ground 2.4
+ * times as deep as it is back), and a fixed 800 cut off a hole whose fit is 868 to 948 back. Only then, since a far plane
+ * further out costs the depth buffer its precision, which the normal view has no need to spend.
+ */
+export const CLIP = { far: 800, overhead: 2.5 } as const;
 /** The ground a hole covers, the corners of a layout's `bounds`. */
 export interface Bounds {
   minX: number;
@@ -396,6 +404,11 @@ export class CameraRig {
   private reach(distance: number): number {
     const most = this.fit?.distance ?? 0;
     return Math.max(Math.min(OVERHEAD.near, most), Math.min(most, distance));
+  }
+
+  /** How far the renderer's far plane must be for this view: `CLIP.far`, and further while the overhead view is up or blending. */
+  get farPlane(): number {
+    return this.k > 0 ? Math.max(CLIP.far, this.top.distance * CLIP.overhead) : CLIP.far;
   }
 
   /** Whether the overhead view is wanted. */

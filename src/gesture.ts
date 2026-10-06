@@ -1,7 +1,7 @@
 /**
  * What the pointers on the course mean. One pointer, a finger or the mouse,
- * pressed, pulled back and let go is a shot, in aim mode, or in look mode
- * turns and tilts the camera as it is dragged and never strikes anything; two
+ * pressed, pulled back and let go is a shot, in aim mode, or in overhead mode
+ * pans the view from above as it is dragged and never strikes anything; two
  * fingers are a pinch in either, and bring the camera nearer as they spread
  * and take it further as they close.
  * A second finger landing mid-drag drops the drag for good: a pinch never
@@ -18,24 +18,15 @@ import { shotFromDrag, type Shot } from './shot';
 /** How far the camera moves for a pinch across the whole of the screen's shorter side, in world units. */
 export const PINCH_REACH = 80;
 
-/**
- * How far a drag in look mode turns the camera, and how far it tilts it, for a drag across the whole of the screen's
- * shorter side, in radians: half a turn across, and a little over a radian of tilt up or down, which is more than the
- * camera's whole range of tilt, so a hand's width of drag takes it from one end to the other. The camera goes round
- * the ball as the ground near it goes with the finger, so a drag to the right swings the camera to the left (more is
- * toward +X, so the turn is the drag's), and a drag down brings it lower, toward the horizon, and one up higher. A
- * turn about a point cannot follow the finger at both ends of the hole at once: it is the near end that does.
- */
-export const ORBIT = { turn: Math.PI, tilt: 1.2 };
-
-/** What a drag on the course does: in aim mode it is a shot, and in look mode it turns the camera. */
-export type Mode = 'aim' | 'look';
+/** What a drag on the course does: in aim mode it is a shot, and in overhead mode it moves the view over the hole. */
+export type Mode = 'aim' | 'overhead';
 
 export type Gesturing =
   | { kind: 'none' }
   | { kind: 'shoot'; shot: Shot }
   | { kind: 'zoom'; by: number }
-  | { kind: 'orbit'; turn: number; tilt: number };
+  /** The view dragged by `dx` pixels across and `dy` down since the last move: the ground goes with the finger. */
+  | { kind: 'pan'; dx: number; dy: number };
 
 export interface GestureOptions {
   /** The screen's shorter side, in the pointers' pixels: what a drag's power is a share of. */
@@ -51,8 +42,8 @@ export class Gesture {
   private readonly down_ = new Map<number, [number, number]>();
   /** The drag under way, if one is: which pointer, and where it began on the screen and the ground. */
   private drag: { id: number; px: [number, number]; ground: [number, number] | null } | null = null;
-  /** The turn under way in look mode: which pointer, and where it was at the last move. */
-  private turning: { id: number; at: [number, number] } | null = null;
+  /** The pan under way in overhead mode: which pointer, and where it was at the last move. */
+  private panning: { id: number; at: [number, number] } | null = null;
   private mode_: Mode = 'aim';
   /** The shot the drag would make if let go now. */
   aim: Shot | null = null;
@@ -64,23 +55,23 @@ export class Gesture {
     return this.mode_;
   }
 
-  /** A drag now is a shot or a turn of the camera, and any under way is dropped, so it never ends as the other. */
+  /** A drag now is a shot or a pan of the view, and any under way is dropped, so it never ends as the other. */
   setMode(mode: Mode) {
     if (mode === this.mode_) return;
     this.mode_ = mode;
     this.drag = null;
-    this.turning = null;
+    this.panning = null;
     this.aim = null;
   }
 
   down(id: number, x: number, y: number): Gesturing {
     this.down_.set(id, [x, y]);
     if (this.down_.size === 1) {
-      if (this.mode_ === 'look') this.turning = { id, at: [x, y] };
+      if (this.mode_ === 'overhead') this.panning = { id, at: [x, y] };
       else this.drag = { id, px: [x, y], ground: this.options.ground(x, y) };
     } else {
       this.drag = null;
-      this.turning = null;
+      this.panning = null;
       this.aim = null;
     }
     return NONE;
@@ -94,14 +85,13 @@ export class Gesture {
       this.aim = this.shotTo(x, y);
       return NONE;
     }
-    if (this.turning?.id === id) {
-      const [px, py] = this.turning.at;
-      this.turning.at = [x, y];
+    if (this.panning?.id === id) {
+      const [px, py] = this.panning.at;
+      this.panning.at = [x, y];
       this.down_.set(id, [x, y]);
-      const short = this.options.shortSide();
-      const turn = ((x - px) / short) * ORBIT.turn,
-        tilt = ((y - py) / short) * ORBIT.tilt;
-      return turn || tilt ? { kind: 'orbit', turn: turn || 0, tilt: tilt || 0 } : NONE;
+      const dx = x - px,
+        dy = y - py;
+      return dx || dy ? { kind: 'pan', dx, dy } : NONE;
     }
     if (this.down_.size !== 2) {
       this.down_.set(id, [x, y]);
@@ -116,7 +106,7 @@ export class Gesture {
   up(id: number, x: number, y: number): Gesturing {
     if (!this.down_.delete(id)) return NONE;
     let out = NONE;
-    if (this.turning?.id === id) this.turning = null;
+    if (this.panning?.id === id) this.panning = null;
     if (this.drag?.id === id) {
       const shot = this.shotTo(x, y);
       if (shot) out = { kind: 'shoot', shot };
@@ -129,7 +119,7 @@ export class Gesture {
   /** A pointer the browser has taken away: whatever it was doing is dropped. */
   cancel(id: number) {
     this.down_.delete(id);
-    if (this.turning?.id === id) this.turning = null;
+    if (this.panning?.id === id) this.panning = null;
     if (this.drag?.id === id) {
       this.drag = null;
       this.aim = null;

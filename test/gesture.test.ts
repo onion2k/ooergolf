@@ -1,7 +1,7 @@
 /** What the pointers on the course mean: one finger or the mouse drags a shot, two fingers pinch the camera nearer or further. */
 import { describe, expect, it } from 'vitest';
 import { DRAG } from '../src/shot';
-import { Gesture, ORBIT, PINCH_REACH } from '../src/gesture';
+import { Gesture, PINCH_REACH } from '../src/gesture';
 
 const SHORT = 800;
 /** A gesture whose ground is the screen itself, a pixel a unit, with y turned to point up the course. */
@@ -76,47 +76,36 @@ describe('a gesture', () => {
   });
 });
 
-describe('a gesture in look mode', () => {
-  const look = () => {
+describe('a gesture in overhead mode', () => {
+  const over = () => {
     const g = make();
-    g.setMode('look');
+    g.setMode('overhead');
     return g;
   };
 
   it('is in aim mode until it is told, and says which it is in', () => {
     const g = make();
     expect(g.mode).toBe('aim');
-    g.setMode('look');
-    expect(g.mode).toBe('look');
+    g.setMode('overhead');
+    expect(g.mode).toBe('overhead');
     g.setMode('aim');
     expect(g.mode).toBe('aim');
-    // and a drag in aim mode never turns the view
+    // and a drag in aim mode never pans the view
     g.down(1, 400, 300);
     expect(g.move(1, 700, 500).kind).toBe('none');
   });
 
-  it('turns one pointer’s drag into an orbit, in proportion to how far it goes and not how far it has gone', () => {
-    const g = look();
+  it('turns one pointer’s drag into a pan by the pixels it moved since the last move, and not how far it has gone', () => {
+    const g = over();
     expect(g.down(1, 400, 300)).toEqual({ kind: 'none' });
-    // across half the screen's shorter side: the ground near the ball follows the finger, so the camera swings the other
-    // way round it, toward the side the finger came from
-    const across = g.move(1, 400 + SHORT / 2, 300);
-    expect(across).toEqual({ kind: 'orbit', turn: ORBIT.turn / 2, tilt: 0 });
-    // down a quarter of it, no further across: what is new since the last move, and nothing of what came before
-    const down = g.move(1, 400 + SHORT / 2, 300 + SHORT / 4);
-    expect(down.kind).toBe('orbit');
-    if (down.kind === 'orbit') {
-      expect(down.turn).toBeCloseTo(0, 9);
-      // dragging down brings the camera lower, more toward the horizon: a bigger angle from the vertical
-      expect(down.tilt).toBeCloseTo(ORBIT.tilt / 4, 9);
-    }
-    // back the other way it turns and tilts the other
-    const back = g.move(1, 400, 300);
-    expect(back.kind === 'orbit' && back.turn < 0 && back.tilt < 0).toBe(true);
+    expect(g.move(1, 450, 300)).toEqual({ kind: 'pan', dx: 50, dy: 0 });
+    expect(g.move(1, 450, 340)).toEqual({ kind: 'pan', dx: 0, dy: 40 });
+    expect(g.move(1, 400, 300)).toEqual({ kind: 'pan', dx: -50, dy: -40 });
+    expect(g.move(1, 400, 300), 'a pointer that did not move is nothing').toEqual({ kind: 'none' });
   });
 
   it('never strikes the ball, shows no aim, and lets go without a shot however hard the drag was', () => {
-    const g = look();
+    const g = over();
     g.down(1, 400, 300);
     g.move(1, 400, 300 + full);
     expect(g.aim, 'no aim to show').toBe(null);
@@ -124,20 +113,18 @@ describe('a gesture in look mode', () => {
     expect(g.aim).toBe(null);
   });
 
-  it('still pinches the camera nearer or further with two fingers, and a second finger drops the orbit as it drops a drag', () => {
-    const g = look();
+  it('still pinches with two fingers, and a second finger drops the pan as it drops a drag', () => {
+    const g = over();
     g.down(1, 400, 300);
-    expect(g.move(1, 500, 300).kind).toBe('orbit');
+    expect(g.move(1, 500, 300).kind).toBe('pan');
     g.down(2, 600, 300);
-    // the first finger no longer turns the view
-    expect(g.move(1, 550, 300).kind).not.toBe('orbit');
-    const pinch = g.move(2, 700, 300);
-    expect(pinch.kind).toBe('zoom');
+    expect(g.move(1, 550, 300).kind, 'the first finger no longer pans').not.toBe('pan');
+    expect(g.move(2, 700, 300).kind).toBe('zoom');
     g.up(2, 700, 300);
     expect(g.move(1, 500, 350).kind, 'the finger left behind starts nothing').toBe('none');
     g.up(1, 500, 350);
     g.down(3, 400, 300);
-    expect(g.move(3, 450, 300).kind, 'and the next touch orbits again').toBe('orbit');
+    expect(g.move(3, 450, 300).kind, 'and the next touch pans again').toBe('pan');
   });
 
   it('drops a drag under way when the mode changes, so a drag that began as one thing does not end as the other', () => {
@@ -145,12 +132,11 @@ describe('a gesture in look mode', () => {
     g.down(1, 400, 300);
     g.move(1, 400, 300 + full);
     expect(g.aim).not.toBe(null);
-    g.setMode('look');
+    g.setMode('overhead');
     expect(g.aim, 'the aim is put away').toBe(null);
     expect(g.up(1, 400, 300 + full), 'and nothing is struck by it').toEqual({ kind: 'none' });
-    // the other way: an orbit under way is dropped, and lets go into nothing
     g.down(2, 400, 300);
-    expect(g.move(2, 500, 300).kind).toBe('orbit');
+    expect(g.move(2, 500, 300).kind).toBe('pan');
     g.setMode('aim');
     expect(g.move(2, 600, 300).kind).toBe('none');
     expect(g.up(2, 600, 300)).toEqual({ kind: 'none' });

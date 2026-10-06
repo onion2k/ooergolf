@@ -921,9 +921,9 @@
   }
 
   /*
-   * the switch between aiming and looking round, at the bottom right above the frame's cost: two chunky pills in one
-   * panel, the one that is on standing up in the sun's yellow and the other quiet, so it shows the state and both
-   * ways to change it
+   * the view's buttons, at the bottom right above the frame's cost, in one panel: the overhead toggle, a chunky pill that
+   * stands up in the sun's yellow while the view is from above and is quiet while it is not, so it shows the state
+   * and the way to change it, and the flag beside it
    */
   #viewMode {
     position: fixed;
@@ -943,7 +943,7 @@
   }
   /*
    * the flag beside them turns the camera to face the cup: a quiet pill with a picture and no word, as narrow as a thumb
-   * allows, pressed and let go and never left on, so it is not one of the pair that say what a drag is
+   * allows, pressed and let go and never left on, so it is not the toggle
    */
   #viewMode #viewFlag {
     display: grid;
@@ -979,8 +979,8 @@
       bottom: auto;
     }
     /*
-     * the pills are no wider than their words need, and a little narrower than that of the desk's, so the three together
-     * are 174px and stand 19px clear of the hole's panel on the narrowest phone, where they were 186 and 7
+     * the pills are no wider than their words need, and a little narrower than that of the desk's, so the two together
+     * stand clear of the hole's panel on the narrowest phone (the Aim and Look pills, which were three with the flag, went with Look)
      */
     #viewMode button {
       min-width: 52px;
@@ -1525,8 +1525,7 @@
 </div>
 <div class="panel" id="holePanel" hidden><canvas id="holeMap" role="img" aria-label="Map of the hole"></canvas></div>
 <div class="panel" id="viewMode" role="group" aria-label="The view" hidden>
-  <button id="modeAim" type="button" aria-pressed="true">Aim</button
-  ><button id="modeLook" type="button" aria-pressed="false">Look</button
+  <button id="viewOverhead" type="button" aria-pressed="false">Overhead</button
   ><button id="viewFlag" class="quiet" type="button" aria-label="Look at the flag" title="Look at the flag">
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
       <path d="M5 21h9" fill="none" stroke="var(--sky-deep)" stroke-width="3" stroke-linecap="round" />

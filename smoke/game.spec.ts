@@ -10,7 +10,7 @@ import { PNG } from 'pngjs';
 import { BALL, KIND_RADIUS, ROLL, heightAt, layoutOf, powerFor } from '../src/arena';
 import { COURSE, COURSES, CUP, type HoleDef } from '../src/course';
 import { VOLCANO } from '../test/hills';
-import { ORBIT } from '../src/gesture';
+import { CLIP, OVERHEAD } from '../src/camera';
 import { LIE } from '../src/surfaces';
 import { LINKS_SPECS, links } from '../src/links';
 import { fells } from '../src/fells';
@@ -430,72 +430,114 @@ test.describe('the water and the sand', () => {
   });
 });
 
-test.describe('looking round', () => {
-  /**
-   * Where the cup is on the page, which the view turning moves: not the tee, which is where the ball lies, and the
-   * camera turns about the ball, so it stays where it was on the screen from every side.
-   */
-  const cupOnPage = (page: Page) =>
+test.describe('the view', () => {
+  /** Where the tee, the cup and the ball are on the page, as the view is now. */
+  const placesOnPage = (page: Page) =>
     page.evaluate(() => {
       const g = window.game!;
-      const { cup } = g.content();
-      return g.project(cup.x, cup.y, 0);
+      const { cup, tee } = g.content();
+      const b = g.ball();
+      return { cup: g.project(cup.x, cup.y, 0), tee: g.project(tee.x, tee.y, 0), ball: g.project(b.x, b.y, 0) };
     });
 
-  test('is Aim until the switch is pressed; Look turns a drag into an orbit that strikes nothing, and Aim strikes again', async ({
+  test('the overhead view: off at boot, a button that toggles it, a drag that pans and never strikes, a wheel that zooms, and the view as it was when it is left', async ({
     page,
   }) => {
     const problems = watch(page);
     await start(page, { seed: 1, paused: true });
     await page.evaluate(() => window.game!.step(30));
     const first = await page.evaluate(() => window.game!.view());
-    expect(first).toMatchObject({ mode: 'aim', azimuth: 0 });
+    expect(first).toMatchObject({ mode: 'aim', azimuth: 0, blend: 0, farPlane: CLIP.far });
     expect(first.tilt).toBeCloseTo(0.78, 9);
-    await expect(page.locator('#modeAim')).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.locator('#modeLook')).toHaveAttribute('aria-pressed', 'false');
+    const button = page.locator('#viewOverhead');
+    await expect(button).toHaveText('Overhead');
+    await expect(button).toHaveAttribute('aria-pressed', 'false');
     await expect(page.locator('#help')).toContainText('drag back');
-    const cup = await cupOnPage(page);
+    await expect(page.locator('#viewFlag')).toBeEnabled();
+    // there is no Aim and Look pair any more: a drag is always the aim
+    await expect(page.locator('#modeAim')).toHaveCount(0);
+    await expect(page.locator('#modeLook')).toHaveCount(0);
 
-    await page.locator('#modeLook').click();
-    await expect(page.locator('#modeLook')).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.locator('#modeAim')).toHaveAttribute('aria-pressed', 'false');
-    await expect(page.locator('#help')).toContainText('look round');
-    expect((await page.evaluate(() => window.game!.view())).mode).toBe('look');
+    await button.click();
+    await expect(button).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#help')).toContainText('look round the hole');
+    await expect(page.locator('#viewFlag'), 'no facing the cup from above').toBeDisabled();
+    expect(await page.evaluate(() => window.game!.faceFlag())).toBe(false);
+    await page.evaluate(() => window.game!.step(240));
+    const above = await page.evaluate(() => window.game!.view());
+    expect(above.mode).toBe('overhead');
+    expect(above.blend, 'blended all the way up').toBe(1);
+    expect(above.farPlane).toBeGreaterThanOrEqual(CLIP.far);
+    // the whole hole is on the screen from above
+    const seen = await placesOnPage(page);
+    const size = await page.evaluate(() => ({ w: innerWidth, h: innerHeight }));
+    for (const [what, at] of Object.entries({ tee: seen.tee, cup: seen.cup }))
+      expect(at.x >= 0 && at.x <= size.w && at.y >= 0 && at.y <= size.h, `the ${what} is on the screen`).toBe(true);
 
-    // across the screen, as far as a quarter of its shorter side is: the ground near the ball goes with the finger
-    const nearOnPage = () =>
-      page.evaluate(() => {
-        const g = window.game!;
-        const ball = g.ball();
-        return g.project(ball.x, ball.y - 8, 0);
-      });
-    const near = await nearOnPage();
-    const short = await page.evaluate(() => Math.min(innerWidth, innerHeight));
-    await drag(page, { x: 640, y: 400 }, { x: 640 + short / 4, y: 400 });
+    // a drag pans the view with the ground going with the finger, and strikes nothing
+    await drag(page, { x: 400, y: 300 }, { x: 460, y: 340 });
     await page.evaluate(() => window.game!.step(1));
-    const turned = await page.evaluate(() => window.game!.view());
-    expect(turned.azimuth, 'turned by the drag').toBeCloseTo(ORBIT.turn / 4, 3);
-    expect((await nearOnPage()).x, 'the ground near the ball went across with the finger').toBeGreaterThan(near.x + 30);
-    expect(turned.tilt, 'not tilted by a drag straight across').toBeCloseTo(0.78, 3);
-    const moved = await cupOnPage(page);
-    expect(Math.hypot(moved.x - cup.x, moved.y - cup.y), 'the cup is somewhere else on the page').toBeGreaterThan(30);
+    const panned = await placesOnPage(page);
+    expect(panned.ball.x - seen.ball.x, 'the ground went across with the finger').toBeGreaterThan(30);
+    expect(panned.ball.y - seen.ball.y, 'and down with it').toBeGreaterThan(20);
     expect((await page.evaluate(() => window.game!.state())).strokes, 'nothing was struck').toBe(0);
     expect(await page.evaluate(() => window.game!.aiming()), 'and no aim was shown').toBe(null);
 
-    // down the screen: the view comes lower, and no lower than it may
-    await drag(page, { x: 640, y: 200 }, { x: 640, y: 600 });
+    // the wheel zooms it nearer, and no nearer than it may
+    const span = (p: typeof seen) => Math.hypot(p.cup.x - p.tee.x, p.cup.y - p.tee.y);
+    await page.mouse.move(640, 400);
+    await page.mouse.wheel(0, -600);
     await page.evaluate(() => window.game!.step(1));
-    expect((await page.evaluate(() => window.game!.view())).tilt, 'as low as it goes').toBe(1);
-    await drag(page, { x: 640, y: 700 }, { x: 640, y: 100 });
-    await page.evaluate(() => window.game!.step(1));
-    expect((await page.evaluate(() => window.game!.view())).tilt, 'and as high').toBe(0.3);
+    const nearer = await placesOnPage(page);
+    expect(span(nearer), 'the hole is bigger on the screen').toBeGreaterThan(span(panned) + 20);
+    expect(OVERHEAD.near).toBeGreaterThan(0);
 
-    // back to Aim, and the same hand strikes the ball
-    await page.locator('#modeAim').click();
-    await expect(page.locator('#modeAim')).toHaveAttribute('aria-pressed', 'true');
+    // pressed again it is left, and the view is exactly what it was before it, to the digit
+    await button.click();
+    await expect(button).toHaveAttribute('aria-pressed', 'false');
     await expect(page.locator('#help')).toContainText('drag back');
+    await expect(page.locator('#viewFlag')).toBeEnabled();
+    await page.evaluate(() => window.game!.step(240));
+    expect(await page.evaluate(() => window.game!.view())).toEqual(first);
+    // and a drag strikes again
     const putted = await putt(page, 0.6);
     expect(putted.state.strokes, 'a stroke in aim mode').toBe(1);
+    expect(problems).toEqual([]);
+  });
+
+  test('the overhead view is put away by a new hole, and its far plane reaches the whole of the longest hole of The Links', async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    const problems = watch(page);
+    await start(page, { seed: 1, paused: true });
+    await page.locator('#viewOverhead').click();
+    await page.evaluate(() => window.game!.startHole(1));
+    await expect(page.locator('#viewOverhead')).toHaveAttribute('aria-pressed', 'false');
+    expect((await page.evaluate(() => window.game!.view())).mode).toBe('aim');
+    // on The Links' longest hole it stands back further than the 800 the far plane used to be, and the plane follows it
+    const view = await page.evaluate((longest) => {
+      const g = window.game!;
+      g.chooseCourse('The Links');
+      g.startHole(longest);
+      g.step(75);
+      g.overhead(true);
+      g.step(240);
+      return g.view();
+    }, LONGEST);
+    expect(view.mode).toBe('overhead');
+    expect(view.farPlane, 'raised for the view from above').toBeGreaterThan(CLIP.far);
+    // and the whole hole is on the screen: the tee and the cup, each in view
+    const seen = await placesOnPage(page);
+    const size = await page.evaluate(() => ({ w: innerWidth, h: innerHeight }));
+    for (const [what, at] of Object.entries({ tee: seen.tee, cup: seen.cup }))
+      expect(at.x >= 0 && at.x <= size.w && at.y >= 0 && at.y <= size.h, `the ${what} is on the screen`).toBe(true);
+    // leaving it puts the plane back
+    await page.evaluate(() => {
+      window.game!.overhead(false);
+      window.game!.step(240);
+    });
+    expect((await page.evaluate(() => window.game!.view())).farPlane).toBe(CLIP.far);
     expect(problems).toEqual([]);
   });
 
@@ -522,19 +564,19 @@ test.describe('looking round', () => {
     expect(problems).toEqual([]);
   });
 
-  test('puts the switch back to Aim at a new hole, and eases the view home over the glide instead of cutting to it', async ({
+  test('puts the view back from overhead at a new hole, and eases the view home over the glide instead of cutting to it', async ({
     page,
   }) => {
     const problems = watch(page);
     await start(page, { seed: 1, paused: true });
-    await page.locator('#modeLook').click();
+    await page.locator('#viewOverhead').click();
     await page.evaluate(() => {
       window.game!.orbit(1.5, 0.2);
       window.game!.step(1);
     });
     expect((await page.evaluate(() => window.game!.view())).azimuth).toBeCloseTo(1.5, 6);
     await page.evaluate(() => window.game!.startHole(1));
-    await expect(page.locator('#modeAim')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#viewOverhead')).toHaveAttribute('aria-pressed', 'false');
     expect((await page.evaluate(() => window.game!.view())).mode).toBe('aim');
     const at = async (frames: number) => {
       await page.evaluate((f) => window.game!.step(f), frames);
@@ -1575,18 +1617,27 @@ test.describe('on a phone', () => {
     expect(problems).toEqual([]);
   });
 
-  test('a finger drag in Look turns the view and two fingers still zoom it, and none of it strikes the ball', async ({
+  test('a finger drag in the overhead view pans it and two fingers still zoom it, and none of it strikes the ball', async ({
     page,
   }) => {
     const problems = watch(page);
     await start(page, { seed: 1, paused: true });
-    await page.locator('#modeLook').tap();
-    await expect(page.locator('#modeLook')).toHaveAttribute('aria-pressed', 'true');
-    await drag(page, { x: 100, y: 500 }, { x: 300, y: 500 }, { touch: true });
+    await page.locator('#viewOverhead').tap();
+    await expect(page.locator('#viewOverhead')).toHaveAttribute('aria-pressed', 'true');
+    await page.evaluate(() => window.game!.step(240));
+    const where = () =>
+      page.evaluate(() => {
+        const g = window.game!;
+        const { cup, tee } = g.content();
+        return { cup: g.project(cup.x, cup.y, 0), tee: g.project(tee.x, tee.y, 0) };
+      });
+    const before = await where();
+    await drag(page, { x: 100, y: 500 }, { x: 160, y: 560 }, { touch: true });
     await page.evaluate(() => window.game!.step(1));
-    const turned = await page.evaluate(() => window.game!.view());
-    expect(turned.azimuth, 'turned').toBeGreaterThan(0.3);
-    const before = turned.distance;
+    const panned = await where();
+    expect(panned.tee.x - before.tee.x, 'panned across with the finger').toBeGreaterThan(20);
+    expect(panned.tee.y - before.tee.y, 'and down with it').toBeGreaterThan(20);
+    const span = (p: typeof before) => Math.hypot(p.cup.x - p.tee.x, p.cup.y - p.tee.y);
     await touches(page, [
       [{ id: 1, x: 200, y: 500 }],
       [
@@ -1600,9 +1651,7 @@ test.describe('on a phone', () => {
       [],
     ]);
     await page.evaluate(() => window.game!.step(1));
-    const after = await page.evaluate(() => window.game!.view());
-    expect(after.distance, 'nearer').toBeLessThan(before - 10);
-    expect(after.azimuth, 'and not turned by the pinch').toBeCloseTo(turned.azimuth, 6);
+    expect(span(await where()), 'nearer').toBeGreaterThan(span(panned) + 10);
     expect((await page.evaluate(() => window.game!.state())).strokes).toBe(0);
     expect(problems).toEqual([]);
   });

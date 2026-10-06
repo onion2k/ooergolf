@@ -23,7 +23,7 @@ import { aimView, reachOf } from '../src/aimview';
 import { Director } from '../src/director';
 import { ROLL, heightAt, powerFor, strikeSpeed } from '../src/arena';
 import { Autopilot, timeAlong } from '../src/autopilot';
-import { CameraRig, facing } from '../src/camera';
+import { CameraRig, facing, overheadFit } from '../src/camera';
 import { CLUBS } from '../src/clubs';
 import { COURSES, type HoleDef } from '../src/course';
 import { Game, type GameEvents } from '../src/game';
@@ -543,16 +543,17 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
       },
       shoot: (angle, power) => void game.shoot(angle, power),
       zoom: (by) => rig.zoom(by),
-      orbit: (turn, tilt) => rig.orbit(turn, tilt),
+      pan: (dx, dy) => rig.pan(dx, dy, SCREEN.h),
       blocked: () => false,
     });
     actions.push([
       2,
       () => {
-        // a player looking round: the switch to Look, then fingers and the mouse dragged and pinched anywhere on the
-        // screen, and the switch back. Nothing may be struck, and the view keeps to its limits
+        // a player looking from overhead: the button pressed, then fingers and the mouse dragged and pinched anywhere on the
+        // screen, and the button pressed back. Nothing may be struck, the view keeps to its limits, and once it is left the
+        // view is as it was to the digit (the pans and the pinches moved the overhead view's own and nothing of the other's)
         const strokes = game.strokes;
-        did('look round');
+        did('look from overhead');
         // the camera set for the hole as a page sets it, and on a golf hole sometimes sent to look at a shot's landing
         rig.setGolf(game.layout.golf);
         if (game.layout.golf && random() < 0.5) {
@@ -561,7 +562,15 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
           rig.settle(between(0, 2));
           for (const problem of viewProblems(rig)) told.push(problem);
         }
-        input.setMode('look');
+        // the view as it is when it has come to rest, which is what leaving the overhead view must give back
+        const rest = () => {
+          for (let k = 0; k < 600; k++) rig.settle(DT);
+          return JSON.stringify([rig.azimuth, rig.tilt, rig.distance, rig.lead, rig.far]);
+        };
+        const before = rest();
+        const bounds = game.layout.bounds;
+        rig.setOverhead(true, { bounds, distance: overheadFit(bounds, rig.azimuth, cam.aspect) });
+        input.setMode('overhead');
         const at = () => [between(0, SCREEN.w), between(0, SCREEN.h)] as const;
         for (let k = 0, fingers = 1 + Math.floor(random() * 3); k < fingers; k++) {
           const id = k + 1;
@@ -580,8 +589,13 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
           input.up(id, x, y);
           if (second) input.up(second, ...at());
         }
+        for (const problem of viewProblems(rig)) told.push(problem);
+        rig.setOverhead(false);
         input.setMode('aim');
-        if (game.strokes !== strokes) told.push(`looking round took a stroke: ${strokes} to ${game.strokes}`);
+        if (game.strokes !== strokes) told.push(`looking from overhead took a stroke: ${strokes} to ${game.strokes}`);
+        const after = rest();
+        if (after !== before) told.push(`the view was ${before} and after the overhead view it was ${after}`);
+        if (rig.blend !== 0) told.push(`the overhead view was left and still blended ${rig.blend}`);
         for (const problem of viewProblems(rig)) told.push(problem);
       },
     ]);
@@ -653,7 +667,17 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
       const digest = JSON.stringify([game.t, game.strokes, ballAt.x, ballAt.y, world.z[ball], game.shape, game.spin]);
       const drawn = draws;
       rig.setGolf(layout.golf);
-      input.setMode(facer() < 0.5 ? 'look' : 'aim');
+      if (facer() < 0.5) {
+        // from above there is no way to face the cup: the button does nothing, and the camera stays as it was
+        const bounds = layout.bounds;
+        rig.setOverhead(true, { bounds, distance: overheadFit(bounds, rig.azimuth, cam.aspect) });
+        input.setMode('overhead');
+        const was = JSON.stringify([rig.azimuth, rig.turning]);
+        if (director.faceFlag(false) || JSON.stringify([rig.azimuth, rig.turning]) !== was)
+          told.push('the flag button turned the camera from overhead');
+        rig.setOverhead(false);
+        input.setMode('aim');
+      }
       if (!director.faceFlag(false)) told.push('the flag button did nothing with the cup to face');
       let seconds = 0;
       // one more second than the rules allow, so a camera left turning is told of by them and not only by this loop

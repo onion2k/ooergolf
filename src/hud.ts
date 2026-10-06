@@ -29,8 +29,8 @@ export interface HudHandlers {
   courses(): void;
   buy(id: string): void;
   equip(id: string): void;
-  /** The switch pressed: what a drag on the course is from now on, a shot or a turn of the camera. */
-  mode(mode: Mode): void;
+  /** The overhead button pressed: the view from above wanted on or off, the one it is not now. A drag is a pan while it is on. */
+  overhead(on: boolean): void;
   /** The flag button pressed: the camera turned to face the cup. */
   flag(): void;
   /** A club of the bag chosen on a golf hole, by its id. */
@@ -116,7 +116,7 @@ export interface Purse {
 const HELP = {
   aim: 'drag back and let go to putt',
   swing: 'drag back and let go to swing',
-  look: 'drag to look round',
+  overhead: 'drag to look round the hole',
 } as const;
 
 export interface HoleInfo {
@@ -153,9 +153,8 @@ export class Hud {
   private readonly courseList = document.getElementById('courses')!;
   private readonly help = document.getElementById('help')!;
   private readonly modes = document.getElementById('viewMode')!;
-  private readonly aimButton = document.getElementById('modeAim')!;
-  private readonly lookButton = document.getElementById('modeLook')!;
-  private readonly flagButton = document.getElementById('viewFlag')!;
+  private readonly overheadButton = document.getElementById('viewOverhead') as HTMLButtonElement;
+  private readonly flagButton = document.getElementById('viewFlag') as HTMLButtonElement;
   private readonly bag = document.getElementById('bag')!;
   private readonly bagInfo = document.getElementById('bagInfo')!;
   private readonly bagClubs = document.getElementById('bagClubs')!;
@@ -221,8 +220,7 @@ export class Hud {
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') this.setDrawer(false);
     });
-    this.aimButton.addEventListener('click', () => handlers.mode('aim'));
-    this.lookButton.addEventListener('click', () => handlers.mode('look'));
+    this.overheadButton.addEventListener('click', () => handlers.overhead(this.mode !== 'overhead'));
     this.flagButton.addEventListener('click', () => handlers.flag());
     // each cycles to the next of its three, and the game says what it took (`setShaping`)
     this.shapeButton.addEventListener('click', () => handlers.shape(this.next(SHAPES, this.shapeShown)));
@@ -282,12 +280,16 @@ export class Hud {
     };
   }
 
-  /** The switch shows which a drag is, and the help says what to do with it: swing, on a golf hole, and not putt. */
-  setMode(mode: Mode) {
-    this.mode = mode;
-    this.aimButton.setAttribute('aria-pressed', String(mode === 'aim'));
-    this.lookButton.setAttribute('aria-pressed', String(mode === 'look'));
-    this.help.textContent = mode === 'look' ? HELP.look : this.bagList.length ? HELP.swing : HELP.aim;
+  /**
+   * The overhead button shows whether the view is from above, and the help says what a drag does: look round the hole from
+   * above, or swing (on a golf hole, and not putt). The flag button is put away while it is on, since there is no turning
+   * the camera to face the cup from above.
+   */
+  setOverhead(on: boolean) {
+    this.mode = on ? 'overhead' : 'aim';
+    this.overheadButton.setAttribute('aria-pressed', String(on));
+    this.flagButton.disabled = on;
+    this.help.textContent = on ? HELP.overhead : this.bagList.length ? HELP.swing : HELP.aim;
   }
 
   /**
@@ -299,7 +301,7 @@ export class Hud {
     this.bagList = clubs ?? [];
     // golf pays nothing, so its purse is the shop's button alone, with no coins or gems to count
     this.purse.toggleAttribute('data-golf', !!clubs);
-    this.setMode(this.mode);
+    this.setOverhead(this.mode === 'overhead');
     if (!clubs) {
       this.bag.hidden = true;
       this.shaping.hidden = true;

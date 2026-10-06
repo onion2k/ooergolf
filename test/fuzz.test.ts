@@ -54,7 +54,7 @@ describe('the fuzzer', () => {
       'choose a course',
       'equip',
       'face the flag',
-      'look round',
+      'look from overhead',
       'play again',
       'putt by the break',
       'read the break',

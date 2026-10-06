@@ -422,13 +422,10 @@ test.describe('what it looks like', () => {
     expect(problems).toEqual([]);
   });
 
-  test('looking round: the first hole from its side, and from behind and low, with the switch on Look', async ({
-    page,
-  }) => {
+  test('the view turned: the first hole from its side, and from behind and low', async ({ page }) => {
     const problems = watch(page);
     await start(page, { seed: 11, paused: true });
     await page.evaluate(() => window.game!.step(60));
-    await page.locator('#modeLook').click();
     await hideStats(page);
     // a quarter turn round to the side, a little lower than it begins
     await page.evaluate(() => {
@@ -983,11 +980,10 @@ test.describe('what it looks like', () => {
       expect(problems).toEqual([]);
     });
 
-    test('looking round, on a phone: the switch on Look, and the view turned', async ({ page }) => {
+    test('the view turned, on a phone', async ({ page }) => {
       const problems = watch(page);
       await start(page, { seed: 11, paused: true });
       await page.evaluate(() => window.game!.step(60));
-      await page.locator('#modeLook').tap();
       await page.evaluate(() => {
         window.game!.orbit(-1.9, 0.15);
         window.game!.step(1);
