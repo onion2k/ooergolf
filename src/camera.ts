@@ -85,10 +85,11 @@ const SETTLED = { distance: 0.25, tilt: 0.002, lead: 0.25, turn: 0.002 };
  * The overhead view, which is the hole seen whole from straight above, to be looked at and never aimed from. `tilt` is how
  * far from the vertical it looks (not nought, since the renderer's camera has the ground's up for its own and looking
  * exactly down is degenerate), `ease` the rate the view blends in and out at, `near` the nearest it may be zoomed to,
- * `far` the furthest (provisional until the cost of the view is measured on the biggest holes; the renderer's far
- * plane follows it, `CLIP`), and `margin` how much more than the hole's bounds the fit shows.
+ * `far` the furthest (3000, which shows The Isles' longest hole, 858 yards, whole on a phone turned across it, which
+ * needs 2737 and was cut at 1500; the view stands out past every ring of the grass there and costs a frame under 1.2 ms,
+ * measured in the plan's Part 0; the renderer's far plane follows it, `CLIP`), and `margin` how much more than the hole's bounds the fit shows.
  */
-export const OVERHEAD = { tilt: 0.05, ease: 4, near: 60, far: 1500, margin: 1.08 } as const;
+export const OVERHEAD = { tilt: 0.05, ease: 4, near: 60, far: 3000, margin: 1.08 } as const;
 /**
  * The renderer's far plane. It is `far` for every view the camera has had, and it is raised while the overhead view is on or
  * blending, to `overhead` times how far back that view stands: the ground at the screen's far edge is met that much deeper
