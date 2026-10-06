@@ -19,7 +19,8 @@
  * --seed N` does, and prints what was done before it went wrong.
  */
 import { Camera } from 'artshape-render/gpu/camera';
-import { aimView } from '../src/aimview';
+import { aimView, reachOf } from '../src/aimview';
+import { Director } from '../src/director';
 import { ROLL, heightAt, powerFor, strikeSpeed } from '../src/arena';
 import { Autopilot, timeAlong } from '../src/autopilot';
 import { CameraRig, facing } from '../src/camera';
@@ -516,6 +517,7 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
           store = memoryStore(store.json);
           game = new Game(new Progress(store), events, { random: chance(seed + frame), course });
           playing = game;
+          director.use(game);
           const loaded = JSON.stringify(game.progress.save);
           if (loaded !== kept) throw new Error(`the save was ${kept} and loaded as ${loaded}`);
           did('reload');
@@ -525,6 +527,9 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
     // a player's hand on the screen, as the page's is: the same pointers, mode and camera, on a desktop-sized window
     const SCREEN = { w: 1280, h: 800 };
     const rig = new CameraRig();
+    // the page's own camera director, which the flag button is pressed through here as there
+    const director = new Director(rig);
+    director.use(game);
     const cam = new Camera();
     cam.aspect = SCREEN.w / SCREEN.h;
     cam.fov = rig.fov;
@@ -552,7 +557,7 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
         rig.setGolf(game.layout.golf);
         if (game.layout.golf && random() < 0.5) {
           const lie = lieAt(game.layout, game.world.x[game.ball], game.world.y[game.ball]);
-          rig.aimAt(aimView(carryFrom(game.inHand, 1, lie) * 1.045, cam.aspect), random() < 0.3);
+          rig.aimAt(aimView(reachOf(game.inHand, lie, 0), cam.aspect), random() < 0.3);
           rig.settle(between(0, 2));
           for (const problem of viewProblems(rig)) told.push(problem);
         }
@@ -649,7 +654,7 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
       const drawn = draws;
       rig.setGolf(layout.golf);
       input.setMode(facer() < 0.5 ? 'look' : 'aim');
-      rig.turnTo(heading);
+      if (!director.faceFlag(false)) told.push('the flag button did nothing with the cup to face');
       let seconds = 0;
       // one more second than the rules allow, so a camera left turning is told of by them and not only by this loop
       for (let k = 0; k < (TURN_TIME + 1) / DT; k++) {

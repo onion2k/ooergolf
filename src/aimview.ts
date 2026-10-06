@@ -9,7 +9,23 @@
  * through the camera, so a camera that moved while a drag was held would turn the aim under the hand. Pure arithmetic
  * on the camera's own geometry, tested without a page; the rig eases to what this says.
  */
+import type { BagClub } from './bag';
 import { LEAD, TILT, VIEW, phoneOf, standOf, tallOf } from './camera';
+import { carryFrom } from './flight';
+import { windReach } from './shaping';
+import type { Lie } from './surfaces';
+
+/** How much further than its formula a club goes on the level, four in a hundred and a half: the landing the aim view is to show. */
+export const LANDS_PAST = 1.045;
+
+/**
+ * How far from the ball the aim view must show a shot of `club` at full power from `lie`: its carry a little over, and as
+ * much further as a tailwind of `wind` miles an hour carries a lofted club, so the ring of a downwind shot is on the
+ * screen too. The one place it is worked out, for the page and the fuzzer alike.
+ */
+export function reachOf(club: BagClub, lie: Lie, wind: number): number {
+  return carryFrom(club, 1, lie) * LANDS_PAST + (club.loft > 0 ? windReach(club, 1, wind) : 0);
+}
 
 /**
  * How far back the camera may stand, at most, whatever the club; where on the screen the landing is wanted at the
