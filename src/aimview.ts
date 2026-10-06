@@ -120,6 +120,28 @@ function screenY(r: number, tilt: number, lead: number, ahead: number, up: numbe
 }
 
 /**
+ * Where on the screen, each way from minus one to one, a point lands for a camera `r` back at `tilt` looking `lead` ahead of the
+ * ball, on a screen of `aspect`: `ahead` yards ahead of the ball the way it faces, `across` to the right of that line and `up` above
+ * the ball's ground. What `aimView` is worked from, with the across, which is what a camera turned off the line to a place needs.
+ */
+export function screenOf(
+  r: number,
+  tilt: number,
+  lead: number,
+  aspect: number,
+  ahead: number,
+  across: number,
+  up: number,
+): [number, number] {
+  const h = Math.tan((VIEW.fov * Math.PI) / 360);
+  const dy = ahead - (lead - Math.sin(tilt) * r),
+    dz = up - Math.cos(tilt) * r;
+  const depth = dy * Math.sin(tilt) - dz * Math.cos(tilt);
+  const above = dy * Math.cos(tilt) + dz * Math.sin(tilt);
+  return [across / (depth * h * Math.max(aspect, 0.1)), above / (depth * h)];
+}
+
+/**
  * The view that shows a landing `reach` yards from the ball on a screen of `aspect`: no nearer than home, no further
  * back than `AIM.far` however tall the screen, and the tilt within the camera's own limits. A reach too far for the
  * limit gets the limit: the best view there is.

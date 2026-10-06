@@ -1747,8 +1747,8 @@ test.describe('the flag button', () => {
     });
   }
 
-  /** The azimuth that faces the cup from the ball, worked out here from where each is. */
-  const toFace = (page: Page) =>
+  /** The azimuth that faces the cup squarely from the ball, worked out here from where each is: what the flag button must turn to look near and never to. */
+  const cupHeading = (page: Page) =>
     page
       .evaluate(() => {
         const g = window.game!;
@@ -1758,18 +1758,24 @@ test.describe('the flag button', () => {
       })
       .then(({ from, to }) => facing(from, to)!);
 
+  /** The azimuth the flag button would turn the camera to from where the ball lies, which is near the cup and not at it. */
+  const toFace = (page: Page) => page.evaluate(() => window.game!.view().flag!);
+
   const view = (page: Page) => page.evaluate(() => window.game!.view());
   /** An angle's distance from another, the short way round. */
   const gap = (a: number, b: number) => Math.abs(((a - b + 3 * Math.PI) % (2 * Math.PI)) - Math.PI);
 
-  test('a real click turns the camera to face the cup, eased, and touches neither the strokes nor the ball; the cup is then in the middle of the screen across', async ({
+  test('a real click turns the camera to look near the cup, not at it, eased, and touches neither the strokes nor the ball; the cup is then on the screen and not in the middle of it', async ({
     page,
   }) => {
     const problems = watch(page);
     await start(page, { seed: 11, paused: true });
     await offToOneSide(page);
+    const cup = await cupHeading(page);
+    expect(Math.abs(cup), 'the cup is well off the line').toBeGreaterThan(0.5);
     const want = await toFace(page);
-    expect(Math.abs(want), 'the cup is well off the line').toBeGreaterThan(0.5);
+    expect(gap(want, cup), 'the way it will look is off the cup by 0.10 to 0.26').toBeGreaterThanOrEqual(0.1 - 1e-6);
+    expect(gap(want, cup)).toBeLessThanOrEqual(0.26 + 1e-6);
     const before = await page.evaluate(() => ({ ball: window.game!.ball(), strokes: window.game!.state().strokes }));
     expect((await view(page)).turning, 'not turning before').toBe(false);
     expect(gap((await view(page)).azimuth, want), 'not facing it before').toBeGreaterThan(0.5);
@@ -1785,18 +1791,51 @@ test.describe('the flag button', () => {
     const after = await view(page);
     expect(after.turning, 'there').toBe(false);
     expect(gap(after.azimuth, want)).toBeLessThan(1e-6);
+    expect(gap(after.azimuth, cup), 'and not at the cup').toBeGreaterThanOrEqual(0.1 - 1e-6);
     // and nothing else was done
     expect(await page.evaluate(() => ({ ball: window.game!.ball(), strokes: window.game!.state().strokes }))).toEqual(
       before,
     );
-    // the cup is on the line down the middle of the screen
-    const across = await page.evaluate(() => {
+    // the cup is on the screen, a little to one side of the line down the middle and not on it
+    const at = await page.evaluate(() => {
       const g = window.game!;
       const c = g.content().cup;
-      return { x: g.project(c.x, c.y, g.ball().z).x, width: innerWidth };
+      return { ...g.project(c.x, c.y, g.ball().z), width: innerWidth, height: innerHeight };
     });
-    expect(Math.abs(across.x - across.width / 2), 'the cup in the middle across').toBeLessThan(across.width * 0.03);
+    expect(at.x, 'on the screen across').toBeGreaterThan(0);
+    expect(at.x).toBeLessThan(at.width);
+    expect(at.y, 'and down it').toBeGreaterThan(0);
+    expect(at.y).toBeLessThan(at.height);
+    expect(Math.abs(at.x - at.width / 2), 'not in the middle across').toBeGreaterThan(at.width * 0.02);
     expect(await page.evaluate(() => window.game!.invariants())).toEqual([]);
+    expect(problems).toEqual([]);
+  });
+
+  test('looks the same way on a second load with the same seed, and pressed again on the same lie changes nothing', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    const press = async () => {
+      await offToOneSide(page);
+      await page.locator('#viewFlag').click();
+      await page.evaluate(() => window.game!.step(120));
+      return (await view(page)).azimuth;
+    };
+    await start(page, { seed: 11, paused: true });
+    const first = await press();
+    // pressed again on the same lie it goes to the same heading
+    await page.evaluate(() => window.game!.orbit(0.8, 0));
+    await page.locator('#viewFlag').click();
+    await page.evaluate(() => window.game!.step(120));
+    expect((await view(page)).azimuth).toBe(first);
+    // the test API's seed gives the camera its seed as well as the game its chance: another seed, another heading
+    await page.evaluate(() => window.game!.seed(12));
+    expect(await toFace(page), 'another seed').not.toBe(first);
+    await page.evaluate(() => window.game!.seed(11));
+    expect(await toFace(page), 'and back').toBe(first);
+    // and from another load of the page with the same seed
+    await start(page, { seed: 11, paused: true });
+    expect(await press()).toBe(first);
     expect(problems).toEqual([]);
   });
 

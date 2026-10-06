@@ -122,7 +122,7 @@ export interface GameApi {
   resume(): void;
   /** Play `frames` frames of 1/60 s exactly, and draw the last. */
   step(frames?: number): void;
-  /** Chance from a seed from now on. */
+  /** Chance from a seed from now on, and the camera's tosses (which side of the flag it looks to) from the same seed, so a view is the same every run. */
   seed(n: number): void;
 
   state(): GameState;
@@ -218,6 +218,8 @@ export interface GameApi {
     azimuth: number;
     /** The azimuth the camera is turning to: its own azimuth when it is turning to none. */
     heading: number;
+    /** Where the flag button would turn the camera to from where the ball lies now (near the cup, never at it); null with the ball at the cup. */
+    flag: number | null;
     tilt: number;
     /** The words of the putt's break under the pin, as drawn (`Putt: aim 1.6 yd right, uphill 0.4 yd`); null when none is up. */
     putt: string | null;
@@ -346,6 +348,8 @@ export interface DebugHost {
   simulate(dt: number): void;
   draw(dt: number): void;
   frame(): number;
+  /** The seed the camera's tosses are made from, as `seed` gives it. */
+  setViewSeed(n: number): void;
   look(x: number, y: number, distance?: number): void;
   follow(): void;
   project(x: number, y: number, z: number): { x: number; y: number };
@@ -397,6 +401,7 @@ export function createApi(host: DebugHost): GameApi {
     },
     seed(n) {
       game.random = seeded(n);
+      host.setViewSeed(n);
     },
 
     state() {

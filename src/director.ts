@@ -12,9 +12,10 @@
  * It holds a fixed set of numbers and a string, never a list, and it never draws the game's chance.
  */
 import { BALL, KIND_RADIUS, heightAt, lieAt, rollsFor } from './arena';
-import { aimView, fitsHome, floorFor, reachOf, reachOnMinigolf } from './aimview';
-import { CameraRig, LEAD, TILT, VIEW, catchUp, facing, tallOf, wrap } from './camera';
+import { aimView, fitsHome, floorFor, reachOf, reachOnMinigolf, safeBox, screenOf } from './aimview';
+import { CameraRig, LEAD, TILT, VIEW, catchUp, facing, standOf, tallOf, wrap } from './camera';
 import type { Game } from './game';
+import { hashed } from './random';
 import type { Shot } from './shot';
 
 /**
@@ -22,6 +23,19 @@ import type { Shot } from './shot';
  * way to being taken back and a camera swinging round to every twitch would be seen to lurch.
  */
 export const AIM_TURN = { least: 0.15 };
+
+/**
+ * How far off the cup, in radians, the camera looks when it is turned to the flag: from `least` to `most` either side of the
+ * line from the ball to the cup, so a ball is seen with the flag near the way ahead and not at the middle of it. `least` is
+ * not nought, since a view that never faces the cup squarely is the point of it.
+ */
+export const NEAR_FLAG = { least: 0.1, most: 0.26 } as const;
+
+/** What a toss of the camera's is for, so two tosses of the same lie are not the one: which side of the flag, and how far off it. */
+export const SALT = { flag: 1, flagSize: 2 } as const;
+
+/** How many times the offset is halved toward `NEAR_FLAG.least` to keep a cup that is in reach on the screen. */
+const FIT_STEPS = 12;
 
 export class Director {
   private game: Game | null = null;
@@ -36,6 +50,8 @@ export class Director {
   private readonly worked = { x: Number.NaN, y: Number.NaN, t: Number.NaN };
   /** Whether the camera was last sent to a view stood back from home on minigolf, so that it is sent home again when the reach fits there. */
   private stood = false;
+  /** What the camera's tosses are made from, with the hole and the stroke: the page's own at boot, and a test's or the fuzzer's by `setSeed`. */
+  private seed = 0;
   /** Whether the camera has been put on a hole yet: the first has nowhere to glide from. */
   private looked = false;
 
@@ -44,6 +60,14 @@ export class Director {
   /** The game it directs for: the page's, or a test's own, which may be swapped for another. */
   use(game: Game) {
     this.game = game;
+  }
+
+  /**
+   * The seed the camera's tosses are made from. Nothing of the game: the toss that says which side of the flag the camera looks
+   * to is a hash of this, the hole and the stroke, so it draws none of the game's chance and the same lie gives the same view.
+   */
+  setSeed(seed: number) {
+    this.seed = seed;
   }
 
   /** Told the shape and the height of the screen, which the aim view depends on: the view is worked out again. */
@@ -190,15 +214,65 @@ export class Director {
   }
 
   /**
-   * The camera turned to face the cup from the ball, the short way and eased; whether it was. Refused while a drag is
-   * `held`, since the aim is the ground under the finger through the camera and a camera turning under it would turn the
-   * shot, and with the ball at the cup, where there is no way to face.
+   * The way the camera looks when it is turned to the flag, as an azimuth, or null where there is no way (the ball at the cup):
+   * the heading of the cup from the ball turned `NEAR_FLAG.least` to `NEAR_FLAG.most` to one side, which side and how far a
+   * hash of the seed, the hole and the stroke says. If the cup is in reach and would be off the screen, or outside the safe box,
+   * from there, the offset is halved toward `least` until it is not, at most `FIT_STEPS` times. The same for the same lie.
+   */
+  nearFlag(): number | null {
+    const game = this.game;
+    if (!game) return null;
+    const { world, ball, layout } = game;
+    const to = facing({ x: world.x[ball], y: world.y[ball] }, layout.cup);
+    if (to === null) return null;
+    const sign = hashed(this.seed, game.hole, game.strokes, SALT.flag) < 0.5 ? -1 : 1;
+    let offset =
+      NEAR_FLAG.least + hashed(this.seed, game.hole, game.strokes, SALT.flagSize) * (NEAR_FLAG.most - NEAR_FLAG.least);
+    for (let step = 0; step < FIT_STEPS && this.cupOffScreen(to + sign * offset); step++)
+      offset = NEAR_FLAG.least + (offset - NEAR_FLAG.least) / 2;
+    return wrap(to + sign * offset);
+  }
+
+  /**
+   * Whether the cup, when it is in reach, would be off the screen or outside the safe box with the camera facing `heading`, as
+   * the view the director keeps stands: worked out from that view's own figures (the aim view of the club, or of the putter's
+   * reach along the heading), so it is the view the camera comes to and not the one it is passing through.
+   */
+  private cupOffScreen(heading: number): boolean {
+    const game = this.game;
+    if (!game) return false;
+    const { world, ball, layout, inHand } = game;
+    const [x, y] = [world.x[ball], world.y[ball]];
+    const [dx, dy] = [layout.cup.x - x, layout.cup.y - y];
+    const t = Math.PI / 2 - heading;
+    const golf = layout.golf;
+    const reach = golf
+      ? reachOf(inHand, lieAt(layout, x, y), game.wind.speed)
+      : reachOnMinigolf(layout, x, y, t, rollsFor(game.hardest));
+    if (Math.hypot(dx, dy) > reach) return false;
+    const view =
+      golf || !fitsHome(reach, this.aspect, this.height)
+        ? aimView(reach, this.aspect, this.height, golf ? {} : { far: VIEW.far * tallOf(this.aspect) })
+        : { distance: VIEW.home, tilt: TILT.home, lead: LEAD };
+    const distance = Math.max(view.distance, this.rig.distance);
+    const tall = tallOf(this.aspect);
+    const r = golf ? Math.min(distance * tall, standOf(this.aspect)) : distance * tall;
+    const [sin, cos] = [Math.sin(heading), Math.cos(heading)];
+    const up = heightAt(layout, layout.cup.x, layout.cup.y) - heightAt(layout, x, y);
+    const [nx, ny] = screenOf(r, view.tilt, view.lead, this.aspect, dx * sin + dy * cos, dx * cos - dy * sin, up);
+    const box = safeBox(this.aspect, this.height);
+    return !(Math.abs(nx) <= box.x && ny <= box.top && ny >= box.bottom);
+  }
+
+  /**
+   * The camera turned to look near the cup from the ball (`nearFlag`), the short way and eased; whether it was. Refused while a
+   * drag is `held`, since the aim is the ground under the finger through the camera and a camera turning under it would turn the
+   * shot, from overhead, where there is no way to face the cup, and with the ball at the cup, where there is none either.
    */
   faceFlag(held: boolean): boolean {
     const game = this.game;
-    // from above there is no way to face the cup, and the button is put away there
     if (!game || held || this.rig.overhead) return false;
-    const to = facing({ x: game.world.x[game.ball], y: game.world.y[game.ball] }, game.layout.cup);
+    const to = this.nearFlag();
     if (to === null) return false;
     this.rig.turnTo(to);
     return true;

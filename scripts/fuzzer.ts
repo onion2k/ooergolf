@@ -19,9 +19,9 @@
  * --seed N` does, and prints what was done before it went wrong.
  */
 import { Camera } from 'artshape-render/gpu/camera';
-import { aimView, reachOf, safeBox } from '../src/aimview';
-import { AIM_TURN, Director } from '../src/director';
-import { ROLL, heightAt, powerFor, strikeSpeed } from '../src/arena';
+import { aimView, reachOf, reachOnMinigolf, safeBox } from '../src/aimview';
+import { AIM_TURN, Director, NEAR_FLAG } from '../src/director';
+import { ROLL, heightAt, powerFor, rollsFor, strikeSpeed } from '../src/arena';
 import { Autopilot, timeAlong } from '../src/autopilot';
 import { CameraRig, facing, overheadFit, wrap } from '../src/camera';
 import { CLUBS } from '../src/clubs';
@@ -547,6 +547,8 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
     // where the aim view says in every frame of the game
     const director = new Director(rig);
     directing = director;
+    // the camera's own tosses (which side of the flag it looks to), from a number of the seed's own and no chance of the game's
+    director.setSeed(seed * 41 + 9);
     director.use(game);
     director.setScreen(SCREEN.w / SCREEN.h, SCREEN.h);
     director.started();
@@ -704,7 +706,8 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
         rig.setOverhead(false);
         input.setMode('aim');
       }
-      if (!director.faceFlag(false)) told.push('the flag button did nothing with the cup to face');
+      const expected = director.nearFlag();
+      if (expected === null || !director.faceFlag(false)) told.push('the flag button did nothing with the cup to face');
       let seconds = 0;
       // one more second than the rules allow, so a camera left turning is told of by them and not only by this loop
       for (let k = 0; k < (TURN_TIME + 1) / DT; k++) {
@@ -715,13 +718,45 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
       }
       for (const problem of viewProblems(rig, seconds)) told.push(problem);
       if (rig.turning) told.push(`the camera was still turning to face the flag after ${seconds.toFixed(2)} seconds`);
-      const off = Math.abs(rig.azimuth - heading);
-      if (!(Math.min(off, 2 * Math.PI - off) <= 1e-6))
-        told.push(`the camera faces ${rig.azimuth}, and the flag is at ${heading} from the ball`);
-      // pressed again it changes nothing (the camera at rest first: it may be easing to an aim view as well, which goes on)
+      // it looks near the flag and not at it: off the cup's heading by `NEAR_FLAG.least` to `most`, and at the heading the
+      // director says (which the camera was sent to, to the last bit but the ease's own)
+      const off = Math.abs(wrap(rig.azimuth - heading));
+      if (!(off >= NEAR_FLAG.least - 1e-6 && off <= NEAR_FLAG.most + 1e-6))
+        told.push(
+          `the camera faces ${rig.azimuth}, which is ${off} off the flag's heading ${heading}, outside ${NEAR_FLAG.least} to ${NEAR_FLAG.most}`,
+        );
+      if (!(Math.abs(wrap(rig.azimuth - expected!)) <= 1e-6))
+        told.push(`the camera faces ${rig.azimuth}, and the director said ${expected}`);
+      // pressed again it changes nothing (the camera at rest first: it may be easing to an aim view as well, which goes on, and
+      // the director is given its frame, which sends the camera to the view of a club chosen in this very frame)
+      director.frame(DT, true);
       for (let k = 0; k < 600; k++) rig.settle(DT);
+      // the view the camera has come to keeps the cup on the screen where it is in reach, and the ball and the reach
+      for (const problem of framing()) told.push(problem);
+      const reachToCup = layout.golf
+        ? reachOf(game.inHand, lieAt(layout, ballAt.x, ballAt.y), game.wind.speed)
+        : reachOnMinigolf(layout, ballAt.x, ballAt.y, Math.PI / 2 - rig.azimuth, rollsFor(game.hardest));
+      if (
+        Math.hypot(layout.cup.x - ballAt.x, layout.cup.y - ballAt.y) <= reachToCup &&
+        !rig.atLimit &&
+        !rig.easing(game.t) &&
+        Math.hypot(rig.target[0] - ballAt.x, rig.target[1] - ballAt.y) <= 0.05
+      ) {
+        rig.place(cam, game.t);
+        cam.update();
+        const m = cam.viewProjection;
+        const [cx, cy, cz] = [layout.cup.x, layout.cup.y, heightAt(layout, layout.cup.x, layout.cup.y)];
+        const w = m[3] * cx + m[7] * cy + m[11] * cz + m[15];
+        const nx = (m[0] * cx + m[4] * cy + m[8] * cz + m[12]) / w,
+          ny = (m[1] * cx + m[5] * cy + m[9] * cz + m[13]) / w;
+        const box = safeBox(cam.aspect, SCREEN.h);
+        if (!(Math.abs(nx) <= box.x + 0.02 && ny <= box.top + 0.02 && ny >= box.bottom - 0.02))
+          told.push(
+            `the cup is in reach and the camera that looks near it has it at ${nx.toFixed(3)},${ny.toFixed(3)}, outside the safe box`,
+          );
+      }
       const at = [rig.azimuth, rig.tilt, rig.distance, rig.lead];
-      rig.turnTo(heading);
+      if (director.faceFlag(false) !== true) told.push('the flag button did nothing the second time');
       rig.settle(DT);
       if (rig.turning || JSON.stringify([rig.azimuth, rig.tilt, rig.distance, rig.lead]) !== JSON.stringify(at))
         told.push('pressing the flag button again moved the camera');

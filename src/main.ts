@@ -371,6 +371,9 @@ async function main() {
   const played = new Game(progress, events, seed !== null ? { random: seeded(+seed) } : {});
   game = played;
   director.use(played);
+  // the camera's own tosses (which side of the flag it looks to): the same seed as the game's when a test gives one, so a
+  // view is the same every run, and otherwise one number from the browser's, which is no chance of the game's
+  director.setSeed(seed !== null ? +seed : crypto.getRandomValues(new Uint32Array(1))[0]);
   // the screen is not measured until after the first hole, which is begun looking from a desk's shape
   director.setScreen(aspect, innerHeight);
   shown.started!(played.hole, played.def.par);
@@ -877,6 +880,7 @@ async function main() {
     simulate,
     draw,
     frame: () => frames,
+    setViewSeed: (n) => director.setSeed(n),
     look(x, y, distance) {
       parked = true;
       rig.jump(x, y, heightAt(played.layout, x, y));
@@ -917,6 +921,7 @@ async function main() {
       aiming: rig.aiming,
       turning: rig.turning,
       heading: rig.headed,
+      flag: director.nearFlag(),
       rung: governor.rung,
       held: governor.held,
       antialias: antialiasFor(renderer.look, renderer.economy),
