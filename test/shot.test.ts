@@ -1,7 +1,7 @@
 /** Turning a drag on the screen into a shot on the course, and finding where on the ground the pointer is. */
 import { Camera } from 'artshape-render/gpu/camera';
 import { describe, expect, it } from 'vitest';
-import { DRAG, groundAt, shotFromDrag } from '../src/shot';
+import { DRAG, HeldView, groundAt, shotFromDrag } from '../src/shot';
 
 /** A camera looking up the course from the south, three-quarters from above. */
 function camera(aspect = 1.6) {
@@ -83,5 +83,46 @@ describe('a drag turned into a shot', () => {
     const phone = shotFromDrag([200, 400], [200, 400 + DRAG.full * 400 * 0.5], [0, 0], [0, -1], 400)!;
     const desk = shotFromDrag([600, 400], [600, 400 + DRAG.full * 800 * 0.5], [0, 0], [0, -1], 800)!;
     expect(phone.power).toBeCloseTo(desk.power, 6);
+  });
+});
+
+describe('a held view', () => {
+  it('gives the ground the live camera gave at the hold, and still does once the camera has turned', () => {
+    const c = camera();
+    const held = new HeldView();
+    held.hold(c);
+    const spots: [number, number, number][] = [
+      [0, 0, 0],
+      [0.4, -0.3, 0],
+      [-0.7, -0.8, 1],
+    ];
+    const before = spots.map(([nx, ny, z]) => groundAt(c, nx, ny, z));
+    for (const [k, [nx, ny, z]] of spots.entries()) expect(held.ground(nx, ny, z)).toEqual(before[k]);
+    // the camera swung round the course
+    c.position = [60, 0, 50];
+    c.target = [10, 10, 0];
+    c.update();
+    for (const [k, [nx, ny, z]] of spots.entries()) {
+      expect(held.ground(nx, ny, z), `held at ${k}`).toEqual(before[k]);
+      expect(groundAt(c, nx, ny, z), `live at ${k}`).not.toEqual(before[k]);
+    }
+  });
+
+  it('is not changed by the camera it copied from, and a frame can be read by groundAt as a camera is', () => {
+    const c = camera();
+    const held = new HeldView();
+    held.hold(c);
+    const was = groundAt(held.frame, 0.2, 0.1, 0);
+    c.target = [30, 30, 0];
+    c.update();
+    expect(groundAt(held.frame, 0.2, 0.1, 0)).toEqual(was);
+  });
+
+  it('writes into the point it is given and makes nothing when it is', () => {
+    const c = camera();
+    const held = new HeldView();
+    held.hold(c);
+    const out: [number, number] = [0, 0];
+    expect(held.ground(0, 0, 0, out)).toBe(out);
   });
 });

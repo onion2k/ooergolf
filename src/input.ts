@@ -20,6 +20,11 @@ export interface InputPorts {
   zoom(by: number): void;
   /** The overhead view dragged by `dx` pixels across and `dy` down: the ground going with the finger. */
   pan(dx: number, dy: number): void;
+  /**
+   * Called as the first pointer of an aim drag lands, before the ground under it is read: the view the drag is to be read
+   * through is held as it is, so that a camera that turns during the drag (to face the aim) does not turn the aim.
+   */
+  hold(): void;
   /** Whether a screen is up over the course, which the pointers pass through: nothing is struck or moved. */
   blocked(): boolean;
 }
@@ -46,6 +51,7 @@ export class Input {
   }
 
   down(id: number, x: number, y: number) {
+    if (this.gesture.idle && this.gesture.mode === 'aim') this.ports.hold();
     this.act(this.gesture.down(id, x, y));
   }
 

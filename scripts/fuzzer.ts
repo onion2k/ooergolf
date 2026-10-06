@@ -52,7 +52,7 @@ import { carryFrom } from '../src/flight';
 import { lieAt } from '../src/arena';
 import { Progress, memoryStore } from '../src/progress';
 import { seeded } from '../src/random';
-import { groundAt } from '../src/shot';
+import { HeldView } from '../src/shot';
 import { GREENS, LIE } from '../src/surfaces';
 
 /**
@@ -533,13 +533,18 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
     const cam = new Camera();
     cam.aspect = SCREEN.w / SCREEN.h;
     cam.fov = rig.fov;
+    // the view held for a drag, as the page holds it
+    const held = new HeldView();
     const input = new Input({
       shortSide: () => SCREEN.h,
-      ground(x, y) {
+      hold() {
         rig.place(cam);
         cam.update();
+        held.hold(cam);
+      },
+      ground(x, y) {
         const z = heightAt(game.layout, game.world.x[game.ball], game.world.y[game.ball]);
-        return groundAt(cam, (x / SCREEN.w) * 2 - 1, 1 - (y / SCREEN.h) * 2, z);
+        return held.ground((x / SCREEN.w) * 2 - 1, 1 - (y / SCREEN.h) * 2, z);
       },
       shoot: (angle, power) => void game.shoot(angle, power),
       zoom: (by) => rig.zoom(by),

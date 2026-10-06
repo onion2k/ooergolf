@@ -50,6 +50,11 @@ export class Gesture {
 
   constructor(private readonly options: GestureOptions) {}
 
+  /** Whether no pointer is down: the next one to land is the first. */
+  get idle(): boolean {
+    return this.down_.size === 0;
+  }
+
   /** Which of the two a drag is: aim until it is told. */
   get mode(): Mode {
     return this.mode_;

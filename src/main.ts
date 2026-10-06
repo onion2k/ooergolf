@@ -40,7 +40,7 @@ import { Squash, squashInto, squashOf } from './squash';
 import { waggle } from './sway';
 import { EFFECT_STRIDE } from 'artshape-render/game/renderer';
 import { Governor, RUNGS } from './quality';
-import { groundAt } from './shot';
+import { HeldView, groundAt } from './shot';
 import { between } from './frames';
 
 /** How many millimetres a world unit is: the renderer fixes a few real sizes by it. */
@@ -406,6 +406,8 @@ async function main() {
 
   // ---- the pointers: one pulled back and let go is a shot, two are a pinch ----
 
+  /** The view as it was when the drag now under way began, which the aim is read through (see `HeldView`). */
+  const held = new HeldView();
   const input = new Input({
     shortSide() {
       const r = canvas.getBoundingClientRect();
@@ -415,8 +417,10 @@ async function main() {
     ground(x, y) {
       const r = canvas.getBoundingClientRect();
       const g = heightAt(played.layout, played.world.x[played.ball], played.world.y[played.ball]);
-      return groundAt(cam, ((x - r.left) / r.width) * 2 - 1, 1 - ((y - r.top) / r.height) * 2, g);
+      return held.ground(((x - r.left) / r.width) * 2 - 1, 1 - ((y - r.top) / r.height) * 2, g);
     },
+    // the camera as the frame drew it, held still for the drag
+    hold: () => held.hold(cam),
     shoot: (angle, power) => played.shoot(angle, power),
     zoom: (by) => rig.zoom(by),
     // the view from above dragged: the ground goes with the finger, over the height of the canvas
