@@ -204,6 +204,8 @@ export interface GameApi {
     /** The renderer's far plane, which is raised while the view is from above. */
     farPlane: number;
     azimuth: number;
+    /** The azimuth the camera is turning to: its own azimuth when it is turning to none. */
+    heading: number;
     tilt: number;
     /** The words of the putt's break under the pin, as drawn (`Putt: aim 1.6 yd right, uphill 0.4 yd`); null when none is up. */
     putt: string | null;

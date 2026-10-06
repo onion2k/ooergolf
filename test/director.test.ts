@@ -6,8 +6,8 @@
 import { describe, expect, it } from 'vitest';
 import { LANDS_PAST, aimView, reachOf } from '../src/aimview';
 import { bagClub } from '../src/bag';
-import { CameraRig, catchUp, facing } from '../src/camera';
-import { Director } from '../src/director';
+import { CameraRig, catchUp, facing, wrap } from '../src/camera';
+import { AIM_TURN, Director } from '../src/director';
 import { carryFrom } from '../src/flight';
 import { windReach } from '../src/shaping';
 import { LIE } from '../src/surfaces';
@@ -227,5 +227,116 @@ describe('the follow', () => {
       twin.settle(DT);
     }
     expect(rig.target).toEqual(twin.target);
+  });
+});
+
+describe('the turn to the aim', () => {
+  const heading = (angle: number) => wrap(Math.PI / 2 - angle);
+
+  it('settles the azimuth on the way the aim looks, within a thousandth in two seconds, falling all the way, at 60 and 30 frames a second', () => {
+    for (const dt of [1 / 60, 1 / 30]) {
+      for (const angle of [0, 1, 2.5, -2, Math.PI]) {
+        const { game } = golfGame(field('f'));
+        const { rig, director } = directed(game);
+        director.started();
+        const want = heading(angle);
+        let last = Math.abs(wrap(rig.azimuth - want));
+        for (let f = 0; f < 2 / dt; f++) {
+          director.aiming({ angle, power: 0.6 });
+          director.frame(dt, false);
+          const off = Math.abs(wrap(rig.azimuth - want));
+          expect(off, `angle ${angle} at ${dt}`).toBeLessThanOrEqual(last + 1e-12);
+          last = off;
+        }
+        expect(last, `angle ${angle} at ${dt}`).toBeLessThan(1e-3);
+      }
+    }
+  });
+
+  it('leaves the distance, the tilt and the lead of the aim view as they are', () => {
+    const { game } = golfGame(field('f'));
+    const { rig, director } = directed(game);
+    director.started();
+    run(director, 3);
+    const before = [rig.distance, rig.tilt, rig.lead];
+    for (let f = 0; f < 180; f++) {
+      director.aiming({ angle: 0.3, power: 1 });
+      director.frame(DT, false);
+    }
+    expect([rig.distance, rig.tilt, rig.lead]).toEqual(before);
+  });
+
+  it('does not turn for an aim weaker than AIM_TURN.least, and does at it', () => {
+    expect(AIM_TURN.least).toBe(0.15);
+    const weak = golfGame(field('f'));
+    const a = directed(weak.game);
+    a.director.started();
+    for (let f = 0; f < 180; f++) {
+      a.director.aiming({ angle: 0, power: AIM_TURN.least * 0.99 });
+      a.director.frame(DT, false);
+    }
+    expect(a.rig.azimuth).toBe(0);
+    expect(a.rig.turning).toBe(false);
+    const strong = golfGame(field('f'));
+    const b = directed(strong.game);
+    b.director.started();
+    b.director.aiming({ angle: 0, power: AIM_TURN.least });
+    expect(b.rig.turning).toBe(true);
+  });
+
+  it('does not turn with no aim, or while the ball is not ready', () => {
+    const { game } = golfGame(field('f'));
+    const { rig, director } = directed(game);
+    director.started();
+    director.aiming(null);
+    expect(rig.turning).toBe(false);
+    expect(game.shoot(Math.PI / 2, 1)).toBe(true);
+    expect(game.ready).toBe(false);
+    director.aiming({ angle: 0, power: 1 });
+    expect(rig.turning).toBe(false);
+  });
+
+  it('does not turn from overhead', () => {
+    const { game } = golfGame(field('f'));
+    const { rig, director } = directed(game);
+    director.started();
+    rig.setOverhead(true, { bounds: game.layout.bounds, distance: 400 });
+    director.aiming({ angle: 0, power: 1 });
+    expect(rig.turning).toBe(false);
+  });
+
+  it('leaves the camera where it had got to when the drag is taken back, and there five seconds on', () => {
+    const { game } = golfGame(field('f'));
+    const { rig, director } = directed(game);
+    director.started();
+    for (let f = 0; f < 20; f++) {
+      director.aiming({ angle: 0, power: 0.8 });
+      director.frame(DT, false);
+    }
+    // a weak aim, then none: neither changes where it is going
+    director.aiming({ angle: 2, power: 0.05 });
+    director.aiming(null);
+    for (let f = 0; f < 300; f++) director.frame(DT, false);
+    expect(rig.azimuth).toBeCloseTo(heading(0), 6);
+    const at = rig.azimuth;
+    for (let f = 0; f < 300; f++) director.frame(DT, false);
+    expect(rig.azimuth).toBe(at);
+  });
+
+  it('keeps the way a shot faced when it is let go', () => {
+    const { game } = golfGame(field('f'));
+    const { rig, director } = directed(game);
+    director.started();
+    for (let f = 0; f < 120; f++) {
+      director.aiming({ angle: 1, power: 0.5 });
+      director.frame(DT, false);
+    }
+    expect(game.shoot(1, 0.5)).toBe(true);
+    director.aiming(null);
+    for (let f = 0; f < 120; f++) {
+      game.step(DT);
+      director.frame(DT, false);
+    }
+    expect(rig.azimuth).toBeCloseTo(heading(1), 6);
   });
 });

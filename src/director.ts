@@ -9,8 +9,15 @@
  */
 import { BALL, KIND_RADIUS, heightAt, lieAt } from './arena';
 import { aimView, reachOf } from './aimview';
-import { CameraRig, catchUp, facing } from './camera';
+import { CameraRig, catchUp, facing, wrap } from './camera';
 import type { Game } from './game';
+import type { Shot } from './shot';
+
+/**
+ * What of a drag turns the camera to face it: a drag of at least `least` of the hardest shot, since a short one is on its
+ * way to being taken back and a camera swinging round to every twitch would be seen to lurch.
+ */
+export const AIM_TURN = { least: 0.15 };
 
 export class Director {
   private game: Game | null = null;
@@ -103,6 +110,19 @@ export class Director {
     const up = golf ? Math.max(0, world.z[ball] - ground - KIND_RADIUS[BALL]) : 0;
     const ease = golf ? catchUp(Math.hypot(world.vx[ball], world.vy[ball], world.vz[ball])) : undefined;
     rig.follow(world.x[ball], world.y[ball], dt, ground + up, ease);
+  }
+
+  /**
+   * The aim of a drag held now, or null when none is: the camera turned to look the way it goes, so a player sees the shot
+   * from behind it, and left looking that way when the drag is taken back. Only while the ball is ready (a drag while it
+   * rolls is no shot), not from overhead, and only for an aim of at least `AIM_TURN.least`; a weaker one, or none, leaves
+   * the camera going where it was going. The heading is the aim's alone and does not depend on where the camera is, and
+   * the drag is read through the view held when it began (`HeldView`), so the turn cannot feed back into the aim.
+   */
+  aiming(aim: Shot | null) {
+    const game = this.game;
+    if (!game || !aim || !game.ready || this.rig.overhead || aim.power < AIM_TURN.least) return;
+    this.rig.turnTo(wrap(Math.PI / 2 - aim.angle));
   }
 
   /**

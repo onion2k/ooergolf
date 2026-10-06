@@ -37,6 +37,10 @@ describe('the fuzzer', () => {
       for (const [k, n] of Object.entries(b)) out[k] = (out[k] ?? 0) + n;
       return out;
     };
+    // the monkey's main stream is drawn from exactly this often: every other action keeps to a stream of its own, so a
+    // stray draw anywhere (a new action reading the monkey's chance, say) moves these and not only what is done. Recorded
+    // on 6 October 2026 before 'aim and take back' was added, and it must not move with it
+    expect([one.drawn, two.drawn, golf.drawn], "draws from the monkey's main stream").toEqual([3296, 3217, 2670]);
     expect(one.failure, JSON.stringify(one.failure)).toBe(null);
     expect(two.failure, JSON.stringify(two.failure)).toBe(null);
     expect(golf.failure, JSON.stringify(golf.failure)).toBe(null);
@@ -48,6 +52,7 @@ describe('the fuzzer', () => {
     expect(r.failure, JSON.stringify(r.failure)).toBe(null);
     const actions = [
       'aim a shot',
+      'aim and take back',
       'buy',
       'buy, refused',
       'choose a club',

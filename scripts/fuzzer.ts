@@ -20,10 +20,10 @@
  */
 import { Camera } from 'artshape-render/gpu/camera';
 import { aimView, reachOf } from '../src/aimview';
-import { Director } from '../src/director';
+import { AIM_TURN, Director } from '../src/director';
 import { ROLL, heightAt, powerFor, strikeSpeed } from '../src/arena';
 import { Autopilot, timeAlong } from '../src/autopilot';
-import { CameraRig, facing, overheadFit } from '../src/camera';
+import { CameraRig, facing, overheadFit, wrap } from '../src/camera';
 import { CLUBS } from '../src/clubs';
 import { COURSES, type HoleDef } from '../src/course';
 import { Game, type GameEvents } from '../src/game';
@@ -52,7 +52,7 @@ import { carryFrom } from '../src/flight';
 import { lieAt } from '../src/arena';
 import { Progress, memoryStore } from '../src/progress';
 import { seeded } from '../src/random';
-import { HeldView } from '../src/shot';
+import { DRAG, HeldView, type Shot } from '../src/shot';
 import { GREENS, LIE } from '../src/surfaces';
 
 /**
@@ -134,6 +134,8 @@ export interface FuzzResult {
   happened: Record<string, number>;
   /** How many times each hole was begun, by name: which holes the monkey played. */
   visited: Record<string, number>;
+  /** How many numbers the monkey drew from its main stream: held by a test, since every other action keeps to a stream of its own and must never add to it. */
+  drawn: number;
 }
 
 /**
@@ -143,7 +145,10 @@ export interface FuzzResult {
  */
 export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]): FuzzResult {
   // the monkey's own chance, apart from the game's, so what it decides does not shift what the game does
-  const random = seeded(seed * 7 + 1);
+  const monkey = seeded(seed * 7 + 1);
+  /** How many numbers the monkey has drawn from its own stream, which a test holds to a figure so a stray draw is seen. */
+  let monkeyDraws = 0;
+  const random = () => (monkeyDraws++, monkey());
   const happened: Record<string, number> = {};
   const visited: Record<string, number> = {};
   const done: Record<string, number> = {};
@@ -209,6 +214,7 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
     done,
     happened,
     visited,
+    drawn: monkeyDraws,
   });
 
   try {
@@ -713,6 +719,84 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
       did('face the flag');
     };
     /**
+     * A player pulling the ball back and thinking better of it: a drag held at any angle and power, which turns the camera
+     * to look the way it aims, and then taken back (let go inside the dead zone, a second finger, or the browser taking the
+     * pointer). Never a stroke. Done on a chance of its own, as the flag button is, so the monkey's stream is as it was and
+     * every other run plays as before. The aim is held bit for bit while the camera turns, the camera arrives within
+     * `TURN_TIME` where the aim is strong enough and stays where a drag left it once it is taken back, and the game and its
+     * chance are not touched.
+     */
+    const aimer = seeded(seed * 37 + 5);
+    const aimAndTakeBack = () => {
+      if (input.aim !== null || !game.ready || game.phase !== 'play') return;
+      const at = (a: number, b: number) => a + aimer() * (b - a);
+      const { world, ball } = game;
+      const strokes = game.strokes;
+      const digest = () => JSON.stringify([game.t, game.strokes, world.x[ball], world.y[ball], world.z[ball]]);
+      const was = digest();
+      const drawn = draws;
+      rig.setGolf(game.layout.golf);
+      // the camera at rest, as a player's is when the drag begins
+      for (let k = 0; k < 600; k++) rig.settle(DT);
+      const home = rig.azimuth;
+      const press = [at(0.1 * SCREEN.w, 0.9 * SCREEN.w), at(0.1 * SCREEN.h, 0.9 * SCREEN.h)] as const;
+      // a pull of from nothing to a good deal more than the hardest, in any direction, kept on the screen
+      const length = at(0, DRAG.full * SCREEN.h * 1.4);
+      const turn = at(0, 2 * Math.PI);
+      const now = [
+        Math.max(0, Math.min(SCREEN.w, press[0] + Math.cos(turn) * length)),
+        Math.max(0, Math.min(SCREEN.h, press[1] + Math.sin(turn) * length)),
+      ] as const;
+      input.down(1, ...press);
+      input.move(1, ...now);
+      const held = input.aim as Shot | null;
+      const aim = held ? { angle: held.angle, power: held.power } : null;
+      const strong = aim !== null && aim.power >= AIM_TURN.least;
+      const heading = aim ? wrap(Math.PI / 2 - aim.angle) : home;
+      let seconds = 0;
+      for (let k = 0; k < (TURN_TIME + 1) / DT; k++) {
+        director.aiming(input.aim);
+        director.frame(DT, true);
+        // the pointer told again where it is, as a still finger is: the aim is the one it was, to the last bit
+        input.move(1, ...now);
+        if (JSON.stringify(input.aim) !== JSON.stringify(aim))
+          told.push(
+            `the aim was ${JSON.stringify(aim)} and the camera turning moved it to ${JSON.stringify(input.aim)}`,
+          );
+        for (const problem of viewProblems(rig, seconds)) told.push(problem);
+        if (!rig.turning) break;
+        seconds += DT;
+      }
+      if (rig.turning) told.push(`the camera was still turning to the aim after ${seconds.toFixed(2)} seconds`);
+      if (strong && Math.abs(wrap(rig.azimuth - heading)) > 1e-3)
+        told.push(`the camera faces ${rig.azimuth} and a drag aimed ${aim.angle} should have it at ${heading}`);
+      if (!strong && rig.azimuth !== home)
+        told.push(`a drag too weak to turn it turned the camera from ${home} to ${rig.azimuth}`);
+      // taken back, one way or another: the camera is left looking where the drag had it
+      const how = Math.floor(aimer() * 3);
+      if (how === 0) {
+        input.move(1, ...press);
+        input.up(1, ...press);
+      } else if (how === 1) {
+        input.down(2, at(0, SCREEN.w), at(0, SCREEN.h));
+        input.up(2, ...press);
+        input.up(1, ...press);
+      } else input.cancel(1);
+      if ((input.aim as Shot | null) !== null) told.push('a drag taken back left an aim');
+      const left = rig.azimuth;
+      for (let k = 0; k < 60; k++) {
+        director.aiming(input.aim);
+        director.frame(DT, true);
+        for (const problem of viewProblems(rig)) told.push(problem);
+      }
+      if (rig.azimuth !== left)
+        told.push(`the camera was at ${left} when a drag was taken back and at ${rig.azimuth} after`);
+      if (game.strokes !== strokes) told.push('a drag taken back took a stroke');
+      if (digest() !== was) told.push('aiming and taking back changed the game');
+      if (draws !== drawn) told.push(`aiming and taking back drew ${draws - drawn} numbers of the game's chance`);
+      did('aim and take back');
+    };
+    /**
      * A player sending the ball into a moving bumper: struck at the place a barrier that throws is at this moment, a little
      * off its middle either way, at any power, the hardest often. Done only on a hole that has one, and on a chance of its
      * own, as the flag button is, so the monkey's stream is as it was and no other hole plays differently. The ceiling on
@@ -856,6 +940,7 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
       }
       // the button is there whatever the ball is doing, so it is pressed while it rolls and between holes too
       if (facer() < 0.008) face();
+      if (aimer() < 0.01) aimAndTakeBack();
       if (bumped() < 0.03) bump();
       if (game.layout.kickers.length && striker() < 0.03) strike();
       if (game.obstacles.streamed.size && streamer() < 0.03) strikeOntoStream();
@@ -874,7 +959,7 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
         if (problems.length) return fail(problems);
       }
     }
-    return { seed, frames, failure: null, done, happened, visited };
+    return { seed, frames, failure: null, done, happened, visited, drawn: monkeyDraws };
   } catch (err) {
     return fail([`threw: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`]);
   }

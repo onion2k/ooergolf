@@ -897,7 +897,7 @@ test.describe('aiming a golf shot', () => {
     expect(problems).toEqual([]);
   });
 
-  test('a held drag draws the flight and says where it lands, never moves the camera, and is gone when taken back', async ({
+  test('a held drag straight up the view draws the flight and says where it lands, has no reason to move the camera, and is gone when taken back', async ({
     page,
   }) => {
     const problems = watch(page);
@@ -912,7 +912,7 @@ test.describe('aiming a golf shot', () => {
     expect(held!.carry).toBeLessThan(175);
     await expect(page.locator('#bagInfo')).toContainText(`lands ${Math.round(held!.carry)}`);
     await expect(page.locator('#bagInfo')).toContainText('Driver');
-    // the camera did not move, nor the aim, for as long as it is held
+    // the camera did not move (the aim is the way it already faces), nor the aim, for as long as it is held
     const aim = await page.evaluate(() => window.game!.aiming());
     for (let k = 0; k < 4; k++) {
       await page.evaluate(() => window.game!.step(15));
@@ -943,6 +943,43 @@ test.describe('aiming a golf shot', () => {
     await expect(page.locator('#bagInfo')).toContainText('carries');
     await page.mouse.up();
     expect((await page.evaluate(() => window.game!.state())).strokes).toBe(0);
+    expect(problems).toEqual([]);
+  });
+
+  test('a held drag turns the camera to look the way it aims, and a drag taken back leaves it looking there', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await longBend(page);
+    const view = () => page.evaluate(() => window.game!.view());
+    const before = await view();
+    // pulled back and well across: the shot goes up the course and a good way to the left of it
+    await pull(page, 0.6, 300);
+    const aim = (await page.evaluate(() => window.game!.aiming()))!;
+    expect(aim).not.toBeNull();
+    // the view turns to look the way the aim goes; the aim itself does not change as it does (it is read through the view the
+    // drag began in), however many frames go by
+    const heading = (await view()).heading;
+    expect(Math.abs(heading - (Math.PI / 2 - aim.angle)), 'looks the way the aim goes').toBeLessThan(1e-9);
+    expect(Math.abs(heading), 'and that is not the way it was looking').toBeGreaterThan(0.3);
+    for (let k = 0; k < 8; k++) {
+      await page.evaluate(() => window.game!.step(15));
+      expect(await page.evaluate(() => window.game!.aiming())).toEqual(aim);
+    }
+    const turned = await view();
+    expect(turned.azimuth).toBeCloseTo(heading, 3);
+    expect([turned.distance, turned.tilt, turned.lead]).toEqual([before.distance, before.tilt, before.lead]);
+    // taken back to where it began: no shot, and no stroke, and the camera is left looking where it was turned to
+    const from = { x: (page.viewportSize()!.width / 2) | 0, y: (page.viewportSize()!.height * 0.15) | 0 };
+    await page.mouse.move(from.x, from.y);
+    await page.evaluate(() => window.game!.step(2));
+    expect(await page.evaluate(() => window.game!.motions().shot)).toBeNull();
+    await page.mouse.up();
+    expect((await page.evaluate(() => window.game!.state())).strokes).toBe(0);
+    await page.evaluate(() => window.game!.step(300));
+    const left = await view();
+    expect(left.azimuth).toBe(turned.azimuth);
+    expect(left.heading).toBe(turned.heading);
     expect(problems).toEqual([]);
   });
 

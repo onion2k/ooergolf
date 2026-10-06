@@ -784,6 +784,9 @@ async function main() {
     played.step(dt);
     // the camera: the aim view for the next shot, eased, and the ball followed, by game time so a test stepping the game
     // sees it follow the same way every run
+    // turned to look the way a drag held now aims, and left looking there when it is taken back; the ball must be ready, and
+    // the start screen has no shot
+    director.aiming(choosing ? null : input.aim);
     director.frame(dt, parked);
     const { world, ball } = played;
     if (!world.alive[ball]) return;
@@ -883,6 +886,7 @@ async function main() {
       lead: rig.lead,
       aiming: rig.aiming,
       turning: rig.turning,
+      heading: rig.headed,
       rung: governor.rung,
       held: governor.held,
       antialias: antialiasFor(renderer.look, renderer.economy),

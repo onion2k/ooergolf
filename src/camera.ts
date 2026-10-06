@@ -135,7 +135,7 @@ export function overheadFit(bounds: Bounds, azimuth: number, aspect: number): nu
 }
 
 /** An angle brought within one turn either way of nought. */
-const wrap = (a: number) => a - 2 * Math.PI * Math.round(a / (2 * Math.PI));
+export const wrap = (a: number) => a - 2 * Math.PI * Math.round(a / (2 * Math.PI));
 
 /**
  * The azimuth that faces the camera from `from` toward `to` on the ground: nought for a place straight up the course, a
@@ -329,6 +329,11 @@ export class CameraRig {
    */
   turnTo(azimuth: number) {
     if (Number.isFinite(azimuth)) this.heading = wrap(azimuth);
+  }
+
+  /** The azimuth it is turning to, or the one it has when it is turning to none. */
+  get headed(): number {
+    return this.heading ?? this.azimuth;
   }
 
   /** Whether it is turning to face a place. */
