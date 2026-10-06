@@ -23,9 +23,11 @@ begins, and after the last the card is shown, with a button for another
 round. A hole pays coins, more for beating par, and a hole in one pays a
 gem; the shop sells finer putters that strike harder. The coins, the clubs
 and the best score on each hole are kept in the browser. The camera follows
-the ball; the wheel zooms on a desktop, and two fingers pinch on a phone. A
-switch, Aim or Look, chooses whether a drag strikes the ball or turns and
-tilts the camera right round it, and a flag button beside it turns the camera to face the flag. On the courses of golf, a bag of
+the ball; the wheel zooms on a desktop, and two fingers pinch on a phone. While you pull the ball back the camera turns to look the way you aim, and
+stays there if you think better of it; about one shot in five it follows
+the ball and otherwise holds the view of the shot, and it always keeps the ball and the furthest
+the shot can reach on the screen. An Overhead button shows the whole hole from above, to
+look round and never to aim from, and a flag button beside it turns the camera to look near the flag. On the courses of golf, a bag of
 eight clubs sits over the course: choose one, and the same drag swings it, the
 ball flying at the club's loft, coming down in a ring that marks where, hopping
 and running on by what it landed on, with a scatter that grows the harder it is

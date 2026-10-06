@@ -386,10 +386,17 @@ and all the words in the page, not the picture.
 
 ## The camera
 
-The game frames the hole, from three-quarters above, and follows the ball.
-On a phone held upright it turns so the hole runs up the screen. On a
-desktop the wheel zooms. There is no free orbit on touch, where a drag is a
-shot.
+The game frames the hole, from three-quarters above. It is always aiming:
+there is no Look mode, and no free orbit, since a drag is a shot. The camera
+does the turning: while the ball is pulled back it turns to look the way the
+shot goes, and a drag taken back leaves it looking there; the flag button
+turns it to look near the flag, not at it, so the cup is ahead and not dead
+centre. It keeps the ball and the furthest the shot can reach on the screen,
+and follows the ball on about one stroke in five, holding the view of the shot
+on the rest and taking the ball up only if it would leave the screen. On a
+phone held upright it turns so the hole runs up the screen. On a desktop the
+wheel zooms and on a phone two fingers do. An Overhead button shows the
+whole hole from above to look round, by dragging, and never to aim from.
 
 ## Phone and desktop
 
