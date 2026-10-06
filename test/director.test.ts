@@ -20,6 +20,8 @@ import { windReach } from '../src/shaping';
 import { LIE } from '../src/surfaces';
 import { DT, field, golfGame, newGame, settle } from './helpers';
 
+/** The most the camera's target may change speed by, a second a second, on a full drive: the smooth hand-over's worst is its cap of 400 (`HAND_OVER.accel`), and the sudden latch's was 132,000 and more. */
+const HANDOVER_ACCEL = 500;
 const ASPECT = 1.6;
 const HEIGHT = 800;
 
@@ -503,7 +505,15 @@ describe('following the ball one shot in five', () => {
     const cam = new Camera();
     cam.fov = rig.fov;
     cam.aspect = aspect;
-    const seen: { nx: number; ny: number; t: number; latched: boolean; target: number; ready: boolean }[] = [];
+    const seen: {
+      nx: number;
+      ny: number;
+      t: number;
+      latched: boolean;
+      target: number;
+      ready: boolean;
+      at: number[];
+    }[] = [];
     const t0 = game.t;
     expect(game.shoot(Math.PI / 2, power)).toBe(true);
     director.struck();
@@ -523,6 +533,7 @@ describe('following the ball one shot in five', () => {
         latched: director.following,
         target: rig.target[1],
         ready: game.ready,
+        at: [rig.target[0], rig.target[1], rig.target[2]],
       });
       if (game.ready) break;
     }
@@ -623,12 +634,31 @@ describe('following the ball one shot in five', () => {
     });
   }
 
+  for (const [aspect, height] of [
+    [1.6, 800],
+    [0.465, 860],
+  ] as const) {
+    it(`hands over from hold to follow without a lurch: the camera's acceleration on a full drive stays small, on ${aspect.toFixed(2)}`, () => {
+      const { seen } = drive(aspect, height, 'never');
+      const flying = seen.filter((s) => !s.ready);
+      // the target's speed from frame to frame, and how much it changes in a frame: a camera that sits still and then
+      // moves at the pace of a drive in one frame is a lurch, however well it keeps the ball on the screen
+      const speeds = flying.slice(1).map((s, i) => Math.hypot(...s.at.map((v, k) => v - flying[i].at[k])) / DT);
+      let worst = 0;
+      for (let i = 1; i < speeds.length; i++) worst = Math.max(worst, Math.abs(speeds[i] - speeds[i - 1]) / DT);
+      expect(Math.max(...speeds), 'the camera moved at all').toBeGreaterThan(5);
+      expect(worst, `largest change of the target's speed, units a second a second, ${worst.toFixed(0)}`).toBeLessThan(
+        HANDOVER_ACCEL,
+      );
+    });
+  }
+
   it('holds the target at the strike point for a putt that stays inside the box, and eases to the ball when it is ready', () => {
     const { seen, game, rig, director } = drive(1.6, 800, 'never', 'putter', 0.1);
     const held = seen.filter((s) => !s.ready);
     expect(held.length).toBeGreaterThan(10);
-    for (const s of held) expect(s.target).toBe(held[0].target);
-    expect(held.at(-1)!.latched, 'it never left the box').toBe(false);
+    // the ball is inside the inner part of the band, or in it only a little, so the camera has moved a hair or not at all
+    for (const s of held) expect(Math.abs(s.target - held[0].target)).toBeLessThan(0.01);
     // ready: the target is eased to the ball as ever, and is there a few seconds on
     expect(game.ready).toBe(true);
     const before = rig.target[1];
@@ -647,6 +677,9 @@ describe('following the ball one shot in five', () => {
   it('follows at the pace catchUp says once it has latched, as it does when it follows from the start', () => {
     const held = drive(1.6, 800, 'never');
     const chased = drive(1.6, 800, 'always');
+    // the held camera went after the ball later and smoothly and keeps the ball nearer the edge, so it is given the seconds the
+    // ready ball is eased to as ever
+    for (const d of [held, chased]) for (let f = 0; f < 600; f++) d.director.frame(DT, false);
     // the same ball, so the camera in the end stands where the one that followed all the way stands, to a few yards
     expect(Math.abs(held.rig.target[1] - chased.rig.target[1])).toBeLessThan(3);
   });
@@ -687,7 +720,7 @@ describe('following the ball one shot in five', () => {
     }
   });
 
-  it('has the ball back inside the box when it is lost in water and put back, as the camera that held still never moved', () => {
+  it('has the ball back inside the box when it is lost in water and put back, as the camera that was taking it up is the other way', () => {
     const base = field('f');
     const map = base.map.map((row, r) => (r >= 20 && r <= 46 ? `#${'~'.repeat(row.length - 2)}#` : row));
     const { game, told } = golfGame({ ...base, map });
@@ -710,8 +743,10 @@ describe('following the ball one shot in five', () => {
       director.frame(DT, false);
     }
     expect(told.filter((t) => t.startsWith('splash ')).length, 'it went in the water').toBe(1);
-    expect(director.following, 'and the camera never took it up').toBe(false);
-    expect(rig.target[1]).toBe(held);
+    // the camera took the ball up on its way out (it begins well inside the box's edge), so as when it follows the ball all the
+    // way it is eased back to the ball put down at the tee, and has it inside the box well within three seconds
+    expect(rig.target[1], 'and the camera moved').toBeGreaterThan(held);
+    for (let f = 0; f < 180; f++) director.frame(DT, false);
     rig.place(cam, game.t);
     cam.update();
     const m = cam.viewProjection;

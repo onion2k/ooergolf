@@ -45,6 +45,16 @@ export const FOLLOW = { share: 0.2 } as const;
 /** Whether the camera follows the ball for each stroke as `FOLLOW` says, or for every one, or for none but those the ball would leave the screen in. */
 export type FollowShots = 'drawn' | 'always' | 'never';
 
+/**
+ * How the camera takes the ball up on a stroke it is holding still for. It begins from `from` of the way out to the safe box's
+ * edge (in the box's own terms, so a half is half way out to it on whichever side the ball is nearest), well before the edge,
+ * and from then goes after the ball at the pace `catchUp` says, but its speed may not change by more than `accel` yards a
+ * second a second. Without the band the camera sat still to the edge and then went after a ball at 200 yards a second in one
+ * frame (a change of speed of 130,000 a second a second), which was seen as a lurch; a pace that merely rose with the ball's
+ * distance out was tried and rose as fast as the ball crossed it, 3,000 to 5,000 a second a second, so the speed is held.
+ */
+export const HAND_OVER = { from: 0.6, accel: 400 } as const;
+
 /** How many times the camera's pace is doubled, at most, to keep a ball on its way inside the safe box: more than the lag of the fastest ball needs. */
 const CATCH_UP_DOUBLINGS = 8;
 
@@ -75,6 +85,10 @@ export class Director {
   private readonly seen = { azimuth: 0, tilt: 0 };
   /** Where the ball is on the screen, as the latch reads it, written each frame and never made. */
   private readonly ndc: [number, number] = [0, 0];
+  /** The target's speed as the hand-over last left it, written each frame and never made. */
+  private readonly vel = [0, 0, 0];
+  /** Whether the camera took the ball up this stroke from a hold, so its change of speed is held (`HAND_OVER`). */
+  private handing = false;
   /** Whether the camera has been put on a hole yet: the first has nowhere to glide from. */
   private looked = false;
   /** Whether a test has put the camera somewhere and left it: on minigolf the aim view that frames the reach is not sent while it has. */
@@ -113,7 +127,7 @@ export class Director {
 
   /** Whether the camera is following the ball for the stroke being played: drawn as it is struck, and on from the moment the ball would have left the screen. */
   get following(): boolean {
-    return this.chasing;
+    return this.chasing || this.handing;
   }
 
   /**
@@ -123,6 +137,7 @@ export class Director {
   struck() {
     const game = this.game;
     if (!game) return;
+    this.handing = false;
     this.chasing =
       this.mode === 'always'
         ? true
@@ -158,6 +173,7 @@ export class Director {
     this.aimedFor = '';
     this.worked.x = Number.NaN;
     this.chasing = false;
+    this.handing = false;
     if (layout.golf) this.aimFor(!glide);
     this.looked = true;
   }
@@ -254,11 +270,21 @@ export class Director {
     else if (!this.left) this.aimOnMinigolf();
     rig.settle(dt);
     const { world, ball } = game;
-    if (!world.alive[ball] || parked) return;
+    if (!world.alive[ball] || parked) {
+      this.vel.fill(0);
+      return;
+    }
     // a stroke the camera is not following: held where it stood while the ball is on its way, and taken up for the rest of the
     // stroke from the moment the ball would leave the safe box; a ball at rest is gone to as ever
-    if (!this.chasing && !game.ready && !this.leaving(game)) return;
-    if (!game.ready) this.chasing = true;
+    // and before that it is not moved at all while the ball is in the inner part of the box (`HAND_OVER`); from the band's edge
+    // it is taken up, at a pace that rises with how far out the ball is, and its change of speed is held
+    let pace = 1;
+    if (!this.chasing && !game.ready) {
+      const k = Math.min(1, Math.max(0, (this.excess(game) - HAND_OVER.from) / (1 - HAND_OVER.from)));
+      if (k > 0) this.handing = true;
+      else if (!this.handing) return;
+      pace = k * k * (3 - 2 * k);
+    }
     const ground = heightAt(game.layout, world.x[ball], world.y[ball]);
     // a lofted ball is followed up into the air as well as along, or it leaves the top of the screen at the top of its
     // flight; on the ground, and on every hole of minigolf, it is the ground that is looked at, as it always was
@@ -266,20 +292,44 @@ export class Director {
     const up = golf ? Math.max(0, world.z[ball] - ground - KIND_RADIUS[BALL]) : 0;
     const ease = golf ? catchUp(Math.hypot(world.vx[ball], world.vy[ball], world.vz[ball])) : undefined;
     const [x0, y0, z0] = rig.target;
-    rig.follow(world.x[ball], world.y[ball], dt, ground + up, ease);
+    const base = ease ?? catchUp(0);
+    rig.follow(world.x[ball], world.y[ball], dt, ground + up, base * pace);
+    if (this.handing) this.limit(x0, y0, z0, dt);
+    else this.vel.fill(0);
     // a ball on its way is never left off the safe box by the camera's lag: a ball struck toward the camera, or thrown, can be
     // further from where the camera is looking than the pace allows for, and then the camera catches up quicker (twice as quick,
     // and again, until the ball is inside), never looser than the box
     if (!game.ready) {
-      let rate = ease ?? catchUp(0);
+      let rate = base * pace;
       for (let n = 0; n < CATCH_UP_DOUBLINGS && this.leaving(game); n++) {
         rig.target[0] = x0;
         rig.target[1] = y0;
         rig.target[2] = z0;
         rate *= 2;
         rig.follow(world.x[ball], world.y[ball], dt, ground + up, rate);
+        this.vel[0] = (rig.target[0] - x0) / dt;
+        this.vel[1] = (rig.target[1] - y0) / dt;
+        this.vel[2] = (rig.target[2] - z0) / dt;
       }
     }
+  }
+
+  /**
+   * The target's change of speed this frame held to `HAND_OVER.accel`: the band's pace alone rises as fast as the ball crosses it,
+   * and a ball at 200 yards a second crosses it in a tenth of a second. The target was at (`x0`, `y0`, `z0`) and has been moved
+   * toward the ball; the speed it had is `vel`, and what it is made to have is written back there.
+   */
+  private limit(x0: number, y0: number, z0: number, dt: number) {
+    const { target } = this.rig;
+    const { vel } = this;
+    const want = [(target[0] - x0) / dt - vel[0], (target[1] - y0) / dt - vel[1], (target[2] - z0) / dt - vel[2]];
+    const most = HAND_OVER.accel * dt;
+    const size = Math.hypot(want[0], want[1], want[2]);
+    const share = size > most ? most / size : 1;
+    for (let k = 0; k < 3; k++) vel[k] += want[k] * share;
+    target[0] = x0 + vel[0] * dt;
+    target[1] = y0 + vel[1] * dt;
+    target[2] = z0 + vel[2] * dt;
   }
 
   /**
@@ -287,6 +337,14 @@ export class Director {
    * camera is not following. Worked out from the view's own figures against where the camera is looking, nothing made.
    */
   private leaving(game: Game): boolean {
+    return this.excess(game) > 1;
+  }
+
+  /**
+   * How far out the ball is on the safe box, as a share of the way to its edge on the side it is nearest: nought at the middle,
+   * one on the edge, more beyond. Worked out from the view's own figures against where the camera is looking, nothing made.
+   */
+  private excess(game: Game): number {
     const { world, ball } = game;
     const { rig } = this;
     const { azimuth, tilt } = rig.view(game.t, this.seen);
@@ -305,7 +363,7 @@ export class Director {
       this.ndc,
     );
     const box = safeBox(this.aspect, this.height);
-    return !(Math.abs(nx) <= box.x && ny <= box.top && ny >= box.bottom);
+    return Math.max(Math.abs(nx) / box.x, ny >= 0 ? ny / box.top : ny / box.bottom);
   }
 
   /**

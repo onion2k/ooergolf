@@ -356,9 +356,17 @@ angle, roll)` is how far the putter's hardest putt rolls along an angle before t
   most twelve times. The view seed is `?seed=N` (or the test API's `seed(n)`), or one `crypto` draw at boot. Refused under the start screen,
   while a drag is held, at the cup and from overhead.
   **Follow one stroke in five**: `struck()` follows the ball when `hashed(viewSeed, hole, strokes, SALT.follow) < FOLLOW.share` (0.2), exactly as
-  the camera always did (`catchUp`); for the other four the camera holds where it stood and the ball flies across the aim view, with a one-way latch for the
-  stroke: if the ball would leave the safe box the camera takes it up from then, quicker (the pace doubled, at most eight times) until it is
-  inside, never a looser box; at rest the camera eases to the ball as ever, and a new hole clears the latch. `followShots('drawn' |
+  the camera always did (`catchUp`); for the other four the camera holds where it stood, exactly still, while the ball is in the inner
+  0.6 of the safe box (`HAND_OVER.from`, in the box's own terms: |nx| over the half width, ny over the top or the bottom), and the
+  ball flies across the aim view. From there out to the edge the camera is taken up (`handing`, which `following` reports) at a pace
+  that rises by a smoothstep from nothing at 0.6 to the full `catchUp` at the edge, and its change of speed is held to
+  `HAND_OVER.accel` (400 yards a second a second; the camera stops as smoothly if the ball falls back inside the band). The
+  hand-over was a latch at the edge, which sent the target from still to 150 a second in a frame (a change of speed of 130,000 a
+  second a second on a full drive, seen as a lurch); a pace that rose with the ball's distance out alone still rose as fast as the
+  ball crossed it (3,000 to 5,000), hence the held speed, and `test/director.test.ts` holds it under 500 on a desk and a phone.
+  The doublings (the pace doubled, at most eight times) stay as a never-a-looser-box safety, and are not reached by a drive; at
+  rest the camera eases to the ball as ever, and a new hole clears it. A ball put back at the tee after a splash is eased to like any
+  followed one. `followShots('drawn' |
 'always' | 'never')` is the test API's say in it, and the perf scenes that fly a ball set `always`.
   **The overhead view** is the rig's: `overhead`, a blend `k` eased at `OVERHEAD.ease` (4 a second), and a `top` of its own (`x`, `y`,
   `distance`). `OVERHEAD` is `tilt` 0.05 radians from vertical (not nought, since the renderer's camera has the ground's up for its own
