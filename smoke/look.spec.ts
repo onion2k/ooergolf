@@ -30,6 +30,8 @@ import { glint } from '../src/glints';
 import { LIE } from '../src/surfaces';
 import { BOWL, SIDE_HILL } from '../test/hills';
 import { STREAM_HOLE } from '../test/stream-hole';
+import { wideHole } from '../test/wide-hole';
+import { smallHole } from './bighole';
 import { drag, puttingHole, start, watch } from './game';
 import { openDrawer } from './panels';
 
@@ -39,6 +41,24 @@ const TOLERANCE = { maxDiffPixelRatio: 0.002, threshold: 0.02 };
 /** The corner that counts the milliseconds a frame takes is different every run, and says nothing about the look. */
 async function hideStats(page: Page) {
   await page.locator('#stats').evaluate((el: HTMLElement) => (el.hidden = true));
+}
+
+/**
+ * A round of two holes, the second of which the field of grass will not cover, begun at it: the page stopped on the boot
+ * screen, which says which hole and why, over the first hole's picture that it was left showing. Settled for the screen's
+ * fade, which a picture waits on.
+ */
+async function stopped(page: Page) {
+  await page.evaluate(
+    ([first, second]) => {
+      const g = window.game!;
+      g.playCourse([{ ...first, terrain: Float32Array.from(first.terrain) }, second]);
+      g.step(60);
+      g.startHole(1);
+    },
+    [smallHole(), wideHole()] as const,
+  );
+  await expect(page.locator('#boot')).toHaveCSS('opacity', '1');
 }
 
 /** Pressed on the ball and pulled back down the page by `share` of a full drag, and held there. */
@@ -532,6 +552,18 @@ test.describe('what it looks like', () => {
     await hideStats(page);
     await expect(page).toHaveScreenshot('start.png', TOLERANCE);
     expect(problems).toEqual([]);
+  });
+
+  test('the page stopped on a hole that cannot be drawn: the boot screen again, saying which hole and why', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true });
+    await stopped(page);
+    await expect(page).toHaveScreenshot('stopped.png', TOLERANCE);
+    // told once to the console, which is where it is looked for
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain('could not be drawn');
   });
 
   // golf, on The Links: nine holes made by the generator, each seen from its tee, some of their greens, the stakes at the
@@ -1060,6 +1092,17 @@ test.describe('what it looks like', () => {
       await hideStats(page);
       await expect(page).toHaveScreenshot('phone-start.png', TOLERANCE);
       expect(problems).toEqual([]);
+    });
+
+    test('the page stopped on a hole that cannot be drawn, on a phone: its words wrapped inside the screen’s edges', async ({
+      page,
+    }) => {
+      const problems = watch(page);
+      await start(page, { seed: 11, paused: true });
+      await stopped(page);
+      await expect(page).toHaveScreenshot('phone-stopped.png', TOLERANCE);
+      expect(problems).toHaveLength(1);
+      expect(problems[0]).toContain('could not be drawn');
     });
 
     test('the lowest rung of the quality ladder: no shadows and no post', async ({ page }) => {
