@@ -29,6 +29,7 @@ import { greensText, landingText, pinReadout, pinText, puttText, windArrow } fro
 import { daylight } from './look';
 import { Progress } from './progress';
 import { seeded } from './random';
+import { titlePage } from './titlepage';
 import { roll } from './roll';
 import { fieldOf, flattenFor, grassOptionsOf, windOf } from './turf';
 import { AIM_REACH, Scene, boxOf } from './scene';
@@ -60,6 +61,14 @@ const WHEEL = 0.05;
 const canvas = document.getElementById('view') as HTMLCanvasElement;
 const boot = document.getElementById('boot')!;
 const bootMsg = document.getElementById('bootMsg')!;
+// the title screen is on the panel while the game boots; a test's page asks for none with `?title=0`
+const title = titlePage(
+  boot,
+  document.getElementById('bootTitle') as HTMLImageElement,
+  new URLSearchParams(location.search).get('title') === '0',
+  matchMedia('(prefers-reduced-motion: reduce)').matches,
+  () => performance.now(),
+);
 const stats = document.getElementById('stats')!;
 
 main().catch((err: unknown) => {
@@ -76,6 +85,8 @@ main().catch((err: unknown) => {
 function showError(words: string) {
   bootMsg.setAttribute('role', 'alert');
   bootMsg.textContent = words;
+  // a title still on its way out must not hide what the panel has come back to say
+  title.hold();
   boot.classList.remove('gone');
 }
 
@@ -83,7 +94,6 @@ async function main() {
   // ---- the renderer ----
 
   const ctx = await createContext(canvas);
-  bootMsg.textContent = 'compiling shaders…';
   const renderer = new GameRenderer(ctx, LIGHT_CAPACITY, EFFECT_CAPACITY, PARTICLE_CAPACITY, MM_PER_UNIT);
   // the daylight look, the same one the models' showcase is drawn in
   await daylight(renderer, ctx);
@@ -933,7 +943,7 @@ async function main() {
 
   await renderer.ready;
   await grown;
-  boot.classList.add('gone');
+  title.leave();
   // the start screen over the first hole of the first course, until a course is chosen
   hud.showStart(summaries);
   stats.hidden = false;

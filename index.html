@@ -1160,18 +1160,47 @@
     /*
      * over every panel, the card, the shop and the start screen (2) and a phone's drawer (3) among them: it is the screen the
      * page stops on when it cannot go on, a hole that cannot be drawn included, and a panel left up over it would be a game
-     * that looked as if it could still be played
+     * that looked as if it could still be played; and the title, which fades out over the start screen that is up behind it
      */
     z-index: 4;
     display: grid;
     place-items: center;
     background: var(--boot);
-    transition: opacity 0.4s;
+    transition: opacity var(--title-out, 0.4s);
   }
   #boot.gone {
     opacity: 0;
     pointer-events: none;
+    /* out of the frame's compositing once it has faded, not only clear */
+    visibility: hidden;
+    transition:
+      opacity var(--title-out, 0.4s),
+      visibility 0s linear var(--title-out, 0.4s);
   }
+  /* the whole picture, never cropped: the panel's sky meets its own */
+  #bootTitle {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    opacity: 0;
+  }
+  #bootTitle[hidden] {
+    display: none;
+  }
+  #boot.shown #bootTitle {
+    animation: bootTitleIn var(--title-in, 0.6s) ease-out forwards;
+  }
+  @keyframes bootTitleIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  /* only a boot that has failed has anything to say */
   #boot p {
     /* a line to each thing the page says when it cannot go on: which hole, why, and what to do; kept off the screen's edges */
     white-space: pre-line;
@@ -1179,6 +1208,18 @@
     text-align: center;
     font-weight: 700;
     color: var(--ink);
+  }
+  /* under the title where it is up, on a plate of the panel's colour so the words read over the picture; alone, where it is not, as the panel always said them */
+  #bootTitle:not([hidden]) ~ p {
+    position: absolute;
+    bottom: 24px;
+    margin: 0;
+    padding: 8px 14px;
+    border-radius: 12px;
+    background: var(--boot);
+  }
+  #boot p:empty {
+    display: none;
   }
 
   @media (max-width: 600px) {
@@ -1586,6 +1627,7 @@
 </div>
 <div class="panel" id="help" hidden>drag back and let go to putt</div>
 <div id="boot">
-  <p id="bootMsg">starting WebGPU…</p>
+  <img id="bootTitle" src="/src/title.webp" alt="Of Course!" decoding="async" />
+  <p id="bootMsg"></p>
 </div>
 <script type="module" src="/src/main.ts"></script>

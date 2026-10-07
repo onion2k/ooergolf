@@ -43,9 +43,11 @@ export async function start(
     paused?: boolean;
     screen?: boolean;
     rung?: number;
+    // the title screen is left out of every page but one that asks for it, so no test waits on a fade
+    title?: boolean;
   } = {},
 ) {
-  const { save, seed, paused, screen, rung } = options;
+  const { save, seed, paused, screen, rung, title } = options;
   if (save)
     await page.addInitScript((s) => {
       if (sessionStorage.getItem('ooergolf-test-seeded')) return;
@@ -53,6 +55,7 @@ export async function start(
       sessionStorage.setItem('ooergolf-test-seeded', '1');
     }, save);
   const query = new URLSearchParams();
+  if (!title) query.set('title', '0');
   if (rung !== undefined) query.set('rung', String(rung));
   if (seed !== undefined) query.set('seed', String(seed));
   if (paused) query.set('paused', '1');

@@ -129,6 +129,7 @@ Numbers, held by gates, on this machine at 1280×800:
 | ------------------------------------------------------ | ------------------------------ | -------------- |
 | Boot, page start to the frame loop running             | 3000 ms                        | `perf`         |
 | Download, scripts and styles gzipped                   | 400 kB                         | `perf`         |
+| Pictures fetched with the page, as sent                | 120 kB                         | `perf`         |
 | A frame drawn, lower quartile at the standard view     | 6 ms                           | `perf`         |
 | The biggest hole begun, and a frame of it drawn        | 400 ms begin, 6 ms a frame     | `perf`         |
 | The physics, a frame, against the reference arithmetic | baseline ± 20%                 | `bench`        |
@@ -880,6 +881,20 @@ angle, roll)` is how far the putter's hardest putt rolls along an angle before t
   fit across a phone's width, 35.9 at 360, which is why `CLUB_LEAST` in `smoke/panels.ts` is not a thumb), the shape
   button carries an arrow in the stylesheet (a mask, so `textContent` is still the words: up for straight, curving left
   for a draw and right for a fade), and the purse shows coins and gems on golf as on minigolf.
+- **The title screen** is the boot panel's (`#boot` in `index.html`, over every other panel, the start screen's `z-index: 2`
+  included, since that is up behind it while it fades out): `src/title.webp` (63 kB, made from `src/title.png` by
+  `cwebp -q 90`, which is kept as the source) fades in over 0.6 s once it has decoded and out over 0.6 s once the game is ready,
+  never before the fade-in is over. `src/title.ts` is the timing (`TITLE`, `fades`, `leaveDelay`, page time and none of the game's),
+  `src/titlepage.ts` is the page's side of it, handed the panel, the picture, the clock and the player's word on motion; the fade
+  times are the panel's `--title-in` and `--title-out`, so the stylesheet holds no figure. It is `contain`ed, never cropped, on the
+  boot colour. A picture that is late or missing is not waited for and is not shown over a game that is up; a boot that fails says
+  why under it (`#bootMsg` is empty otherwise: there are no status words; `showError` calls the title's `hold()` so an exit still on its
+  way cannot hide the panel it has come back to say something on); under reduced motion there is no fade. The hold is
+  after `bootMs` is read, and the `perf` boot figure is read with it left out, so it holds the game's boot and not the title's
+  (the title is measured at about 12 ms of a boot of 290 on a loaded machine). **`?title=0` leaves the title out**, which
+  `start()` in `smoke/game.ts` does for every test but one that asks `{ title: true }`; `smoke/title.spec.ts` is that one, and
+  holds its two pictures (`title-desk`, `title-phone`). `imageKb` in `perf` holds the pictures a page fetches, which the scripts'
+  figure never counted. The showcase page keeps its own status words.
 - `src/noise.ts` makes ground from noise: `gradientNoise(seed)` is Perlin's,
   and `noiseGround(layout, { seed, feel, steepness })` a hole's heights from
   it, the same for a seed every time, never below nought, with optional

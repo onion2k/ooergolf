@@ -12,6 +12,8 @@ export const BUDGET = {
   bootMs: 3000,
   frameMs: 6,
   bundleKb: 400,
+  // the pictures the page fetches before the game is up, which the scripts' budget does not count: the title is 63 kB as WebP
+  imageKb: 120,
   beginMs: 400,
   bigFrameMs: 6,
   linksBeginMs: 400,

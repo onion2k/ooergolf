@@ -62,6 +62,8 @@ const TOLERANCE = {
   bootMs: [0.35, 250],
   frameMs: [0.15, 0.1],
   bundleKb: [0.1, 2],
+  // a file's size does not wobble: a picture swapped for another is the change this is here to see
+  imageKb: [0.05, 1],
   // begun: 38 to 49 ms over nine runs of the biggest hole, and a frame of it 3.07 to 3.77 ms: the tolerance is wider than
   // that spread, and narrower than a hole costing twice as much to begin or half as much again to draw
   beginMs: [0.5, 30],
@@ -75,6 +77,8 @@ interface Figures {
   bootMs: number;
   frameMs: number;
   bundleKb: number;
+  /** The pictures fetched with the page, as sent. */
+  imageKb: number;
   /** The biggest hole that is not golf (`BIG`) begun: the middle of nine begins, alternating with the smallest. */
   beginMs: number;
   /** A frame of that hole at the worst of three views: from its tee, and from outside its rail's corner at two zooms. */
@@ -97,10 +101,22 @@ function bundleKb(): number {
   return Math.round(bytes / 102.4) / 10;
 }
 
+/** The built game's pictures: every image in dist/assets, kilobytes as they are sent (they are compressed already, and gzip does nothing for them). Needs `bundleKb` to have built first. */
+function imageKb(): number {
+  const dir = 'dist/assets';
+  let bytes = 0;
+  for (const f of readdirSync(dir)) {
+    if (!/\.(webp|png|jpe?g|avif|gif)$/.test(f)) continue;
+    bytes += statSync(join(dir, f)).size;
+  }
+  return Math.round(bytes / 102.4) / 10;
+}
+
 test('boots, draws and downloads within budget, and as it did before', async ({ page }, info) => {
   test.setTimeout(180_000);
   const problems = watch(page);
   const bundle = bundleKb();
+  const images = imageKb();
   await start(page, { seed: 11, paused: true });
   const boot = await page.evaluate(() => window.game!.bootMs);
   // the standard view: the whole course, seen from the far end of the zoom, the most of it there is to draw
@@ -184,6 +200,7 @@ test('boots, draws and downloads within budget, and as it did before', async ({ 
     bootMs: Math.round(boot),
     frameMs: Math.round(frame * 100) / 100,
     bundleKb: bundle,
+    imageKb: images,
     beginMs: Math.round(big.begin),
     bigFrameMs: Math.round(big.frame * 100) / 100,
     linksBeginMs: Math.round(links.begin),
@@ -191,7 +208,7 @@ test('boots, draws and downloads within budget, and as it did before', async ({ 
   };
   info.annotations.push({ type: 'perf', description: JSON.stringify(now) });
   console.log(
-    `perf: boot ${now.bootMs} ms, frame ${now.frameMs} ms, download ${now.bundleKb} kB, begin the biggest hole ${now.beginMs} ms, its frame ${now.bigFrameMs} ms; of ${golf.name}, begin ${now.linksBeginMs} ms, frame ${now.linksFrameMs} ms`,
+    `perf: boot ${now.bootMs} ms, frame ${now.frameMs} ms, download ${now.bundleKb} kB, pictures ${now.imageKb} kB, begin the biggest hole ${now.beginMs} ms, its frame ${now.bigFrameMs} ms; of ${golf.name}, begin ${now.linksBeginMs} ms, frame ${now.linksFrameMs} ms`,
   );
 
   if (process.env.PERF_UPDATE) {
@@ -209,6 +226,7 @@ test('boots, draws and downloads within budget, and as it did before', async ({ 
       'bootMs',
       'frameMs',
       'bundleKb',
+      'imageKb',
       'beginMs',
       'bigFrameMs',
       'linksBeginMs',
@@ -229,6 +247,7 @@ test('boots, draws and downloads within budget, and as it did before', async ({ 
   expect(now.bootMs, 'boot within budget').toBeLessThanOrEqual(BUDGET.bootMs);
   expect(now.frameMs, 'frame within budget').toBeLessThanOrEqual(BUDGET.frameMs);
   expect(now.bundleKb, 'download within budget').toBeLessThanOrEqual(BUDGET.bundleKb);
+  expect(now.imageKb, 'pictures within budget').toBeLessThanOrEqual(BUDGET.imageKb);
   expect(now.beginMs, 'the biggest hole begun within budget').toBeLessThanOrEqual(BUDGET.beginMs);
   expect(now.bigFrameMs, 'a frame of the biggest hole within budget').toBeLessThanOrEqual(BUDGET.bigFrameMs);
   expect(now.linksBeginMs, 'the biggest golf hole of any course begun within budget').toBeLessThanOrEqual(
