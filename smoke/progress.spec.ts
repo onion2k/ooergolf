@@ -13,6 +13,7 @@
  * stage the game's invariants are checked.
  */
 import { expect, test, type Page } from '@playwright/test';
+import { PNG } from 'pngjs';
 import { TILE, layoutOf } from '../src/arena';
 import { facing } from '../src/camera';
 import { breakOf } from '../src/green';
@@ -21,6 +22,7 @@ import { DRAG } from '../src/shot';
 import { scoreName } from '../src/score';
 import { LIE } from '../src/surfaces';
 import { FLAT } from '../test/level';
+import { wideHole } from '../test/wide-hole';
 import { smallHole } from './bighole';
 import { BUDGET } from './budget';
 import { drag, puttingHole, start, watch } from './game';
@@ -199,6 +201,119 @@ test('with the magnet cup worn the game loads, and a hole holed out is followed 
   }
   expect(problems).toEqual([]);
 });
+
+/** The boot screen's colour, `--boot` in `index.html`: what a screen the page has stopped on is all of, but for its words. */
+const BOOT = [0xbf, 0xe3, 0xff];
+
+for (const [label, viewport, touch] of [
+  ['a desk', { width: 1280, height: 800 }, false],
+  ['a phone', { width: 400, height: 860 }, true],
+] as const) {
+  test.describe(`a hole that cannot be drawn, on ${label}`, () => {
+    test.use({ viewport, hasTouch: touch, isMobile: touch });
+
+    test('begun mid-round, it stops the page on the boot screen, which names the hole and says why: the last hole and the shop open over it are put away, and no frame goes on', async ({
+      page,
+    }, info) => {
+      const problems = watch(page);
+      await start(page, { seed: 1, paused: true });
+      // a round of two holes: one that is played out, and one that the field of grass will not cover, which the game plays and
+      // the scene's models are built for, so that it is begun as a hole is and fails as it is drawn (a real refusal, not a hook)
+      const wide = wideHole();
+      await page.evaluate(
+        ([first, second]) => {
+          window.game!.playCourse([{ ...first, terrain: Float32Array.from(first.terrain) }, second]);
+          window.game!.step(75);
+        },
+        [smallHole(), wide] as const,
+      );
+      await expect(page.locator('#holeName')).toContainText('Hole 1 of 2');
+      await expect(page.locator('#boot'), 'the first hole is drawn: the boot screen is gone').toHaveClass(/gone/);
+      expect((await holeOut(page)).phase, 'the first hole holed').toBe('done');
+      // the shop open between the holes: a panel that stands over the page's others, and so over a boot screen that did not
+      await page.locator('#shopOpen').click();
+      await expect(page.locator('#shop')).toBeVisible();
+      // on to the next hole, a frame at a time, as the frame loop does it: it is begun, and cannot be drawn
+      const thrown = await page.evaluate(() => {
+        try {
+          for (let f = 0; f < 400 && window.game!.state().hole === 0; f++) window.game!.step(1);
+          return null;
+        } catch (err) {
+          return err instanceof Error ? err.message : String(err);
+        }
+      });
+
+      // what the player sees: the boot screen again, saying which hole and why, and nothing of the last hole
+      await expect(page.locator('#boot'), 'the boot screen is up again').not.toHaveClass(/gone/);
+      await expect(page.locator('#bootMsg')).toContainText(`Hole 2, ${wide.name}, could not be drawn.`);
+      await expect(page.locator('#bootMsg')).toContainText('more than a field of grass covers');
+      await expect(page.locator('#bootMsg'), 'told to a screen reader as it appears').toHaveAttribute('role', 'alert');
+      await expect(page.locator('#boot')).toHaveCSS('opacity', '1');
+      const png = await page.screenshot({ animations: 'disabled' });
+      await info.attach('the page stopped', { body: png, contentType: 'image/png' });
+      const shot = PNG.sync.read(png);
+      const scale = shot.width / viewport.width;
+      const words = (await page.locator('#bootMsg').boundingBox())!;
+      const off: string[] = [];
+      let looked = 0;
+      for (let i = 0; i <= 12; i++)
+        for (let j = 0; j <= 16; j++) {
+          const x = Math.min(viewport.width - 1, Math.round((viewport.width * i) / 12));
+          const y = Math.min(viewport.height - 1, Math.round((viewport.height * j) / 16));
+          // the words are anti-aliased into the colour, so a point in the box round them says nothing of what is under
+          if (x > words.x - 6 && x < words.x + words.width + 6 && y > words.y - 6 && y < words.y + words.height + 6)
+            continue;
+          looked++;
+          const at = (Math.round(y * scale) * shot.width + Math.round(x * scale)) * 4;
+          const rgb = [shot.data[at], shot.data[at + 1], shot.data[at + 2]];
+          if (rgb.some((c, k) => Math.abs(c - BOOT[k]) > 2)) off.push(`(${x}, ${y}) is rgb(${rgb.join(', ')})`);
+        }
+      // a check that looked at nothing would pass in silence: the grid is 13 by 17, and only the words' own box is left out
+      expect(looked, 'most of the screen was looked at').toBeGreaterThan(190);
+      expect(off, 'every part of the screen but its words is the boot screen: no hole, panel or shop left up').toEqual(
+        [],
+      );
+
+      // what the page did: the game has begun the hole it could not draw, and told no one it threw; and the picture is not
+      // played over, by a step of the test's or by the page's own frame loop
+      expect(thrown, 'the page deals with it, and does not throw it at whoever stepped the game').toBeNull();
+      const stopped = await page.evaluate(() => window.game!.state());
+      expect(stopped.hole, 'the game has begun the second hole').toBe(1);
+      expect(stopped.phase).toBe('play');
+      const stepped = await page.evaluate(() => {
+        const g = window.game!;
+        const was = g.state();
+        g.step(120);
+        const now = g.state();
+        return { seconds: now.t - was.t, frames: now.frame - was.frame };
+      });
+      expect(stepped, 'a step of the test’s plays nothing').toEqual({ seconds: 0, frames: 0 });
+      // the page's own loop, let go and given five frames to show it: it plays nothing, and asks for no frame but the test's own
+      const looped = await page.evaluate(async () => {
+        const g = window.game!;
+        const real = window.requestAnimationFrame.bind(window);
+        let asked = 0;
+        window.requestAnimationFrame = (callback) => {
+          asked++;
+          return real(callback);
+        };
+        const was = g.state().t;
+        g.resume();
+        const ticks = 5;
+        for (let k = 0; k < ticks; k++) await new Promise((resolve) => requestAnimationFrame(resolve));
+        g.pause();
+        window.requestAnimationFrame = real;
+        return { seconds: g.state().t - was, others: asked - ticks };
+      });
+      expect(looped, 'the page’s own frame loop has ended').toEqual({ seconds: 0, others: 0 });
+      expect(await page.evaluate(() => window.game!.invariants()), 'the game itself is as it should be').toEqual([]);
+      // and it is told, once, to the console, with the error that was thrown, which is where a developer looks
+      expect(problems, 'told once to the console').toHaveLength(1);
+      expect(problems[0]).toContain(`Hole 2, ${wide.name}, could not be drawn.`);
+      expect(problems[0]).toContain('more than a field of grass covers');
+    });
+  });
+}
 
 test('a hole of open country, fifty-one units from tee to cup, played out by drags, the camera following the ball the whole way', async ({
   page,

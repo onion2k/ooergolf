@@ -16,6 +16,7 @@ import { CLIP, CameraRig, LEAD, TILT, overheadFit, standOf, tallOf } from './cam
 import { Director } from './director';
 import { ITEMS } from './items';
 import { createApi } from './debug';
+import { holeFailureText, reasonOf } from './failure';
 import { frameCost } from './frame-cost';
 import { COURSES } from './course';
 import { Game, type GameEvents } from './game';
@@ -62,9 +63,21 @@ const bootMsg = document.getElementById('bootMsg')!;
 const stats = document.getElementById('stats')!;
 
 main().catch((err: unknown) => {
-  bootMsg.textContent = err instanceof Error ? err.message : String(err);
+  showError(reasonOf(err));
   console.error(err);
 });
+
+/**
+ * The boot screen put up with `words` on it, for a page that could not start or, once it had, could not go on: one screen
+ * for both, so a player is told in one place, and it stands over every panel (`#boot` in `index.html`). Said aloud as it
+ * appears, which a screen that stopped without a sound would not be: the role first, so it is a live region when the words
+ * are written into it.
+ */
+function showError(words: string) {
+  bootMsg.setAttribute('role', 'alert');
+  bootMsg.textContent = words;
+  boot.classList.remove('gone');
+}
 
 async function main() {
   // ---- the renderer ----
@@ -166,6 +179,19 @@ async function main() {
   /** Whether the waders took the loss being told of, which the word for it says: set just before it, and read by it. */
   let wadedNow = false;
   const showPurse = () => game && hud.setPurse(game.progress.save);
+  /**
+   * What the boot screen says once a hole could not be drawn, and nothing before: the page is stopped while it says
+   * anything. The game has begun a hole that no one can see, so nothing is played or drawn over it, and the page does not
+   * go on to the next frame; a reload is the way out, as it is of any failure of the boot.
+   */
+  let failure: string | null = null;
+  const stopped = () => failure !== null;
+  /** The page stopped on the boot screen, which says which hole could not be drawn and why, and the error told to the console too. */
+  const stop = (index: number, name: string, err: unknown) => {
+    failure = holeFailureText(index, name, err);
+    showError(failure);
+    console.error(failure, err);
+  };
   const scene = new Scene();
   const rig = new CameraRig();
   /** What is done to the camera as the game goes on: the aim view, the tee, the flag and the follow. */
@@ -275,81 +301,92 @@ async function main() {
   const shown: GameEvents = {
     // a hole begun: drawn afresh, the sun's shadow fitted to it, and the camera on its tee. Everything that can be refused is
     // built first and none of it is handed to the renderer or the hud until all of it is, so a hole that cannot be drawn
-    // leaves them as the last hole had them and not half of one hole and half of another
+    // leaves them as the last hole had them and not half of one hole and half of another. And the page stops there, on the
+    // boot screen, which says which hole and why: the game has begun a hole that no one can see, and is not played over
     started(index, par) {
       if (!game) return;
       const held = game;
       const { layout } = game;
       const { name } = game.course[index];
-      // ---- built ----
-      // the hole's own wind, which the grass bends in and the flag and the trees follow
-      const wind = windOf(name);
-      const fixed = scene.static(layout, name, game.obstacles, game.cup.radius);
-      // the items that show more are drawn on the holes begun with them, which is where their previews are made too
-      const moving = scene.dynamic(game.obstacles, layout, name, wind, {
-        ghost: game.effects.has('ghost'),
-        reader: game.effects.has('reader'),
-        rainbow: game.effects.has('rainbow'),
-      });
-      // the hole's rough, round the painted green: a hole too big for a field of grass is refused here, by its size
-      const field = fieldOf(layout, name, clearings(layout, name));
-      const grass = grassOptionsOf(layout);
-      // the preview of this hole's shots is worked out in a rehearsal of it, made once here and let go with the hole
-      const slopes = leansOnMinigolf(layout);
-      const rehearsal = layout.golf || slopes ? new Previewer(game) : null;
-      const map = mapOfHole();
+      try {
+        // ---- built ----
+        // the hole's own wind, which the grass bends in and the flag and the trees follow
+        const wind = windOf(name);
+        const fixed = scene.static(layout, name, game.obstacles, game.cup.radius);
+        // the items that show more are drawn on the holes begun with them, which is where their previews are made too
+        const moving = scene.dynamic(game.obstacles, layout, name, wind, {
+          ghost: game.effects.has('ghost'),
+          reader: game.effects.has('reader'),
+          rainbow: game.effects.has('rainbow'),
+        });
+        // the hole's rough, round the painted green: a hole too big for a field of grass is refused here, by its size
+        const field = fieldOf(layout, name, clearings(layout, name));
+        const grass = grassOptionsOf(layout);
+        // the preview of this hole's shots is worked out in a rehearsal of it, made once here and let go with the hole
+        const slopes = leansOnMinigolf(layout);
+        const rehearsal = layout.golf || slopes ? new Previewer(game) : null;
+        const map = mapOfHole();
 
-      // ---- shown ----
-      kickedAt = layout.kickers.map(() => -Infinity);
-      // the hole's wind, for the line under the pin and for how far the camera must stand back for a tailwind
-      const blowing = game.wind;
-      windNow.x = blowing.x;
-      windNow.y = blowing.y;
-      windNow.speed = layout.golf ? blowing.speed : 0;
-      renderer.setStatic(fixed);
-      renderer.setDynamic(moving);
-      grown = renderer.setGrass(field, grass);
-      // nothing is pressed on a new hole: the grass stands as it was grown
-      renderer.clearPresses();
-      renderer.wind = wind;
-      renderer.setSunShadow(boxOf(layout));
-      // the camera glides to the tee from wherever it was looking, but for the first hole, with nowhere it was; and the
-      // ball on the tee is round
-      // (a golf hole lets the camera stand back as far as a drive needs, and begins looking at the tee shot from there;
-      // a hole of minigolf has its limits and its home view as it always had)
-      director.started();
-      leans = slopes;
-      previewer = rehearsal;
-      previewed.club = '';
-      previewShown = false;
-      shownPreview = null;
-      scene.setShot(null);
-      hud.setLanding(null);
-      showHoleMap(map);
-      // the pin is read off the ball from the first frame of a golf hole, and is not there on a hole of minigolf
-      pinned.x = NaN;
-      if (!layout.golf) hud.setPin(null);
-      // the wind is told on a golf hole, as a number or as calm, and is not there on a hole of minigolf
-      hud.setWind(layout.golf ? windNow.speed : null);
-      // the greens' speed is told on a hole that has set one (The Links), and the putt's break when the ball rests on its green
-      hud.setGreens(layout.golf ? greensText(game.def.greens) : null);
-      hud.setPutt(null);
-      putted.x = NaN;
-      read.x = NaN;
-      scene.setArrows(false);
-      hud.setShaping(game.shape, game.spin);
-      // a hole is begun aiming, and the view eases home to the tee's over the glide
-      backToAim?.();
-      squash.clear();
-      trail.clear();
-      hud.started({ index, count: game.course.length, name, par });
-      // the bag on a golf hole, with the driver in hand, and none on a hole of minigolf
-      hud.setBag(
-        layout.golf
-          ? BAG.map((c) => ({ id: c.id, name: c.name, label: c.label, carry: carryOf(held.club(c), 1), loft: c.loft }))
-          : null,
-        game.inHand.id,
-      );
+        // ---- shown ----
+        kickedAt = layout.kickers.map(() => -Infinity);
+        // the hole's wind, for the line under the pin and for how far the camera must stand back for a tailwind
+        const blowing = game.wind;
+        windNow.x = blowing.x;
+        windNow.y = blowing.y;
+        windNow.speed = layout.golf ? blowing.speed : 0;
+        renderer.setStatic(fixed);
+        renderer.setDynamic(moving);
+        grown = renderer.setGrass(field, grass);
+        // nothing is pressed on a new hole: the grass stands as it was grown
+        renderer.clearPresses();
+        renderer.wind = wind;
+        renderer.setSunShadow(boxOf(layout));
+        // the camera glides to the tee from wherever it was looking, but for the first hole, with nowhere it was; and the
+        // ball on the tee is round
+        // (a golf hole lets the camera stand back as far as a drive needs, and begins looking at the tee shot from there;
+        // a hole of minigolf has its limits and its home view as it always had)
+        director.started();
+        leans = slopes;
+        previewer = rehearsal;
+        previewed.club = '';
+        previewShown = false;
+        shownPreview = null;
+        scene.setShot(null);
+        hud.setLanding(null);
+        showHoleMap(map);
+        // the pin is read off the ball from the first frame of a golf hole, and is not there on a hole of minigolf
+        pinned.x = NaN;
+        if (!layout.golf) hud.setPin(null);
+        // the wind is told on a golf hole, as a number or as calm, and is not there on a hole of minigolf
+        hud.setWind(layout.golf ? windNow.speed : null);
+        // the greens' speed is told on a hole that has set one (The Links), and the putt's break when the ball rests on its green
+        hud.setGreens(layout.golf ? greensText(game.def.greens) : null);
+        hud.setPutt(null);
+        putted.x = NaN;
+        read.x = NaN;
+        scene.setArrows(false);
+        hud.setShaping(game.shape, game.spin);
+        // a hole is begun aiming, and the view eases home to the tee's over the glide
+        backToAim?.();
+        squash.clear();
+        trail.clear();
+        hud.started({ index, count: game.course.length, name, par });
+        // the bag on a golf hole, with the driver in hand, and none on a hole of minigolf
+        hud.setBag(
+          layout.golf
+            ? BAG.map((c) => ({
+                id: c.id,
+                name: c.name,
+                label: c.label,
+                carry: carryOf(held.club(c), 1),
+                loft: c.loft,
+              }))
+            : null,
+          game.inHand.id,
+        );
+      } catch (err) {
+        stop(index, name, err);
+      }
     },
     struck(power, x, y) {
       // one stroke in five has the camera follow the ball, and the rest hold the view where it stood
@@ -451,6 +488,8 @@ async function main() {
   // the screen is not measured until after the first hole, which is begun looking from a desk's shape
   director.setScreen(aspect, innerHeight);
   shown.started!(played.hole, played.def.par);
+  // a first hole that cannot be drawn is the boot's failure: the screen says so, and there is no game to start
+  if (stopped()) return;
   showPurse();
 
   // ---- the scene and the camera ----
@@ -904,8 +943,11 @@ async function main() {
   let frames = 0;
   let smoothed = 0;
   function simulate(dt: number) {
+    if (stopped()) return;
     frames++;
     played.step(dt);
+    // the step may have begun a hole that could not be drawn: the rest of the frame is of a hole no one sees
+    if (stopped()) return;
     // the camera: the aim view for the next shot, eased, and the ball followed, by game time so a test stepping the game
     // sees it follow the same way every run
     // turned to look the way a drag held now aims, and left looking there when it is taken back; the ball must be ready, and
@@ -945,6 +987,8 @@ async function main() {
   }
   /** The frame drawn, and when it was begun, for the governor to measure the drawing against. */
   function draw(dt: number): number {
+    // nothing is drawn once the page is stopped on the boot screen: the scene is left as the build that failed left it
+    if (stopped()) return performance.now();
     // the far plane is further while the view from above is up, so the whole of a big hole is inside it
     cam.far = rig.farPlane;
     // the Retake button is up while pressing it would do something: the page tells the hud, which does not read the game
@@ -1134,6 +1178,8 @@ async function main() {
 
   let last = performance.now();
   const frame = (now: number) => {
+    // a page stopped on the boot screen is not asked for another frame, and the loop ends
+    if (stopped()) return;
     requestAnimationFrame(frame);
     // never back, however early the browser stamps the first frame, and never a leap after the page was away
     const { gap, dt } = between(now, last);
@@ -1146,6 +1192,7 @@ async function main() {
     // much of it the drawing takes, so a screen that is only slow to deliver frames does not lose the grass
     judge(gap, worked);
     simulate(dt);
+    if (stopped()) return;
     probe(draw(dt));
   };
   ready = true;

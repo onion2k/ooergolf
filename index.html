@@ -1157,6 +1157,12 @@
   #boot {
     position: fixed;
     inset: 0;
+    /*
+     * over every panel, the card, the shop and the start screen (2) and a phone's drawer (3) among them: it is the screen the
+     * page stops on when it cannot go on, a hole that cannot be drawn included, and a panel left up over it would be a game
+     * that looked as if it could still be played
+     */
+    z-index: 4;
     display: grid;
     place-items: center;
     background: var(--boot);
@@ -1167,6 +1173,10 @@
     pointer-events: none;
   }
   #boot p {
+    /* a line to each thing the page says when it cannot go on: which hole, why, and what to do; kept off the screen's edges */
+    white-space: pre-line;
+    max-width: calc(100% - 32px);
+    text-align: center;
     font-weight: 700;
     color: var(--ink);
   }

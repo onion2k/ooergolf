@@ -291,7 +291,18 @@ change meant to move it, and the commit says why. Look at every picture.
   and knows nothing of the renderer or the page.
 - `src/main.ts` is the page. It turns those events into words on the screen,
   a drag into a shot through `shot.ts`, and draws the frame. There is no
-  game logic here.
+  game logic here. A hole begun is built whole before any of it is shown: the scene's static and moving groups, the grass
+  field, the previewer and the map are made first, and only then handed to the renderer and the hud, so a hole that is
+  refused leaves them as the last hole had them. A hole that cannot be drawn (the field of grass refuses one more than 489
+  tiles a side, `cellFor`; `wideHole()` in `test/wide-hole.ts` is one) stops the page, however the hole was begun (the frame
+  loop, a button, the test API or the boot): the boot screen goes up again over every panel with `holeFailureText`
+  (`src/failure.ts`: the hole's number and name, the reason, and to reload), the error is told to the console too, nothing
+  is played or drawn after it and the loop is not asked for another frame. The game has by then begun the hole, so its
+  state is the new hole's while the picture under the screen is the last one's. `smoke/progress.spec.ts` plays it on a desk
+  and a phone with the shop open over it, and `smoke/look.spec.ts` holds the screen. No test can see the order of the
+  build and the hand-over, since the screen covers whatever the renderer holds: it was checked once by a log at the
+  hand-over, with the order put back as it was to see the log change. Not done: the panels under the screen can still be
+  reached by keyboard.
 - `src/shot.ts` is the shot as the player makes it: a drag into a direction
   and a power, and the pointer onto the ground. The ground under a pointer is read through a `HeldView` (a `ViewFrame`, a copy
   of the camera's position, target, right, up and lens, made once and written into): `Input.down` calls `InputPorts.hold()` as the first
@@ -958,6 +969,8 @@ What to copy the shape of, when building something new:
   steepness and bumpiness, `FLAT` and `levelHole` in `test/level.ts` (re-exported by `test/helpers.ts`) for a golf hole as flat as a table (a pitch, a par four with a bunker, a pond, a wind of 8 mph, a par five on quick greens), `SAMPLE_HOLES` for the slow
   tests that try every tile of every hole (all but six of The Links), and
   `memoryStore` in `src/progress.ts` for a save that is not the player's;
+  `wideHole()` in `test/wide-hole.ts` for a minigolf corridor the game plays and the scene's models are built for and
+  only the field of grass refuses, the hole a test of the page failing to draw begins; `corridor(cols)` makes one of any length;
   `field(surface, rows, cols, terrain?)` for a golf hole that is one surface end to
   end (the tee in a box of its own at the south, the cup out of the way in the
   far corner) and `golfGame(hole, random)` for a game on it whose chance says
