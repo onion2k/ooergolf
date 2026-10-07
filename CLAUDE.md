@@ -394,7 +394,10 @@ angle, roll)` is how far the putter's hardest putt rolls along an angle before t
   **At the flag**: the flag button turns the camera to the cup's own heading from the ball (`nearFlag`, which is `facing(ball, cup)`), so the flag is
   at the middle of the screen across; the earlier random offset of 0.10 to 0.26 was removed on 7 October 2026 after play-testing. Refused under the
   start screen, while a drag is held, at the cup and from overhead. **On a ball come to rest** the Director does the same by itself (`frame` sees
-  `game.ready` go from false to true; not at a hole's start, and not from overhead), and the player's next aim turns it on from there.
+  `game.ready` go from false to true; not at a hole's start, and not from overhead), but only once the camera has got to the ball (its target
+  within `ARRIVED`, half a yard, along the ground): the move and the turn one after the other, since both at once swung the view round a place
+  still moving (7 October 2026). A drag, the flag button, a stroke or a new hole before then takes the waiting turn back, and the player's
+  next aim turns it on from there.
   **Follow one stroke in five**: `struck()` follows the ball when `hashed(viewSeed, hole, strokes, SALT.follow) < FOLLOW.share` (0.2), exactly as
   the camera always did (`catchUp`); for the other four the camera holds where it stood, exactly still, while the ball is in the inner
   0.6 of the safe box (`HAND_OVER.from`, in the box's own terms: |nx| over the half width, ny over the top or the bottom), and the
@@ -404,7 +407,9 @@ angle, roll)` is how far the putter's hardest putt rolls along an angle before t
   hand-over was a latch at the edge, which sent the target from still to 150 a second in a frame (a change of speed of 130,000 a
   second a second on a full drive, seen as a lurch); a pace that rose with the ball's distance out alone still rose as fast as the
   ball crossed it (3,000 to 5,000), hence the held speed, and `test/director.test.ts` holds it under 500 on a desk and a phone.
-  The doublings (the pace doubled, at most eight times) stay as a never-a-looser-box safety, and are not reached by a drive; at
+  The held speed toward the ball is never more than it can lose at half that rate in the way left (`limit`, each of the three
+  ways alone), so the camera never goes past a ball that stops: held speed alone ran a drive's camera sixteen yards past the ball
+  and back, which `test/director.test.ts` now forbids. The doublings (the pace doubled, at most eight times) stay as a never-a-looser-box safety, and are not reached by a drive; at
   rest the camera eases to the ball as ever, and a new hole clears it. A ball put back at the tee after a splash is eased to like any
   followed one. `followShots('drawn' |
 'always' | 'never')` is the test API's say in it, and the perf scenes that fly a ball set `always`.

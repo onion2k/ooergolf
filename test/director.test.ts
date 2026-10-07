@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { LANDS_PAST, aimView, reachOf } from '../src/aimview';
 import { bagClub } from '../src/bag';
 import { CameraRig, catchUp, facing, wrap } from '../src/camera';
-import { AIM_DEAD, AIM_TURN, Director, FOLLOW } from '../src/director';
+import { AIM_DEAD, AIM_TURN, ARRIVED, Director, FOLLOW } from '../src/director';
 import { Camera } from 'artshape-render/gpu/camera';
 import { safeBox } from '../src/aimview';
 import { heightAt } from '../src/arena';
@@ -263,15 +263,18 @@ describe('the flag', () => {
 
 describe('the camera on a ball come to rest', () => {
   /** A golf game struck at an angle away from the cup and stepped until the ball is ready again, the director given each frame. */
-  function played(angle = 0) {
+  function played(angle = 0, club = 'driver', power = 0.3, follow: 'drawn' | 'never' = 'drawn') {
     const { game } = golfGame(field('f'));
     const { rig, director } = directed(game);
+    director.followShots(follow);
     director.started();
     run(director, 3);
-    expect(game.shoot(angle, 0.3)).toBe(true);
+    game.pick(club);
+    run(director, 5);
+    expect(game.shoot(angle, power)).toBe(true);
     director.struck();
     let frames = 0;
-    while (!game.ready && frames++ < 1200) {
+    while (!game.ready && frames++ < 3000) {
       game.step(DT);
       director.frame(DT, false);
     }
@@ -279,12 +282,58 @@ describe('the camera on a ball come to rest', () => {
     return { game, rig, director };
   }
 
+  /** How far the camera's target is from the ball along the ground. */
+  const gap = (game: ReturnType<typeof golfGame>['game'], rig: CameraRig) =>
+    Math.hypot(rig.target[0] - game.world.x[game.ball], rig.target[1] - game.world.y[game.ball]);
+
   it('turns to look directly at the flag by itself, within the turn’s time', () => {
     const { game, rig, director } = played(0.8);
-    expect(rig.turning).toBe(true);
-    run(director, 3);
+    run(director, 5);
     expect(rig.turning).toBe(false);
     expect(Math.abs(offFlag(game, rig))).toBeLessThan(1e-9);
+  });
+
+  it('goes to the ball first and only then turns to the flag, which it is there for within the turn’s time', () => {
+    const { game, rig, director } = played(0.8, 'driver', 0.6, 'never');
+    const facing0 = rig.azimuth;
+    expect(gap(game, rig), 'the camera has a way to go to the ball, or there is nothing to hold').toBeGreaterThan(20);
+    let frames = 0;
+    while (gap(game, rig) > ARRIVED && frames++ < 600) {
+      expect(rig.turning).toBe(false);
+      expect(rig.azimuth).toBe(facing0);
+      director.frame(DT, false);
+    }
+    expect(gap(game, rig)).toBeLessThanOrEqual(ARRIVED);
+    director.frame(DT, false);
+    expect(rig.turning).toBe(true);
+    run(director, 2);
+    expect(rig.turning).toBe(false);
+    expect(Math.abs(offFlag(game, rig))).toBeLessThan(1e-9);
+  });
+
+  it('never goes past a ball it took up on a held stroke, and comes nearer it every frame once it is at rest (the camera ran sixteen yards past a drive and back)', () => {
+    for (const [club, power, angle] of [
+      ['driver', 1, Math.PI / 2],
+      ['driver', 0.6, Math.PI / 2 + 0.3],
+      ['7-iron', 0.7, Math.PI / 2 - 0.2],
+    ] as const) {
+      const { game, rig, director } = played(angle, club, power, 'never');
+      const [bx, by] = [game.world.x[game.ball], game.world.y[game.ball]];
+      const [tx, ty] = [game.layout.tee.x, game.layout.tee.y];
+      const along = Math.hypot(bx - tx, by - ty);
+      const [ux, uy] = [(bx - tx) / along, (by - ty) / along];
+      let last = gap(game, rig);
+      for (let f = 0; f < 600; f++) {
+        director.frame(DT, false);
+        const now = gap(game, rig);
+        expect(now, `${club} at ${power}, frame ${f}`).toBeLessThanOrEqual(last + 1e-9);
+        expect((rig.target[0] - bx) * ux + (rig.target[1] - by) * uy, `${club} at ${power}, frame ${f}`).toBeLessThan(
+          1e-6,
+        );
+        last = now;
+      }
+      expect(last).toBeLessThan(0.01);
+    }
   });
 
   it('does not turn at the start of a hole, or while the ball is not ready', () => {

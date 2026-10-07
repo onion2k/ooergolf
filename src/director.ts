@@ -1,7 +1,7 @@
 /**
  * The director: what is done to the camera as a game goes on, whoever is playing. It sends the camera to the aim view of
- * the club in hand when the ball is ready, begins it on a new hole's tee, turns it to face the flag, and follows the ball,
- * all by game time. It was the page's own, a few lines in each of its callbacks, and the fuzzer wanted the same; kept here
+ * the club in hand when the ball is ready, begins it on a new hole's tee, follows the ball, and turns it to face the flag
+ * once it has got to a ball come to rest, all by game time. It was the page's own, a few lines in each of its callbacks, and the fuzzer wanted the same; kept here
  * the page and the fuzzer drive one implementation and the camera can be tested without either. Without it a change to how
  * the camera behaves would be made twice, and the fuzzer would hold the page to a copy.
  *
@@ -55,6 +55,9 @@ export type FollowShots = 'drawn' | 'always' | 'never';
  */
 export const HAND_OVER = { from: 0.6, accel: 400 } as const;
 
+/** How near the ball, in yards along the ground, the camera's target is when it has got to a ball come to rest, and turns to the flag. */
+export const ARRIVED = 0.5;
+
 /** How many times the camera's pace is doubled, at most, to keep a ball on its way inside the safe box: more than the lag of the fastest ball needs. */
 const CATCH_UP_DOUBLINGS = 8;
 
@@ -92,6 +95,11 @@ export class Director {
   private left = false;
   /** Whether the ball was ready at the last frame, so the moment it comes to rest is seen and the camera turned to the flag. */
   private wasReady = true;
+  /**
+   * Whether a ball has come to rest and the camera is to turn to the flag once it has got to it (`ARRIVED`): the move to the
+   * ball and the turn one after the other, since both at once swung the view round a place that was itself still moving.
+   */
+  private toFlag = false;
 
   constructor(readonly rig: CameraRig) {}
 
@@ -137,6 +145,7 @@ export class Director {
     const game = this.game;
     if (!game) return;
     this.handing = false;
+    this.toFlag = false;
     this.chasing =
       this.mode === 'always'
         ? true
@@ -173,6 +182,7 @@ export class Director {
     this.worked.x = Number.NaN;
     this.chasing = false;
     this.handing = false;
+    this.toFlag = false;
     this.wasReady = game.ready;
     if (layout.golf) this.aimFor(!glide);
     this.looked = true;
@@ -268,9 +278,11 @@ export class Director {
     const game = this.game;
     if (!game) return;
     const { rig } = this;
-    // a ball that has just come to rest has the camera turned to look at the flag, as the button does
-    if (game.ready && !this.wasReady) this.faceFlag(false);
+    // a ball that has just come to rest has the camera turned to look at the flag, as the button does, once it has got there
+    if (game.ready && !this.wasReady) this.toFlag = true;
+    if (!game.ready) this.toFlag = false;
     this.wasReady = game.ready;
+    this.arrived(game);
     if (game.layout.golf) {
       if (!game.ready) this.aimedFor = '';
       else {
@@ -306,7 +318,7 @@ export class Director {
     const [x0, y0, z0] = rig.target;
     const base = ease ?? catchUp(0);
     rig.follow(world.x[ball], world.y[ball], dt, ground + up, base * pace);
-    if (this.handing) this.limit(x0, y0, z0, dt);
+    if (this.handing) this.limit(x0, y0, z0, dt, world.x[ball], world.y[ball], ground + up);
     else this.vel.fill(0);
     // a ball on its way is never left off the safe box by the camera's lag: a ball struck toward the camera, or thrown, can be
     // further from where the camera is looking than the pace allows for, and then the camera catches up quicker (twice as quick,
@@ -324,14 +336,28 @@ export class Director {
         this.vel[2] = (rig.target[2] - z0) / dt;
       }
     }
+    // and again once the camera has moved this frame, so a turn it has got there for is never left a frame to a drag
+    this.arrived(game);
+  }
+
+  /** The turn to the flag a ball come to rest is waiting on, made once the camera's target is within `ARRIVED` of the ball. */
+  private arrived(game: Game) {
+    if (!this.toFlag) return;
+    const { world, ball } = game;
+    const { target } = this.rig;
+    if (Math.hypot(target[0] - world.x[ball], target[1] - world.y[ball]) > ARRIVED) return;
+    this.toFlag = false;
+    this.faceFlag(false);
   }
 
   /**
    * The target's change of speed this frame held to `HAND_OVER.accel`: the band's pace alone rises as fast as the ball crosses it,
    * and a ball at 200 yards a second crosses it in a tenth of a second. The target was at (`x0`, `y0`, `z0`) and has been moved
-   * toward the ball; the speed it had is `vel`, and what it is made to have is written back there.
+   * toward the ball, which is at (`bx`, `by`, `bz`); the speed it had is `vel`, and what it is made to have is written back there.
+   * Its speed toward the ball is never more than it can lose at that same rate in the way left to it, so it never goes past a
+   * ball that stops: a held speed alone ran a drive's camera sixteen yards past the ball, and back.
    */
-  private limit(x0: number, y0: number, z0: number, dt: number) {
+  private limit(x0: number, y0: number, z0: number, dt: number, bx: number, by: number, bz: number) {
     const { target } = this.rig;
     const { vel } = this;
     const want = [(target[0] - x0) / dt - vel[0], (target[1] - y0) / dt - vel[1], (target[2] - z0) / dt - vel[2]];
@@ -339,6 +365,15 @@ export class Director {
     const size = Math.hypot(want[0], want[1], want[2]);
     const share = size > most ? most / size : 1;
     for (let k = 0; k < 3; k++) vel[k] += want[k] * share;
+    // toward the ball no faster than stops at it braking at half the hand-over's rate, so the ease above has the rest of it
+    // to slow the last of the way gently, and never past it in a frame: along each of the three ways alone, since a ball come
+    // to rest a little above the target is a gap mostly up, which would let the speed along the ground past it
+    const gap = [bx - x0, by - y0, bz - z0];
+    for (let k = 0; k < 3; k++) {
+      const left = Math.abs(gap[k]);
+      const cap = Math.min(Math.sqrt(HAND_OVER.accel * left), left / dt);
+      if (vel[k] * gap[k] >= 0 && Math.abs(vel[k]) > cap) vel[k] = Math.sign(vel[k]) * cap;
+    }
     target[0] = x0 + vel[0] * dt;
     target[1] = y0 + vel[1] * dt;
     target[2] = z0 + vel[2] * dt;
@@ -388,6 +423,8 @@ export class Director {
    */
   aiming(aim: Shot | null) {
     const game = this.game;
+    // a drag held is the player's say in where the camera looks: the turn to the flag a ball come to rest was waiting on is not made
+    if (aim) this.toFlag = false;
     if (!game || !aim || !game.ready || this.rig.overhead || aim.power < AIM_TURN.least) return;
     const off = wrap(aim.angle - (Math.PI / 2 - this.rig.headed));
     if (Math.abs(off) <= AIM_DEAD.half) return;
@@ -413,6 +450,7 @@ export class Director {
   faceFlag(held: boolean): boolean {
     const game = this.game;
     if (!game || held || this.rig.overhead) return false;
+    this.toFlag = false;
     const to = this.nearFlag();
     if (to === null) return false;
     this.rig.turnTo(to);
