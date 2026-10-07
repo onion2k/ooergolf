@@ -89,6 +89,34 @@ it builds, and the gates once when its part is done, or not at all where the
 orchestrator runs them at the end of the wave. The user may ask for the
 checks sooner, or for none.
 
+**The pass is sized to what the change can reach**, since the measuring gates
+are most of the quarter of an hour. A change that cannot move a cost (words,
+a stylesheet, a test, a script, a comment, `CLAUDE.md`, content that is not
+drawn or stepped differently) is held to `check:quick` and its own tests, and
+the report says the rest was not run and why. Otherwise, run only the gates
+the change can reach, once, at the end:
+
+- `perf` and `measureFrame`: only for a change to drawing (`scene.ts`,
+  `ground.ts`, `turf.ts`, `look.ts`, models, grass, water, the quality
+  ladder), to boot or to the download (a dependency, `main.ts`'s start-up, a
+  new asset), or to the size of a hole. Timed in turn with the parent commit
+  where the machine is busy, and once and not three times where the figure
+  is far inside its budget and baseline.
+- `bench`: only for a change to `physics.ts`, `arena.ts` or what the world
+  steps.
+- `leaks`: only for something kept (a list, map, cache, pool or save field),
+  and `--on` the one kind of course it can reach, not all four, for the first
+  run.
+- The full ten minutes of `leaks`, `fuzz` over 24 seeds, `determinism` and
+  the whole of `npm run check` are for a feature or a change to the rules of
+  play, as the Definition of done has it, and for what lands on main as a
+  release; a fix is held to its test, the invariants and `fuzz` on the seeds
+  and course it concerns.
+
+A gate that was not run because the change cannot reach it is marked so in the
+report, with the reason, as the house rules allow; one a change can reach is
+run in full.
+
 Why: the full check takes a quarter of an hour and the measuring gates read
 wrong while anything else is on the GPU, so checking step by step cost hours,
 read noise as often as signal, and measured figures the next step moved again.
@@ -266,7 +294,7 @@ today, and what the next features must hand it:
 
     npm run dev            the game at http://localhost:5200 (PORT=n for another port; the smoke tests take PORT too, 5201 by default)
     npm run check:quick    formatting, types, lint, unit tests (the pre-commit hook; ~40 s)
-    npm run check          all of it: check:quick, fuzz, determinism, leaks, bench, smoke with perf and look (~15 min; at the end of a piece of work)
+    npm run check          all of it: check:quick, fuzz, determinism, leaks, bench, smoke with perf and look (~15 min; for a feature at the end of its work, not for a change that cannot reach the gates: see "When to check")
     npm test               unit tests (Vitest, test/)
     npm run fuzz           the game played at random, rules checked; -- --seed N plays one failure again
     npm run determinism    the same seed played twice, hashed, to catch chance not from the seed
@@ -1152,9 +1180,11 @@ tests in `test/`, a stage in `smoke/progress.spec.ts`, an action in
 `scripts/fuzzer.ts` and a rule in `src/invariants.ts`, a size in
 `scripts/leaks.ts` for anything kept, the perf figures before and after in
 the report and within budget, `measureFrame` in any other scene touched, and
-a picture in `smoke/look.spec.ts`. `npm run check` green, and
+a picture in `smoke/look.spec.ts`. For a feature, `npm run check` green, and
 `npm run fuzz -- --seeds 1-24` clean: run once, at the end of the piece of
-work, as "When to check" says, and not after each step of it.
+work, as "When to check" says, and not after each step of it. A smaller
+change runs the gates it can reach, as that section sizes them. The perf
+figures are asked for only where the change can move them.
 
 ## Edge-case checklist
 
