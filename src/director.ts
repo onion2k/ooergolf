@@ -26,14 +26,14 @@ import type { Shot } from './shot';
 export const AIM_TURN = { least: 0.15 };
 
 /**
- * How far off the cup, in radians, the camera looks when it is turned to the flag: from `least` to `most` either side of the
- * line from the ball to the cup, so a ball is seen with the flag near the way ahead and not at the middle of it. `least` is
- * not nought, since a view that never faces the cup squarely is the point of it.
+ * The dead zone of the aim: while the aim is within `half` radians of the way the camera faces, the camera stays still and
+ * only the reticule moves, so a small adjustment of a shot does not swing the view. Past it the camera turns just far enough
+ * to keep the aim on the zone's edge, so there is no jump as the aim crosses it.
  */
-export const NEAR_FLAG = { least: 0.1, most: 0.26 } as const;
+export const AIM_DEAD = { half: 0.2 } as const;
 
-/** What a toss of the camera's is for, so two tosses of the same lie are not the one: which side of the flag, and how far off it. */
-export const SALT = { flag: 1, flagSize: 2, follow: 3 } as const;
+/** What a toss of the camera's is for, so two tosses of the same lie are not the one: which strokes it follows. */
+export const SALT = { follow: 3 } as const;
 
 /**
  * The share of strokes the camera follows the ball for (a fifth): the rest it holds where it stood and lets the ball
@@ -57,9 +57,6 @@ export const HAND_OVER = { from: 0.6, accel: 400 } as const;
 
 /** How many times the camera's pace is doubled, at most, to keep a ball on its way inside the safe box: more than the lag of the fastest ball needs. */
 const CATCH_UP_DOUBLINGS = 8;
-
-/** How many times the offset is halved toward `NEAR_FLAG.least` to keep a cup that is in reach on the screen. */
-const FIT_STEPS = 12;
 
 export class Director {
   private game: Game | null = null;
@@ -93,6 +90,8 @@ export class Director {
   private looked = false;
   /** Whether a test has put the camera somewhere and left it: on minigolf the aim view that frames the reach is not sent while it has. */
   private left = false;
+  /** Whether the ball was ready at the last frame, so the moment it comes to rest is seen and the camera turned to the flag. */
+  private wasReady = true;
 
   constructor(readonly rig: CameraRig) {}
 
@@ -174,6 +173,7 @@ export class Director {
     this.worked.x = Number.NaN;
     this.chasing = false;
     this.handing = false;
+    this.wasReady = game.ready;
     if (layout.golf) this.aimFor(!glide);
     this.looked = true;
   }
@@ -268,6 +268,9 @@ export class Director {
     const game = this.game;
     if (!game) return;
     const { rig } = this;
+    // a ball that has just come to rest has the camera turned to look at the flag, as the button does
+    if (game.ready && !this.wasReady) this.faceFlag(false);
+    this.wasReady = game.ready;
     if (game.layout.golf) {
       if (!game.ready) this.aimedFor = '';
       else {
@@ -379,68 +382,31 @@ export class Director {
    * The aim of a drag held now, or null when none is: the camera turned to look the way it goes, so a player sees the shot
    * from behind it, and left looking that way when the drag is taken back. Only while the ball is ready (a drag while it
    * rolls is no shot), not from overhead, and only for an aim of at least `AIM_TURN.least`; a weaker one, or none, leaves
-   * the camera going where it was going. The heading is the aim's alone and does not depend on where the camera is, and
-   * the drag is read through the view held when it began (`HeldView`), so the turn cannot feed back into the aim.
+   * the camera going where it was going. An aim inside the dead zone (`AIM_DEAD`) leaves the camera still; past it the camera
+   * turns to keep the aim on the zone's edge. The drag is read through the view held when it began (`HeldView`), so the turn
+   * cannot feed back into the aim.
    */
   aiming(aim: Shot | null) {
     const game = this.game;
     if (!game || !aim || !game.ready || this.rig.overhead || aim.power < AIM_TURN.least) return;
-    this.rig.turnTo(wrap(Math.PI / 2 - aim.angle));
+    const off = wrap(aim.angle - (Math.PI / 2 - this.rig.headed));
+    if (Math.abs(off) <= AIM_DEAD.half) return;
+    this.rig.turnTo(wrap(Math.PI / 2 - (aim.angle - Math.sign(off) * AIM_DEAD.half)));
   }
 
   /**
    * The way the camera looks when it is turned to the flag, as an azimuth, or null where there is no way (the ball at the cup):
-   * the heading of the cup from the ball turned `NEAR_FLAG.least` to `NEAR_FLAG.most` to one side, which side and how far a
-   * hash of the seed, the hole and the stroke says. If the cup is in reach and would be off the screen, or outside the safe box,
-   * from there, the offset is halved toward `least` until it is not, at most `FIT_STEPS` times. The same for the same lie.
+   * the heading of the cup from the ball, so the flag is at the middle of the screen. The same for the same lie.
    */
   nearFlag(): number | null {
     const game = this.game;
     if (!game) return null;
     const { world, ball, layout } = game;
-    const to = facing({ x: world.x[ball], y: world.y[ball] }, layout.cup);
-    if (to === null) return null;
-    const sign = hashed(this.seed, game.hole, game.strokes, SALT.flag) < 0.5 ? -1 : 1;
-    let offset =
-      NEAR_FLAG.least + hashed(this.seed, game.hole, game.strokes, SALT.flagSize) * (NEAR_FLAG.most - NEAR_FLAG.least);
-    for (let step = 0; step < FIT_STEPS && this.cupOffScreen(to + sign * offset); step++)
-      offset = NEAR_FLAG.least + (offset - NEAR_FLAG.least) / 2;
-    return wrap(to + sign * offset);
+    return facing({ x: world.x[ball], y: world.y[ball] }, layout.cup);
   }
 
   /**
-   * Whether the cup, when it is in reach, would be off the screen or outside the safe box with the camera facing `heading`, as
-   * the view the director keeps stands: worked out from that view's own figures (the aim view of the club, or of the putter's
-   * reach along the heading), so it is the view the camera comes to and not the one it is passing through.
-   */
-  private cupOffScreen(heading: number): boolean {
-    const game = this.game;
-    if (!game) return false;
-    const { world, ball, layout, inHand } = game;
-    const [x, y] = [world.x[ball], world.y[ball]];
-    const [dx, dy] = [layout.cup.x - x, layout.cup.y - y];
-    const t = Math.PI / 2 - heading;
-    const golf = layout.golf;
-    const reach = golf
-      ? reachOf(inHand, lieAt(layout, x, y), game.wind.speed, game.effects)
-      : reachOnMinigolf(layout, x, y, t, rollsFor(game.hardest));
-    if (Math.hypot(dx, dy) > reach) return false;
-    const view =
-      golf || !fitsHome(reach, this.aspect, this.height)
-        ? aimView(reach, this.aspect, this.height, golf ? {} : { far: VIEW.far * tallOf(this.aspect) })
-        : { distance: VIEW.home, tilt: TILT.home, lead: LEAD };
-    const distance = Math.max(view.distance, this.rig.distance);
-    const tall = tallOf(this.aspect);
-    const r = golf ? Math.min(distance * tall, standOf(this.aspect)) : distance * tall;
-    const [sin, cos] = [Math.sin(heading), Math.cos(heading)];
-    const up = heightAt(layout, layout.cup.x, layout.cup.y) - heightAt(layout, x, y);
-    const [nx, ny] = screenOf(r, view.tilt, view.lead, this.aspect, dx * sin + dy * cos, dx * cos - dy * sin, up);
-    const box = safeBox(this.aspect, this.height);
-    return !(Math.abs(nx) <= box.x && ny <= box.top && ny >= box.bottom);
-  }
-
-  /**
-   * The camera turned to look near the cup from the ball (`nearFlag`), the short way and eased; whether it was. Refused while a
+   * The camera turned to look at the cup from the ball (`nearFlag`), the short way and eased; whether it was. Refused while a
    * drag is `held`, since the aim is the ground under the finger through the camera and a camera turning under it would turn the
    * shot, from overhead, where there is no way to face the cup, and with the ball at the cup, where there is none either.
    */

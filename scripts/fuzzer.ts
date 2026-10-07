@@ -19,9 +19,9 @@
  * --seed N` does, and prints what was done before it went wrong.
  */
 import { Camera } from 'artshape-render/gpu/camera';
-import { aimView, reachOf, reachOnMinigolf, safeBox } from '../src/aimview';
-import { AIM_TURN, Director, NEAR_FLAG } from '../src/director';
-import { ROLL, heightAt, powerFor, rollsFor, strikeSpeed } from '../src/arena';
+import { aimView, reachOf, safeBox } from '../src/aimview';
+import { AIM_DEAD, AIM_TURN, Director } from '../src/director';
+import { ROLL, heightAt, powerFor, strikeSpeed } from '../src/arena';
 import { Autopilot, timeAlong } from '../src/autopilot';
 import { CameraRig, facing, overheadFit, wrap } from '../src/camera';
 import { ITEMS, paid } from '../src/items';
@@ -780,55 +780,18 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
       }
       for (const problem of viewProblems(rig, seconds)) told.push(problem);
       if (rig.turning) told.push(`the camera was still turning to face the flag after ${seconds.toFixed(2)} seconds`);
-      // it looks near the flag and not at it: off the cup's heading by `NEAR_FLAG.least` to `most`, and at the heading the
-      // director says (which the camera was sent to, to the last bit but the ease's own)
+      // it looks directly at the flag: the cup's own heading, to the last bit but the ease's own
       const off = Math.abs(wrap(rig.azimuth - heading));
-      if (!(off >= NEAR_FLAG.least - 1e-6 && off <= NEAR_FLAG.most + 1e-6))
-        told.push(
-          `the camera faces ${rig.azimuth}, which is ${off} off the flag's heading ${heading}, outside ${NEAR_FLAG.least} to ${NEAR_FLAG.most}`,
-        );
+      if (!(off <= 1e-6))
+        told.push(`the camera faces ${rig.azimuth}, which is ${off} off the flag's heading ${heading}`);
       if (!(Math.abs(wrap(rig.azimuth - expected!)) <= 1e-6))
         told.push(`the camera faces ${rig.azimuth}, and the director said ${expected}`);
       // pressed again it changes nothing (the camera at rest first: it may be easing to an aim view as well, which goes on, and
       // the director is given its frame, which sends the camera to the view of a club chosen in this very frame)
       director.frame(DT, true);
       for (let k = 0; k < 600; k++) rig.settle(DT);
-      // the view the camera has come to keeps the cup on the screen where it is in reach, and the ball and the reach
+      // the view the camera has come to keeps the ball and the reach on the screen
       for (const problem of framing()) told.push(problem);
-      const reachToCup = layout.golf
-        ? reachOf(game.inHand, lieAt(layout, ballAt.x, ballAt.y), game.wind.speed)
-        : reachOnMinigolf(layout, ballAt.x, ballAt.y, Math.PI / 2 - rig.azimuth, rollsFor(game.hardest));
-      if (
-        Math.hypot(layout.cup.x - ballAt.x, layout.cup.y - ballAt.y) <= reachToCup &&
-        !rig.atLimit &&
-        !rig.easing(game.t) &&
-        Math.hypot(rig.target[0] - ballAt.x, rig.target[1] - ballAt.y) <= 0.05
-      ) {
-        const [cx, cy, cz] = [layout.cup.x, layout.cup.y, heightAt(layout, layout.cup.x, layout.cup.y)];
-        const cupAt = (): [number, number] => {
-          rig.place(cam, game.t);
-          cam.update();
-          const m = cam.viewProjection;
-          const w = m[3] * cx + m[7] * cy + m[11] * cz + m[15];
-          return [(m[0] * cx + m[4] * cy + m[8] * cz + m[12]) / w, (m[1] * cx + m[5] * cy + m[9] * cz + m[13]) / w];
-        };
-        const box = safeBox(cam.aspect, SCREEN.h);
-        const inside = ([nx, ny]: [number, number]) =>
-          Math.abs(nx) <= box.x + 0.02 && ny <= box.top + 0.02 && ny >= box.bottom - 0.02;
-        const [nx, ny] = cupAt();
-        // the aim view frames a landing level with the ball, so a cup up a hill from it can stand above the box's top however the
-        // camera is turned: what is asked is that looking near the cup is no worse than looking straight at it, the camera turned
-        // to the cup's own heading for a moment and put back as it was
-        const turned = rig.azimuth;
-        rig.azimuth = heading;
-        const squarely = cupAt();
-        rig.azimuth = turned;
-        cupAt();
-        if (!inside([nx, ny]) && inside(squarely))
-          told.push(
-            `the cup is in reach and the camera that looks near it has it at ${nx.toFixed(3)},${ny.toFixed(3)}, outside the safe box, where facing it squarely has it at ${squarely[0].toFixed(3)},${squarely[1].toFixed(3)}`,
-          );
-      }
       const at = [rig.azimuth, rig.tilt, rig.distance, rig.lead];
       if (director.faceFlag(false) !== true) told.push('the flag button did nothing the second time');
       rig.settle(DT);
@@ -876,7 +839,10 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
       const held = input.aim as Shot | null;
       const aim = held ? { angle: held.angle, power: held.power } : null;
       const strong = aim !== null && aim.power >= AIM_TURN.least;
-      const heading = aim ? wrap(Math.PI / 2 - aim.angle) : home;
+      // inside the dead zone the camera stays where it was; past it the aim is on the zone's edge
+      const off = aim ? wrap(aim.angle - (Math.PI / 2 - home)) : 0;
+      const turns = strong && Math.abs(off) > AIM_DEAD.half;
+      const heading = turns ? wrap(Math.PI / 2 - (aim.angle - Math.sign(off) * AIM_DEAD.half)) : home;
       let seconds = 0;
       for (let k = 0; k < (TURN_TIME + 1) / DT; k++) {
         director.aiming(input.aim);
@@ -892,10 +858,10 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
         seconds += DT;
       }
       if (rig.turning) told.push(`the camera was still turning to the aim after ${seconds.toFixed(2)} seconds`);
-      if (strong && Math.abs(wrap(rig.azimuth - heading)) > 1e-3)
+      if (turns && Math.abs(wrap(rig.azimuth - heading)) > 1e-3)
         told.push(`the camera faces ${rig.azimuth} and a drag aimed ${aim.angle} should have it at ${heading}`);
-      if (!strong && rig.azimuth !== home)
-        told.push(`a drag too weak to turn it turned the camera from ${home} to ${rig.azimuth}`);
+      if (!turns && rig.azimuth !== home)
+        told.push(`a drag that should not turn it turned the camera from ${home} to ${rig.azimuth}`);
       // taken back, one way or another: the camera is left looking where the drag had it
       const how = Math.floor(aimer() * 3);
       if (how === 0) {

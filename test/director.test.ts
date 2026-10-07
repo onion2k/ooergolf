@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { LANDS_PAST, aimView, reachOf } from '../src/aimview';
 import { bagClub } from '../src/bag';
 import { CameraRig, catchUp, facing, wrap } from '../src/camera';
-import { AIM_TURN, Director, FOLLOW, NEAR_FLAG } from '../src/director';
+import { AIM_DEAD, AIM_TURN, Director, FOLLOW } from '../src/director';
 import { Camera } from 'artshape-render/gpu/camera';
 import { safeBox } from '../src/aimview';
 import { heightAt } from '../src/arena';
@@ -158,7 +158,7 @@ function offFlag(game: ReturnType<typeof golfGame>['game'], rig: CameraRig): num
 }
 
 describe('the flag', () => {
-  it('turns the camera to look near the cup from the ball, eased, and not at it', () => {
+  it('turns the camera to look directly at the cup from the ball, eased', () => {
     const { game } = golfGame(field('f'));
     const { rig, director } = directed(game);
     director.started();
@@ -166,79 +166,23 @@ describe('the flag', () => {
     expect(rig.turning).toBe(true);
     run(director, 3);
     expect(rig.turning).toBe(false);
-    const off = Math.abs(offFlag(game, rig));
-    expect(off).toBeGreaterThanOrEqual(NEAR_FLAG.least - 1e-9);
-    expect(off).toBeLessThanOrEqual(NEAR_FLAG.most + 1e-9);
+    expect(Math.abs(offFlag(game, rig))).toBeLessThan(1e-9);
     expect(rig.azimuth).toBe(director.nearFlag());
   });
 
-  it('is a figure the tests can hold: the offset runs from 0.10 to 0.26 of a radian', () => {
-    expect(NEAR_FLAG).toEqual({ least: 0.1, most: 0.26 });
-  });
-
-  it('is never exactly at the cup, whatever the seed, the hole or the stroke, and never more than most', () => {
+  it('is exactly the cup’s heading from any lie, whatever the seed or the stroke', () => {
     const { game } = golfGame(field('f'));
     const { rig, director } = directed(game);
     director.started();
-    const offs: number[] = [];
-    for (let k = 0; k < 500; k++) {
+    for (let k = 0; k < 200; k++) {
       director.setSeed(k * 7919 + 3);
-      // another lie each time: the ball put down somewhere along the hole
+      game.strokes = k % 7;
       game.world.x[game.ball] = game.layout.tee.x + ((k * 37) % 41) - 20;
       game.world.y[game.ball] = game.layout.tee.y + ((k * 53) % 90);
       expect(director.faceFlag(false)).toBe(true);
       run(director, 3);
-      offs.push(offFlag(game, rig));
+      expect(Math.abs(offFlag(game, rig)), `lie ${k}`).toBeLessThan(1e-9);
     }
-    // the figures as they are written, not as the code has them: a flag looked at squarely is the one thing it must never do
-    for (const off of offs) {
-      expect(Math.abs(off)).toBeGreaterThanOrEqual(0.1 - 1e-9);
-      expect(Math.abs(off)).toBeLessThanOrEqual(0.26 + 1e-9);
-    }
-    // a spread, not one size: over the range, and on both sides, each a fair share
-    expect(Math.max(...offs.map(Math.abs)) - Math.min(...offs.map(Math.abs))).toBeGreaterThan(0.1);
-    const right = offs.filter((o) => o > 0).length / offs.length;
-    expect(right).toBeGreaterThan(0.4);
-    expect(right).toBeLessThan(0.6);
-  });
-
-  it('is the same when pressed again on the same lie, and for the same seed, hole and stroke in another director', () => {
-    const { game } = golfGame(field('f'));
-    const one = directed(game);
-    one.director.started();
-    one.director.setSeed(11);
-    one.director.faceFlag(false);
-    run(one.director, 3);
-    const first = one.rig.azimuth;
-    one.director.faceFlag(false);
-    run(one.director, 3);
-    expect(one.rig.azimuth).toBe(first);
-    // pressed from somewhere else it still goes to the one heading
-    one.rig.orbit(1.3, 0);
-    one.director.faceFlag(false);
-    run(one.director, 3);
-    expect(one.rig.azimuth).toBe(first);
-    const other = directed(game);
-    other.director.started();
-    other.director.setSeed(11);
-    other.director.faceFlag(false);
-    run(other.director, 3);
-    expect(other.rig.azimuth).toBe(first);
-    other.director.setSeed(12);
-    expect(other.director.nearFlag()).not.toBe(first);
-  });
-
-  it('changes with the stroke, since a new lie is a new coin', () => {
-    const { game } = golfGame(field('f'));
-    const { director } = directed(game);
-    director.started();
-    director.setSeed(5);
-    const seen = new Set<number>();
-    for (let strokes = 0; strokes < 12; strokes++) {
-      game.strokes = strokes;
-      seen.add(Math.round((director.nearFlag() as number) * 1e6));
-    }
-    expect(seen.size).toBeGreaterThan(6);
     game.strokes = 0;
   });
 
@@ -256,50 +200,33 @@ describe('the flag', () => {
     expect(drawn).toBe(0);
   });
 
-  for (const [aspect, height] of [
-    [1.6, 800],
-    [1.0, 800],
-    [400 / 860, 860],
-  ] as const) {
-    it(`leaves the cup on the screen, inside the safe box, when it is in reach, on a screen of ${aspect.toFixed(2)}`, () => {
-      // holes short enough to be in reach from the tee, with the cup well to one side so the offset has to be fitted: the
-      // second is so near that a phone's narrow view has the cup off its side at the largest offset
-      for (const rows of [60, 24, 90])
-        for (let k = 0; k < 40; k++) {
-          const hole = { ...field('f', rows, 41) };
-          const { game } = golfGame(hole);
-          const rig = new CameraRig();
-          const director = new Director(rig);
-          director.use(game);
-          director.setScreen(aspect, height);
-          director.started();
-          director.setSeed(k * 13 + 1);
-          run(director, 3);
-          expect(director.faceFlag(false)).toBe(true);
-          run(director, 4);
-          const cam = new Camera();
-          cam.fov = rig.fov;
-          cam.aspect = aspect;
-          rig.place(cam);
-          cam.update();
-          const m = cam.viewProjection;
-          const { x, y } = game.layout.cup;
-          const z = heightAt(game.layout, x, y);
-          const w = m[3] * x + m[7] * y + m[11] * z + m[15];
-          const nx = (m[0] * x + m[4] * y + m[8] * z + m[12]) / w,
-            ny = (m[1] * x + m[5] * y + m[9] * z + m[13]) / w;
-          const box = safeBox(aspect, height);
-          const why = `seed ${k}: the cup at ${nx.toFixed(2)},${ny.toFixed(2)}`;
-          // to a thousandth, since a cup just in reach on a phone's narrow view is where the offset has to be fitted
-          expect(Math.abs(nx), why).toBeLessThanOrEqual(box.x + 0.001);
-          // (a cup further than the furthest view the camera may stand shows is the limit's, as the framing rule has it)
-          if (!rig.atLimit) expect(ny, why).toBeLessThanOrEqual(box.top + 0.02);
-          expect(ny, why).toBeGreaterThanOrEqual(box.bottom - 0.02);
-          // and it is still near the cup and not at it
-          expect(Math.abs(offFlag(game, rig))).toBeGreaterThanOrEqual(NEAR_FLAG.least - 1e-9);
-        }
-    });
-  }
+  it('puts the cup in the middle of the screen, across, on every screen', () => {
+    for (const [aspect, height] of [
+      [1.6, 800],
+      [1.0, 800],
+      [400 / 860, 860],
+    ] as const) {
+      const { game } = golfGame({ ...field('f', 60, 41) });
+      const rig = new CameraRig();
+      const director = new Director(rig);
+      director.use(game);
+      director.setScreen(aspect, height);
+      director.started();
+      run(director, 3);
+      expect(director.faceFlag(false)).toBe(true);
+      run(director, 4);
+      const cam = new Camera();
+      cam.fov = rig.fov;
+      cam.aspect = aspect;
+      rig.place(cam);
+      cam.update();
+      const m = cam.viewProjection;
+      const { x, y } = game.layout.cup;
+      const z = heightAt(game.layout, x, y);
+      const w = m[3] * x + m[7] * y + m[11] * z + m[15];
+      expect(Math.abs((m[0] * x + m[4] * y + m[8] * z + m[12]) / w), `${aspect}`).toBeLessThan(1e-6);
+    }
+  });
 
   it('is refused while a drag is held, and does nothing', () => {
     const { game } = golfGame(field('f'));
@@ -330,6 +257,61 @@ describe('the flag', () => {
     game.world.x[game.ball] = game.layout.cup.x;
     game.world.y[game.ball] = game.layout.cup.y;
     expect(director.faceFlag(false)).toBe(false);
+    expect(rig.turning).toBe(false);
+  });
+});
+
+describe('the camera on a ball come to rest', () => {
+  /** A golf game struck at an angle away from the cup and stepped until the ball is ready again, the director given each frame. */
+  function played(angle = 0) {
+    const { game } = golfGame(field('f'));
+    const { rig, director } = directed(game);
+    director.started();
+    run(director, 3);
+    expect(game.shoot(angle, 0.3)).toBe(true);
+    director.struck();
+    let frames = 0;
+    while (!game.ready && frames++ < 1200) {
+      game.step(DT);
+      director.frame(DT, false);
+    }
+    expect(game.ready).toBe(true);
+    return { game, rig, director };
+  }
+
+  it('turns to look directly at the flag by itself, within the turn’s time', () => {
+    const { game, rig, director } = played(0.8);
+    expect(rig.turning).toBe(true);
+    run(director, 3);
+    expect(rig.turning).toBe(false);
+    expect(Math.abs(offFlag(game, rig))).toBeLessThan(1e-9);
+  });
+
+  it('does not turn at the start of a hole, or while the ball is not ready', () => {
+    const { game } = golfGame(field('f'));
+    const { rig, director } = directed(game);
+    director.started();
+    run(director, 3);
+    expect(rig.turning).toBe(false);
+    expect(game.shoot(0.8, 0.3)).toBe(true);
+    for (let f = 0; f < 5; f++) {
+      game.step(DT);
+      director.frame(DT, false);
+    }
+    expect(rig.turning).toBe(false);
+  });
+
+  it('does not turn from overhead', () => {
+    const { game } = golfGame(field('f'));
+    const { rig, director } = directed(game);
+    director.started();
+    run(director, 3);
+    rig.setOverhead(true, { bounds: game.layout.bounds, distance: 400 });
+    expect(game.shoot(0.8, 0.3)).toBe(true);
+    while (!game.ready) {
+      game.step(DT);
+      director.frame(DT, false);
+    }
     expect(rig.turning).toBe(false);
   });
 });
@@ -394,7 +376,46 @@ describe('the follow', () => {
 });
 
 describe('the turn to the aim', () => {
-  const heading = (angle: number) => wrap(Math.PI / 2 - angle);
+  /** The azimuth an aim at `angle` leaves a camera that faces `from`: where it was inside the dead zone, else with the aim on the zone's edge. */
+  const heading = (angle: number, from = 0) => {
+    const off = wrap(angle - (Math.PI / 2 - from));
+    return Math.abs(off) <= AIM_DEAD.half ? from : wrap(Math.PI / 2 - (angle - Math.sign(off) * AIM_DEAD.half));
+  };
+
+  it('is a figure the tests can hold: 0.2 of a radian either side of where the camera faces', () => {
+    expect(AIM_DEAD).toEqual({ half: 0.2 });
+  });
+
+  it('leaves the camera still while the aim is inside the dead zone, however it moves about in it', () => {
+    const { game } = golfGame(field('f'));
+    const { rig, director } = directed(game);
+    director.started();
+    run(director, 3);
+    for (const off of [0, 0.1, -0.1, 0.19, -0.19, AIM_DEAD.half]) {
+      director.aiming({ angle: Math.PI / 2 + off, power: 1 });
+      expect(rig.turning, `${off}`).toBe(false);
+      expect(rig.azimuth).toBe(0);
+    }
+  });
+
+  it('turns only as far as keeps the aim on the dead zone’s edge, on either side, and then stays', () => {
+    for (const side of [1, -1]) {
+      const { game } = golfGame(field('f'));
+      const { rig, director } = directed(game);
+      director.started();
+      const angle = Math.PI / 2 + side * 0.8;
+      for (let f = 0; f < 180; f++) {
+        director.aiming({ angle, power: 1 });
+        director.frame(DT, false);
+      }
+      expect(Math.abs(wrap(angle - (Math.PI / 2 - rig.azimuth)))).toBeCloseTo(AIM_DEAD.half, 3);
+      // the aim eased back inside the zone, and the camera stays where it is
+      const at = rig.azimuth;
+      director.aiming({ angle: Math.PI / 2 - at + side * 0.05, power: 1 });
+      for (let f = 0; f < 60; f++) director.frame(DT, false);
+      expect(rig.azimuth).toBe(at);
+    }
+  });
 
   it('settles the azimuth on the way the aim looks, within a thousandth in two seconds, falling all the way, at 60 and 30 frames a second', () => {
     for (const dt of [1 / 60, 1 / 30]) {
@@ -496,10 +517,12 @@ describe('the turn to the aim', () => {
     }
     expect(game.shoot(1, 0.5)).toBe(true);
     director.aiming(null);
-    for (let f = 0; f < 120; f++) {
+    for (let f = 0; f < 20; f++) {
       game.step(DT);
       director.frame(DT, false);
     }
+    // while the ball is in the air; once it rests the camera turns to the flag
+    expect(game.ready).toBe(false);
     expect(rig.azimuth).toBeCloseTo(heading(1), 6);
   });
 });

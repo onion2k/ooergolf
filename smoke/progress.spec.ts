@@ -1110,7 +1110,12 @@ test.describe('aiming a golf shot', () => {
     // the view turns to look the way the aim goes; the aim itself does not change as it does (it is read through the view the
     // drag began in), however many frames go by
     const heading = (await view()).heading;
-    expect(Math.abs(heading - (Math.PI / 2 - aim.angle)), 'looks the way the aim goes').toBeLessThan(1e-9);
+    // with the aim on the edge of the dead zone, which is `AIM_DEAD.half` off the way the camera looks
+    const edge = -Math.sign(Math.PI / 2 - aim.angle) * 0.2;
+    expect(
+      Math.abs(heading - (Math.PI / 2 - aim.angle + edge)),
+      'looks to keep the aim on the dead zone’s edge',
+    ).toBeLessThan(1e-9);
     expect(Math.abs(heading), 'and that is not the way it was looking').toBeGreaterThan(0.3);
     for (let k = 0; k < 8; k++) {
       await page.evaluate(() => window.game!.step(15));
@@ -1908,14 +1913,14 @@ test.describe('the flag button', () => {
       })
       .then(({ from, to }) => facing(from, to)!);
 
-  /** The azimuth the flag button would turn the camera to from where the ball lies, which is near the cup and not at it. */
+  /** The azimuth the flag button would turn the camera to from where the ball lies, which is the cup's own heading. */
   const toFace = (page: Page) => page.evaluate(() => window.game!.view().flag!);
 
   const view = (page: Page) => page.evaluate(() => window.game!.view());
   /** An angle's distance from another, the short way round. */
   const gap = (a: number, b: number) => Math.abs(((a - b + 3 * Math.PI) % (2 * Math.PI)) - Math.PI);
 
-  test('a real click turns the camera to look near the cup, not at it, eased, and touches neither the strokes nor the ball; the cup is then on the screen and not in the middle of it', async ({
+  test('a real click turns the camera to look directly at the cup, eased, and touches neither the strokes nor the ball; the cup is then in the middle of the screen across', async ({
     page,
   }) => {
     const problems = watch(page);
@@ -1924,8 +1929,7 @@ test.describe('the flag button', () => {
     const cup = await cupHeading(page);
     expect(Math.abs(cup), 'the cup is well off the line').toBeGreaterThan(0.5);
     const want = await toFace(page);
-    expect(gap(want, cup), 'the way it will look is off the cup by 0.10 to 0.26').toBeGreaterThanOrEqual(0.1 - 1e-6);
-    expect(gap(want, cup)).toBeLessThanOrEqual(0.26 + 1e-6);
+    expect(gap(want, cup), 'the way it will look is the cup’s own heading').toBeLessThan(1e-6);
     const before = await page.evaluate(() => ({ ball: window.game!.ball(), strokes: window.game!.state().strokes }));
     expect((await view(page)).turning, 'not turning before').toBe(false);
     expect(gap((await view(page)).azimuth, want), 'not facing it before').toBeGreaterThan(0.5);
@@ -1941,12 +1945,12 @@ test.describe('the flag button', () => {
     const after = await view(page);
     expect(after.turning, 'there').toBe(false);
     expect(gap(after.azimuth, want)).toBeLessThan(1e-6);
-    expect(gap(after.azimuth, cup), 'and not at the cup').toBeGreaterThanOrEqual(0.1 - 1e-6);
+    expect(gap(after.azimuth, cup), 'and at the cup').toBeLessThan(1e-6);
     // and nothing else was done
     expect(await page.evaluate(() => ({ ball: window.game!.ball(), strokes: window.game!.state().strokes }))).toEqual(
       before,
     );
-    // the cup is on the screen, a little to one side of the line down the middle and not on it
+    // the cup is on the screen, on the line down the middle
     const at = await page.evaluate(() => {
       const g = window.game!;
       const c = g.content().cup;
@@ -1956,12 +1960,12 @@ test.describe('the flag button', () => {
     expect(at.x).toBeLessThan(at.width);
     expect(at.y, 'and down it').toBeGreaterThan(0);
     expect(at.y).toBeLessThan(at.height);
-    expect(Math.abs(at.x - at.width / 2), 'not in the middle across').toBeGreaterThan(at.width * 0.02);
+    expect(Math.abs(at.x - at.width / 2), 'in the middle across').toBeLessThan(at.width * 0.01);
     expect(await page.evaluate(() => window.game!.invariants())).toEqual([]);
     expect(problems).toEqual([]);
   });
 
-  test('looks the same way on a second load with the same seed, and pressed again on the same lie changes nothing', async ({
+  test('looks the same way on a second load and for any seed, and pressed again on the same lie changes nothing', async ({
     page,
   }) => {
     const problems = watch(page);
@@ -1978,11 +1982,9 @@ test.describe('the flag button', () => {
     await page.locator('#viewFlag').click();
     await page.evaluate(() => window.game!.step(120));
     expect((await view(page)).azimuth).toBe(first);
-    // the test API's seed gives the camera its seed as well as the game its chance: another seed, another heading
+    // the heading is the cup's own, so no seed changes it
     await page.evaluate(() => window.game!.seed(12));
-    expect(await toFace(page), 'another seed').not.toBe(first);
-    await page.evaluate(() => window.game!.seed(11));
-    expect(await toFace(page), 'and back').toBe(first);
+    expect(await toFace(page), 'another seed').toBe(first);
     // and from another load of the page with the same seed
     await start(page, { seed: 11, paused: true });
     expect(await press()).toBe(first);

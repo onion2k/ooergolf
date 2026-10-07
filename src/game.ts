@@ -45,7 +45,7 @@ import { PHYSICS, THE_CUP, makeWorld, type Cup, type World } from './physics';
 import { Progress, memoryStore } from './progress';
 import type { Random } from './random';
 import { curveRate, spunKeep, windDirection, windPush } from './shaping';
-import { GREENS, LANDING, SURFACES, rollOf } from './surfaces';
+import { GREENS, LANDING, LIE, SURFACES, rollOf } from './surfaces';
 import { hitCanopy, treeCone, turned, type Cone } from './trees';
 
 /** What happens, for whoever shows it. Every one may be left out. */
@@ -608,6 +608,9 @@ export class Game {
     }
     if (this.moving && this.ready) {
       this.moving = false;
+      // a ball come to rest on the putting green is for the putter, which the player may put back in the bag for another club
+      if (this.layout.golf && lieAt(this.layout, this.world.x[this.ball], this.world.y[this.ball]) === LIE.green)
+        this.picked = PUTTER;
       this.events.stopped?.(this.world.x[this.ball], this.world.y[this.ball]);
       if (this.strokes >= this.limit) this.done('pickedUp');
     }

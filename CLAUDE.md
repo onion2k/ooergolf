@@ -181,7 +181,7 @@ today, and what the next features must hand it:
   bit while the camera turns to it, the camera at the aim's heading within `TURN_TIME`, left there once the drag is taken back, and
   the game, its clock and its chance untouched); and presses the flag button (`face the flag`: on its own stream, while the ball rolls and
   between holes too, refused while a drag is held as the page refuses it and from overhead, where the button does nothing, and checked to
-  turn the camera to look near the cup, from `NEAR_FLAG.least` to `NEAR_FLAG.most` off the cup's heading and at the Director's own heading
+  turn the camera to look directly at the cup, at the cup's own heading and at the Director's own heading
   to a millionth of a radian, inside `TURN_TIME`, with the cup on the screen where it is in reach, touching nothing of the game, its
   clock or its chance). The page's own `Director` runs in the fuzzer every frame, on a desk's screen (1280 by 800) on even seeds and a
   phone's (400 by 860) on odd ones, and the framing rule is asked of the camera as it comes to rest; a test counts the numbers the
@@ -386,15 +386,15 @@ angle, roll)` is how far the putter's hardest putt rolls along an angle before t
   reach) when that fits there, so a minigolf hole is seen as it always was where nothing needs more, and otherwise the aim view of the reach
   no further back than `VIEW.far`.
   **Turning to the aim**: while the ball is ready, the start screen is not up and the overhead view is off, a held aim of at least `AIM_TURN.least`
-  (0.15 of the hardest shot) has the camera `turnTo(wrap(PI/2 - aim.angle))`, so the player sees the shot from behind it. The heading is the
-  aim's own and does not depend on the camera. A drag taken back (released in the dead zone, a second finger, a cancel) simply stops
-  calling `turnTo`, so the camera is left looking the way the last strong aim had it; a shot let go faces its way.
-  **Near the flag**: the flag button turns the camera to the cup's heading from the ball turned `NEAR_FLAG.least` to `NEAR_FLAG.most`
-  radians (0.10 to 0.26) to one side, the cup near the way ahead and not at the middle of it. Which side and how far is a stateless
-  `hashed(viewSeed, hole, strokes, SALT.flag)` (`random.ts`), never the game's chance, so determinism and pace cannot move, and pressing
-  twice on the same lie gives the same heading; where the cup is in reach and the offset would put it off the screen the offset is halved toward `least`, at
-  most twelve times. The view seed is `?seed=N` (or the test API's `seed(n)`), or one `crypto` draw at boot. Refused under the start screen,
-  while a drag is held, at the cup and from overhead.
+  (0.15 of the hardest shot) turns the camera, but only past a **dead zone**: while the aim is within `AIM_DEAD.half` (0.2 radians) of the way
+  the camera faces (`rig.headed`) it stays still and only the reticule moves; past it the camera `turnTo`s the heading that keeps the aim on
+  the zone's edge, so there is no jump as the aim crosses and the shot is seen from nearly behind. The aim is read through the held view, so the
+  turn cannot feed back into it. A drag taken back (released in the dead zone, a second finger, a cancel) simply stops calling `turnTo`, so the
+  camera is left looking the way the last strong aim had it; a shot let go faces its way while the ball is in the air.
+  **At the flag**: the flag button turns the camera to the cup's own heading from the ball (`nearFlag`, which is `facing(ball, cup)`), so the flag is
+  at the middle of the screen across; the earlier random offset of 0.10 to 0.26 was removed on 7 October 2026 after play-testing. Refused under the
+  start screen, while a drag is held, at the cup and from overhead. **On a ball come to rest** the Director does the same by itself (`frame` sees
+  `game.ready` go from false to true; not at a hole's start, and not from overhead), and the player's next aim turns it on from there.
   **Follow one stroke in five**: `struck()` follows the ball when `hashed(viewSeed, hole, strokes, SALT.follow) < FOLLOW.share` (0.2), exactly as
   the camera always did (`catchUp`); for the other four the camera holds where it stood, exactly still, while the ball is in the inner
   0.6 of the safe box (`HAND_OVER.from`, in the box's own terms: |nx| over the half width, ny over the top or the bottom), and the
@@ -694,7 +694,7 @@ angle, roll)` is how far the putter's hardest putt rolls along an angle before t
   (`strike`), with a scatter that grows with the power and never adds speed,
   from the game's `random`, and none, no chance spent, for the putter.
 - `Game` on a golf hole holds the club in hand (`inHand`, `pick`, the driver
-  at each tee) and lands the ball: a step that met the ground going in faster
+  at each tee, and the putter when a ball comes to rest on the putting green, which the player may override with `pick`) and lands the ball: a step that met the ground going in faster
   than `LANDING.least` has the speed along the ground cut to `keep` less the
   steeper it came down, and hops by `bounce`, along the slope. That, and not
   `roll`, is what makes a driver run on a fifth of its carry (288 yards from a 239 carry), a 7-iron a tenth and a sand wedge
@@ -868,7 +868,7 @@ angle, roll)` is how far the putter's hardest putt rolls along an angle before t
   keeps clear of the switch, held by a test at 400 and 360 wide). It holds the **Overhead** button (`#viewOverhead`, a text pill with
   `aria-pressed`: not saved, off at boot and put away by a new hole, and while it is on a drag pans the view over the hole, two fingers or the wheel zoom it,
   nothing is struck and the help says "drag to look round the hole"), and the **flag** (`#viewFlag`, a flag
-  icon, no text, labelled "Look at the flag"): an action, not a toggle, which turns the camera to look near the cup from the
+  icon, no text, labelled "Look at the flag"): an action, not a toggle, which turns the camera to look at the cup from the
   ball (`faceFlag` in `main.ts`, through the hud's `flag` handler, to the Director's `nearFlag`), eased and by the shortest way, on
   minigolf as on golf, leaving the zoom, the tilt and an aim view as they are; it does nothing under the start
   screen, with the ball at the cup or while a drag is held on the course, and is disabled while Overhead is on (there is no
@@ -1244,7 +1244,7 @@ each:
   both limits, at the home zoom and the widest, where the grass costs most;
   the ball and the furthest reach on the screen at every heading, on a desk and a
   phone, for every club; a drag turned to the aim and taken back (left looking there); the flag
-  button near the cup and never at it; a stroke followed and one held (and a held ball that would leave the
+  button at the cup, and the camera turned to it by itself when a ball comes to rest; a stroke followed and one held (and a held ball that would leave the
   screen); the overhead view fitted to the whole hole on a desk and a phone turned along and across it, and
   left to the view as it was
 
