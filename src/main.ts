@@ -247,50 +247,68 @@ async function main() {
       : innerWidth <= 600
         ? { key: 'phone', width: 64, height: 150 }
         : { key: 'desk', width: 100, height: 230 };
-  /** The hole's map painted for the screen it is on, or put away for a hole that is not golf. */
-  const paintHoleMap = () => {
-    if (!game?.layout.golf) {
-      mapped = null;
-      hud.setMap(null);
-      return;
-    }
+  /** The hole's map painted for the screen it is on, made and not yet shown: none for a hole that is not golf. */
+  const mapOfHole = () => {
+    if (!game?.layout.golf) return null;
     const small = mapBoxOf();
     const size = mapSize(game.layout, small.width, small.height);
     const pixels = new Uint8ClampedArray(size.width * size.height * 4);
     paintMap(game.layout, size, pixels, game.obstacles.streamed);
-    mapped = { size, small: small.key };
-    mapInto(size, game.layout.cup.x, game.layout.cup.y, hud.overlay.cup);
-    hud.setMap({ width: size.width, height: size.height, pixels });
+    return { size, small: small.key, pixels };
   };
+  /** A map made by `mapOfHole` handed to the hud, or the hud's put away for none. */
+  const showHoleMap = (map: ReturnType<typeof mapOfHole>) => {
+    if (!map || !game) {
+      mapped = null;
+      hud.setMap(null);
+      return;
+    }
+    mapped = { size: map.size, small: map.small };
+    mapInto(map.size, game.layout.cup.x, game.layout.cup.y, hud.overlay.cup);
+    hud.setMap({ width: map.size.width, height: map.size.height, pixels: map.pixels });
+  };
+  /** The hole's map painted for the screen it is on, or put away for a hole that is not golf. */
+  const paintHoleMap = () => showHoleMap(mapOfHole());
   /** What a new hole puts back: a drag a shot again, and the switch showing it. Set once the input exists, which is after the first hole. */
   let backToAim: (() => void) | null = null;
   /** What the player sees of each event, beside the note of it. */
   const shown: GameEvents = {
-    // a hole begun: drawn afresh, the sun's shadow fitted to it, and the camera on its tee
+    // a hole begun: drawn afresh, the sun's shadow fitted to it, and the camera on its tee. Everything that can be refused is
+    // built first and none of it is handed to the renderer or the hud until all of it is, so a hole that cannot be drawn
+    // leaves them as the last hole had them and not half of one hole and half of another
     started(index, par) {
       if (!game) return;
       const held = game;
       const { layout } = game;
-      kickedAt = layout.kickers.map(() => -Infinity);
       const { name } = game.course[index];
+      // ---- built ----
+      // the hole's own wind, which the grass bends in and the flag and the trees follow
+      const wind = windOf(name);
+      const fixed = scene.static(layout, name, game.obstacles, game.cup.radius);
+      // the items that show more are drawn on the holes begun with them, which is where their previews are made too
+      const moving = scene.dynamic(game.obstacles, layout, name, wind, {
+        ghost: game.effects.has('ghost'),
+        reader: game.effects.has('reader'),
+        rainbow: game.effects.has('rainbow'),
+      });
+      // the hole's rough, round the painted green: a hole too big for a field of grass is refused here, by its size
+      const field = fieldOf(layout, name, clearings(layout, name));
+      const grass = grassOptionsOf(layout);
+      // the preview of this hole's shots is worked out in a rehearsal of it, made once here and let go with the hole
+      const slopes = leansOnMinigolf(layout);
+      const rehearsal = layout.golf || slopes ? new Previewer(game) : null;
+      const map = mapOfHole();
+
+      // ---- shown ----
+      kickedAt = layout.kickers.map(() => -Infinity);
       // the hole's wind, for the line under the pin and for how far the camera must stand back for a tailwind
       const blowing = game.wind;
       windNow.x = blowing.x;
       windNow.y = blowing.y;
       windNow.speed = layout.golf ? blowing.speed : 0;
-      // the hole's own wind, which the grass bends in and the flag and the trees follow
-      const wind = windOf(name);
-      renderer.setStatic(scene.static(layout, name, game.obstacles, game.cup.radius));
-      // the items that show more are drawn on the holes begun with them, which is where their previews are made too
-      renderer.setDynamic(
-        scene.dynamic(game.obstacles, layout, name, wind, {
-          ghost: game.effects.has('ghost'),
-          reader: game.effects.has('reader'),
-          rainbow: game.effects.has('rainbow'),
-        }),
-      );
-      // the hole's rough, round the painted green
-      grown = renderer.setGrass(fieldOf(layout, name, clearings(layout, name)), grassOptionsOf(layout));
+      renderer.setStatic(fixed);
+      renderer.setDynamic(moving);
+      grown = renderer.setGrass(field, grass);
       // nothing is pressed on a new hole: the grass stands as it was grown
       renderer.clearPresses();
       renderer.wind = wind;
@@ -300,15 +318,14 @@ async function main() {
       // (a golf hole lets the camera stand back as far as a drive needs, and begins looking at the tee shot from there;
       // a hole of minigolf has its limits and its home view as it always had)
       director.started();
-      // the preview of this hole's shots is worked out in a rehearsal of it, made once here and let go with the hole
-      leans = leansOnMinigolf(layout);
-      previewer = layout.golf || leans ? new Previewer(game) : null;
+      leans = slopes;
+      previewer = rehearsal;
       previewed.club = '';
       previewShown = false;
       shownPreview = null;
       scene.setShot(null);
       hud.setLanding(null);
-      paintHoleMap();
+      showHoleMap(map);
       // the pin is read off the ball from the first frame of a golf hole, and is not there on a hole of minigolf
       pinned.x = NaN;
       if (!layout.golf) hud.setPin(null);
@@ -325,7 +342,7 @@ async function main() {
       backToAim?.();
       squash.clear();
       trail.clear();
-      hud.started({ index, count: game.course.length, name: game.course[index].name, par });
+      hud.started({ index, count: game.course.length, name, par });
       // the bag on a golf hole, with the driver in hand, and none on a hole of minigolf
       hud.setBag(
         layout.golf
