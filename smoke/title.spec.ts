@@ -1,6 +1,6 @@
 /**
  * The title screen: the picture shown on the boot panel while the game boots, faded in once it is drawable and out once
- * the game is ready but not before it has been seen in full, whole on a desk and on a phone, with none of the old
+ * the game is ready but not before it has been seen in full, covering the screen on a desk and on a phone, with none of the old
  * status words, and a boot that fails still saying why. Every other smoke test leaves the title out (`?title=0`), so
  * this is the one that loads the page as a player does. Timing is read from when the page changed its own classes, not
  * waited on, so a slow machine fails nothing here by being slow.
@@ -46,6 +46,23 @@ const HOLD = '#boot.gone { opacity: 1 !important; visibility: visible !important
 const onTop = (page: Page) =>
   page.evaluate(() => document.elementFromPoint(innerWidth / 2, innerHeight / 2)?.closest('#boot') !== null);
 
+/** Where the logo is in the picture, as shares of its width and height, with a little round it: held here so a new picture says its own. */
+const LOGO = { x0: 0.22, x1: 0.81, y0: 0.09, y1: 0.41 };
+
+/** Where the picture's own pixels fall on the screen as it is laid out now, worked out from the style the page gave it. */
+const placed = (page: Page) =>
+  page.evaluate(() => {
+    const img = document.getElementById('bootTitle') as HTMLImageElement;
+    const css = getComputedStyle(img);
+    const [w, h] = [innerWidth, innerHeight];
+    const [nw, nh] = [img.naturalWidth, img.naturalHeight];
+    const scale = css.objectFit === 'cover' ? Math.max(w / nw, h / nh) : Math.min(w / nw, h / nh);
+    const [dw, dh] = [nw * scale, nh * scale];
+    const [px, py] = css.objectPosition.split(' ').map((v) => parseFloat(v) / 100);
+    const [ox, oy] = [(w - dw) * px, (h - dh) * py];
+    return { fit: css.objectFit, w, h, dw, dh, ox, oy };
+  });
+
 const log = (page: Page) =>
   page.evaluate(() => {
     const l = (window as unknown as { titleLog: { shown: number; gone: number; said: Set<string> } }).titleLog;
@@ -88,7 +105,7 @@ test.describe('on a desk', () => {
     await expect(page.locator('#courses')).toBeVisible();
   });
 
-  test('is whole, never cropped, and draws the picture that was made', async ({ page }) => {
+  test('covers the whole screen, and draws the picture that was made', async ({ page }) => {
     await page.goto('/?paused=1&seed=1');
     await expect(page.locator('#boot')).toHaveClass(/shown/, { timeout: 30_000 });
     const box = await page.evaluate(() => {
@@ -102,12 +119,9 @@ test.describe('on a desk', () => {
         view: [innerWidth, innerHeight],
       };
     });
-    expect(box.fit).toBe('contain');
-    expect(box.natural, 'the portrait picture').toEqual([512, 768]);
-    expect(box.box[0]).toBeGreaterThanOrEqual(0);
-    expect(box.box[1]).toBeGreaterThanOrEqual(0);
-    expect(box.box[2]).toBeLessThanOrEqual(box.view[0]);
-    expect(box.box[3]).toBeLessThanOrEqual(box.view[1]);
+    expect(box.fit).toBe('cover');
+    expect(box.natural, 'the square picture').toEqual([1254, 1254]);
+    expect(box.box, 'the picture is as big as the screen, edge to edge').toEqual([0, 0, box.view[0], box.view[1]]);
     await page.addStyleTag({ content: HOLD });
     await expect.poll(() => page.evaluate(() => window.game?.state().choosing ?? false)).toBe(true);
     expect(await onTop(page), 'the title is over the start screen that is up behind it').toBe(true);
@@ -118,23 +132,51 @@ test.describe('on a desk', () => {
 test.describe('on a phone', () => {
   test.use(PHONE);
 
-  test('is whole and not cropped on a tall narrow screen', async ({ page }) => {
+  test('fits the whole width of a tall narrow screen, with a bar above and below, and the logo whole', async ({
+    page,
+  }) => {
     await page.goto('/?paused=1&seed=1');
     await expect(page.locator('#boot')).toHaveClass(/shown/, { timeout: 30_000 });
-    const box = await page.evaluate(() => {
-      document.getAnimations().forEach((a) => ((a.currentTime = 600), a.pause()));
-      const r = document.getElementById('bootTitle')!.getBoundingClientRect();
-      return { right: r.right, bottom: r.bottom, left: r.left, top: r.top, w: innerWidth, h: innerHeight };
-    });
-    expect(box.left).toBeGreaterThanOrEqual(0);
-    expect(box.top).toBeGreaterThanOrEqual(0);
-    expect(box.right).toBeLessThanOrEqual(box.w);
-    expect(box.bottom).toBeLessThanOrEqual(box.h);
+    await page.evaluate(() => document.getAnimations().forEach((a) => ((a.currentTime = 600), a.pause())));
+    const at = await placed(page);
+    expect(at.fit).toBe('contain');
+    expect(at.dw, 'the picture is the width of the screen').toBeCloseTo(at.w, 3);
+    expect(at.oy, 'a bar above').toBeGreaterThan(50);
+    expect(at.oy, 'and the same below').toBeCloseTo(at.h - at.dh - at.oy, 3);
     await page.addStyleTag({ content: HOLD });
     await expect.poll(() => page.evaluate(() => window.game?.state().choosing ?? false)).toBe(true);
     expect(await onTop(page), 'the title is over the start screen that is up behind it').toBe(true);
     await expect(page.locator('#boot')).toHaveScreenshot('title-phone.png', { maxDiffPixelRatio: 0.02 });
   });
+});
+
+test.describe('on any screen', () => {
+  // a desk, a wide one, a phone on its side, a tablet each way and a tall phone: the logo is whole on every one of them
+  for (const [name, width, height] of [
+    ['a desk', 1280, 800],
+    ['an ultrawide', 2560, 1080],
+    ['a phone on its side', 844, 390],
+    ['a tablet on its side', 1024, 768],
+    ['a tablet upright', 768, 1024],
+    ['a phone upright', 400, 860],
+    ['a tall phone', 360, 800],
+    ['a very tall phone', 360, 900],
+  ] as const) {
+    test(`the logo is whole on ${name}, ${width} by ${height}`, async ({ page }) => {
+      await page.setViewportSize({ width, height });
+      await page.goto('/?paused=1&seed=1');
+      await expect(page.locator('#boot')).toHaveClass(/shown/, { timeout: 30_000 });
+      const at = await placed(page);
+      const left = at.ox + LOGO.x0 * at.dw;
+      const right = at.ox + LOGO.x1 * at.dw;
+      const top = at.oy + LOGO.y0 * at.dh;
+      const bottom = at.oy + LOGO.y1 * at.dh;
+      expect(left, 'its left edge').toBeGreaterThanOrEqual(0);
+      expect(right, 'its right edge').toBeLessThanOrEqual(at.w);
+      expect(top, 'its top').toBeGreaterThanOrEqual(0);
+      expect(bottom, 'its foot').toBeLessThanOrEqual(at.h);
+    });
+  }
 });
 
 test.describe('where it cannot be shown as it is', () => {

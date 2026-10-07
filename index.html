@@ -1177,14 +1177,26 @@
       opacity var(--title-out, 0.4s),
       visibility 0s linear var(--title-out, 0.4s);
   }
-  /* the whole picture, never cropped: the panel's sky meets its own */
+  /*
+   * The picture's width is always the screen's, so the logo is never cut at its sides: a wide screen is covered, and
+   * shows the top of the picture where the title is, and a tall one shows the whole of it with a bar above and below,
+   * in the colours of its own top and bottom edges. The bars are the element's own background, so they fade with it.
+   */
   #bootTitle {
     position: absolute;
     inset: 0;
     width: 100%;
     height: 100%;
-    object-fit: contain;
+    object-fit: cover;
+    object-position: 50% 0%;
+    background: linear-gradient(#2c9cf5 50%, #568439 50%);
     opacity: 0;
+  }
+  @media (max-aspect-ratio: 1/1) {
+    #bootTitle {
+      object-fit: contain;
+      object-position: 50% 50%;
+    }
   }
   #bootTitle[hidden] {
     display: none;
