@@ -303,12 +303,16 @@ save that names one keeps its best, as a best is kept by name.
 Bought in the shop with what the holes pay. They change the physics, within
 limits, so a score is a score with a given club and ball.
 
-- **Items** are worn one at a time, bought with coins and gems, and work on minigolf and golf: eighteen in `src/items.ts`, from a rainbow flag to a mulligan.
-- **Balls** differ in bounce and in roll. Made of enamel and gems.
+- **The shop** has three aisles of fifteen, and a player wears one thing from each: a club, a ball and an accessory. All
+  forty-five work on minigolf and on golf. **Clubs** change only how the ball is struck and flies (power, scatter, shape,
+  spin, and on minigolf the feel of a drag, a bend and a spin on a putt). **Balls** change only how it moves on the ground
+  (roll, sand, rail, landing, belts), each looks different, and a putt's power is still how far it rolls. **Accessories**
+  change anything or only the look: an aid, a retake, a wider cup, a trail. Prices follow what each is measured to save,
+  and for the rest what it offers a human.
 - **Coins** are paid for finishing a hole (5), and more for each stroke
   under par (5 each); a hole picked up pays nothing. **Gems** are paid for a
   hole in one, on every course. The shop is open from the purse's button and from the card.
-- The best score on a hole is kept with the club and ball it was made with.
+- The best score on a hole is kept with the kit it was made with.
 
 ## The look
 

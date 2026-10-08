@@ -19,19 +19,26 @@ import { TRAIL, Trail } from '../src/trail';
 import { newGame } from './helpers';
 
 describe('what must stay bounded', () => {
-  it('holds a save with every item and a best on every hole of every course under its ceiling, however many courses there are', () => {
+  it('holds a save with every item and a best on every hole of every course at the figure measured, under its ceiling', () => {
     // a best is kept for each hole by its name, so the save grows a hole at a time as the courses are played: the most it
     // could ever be is every item owned and every hole of every course done
     const progress = new Progress(memoryStore(null));
     progress.save.owned = ITEMS.map((i) => i.id);
-    progress.save.item = ITEMS[ITEMS.length - 1].id;
+    // the three longest ids there are, as a kit worn and as the kit of every best: the most a kit's words can take
+    const [one, two, three] = ITEMS.map((i) => i.id).sort((a, b) => b.length - a.length);
+    const kit = { club: one, ball: two, accessory: three };
+    progress.save.kit = { ...kit };
     progress.save.coins = 999_999;
     progress.save.gems = 999;
     const holes = COURSES.flatMap((c) => c.holes);
-    for (const hole of holes) progress.save.best[hole.name] = { strokes: 10, item: ITEMS[ITEMS.length - 1].id };
-    expect(holes.length, 'a hole of each').toBeGreaterThanOrEqual(27);
+    for (const hole of holes) progress.save.best[hole.name] = { strokes: 10, kit: { ...kit } };
+    expect(ITEMS.length, 'the forty-five').toBe(45);
+    expect(holes.length, 'a hole of each, six courses of nine').toBe(54);
     const bytes = JSON.stringify(progress.save).length;
-    expect(bytes, `${bytes} bytes for ${holes.length} holes`).toBeLessThan(WATCH['save bytes']!.ceiling);
+    // held to the byte, so a longer id, a new hole or a new field in a best is seen and the ceiling thought about again
+    expect(bytes, `${bytes} bytes for ${holes.length} holes`).toBe(5_830);
+    expect(bytes, 'under the ceiling').toBeLessThan(WATCH['save bytes']!.ceiling);
+    expect(WATCH['save bytes']!.ceiling, 'with room for about six holes more and no more').toBeLessThan(bytes * 1.15);
   });
 
   it('reads the sizes off a game, and has a ceiling for every one', () => {

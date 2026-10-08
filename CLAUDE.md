@@ -308,6 +308,7 @@ today, and what the next features must hand it:
     npm run leaks          an hour of play, watching what must stay bounded (10 min of it in check)
     npm run pace           the strokes a round takes, seed by seed, and each hole's median against its par; pace:check holds it
     npm run bench          the physics' frame time held to scripts/bench-baseline.json
+    npm run value          what each shop item saves the pace player, a round, against no item (the prices' measure; slow)
     npm run perf           boot, frame and download held to smoke/perf-baseline.json and the budget
     npm run smoke          the game in headless Chromium on the real GPU (Playwright, smoke/)
     npm run look           the scenes, and the models' showcase, held to the pictures in smoke/screens
@@ -493,7 +494,7 @@ angle, roll)` is how far the putter's hardest putt rolls along an angle before t
   open, plumb below that where the ball meets it, its corners rounded out
   and square in, drawn on its own tiles and no further so what is seen is
   what the ball meets, and sloping with the ground; `cupGround` is the
-  cup's own step and slope, which the collar is cut to. A cup wider than its tile (the magnet's 1.9, against a tile's half of 1.5)
+  cup's own step and slope, which the collar is cut to. A cup wider than its tile (the horseshoe's 1.8, against a tile's half of 1.5)
   has a mouth that reaches into the tiles beside it, so `groundOf(layout, mouth)` cuts every yard-square piece of their grass the
   mouth reaches into (`cupRing`, the lining's own polygon, cut with `src/clip.ts`), each in the colour and the texture of its own
   tile, and `wideCollar` is the cup tile's grass round it; the plain cup's is `collar`, zipped to the tile in one piece, which no hole's
@@ -984,18 +985,32 @@ minigolf: true }`, read through `oceanFor`) is the one switch: `waterBed` and `s
   boxes and belts. `arena.ts` reads a map into a layout, and holds
   the kinds of body, the hardest shot and how the ball rolls. Each hole is a
   world of its own, made when it begins: nothing may keep `game.world`.
-- The shop's items, what they cost and what a hole pays are content in `items.ts` (`ITEMS`, eighteen, `ITEM_FIGURES` holds every
-  figure, `Effects.has(id)` asks whether one is held). One is worn at a time or none; each is an exact no-op when absent, draws no
-  chance, and is read through `game.effects` so the preview, the autopilot's rehearsal and the shot agree. Play items: grip, glove,
-  spin, curve, sock, wedge, sticky, slow (golf greens only), magnet, rubber, waders (first water or out of bounds loss a hole is
-  free), mulligan (`Game.mulligan()`, one a round, the page's Retake button), penny (consumable), ghost (`Preview.rest`), reader.
-  Cosmetics: glow (`trail.ts`), confetti (`cupBurst` style), rainbow (`flag` strips). Magnet, rubber, slow, ghost, reader and rainbow
-  take hold at the next hole, and a hole begun with one worn is drawn with it as the game made it. The magnet's cup is wider than a
-  tile, which the scene refused until 6 October 2026: the page stopped on a blue screen as it loaded, and a hole begun in a round was
-  never drawn, the last hole's picture left under the next hole's ball and rails (`smoke/progress.spec.ts` plays it). The save (`progress.ts`) holds coins, gems, the items owned, the one worn and the best score on each hole
-  with the item it was made with; `Game` pays into it when a hole is done (golf too), and buys and equips from it.
-  Every save shape is in `test/saves/`. The save
-  lives in `progress.ts`. Chance comes from `random.ts`, handed in.
+- The shop is content in `items.ts` and has three aisles, **clubs, balls and accessories**, fifteen items each (`ITEMS`, forty-five,
+  cheapest first, held by `test/prices.test.ts`), and the player wears one from each at once: the **kit** (`Save.kit`, `Best.kit`,
+  `{ club, ball, accessory }`, each `''` or an owned item of its aisle). An item says in `figures` which numbers of the `Kit` it moves;
+  `kitOf(slots)` works the three into one `Kit` once, when the kit changes, with each figure combined by `COMBINE` and held inside
+  `CEILINGS` (power at most 1.2, scatter and loss at least a quarter, rail 0.5 to 1.5, roll 0.8 to 1.25, touch 0.8 to 1.8), and
+  empty slots are `NO_KIT` itself, so a game with nothing worn is the game as it was (a hash of seeded rounds holds it). No module reads
+  an id: `game.kit` is asked for a number, so the preview, the autopilot's rehearsal and the shot agree. **Clubs** move only the
+  strike. On golf that is the flight (power, `woods`, scatter, loss, shape, spin, loft, wind, what sand and rough take off); on minigolf
+  the six strike figures: `touch` (a drag becomes power as `drag ^ touch`, applied in `shot.ts`), `puttScatter` (a miss of a few
+  degrees from the game's chance, none drawn without it), `bend` (a putt curves at that many radians a second until its first knock, the
+  dots with it), `puttSpin` (top and back change what the first rail, post or kicker keeps), the chip (`chipSand`, `chipAll`: a loft
+  that never rises past the rail) and `sandPutt`. **Balls** move only the ground: `roll`, `sand`, `green`, `rough`, `rail` (trees and
+  rock too), `keep`, `hop` and `belt`, into `makeWorld` and `Game.landing`; a ball's ground figures take hold at the next hole, a club's
+  at once, and **a putt's power stays how far it rolls** (`strikeSpeed`, `powerFor`, the dots and `runOn` read the ball's roll). Each
+  ball has a `BallLook` (`models/course.ts`: a colour, a second, a pattern and a finish; a test holds no two alike) that `scene.dynamic`
+  draws and `src/swatch.ts` paints in the shop. **Accessories** move anything or only the look: the cap (wind, belts), tee, gloves, shoes,
+  clover (`paid`), watch (the one retake a round, the Retake button), snorkel, horseshoe (the cup takes a ball from 1.8), piggy bank
+  (consumable, empties its slot), the scope (golf's preview to rest, and on minigolf a `Previewer` of the putt to rest, made when the kit
+  rests and redone four times a second on a hole that moves), the chalk (the break anywhere on golf; on minigolf the line drawn past its
+  first bank, `src/bank.ts`) and four looks (comet trail, party cup, pennant, fireworks). Prices follow the rule in `items.ts`'s header,
+  measured by `npm run value`. The cup of the horseshoe is wider than a tile, which the scene refused until 6 October 2026 (the page
+  stopped on a blue screen as it loaded and a hole begun in a round was never drawn; `smoke/progress.spec.ts` plays it). The save
+  (`progress.ts`) holds coins, gems, the items owned, the kit worn and each hole's best with the kit it was made with; an id the shop does
+  not sell is dropped and a slot is read only if owned, so a save from before the three aisles loads with its coins, gems and bests and
+  no items. `Game` pays into it when a hole is done (golf too), and buys, equips (`equip`, `unequip(aisle)`) from it. Every save shape is
+  in `test/saves/`. Chance comes from `random.ts`, handed in.
 - `src/physics.ts` is the game's side of artshape-physics, and nothing else
   imports the package directly. A change a package needs goes in that repo,
   with a version bump here, as v0.4.1 was for a ball put to sleep in the
@@ -1068,7 +1083,7 @@ posts, kickers, stones, trees, the hardest shot, and every hole's name and par),
 `invariants`, and `aiming`,
 the shot a drag under way would make. `state` has the hole, its par, the
 phase (`play`, `done`, `over`), the card, the coins and gems, the club in
-hand and those owned, the hardest shot the club in hand strikes, the
+hand, the items owned and the kit worn (`kit`: club, ball, accessory), the hardest shot the club in hand strikes, the
 course's name, whether the start screen is up (`choosing`), and whether the
 hole is golf and the club of the bag in hand (`golf`, `inHand`).
 Playing: `shoot(angle, power, club?, shape?, spin?)` (with a club of the bag put in hand
@@ -1077,7 +1092,7 @@ speed and carry) and `suggest()` for the autopilot's shot from
 where the ball lies (with its `club` on a golf hole), `chooseCourse(name)`, which presses that course's
 button on the start screen, `startHole(index)`, `playCourse(holes)` for
 holes of the test's own that are not on a course, `newRound()`, `buy(id)`,
-`equip(id)`, and `drag(page, from, to, { touch, hold })` in
+`equip(id)`, `unequip(aisle)`, `shopTab(aisle)` (the shop's tab as a click on it), and `drag(page, from, to, { touch, hold })` in
 `smoke/game.ts` for a real mouse or finger, pressed where `project(x, y,
 z)` says a point on the course is on the page. Setting a scene: `place` for
 a body that exists (raw: on a hole that slopes, `lay(x, y)`, the game's own, puts the ball down on the ground there),
@@ -1201,10 +1216,13 @@ each step, and a gate handed what it needs in the same change:
   ball hidden behind a tree or a rail, and the map turning with the camera are not there, and how the held view feels after a big turn to the
   aim, desk and phone, is for the user to judge by playing. The overhead view draws no grass on most holes (it stands past the rings), and
   has no new rung on the ladder, since it costs a frame less than the standard view. The overhead view is fitted to the screen and not to what the panels leave of it: on a phone the far end of a long hole is under the chips and its tee under the bag, and on a desk the tee is under the bag; the pictures `overhead-links` and `phone-overhead-meadow` show it, and whether to fit it inside the safe area is for the user to say.
-- Slow roll does nothing on minigolf (its roll is a constant); the autopilot takes no item and never uses the mulligan.
-- The magnet's mouth is cut only in the level grass round the cup, so on Three Cushion, whose cup stands against
-  a wall 1.2 high, the hole runs into the wall's foot, where no ball can be; a bunker beside a cup would cover a part of it
-  too, and no hole has one. No `look` picture holds the magnet's cup, since a picture is held to the GPU it was written on.
+- The autopilot chooses no item, shape, spin or bend and never takes the watch's retake, and with most balls on golf it plays a little
+  worse than with none. On the Isles' Long Water it repeats a lost 3-wood with more
+  power. The shop's prices for what it cannot feel are judgement (`items.ts`'s header).
+- The scope's ring on minigolf is held by its picture alone, since `motions().shot` is null there; the pennant has no `motions` marker.
+  The horseshoe's mouth is cut only in the level grass round the cup, so on Three Cushion, whose cup stands against a wall 1.2 high, the
+  hole runs into the wall's foot, where no ball can be; no `look` picture holds a wide cup, since a picture is held to the GPU it was
+  written on.
 
 ## Rules for the code
 

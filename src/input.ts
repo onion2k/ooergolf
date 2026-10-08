@@ -14,6 +14,8 @@ export interface InputPorts {
   shortSide(): number;
   /** The point on the ground under a spot on the screen, or null for sky. */
   ground(x: number, y: number): [number, number] | null;
+  /** The exponent a drag's share of the hardest is raised to for its power (the kit's touch with the putter): one if the port is not given. */
+  touch?(): number;
   /** The ball struck toward `angle` at `power` of the club's hardest. */
   shoot(angle: number, power: number): void;
   /** The camera nearer for less than nought, further for more. */
@@ -33,7 +35,11 @@ export class Input {
   private readonly gesture: Gesture;
 
   constructor(private readonly ports: InputPorts) {
-    this.gesture = new Gesture({ shortSide: () => ports.shortSide(), ground: (x, y) => ports.ground(x, y) });
+    this.gesture = new Gesture({
+      shortSide: () => ports.shortSide(),
+      ground: (x, y) => ports.ground(x, y),
+      touch: () => ports.touch?.() ?? 1,
+    });
   }
 
   /** The shot a drag under way would make if let go now, or null. */

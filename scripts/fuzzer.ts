@@ -21,10 +21,10 @@
 import { Camera } from 'artshape-render/gpu/camera';
 import { aimView, reachOf, safeBox } from '../src/aimview';
 import { AIM_DEAD, AIM_TURN, Director } from '../src/director';
-import { ROLL, heightAt, powerFor, strikeSpeed } from '../src/arena';
+import { heightAt, powerFor, strikeSpeed } from '../src/arena';
 import { Autopilot, timeAlong } from '../src/autopilot';
 import { CameraRig, facing, overheadFit, wrap } from '../src/camera';
-import { ITEMS, paid } from '../src/items';
+import { AISLES, ITEMS, paid } from '../src/items';
 import { retakeShown } from '../src/retake';
 import { COURSES, type HoleDef } from '../src/course';
 import { Game, type GameEvents } from '../src/game';
@@ -40,7 +40,9 @@ import {
   landingProblems,
   lostOnStreamProblems,
   planProblems,
+  bankProblems,
   previewProblems,
+  rollProblems,
   viewProblems,
   TURN_TIME,
 } from '../src/invariants';
@@ -50,7 +52,8 @@ import { centre, figures } from '../test/lake-figures';
 import { LINKS_SPECS } from '../src/links';
 import { flipperYaw } from '../src/obstacles';
 import { Previewer } from '../src/preview';
-import { BAG, type BagClub } from '../src/bag';
+import { BAG, PUTTER, type BagClub } from '../src/bag';
+import { bankOf, makeBank } from '../src/bank';
 import { carryFrom } from '../src/flight';
 import { lieAt } from '../src/arena';
 import { Progress, memoryStore } from '../src/progress';
@@ -174,8 +177,8 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
     finished: null as null | { holed: boolean; par: number; score: number },
     spent: 0,
   };
-  /** Whether the lucky penny was the item equipped as the hole being played began, which is the hole it pays double for. */
-  let pennyOnHole = false;
+  /** The piggy bank's id if one was worn as the hole being played began, which is the hole it pays double for; '' if none. */
+  let piggyOnHole = '';
   /** The game being played, once there is one, and what was wrong with a knock as it was told, for the next check. */
   let playing: Game | null = null;
   const told: string[] = [];
@@ -192,7 +195,7 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
         (...args: number[]) => {
           count(happened, name);
           if (name === 'started' && playing) count(visited, playing.def.name);
-          if (name === 'started' && playing) pennyOnHole = playing.effects.has('penny');
+          if (name === 'started' && playing) piggyOnHole = playing.kit.piggy ? playing.slots.accessory : '';
           if (name === 'splash' || name === 'outOfBounds') lately.lost++;
           if (name === 'waded') lately.waded++;
           if (name === 'spent') lately.spent++;
@@ -250,12 +253,15 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
   const fail = (problems: string[]): FuzzResult => ({
     seed,
     frames: frame,
-    // the item in hand is said last, since what is wrong may be of the item and the last equip is a long way back
+    // the kit worn is said last, since what is wrong may be of an item and the last equip is a long way back
     failure: {
       seed,
       frame,
       problems,
-      log: [...log.slice(-LOG_TAIL), `item held: ${playing?.item || 'none'}`],
+      log: [
+        ...log.slice(-LOG_TAIL),
+        `kit worn: ${playing ? `${playing.slots.club || '-'}, ${playing.slots.ball || '-'}, ${playing.slots.accessory || '-'}` : 'none'}`,
+      ],
     },
     done,
     happened,
@@ -268,10 +274,10 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
 
   try {
     // a new player, or, on odd seeds, one come back with coins and gems enough for the shop
-    // (and every fifth seed a collector, with the price of the whole shop, so that all eighteen items are bought and played on)
+    // (and every fifth seed a collector, with the price of the whole shop, so that all forty-five items are bought and played on)
     let store = memoryStore(
       seed % 5 === 0
-        ? JSON.stringify({ coins: 4000, gems: 10 })
+        ? JSON.stringify({ coins: 12000, gems: 16 })
         : seed % 2
           ? JSON.stringify({ coins: 700, gems: 6 })
           : null,
@@ -489,13 +495,13 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
             throw new Error(
               `a preview of the ${club.id} at ${power.toFixed(3)} with shape ${game.shape} and spin ${game.spin}, in a wind of ${game.wind.speed}: ${bad.join('; ')}`,
             );
-          // the ghost shot's rest is shown with the item held and never without it, and is held to its own rules (in `previewProblems`)
-          const ghost = game.effects.has('ghost');
+          // the rest is shown when the kit asks for it and never without, and is held to its own rules (in `previewProblems`)
+          const ghost = game.kit.rest;
           if (p.rest.shown !== (ghost && (p.end === 'landed' ? p.n > 1 : p.rest.shown)))
             throw new Error(
-              `the preview's rest was ${p.rest.shown ? 'shown' : 'not shown'} for a shot that ${p.end === 'landed' ? 'came down' : `was ${p.end}`} with ${game.item || 'no item'} held`,
+              `the preview's rest was ${p.rest.shown ? 'shown' : 'not shown'} for a shot that ${p.end === 'landed' ? 'came down' : `was ${p.end}`} with the rest ${ghost ? 'asked for' : 'not asked for'}`,
             );
-          if (p.rest.shown) count(checked, 'ghost aimed');
+          if (p.rest.shown) count(checked, 'rest aimed');
           if (digest() !== before) throw new Error('aiming a shot changed the game');
           if (draws !== drawn) throw new Error(`aiming a shot drew ${draws - drawn} numbers of the game's chance`);
           did('aim a shot');
@@ -533,7 +539,8 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
       [
         1,
         () => {
-          // the shop, open whenever: any item, whether it can be paid for or not
+          // the shop, open whenever: any item, whether it can be paid for or not (nothing to buy while the aisles are empty)
+          if (!ITEMS.length) return;
           const item = ITEMS[Math.floor(random() * ITEMS.length)];
           const { coins, gems } = game.progress.save;
           const can = coins >= item.coins && gems >= item.gems && !game.progress.save.owned.includes(item.id);
@@ -545,15 +552,25 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
       [
         1,
         () => {
-          // any item, owned or not, or none: only one owned goes on, and the one on stays on when another is refused
-          const pick = Math.floor(random() * (ITEMS.length + 1));
-          const id = pick < ITEMS.length ? ITEMS[pick].id : '';
-          const before = game.item;
-          const can = id === '' || game.progress.save.owned.includes(id);
-          if (game.equip(id) !== can) throw new Error(`equipping ${id || 'none'} went against what is owned`);
-          if (game.item !== (can ? id : before))
-            throw new Error(`equipping ${id || 'none'} left ${game.item || 'none'}`);
-          did('equip', id || 'none');
+          // any item, owned or not, or an aisle emptied: only one owned goes on, in its own aisle's slot, and the slots stay as they were when one is refused
+          const pick = Math.floor(random() * (ITEMS.length + AISLES.length));
+          if (pick >= ITEMS.length) {
+            const aisle = AISLES[pick - ITEMS.length];
+            game.unequip(aisle);
+            if (game.slots[aisle] !== '') throw new Error(`emptying the ${aisle} left ${game.slots[aisle]}`);
+            did('unequip', aisle);
+            return;
+          }
+          const { id, aisle } = ITEMS[pick];
+          const before = game.slots[aisle];
+          const others = AISLES.filter((a) => a !== aisle).map((a) => game.slots[a]);
+          const can = game.progress.save.owned.includes(id);
+          if (game.equip(id) !== can) throw new Error(`equipping ${id} went against what is owned`);
+          if (game.slots[aisle] !== (can ? id : before))
+            throw new Error(`equipping ${id} left ${game.slots[aisle] || 'none'} in the ${aisle} slot`);
+          if (AISLES.filter((a) => a !== aisle).some((a, k) => game.slots[a] !== others[k]))
+            throw new Error(`equipping ${id} moved another aisle's slot`);
+          did('equip', id);
         },
       ],
       [
@@ -596,7 +613,7 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
           director.use(game);
           director.started();
           holeBegan = game.t;
-          pennyOnHole = game.effects.has('penny');
+          piggyOnHole = game.kit.piggy ? game.slots.accessory : '';
           const loaded = JSON.stringify(game.progress.save);
           if (loaded !== kept) throw new Error(`the save was ${kept} and loaded as ${loaded}`);
           did('reload');
@@ -734,6 +751,8 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
               target.x,
               target.y,
               strikeSpeed(power, game.hardest),
+              undefined,
+              game.ground,
             );
             if (Math.abs(time - (arrive - game.t)) < best.off)
               best = { power, off: Math.abs(time - (arrive - game.t)) };
@@ -976,7 +995,7 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
         dy = py - world.y[ball];
       const power = Math.min(
         1,
-        powerFor(Math.sqrt(2 * ROLL.roll * Math.hypot(dx, dy)), game.hardest) * (0.8 + 0.4 * streamer()),
+        powerFor(Math.sqrt(2 * game.putRoll * Math.hypot(dx, dy)), game.hardest) * (0.8 + 0.4 * streamer()),
       );
       if (game.shoot(Math.atan2(dy, dx) + (streamer() - 0.5) * 0.1, power)) {
         spent();
@@ -1073,17 +1092,17 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
       framed++;
       return framingProblems(rig, cam, there, director.reachPoint(reach) ? reach : null, box).map(where);
     };
-    /** What a step or a retake left behind, held to what an item says it does: the waders, the lucky penny. */
+    /** What a step or a retake left behind, held to what the kit says it does: the free loss, the piggy bank. */
     const snapshot = () => ({
       game,
       strokes: game.strokes,
       coins: game.progress.save.coins,
       gems: game.progress.save.gems,
       owned: [...game.progress.save.owned],
-      item: game.item,
-      waders: game.effects.has('waders'),
+      slots: { ...game.slots },
+      waders: game.kit.freeLoss,
       waded: game.wadersUsed,
-      penny: pennyOnHole,
+      penny: piggyOnHole,
       phase: game.phase,
       hole: game.hole,
     });
@@ -1111,7 +1130,7 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
       // the lucky penny: a hole holed with it in hand at its start pays its coins twice, once, and it is spent; a hole picked up
       // pays nothing and spends nothing
       if (finished) {
-        const pay = paid(finished.score, finished.par, !finished.holed);
+        const pay = paid(finished.score, finished.par, !finished.holed, game.kit.underParPay);
         const double = finished.holed && was.penny;
         const save = game.progress.save;
         const coins = pay.coins * (double ? 2 : 1);
@@ -1121,13 +1140,13 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
           );
         if (double) {
           if (spent !== 1) throw new Error(`the penny was spent ${spent} times`);
-          if (save.owned.includes('penny') || save.item === 'penny')
-            throw new Error('the penny paid double and is still owned or equipped');
+          if (save.owned.includes(was.penny) || AISLES.some((a) => save.kit[a] === was.penny))
+            throw new Error('the piggy bank paid double and is still owned or worn');
           count(checked, 'penny doubled');
         } else {
           if (spent) throw new Error('the penny was spent without paying double');
           if (was.penny && !finished.holed) {
-            if (!save.owned.includes('penny') || save.item !== was.item)
+            if (!save.owned.includes(was.penny) || AISLES.some((a) => save.kit[a] !== was.slots[a]))
               throw new Error('a hole picked up spent the penny, or took it off');
             count(checked, 'penny kept on a pick up');
           }
@@ -1143,7 +1162,7 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
     const retaker = seeded(seed * 43 + 11);
     const retake = () => {
       const shown = retakeShown({
-        held: game.effects.has('mulligan'),
+        held: game.kit.retake,
         strokes: game.strokes,
         used: game.mulliganUsed,
         phase: game.phase,
@@ -1184,7 +1203,7 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
     const reading = seeded(seed * 47 + 3);
     const readOff = () => {
       const { world, ball, layout } = game;
-      if (!game.effects.has('reader') || !world.alive[ball]) return;
+      if (!game.kit.chalk || !world.alive[ball]) return;
       const digest = () => JSON.stringify([game.t, game.strokes, world.x[ball], world.y[ball], world.z[ball]]);
       const [was, drawn] = [digest(), draws];
       const bad = arrowProblems(layout, readerArrows(layout, world.x[ball], world.y[ball]), { anywhere: true });
@@ -1194,21 +1213,75 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
       count(checked, 'reader read');
     };
     /**
+     * A player with the rangefinder or the chalk lining up a putt on minigolf, from a stream of its own and only with one of them
+     * worn, so no other run draws from it: the roll to where it rests, which is a ring with no path past it, held to
+     * `rollProblems` and leaving the game, its clock and its chance as they were; and the aim's first bank off a rail, held to
+     * `bankProblems` over the reach the putt's power gives.
+     */
+    const ranging = seeded(seed * 61 + 7);
+    let puttPreviewer: Previewer | null = null;
+    let puttPreviewerOf: { game: Game | null; hole: number } = { game: null, hole: -1 };
+    const rangeOff = () => {
+      const { world, ball, layout } = game;
+      if (layout.golf || !game.ready || !world.alive[ball] || !(game.kit.rest || game.kit.chalk)) return;
+      const at = { x: world.x[ball], y: world.y[ball] };
+      const angle = (ranging() * 2 - 1) * Math.PI;
+      const power = ranging() < 0.2 ? 1 : ranging();
+      const digest = () => JSON.stringify([game.t, game.strokes, game.phase, game.hole, at.x, at.y, world.z[ball]]);
+      const [was, drawn] = [digest(), draws];
+      if (game.kit.rest) {
+        if (!puttPreviewer || puttPreviewerOf.game !== game || puttPreviewerOf.hole !== game.hole) {
+          puttPreviewer = new Previewer(game);
+          puttPreviewerOf = { game, hole: game.hole };
+        }
+        const p = puttPreviewer.roll(at, PUTTER, angle, power, game.shape, game.spin);
+        const bad = rollProblems(game, at, p);
+        if (bad.length)
+          throw new Error(`a roll of the putt at ${power.toFixed(3)}, angle ${angle.toFixed(3)}: ${bad.join('; ')}`);
+        if (p.rest.shown) count(checked, 'putt rest aimed');
+      }
+      if (game.kit.chalk) {
+        const bank = makeBank();
+        // a long way, so a rail far off is met as well as one near: the page's own reach is shorter, which only finds fewer
+        const reach = 40 * power;
+        if (bankOf(layout, at.x, at.y, angle, reach, bank)) {
+          const bad = bankProblems(game, at, angle, reach, bank);
+          if (bad.length) throw new Error(`the chalk's bank for an aim at ${angle.toFixed(3)}: ${bad.join('; ')}`);
+          count(checked, 'bank found');
+        } else count(checked, 'no bank');
+      }
+      if (digest() !== was) throw new Error('lining up a putt changed the game');
+      if (draws !== drawn) throw new Error(`lining up a putt drew ${draws - drawn} numbers of the game's chance`);
+      did('line up a putt');
+    };
+    /**
      * A collector (every fifth seed, with the price of the whole shop) trying on one item after another: bought if it can be
      * paid for, and put on, or none put on. On a stream of its own and only for a collector, so that the monkey's own draws, and
-     * every run of any other seed, are as they were; it is what has every one of the eighteen held and played on with.
+     * every run of any other seed, are as they were; it is what has every one of the forty-five held and played on with.
      */
     const wardrobe = seeded(seed * 53 + 9);
     const tryOn = () => {
-      const pick = Math.floor(wardrobe() * (ITEMS.length + 1));
-      const id = pick < ITEMS.length ? ITEMS[pick].id : '';
-      const item = ITEMS[pick];
-      if (pick < ITEMS.length && game.progress.save.coins >= item.coins && game.progress.save.gems >= item.gems)
-        game.buy(id);
-      game.equip(id);
-      did('try on', `${id || 'none'}, now ${game.item || 'none'}`);
+      if (!ITEMS.length) return;
+      const item = ITEMS[Math.floor(wardrobe() * ITEMS.length)];
+      if (game.progress.save.coins >= item.coins && game.progress.save.gems >= item.gems) game.buy(item.id);
+      game.equip(item.id);
+      did('try on', `${item.id}, now ${game.slots[item.aisle] || 'none'}`);
     };
     const total = actions.reduce((n, [w]) => n + w, 0);
+    /**
+     * A player pressing the putt's shape and spin buttons on minigolf, for a kit whose club bends or spins: a shape and a spin
+     * chosen before the next putt, from a stream of its own and only with such a kit, so no other run draws from it, and the
+     * monkey's own stream is as it was (`drawn` counts it). The stroke spends them, as `spent` holds wherever one is taken.
+     */
+    const shaper = seeded(seed * 59 + 1);
+    const shape = () => {
+      if (game.layout.golf || !game.ready || (game.kit.bend === 0 && game.kit.puttSpin === 0)) return;
+      if (shaper() < 0.3) {
+        game.setShape(game.kit.bend > 0 ? SHAPES[Math.floor(shaper() * SHAPES.length)] : 0);
+        game.setSpin(game.kit.puttSpin > 0 ? SPINS[Math.floor(shaper() * SPINS.length)] : 0);
+        did('shape and spin a putt');
+      }
+    };
     const act = () => {
       let pick = random() * total;
       for (const [w, go] of actions) {
@@ -1223,6 +1296,7 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
         act();
       }
       // the button is there whatever the ball is doing, so it is pressed while it rolls and between holes too
+      shape();
       if (facer() < 0.008) face();
       if (aimer() < 0.01) aimAndTakeBack();
       if (bumped() < 0.03) bump();
@@ -1231,10 +1305,11 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
       if (game.obstacles.streamed.size && streamer() < 0.03) strikeOntoStream();
       if (laneOf(game.def) && driver() < 0.03) driveTheLane();
       if (game.layout.golf && islandsOf(game.def).length && islander() < 0.03) flyToIsland();
-      count(itemFrames, game.item || 'none');
+      count(itemFrames, `${game.slots.club || '-'}|${game.slots.ball || '-'}|${game.slots.accessory || '-'}`);
       if (seed % 5 === 0 && wardrobe() < 0.004) tryOn();
       if (retaker() < 0.01) retake();
       if (reading() < 0.03) readOff();
+      if (!game.layout.golf && ranging() < 0.03) rangeOff();
       const was = snapshot();
       quiet();
       game.step(DT);

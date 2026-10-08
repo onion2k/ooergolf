@@ -64,7 +64,11 @@ describe('the fuzzer', () => {
       putted = 0,
       holed = 0;
     const visited = new Set<string>();
-    for (const seed of [4, 9, 21, 30]) {
+    // six seeds, since a seed reads the break from one time to sixteen: on four the count came to 18 to 24 by which way a
+    // round happened to go, astride the floor below, and the stones laid by the water on 8 October 2026 took it under; on
+    // these six it is 37 to 52 on the trees measured, so a change that stops the reading still fails and one that only
+    // moves the chance does not
+    for (const seed of [4, 9, 21, 30, 37, 52]) {
       const r = fuzz(seed, 12000, contoured());
       expect(r.failure, `seed ${seed}: ${JSON.stringify(r.failure)}`).toBe(null);
       read += r.done['read the break'] || 0;

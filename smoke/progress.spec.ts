@@ -25,7 +25,7 @@ import { FLAT } from '../test/level';
 import { wideHole } from '../test/wide-hole';
 import { smallHole } from './bighole';
 import { BUDGET } from './budget';
-import { drag, intoThePond, puttingHole, start, watch } from './game';
+import { drag, intoThePond, landed, puttingHole, start, watch } from './game';
 import { CONTRAST, THUMB, holeOut, openDrawer, read } from './panels';
 
 /** Play `frames` frames, and check nothing that must hold has broken. */
@@ -177,18 +177,22 @@ test('a hole played out to the cup by drags, its score shown, and the next hole 
   expect(problems).toEqual([]);
 });
 
-test('with the magnet cup worn the game loads, and a hole holed out is followed by the next, drawn and played', async ({
+test('with the horseshoe worn the game loads, and a hole holed out is followed by the next, drawn and played', async ({
   page,
 }) => {
   const problems = watch(page);
-  // a player who has bought the magnet and wears it, as the save they come back to has it. Its cup is wider than a tile, which the scene
-  // refused to draw: the page stopped on a blue screen as it loaded, and a hole begun in a round left the last hole's picture and panel
+  // a player who has bought the horseshoe and wears it, as the save they come back to has it. Its cup is wider than a tile, which the scene
+  // refused to draw once: the page stopped on a blue screen as it loaded, and a hole begun in a round left the last hole's picture and panel
   // up over the next hole's physics, the ball on a tee that was not drawn and rails that were not
-  await start(page, { seed: 1, paused: true, save: { coins: 500, gems: 5, owned: ['magnet'], item: 'magnet' } });
+  await start(page, {
+    seed: 1,
+    paused: true,
+    save: { coins: 500, gems: 5, owned: ['horseshoe'], kit: { club: '', ball: '', accessory: 'horseshoe' } },
+  });
   for (const course of ['The Meadow', 'The Links']) {
     await page.evaluate((name) => window.game!.chooseCourse(name), course);
     const first = await page.evaluate(() => window.game!.content().cup);
-    expect(first.radius, `${course}: the magnet's cup, 1.9 across the middle`).toBe(1.9);
+    expect(first.radius, `${course}: the horseshoe's cup, 1.8 across the middle`).toBe(1.8);
     const done = await holeOut(page);
     expect(done.phase, `${course}: holed`).toBe('done');
     // the next hole begun, which is drawn as it begins: its panel names it, the card has the one score, and nothing threw
@@ -199,6 +203,53 @@ test('with the magnet cup worn the game loads, and a hole holed out is followed 
     expect(next.card.length).toBe(1);
     await expect(page.locator('#holeName')).toContainText('Hole 2 of');
   }
+  expect(problems).toEqual([]);
+});
+
+test('the shop is opened, each aisle pressed by a real pointer, one thing bought and worn from each, and a stroke played with the kit', async ({
+  page,
+}) => {
+  const problems = watch(page);
+  await start(page, { seed: 1, paused: true, save: { coins: 500, gems: 1 } });
+  await page.locator('#shopOpen').click();
+  await expect(page.locator('#shop')).toBeVisible();
+  // each tab pressed with the pointer, its fifteen rows and the row for none shown, and the note on the ball aisle that a new ball waits for the next hole
+  for (const [aisle, label, buy] of [
+    ['club', 'Clubs', 'mallet'],
+    ['ball', 'Balls', 'clay'],
+    ['accessory', 'Accessories', 'comet'],
+  ] as const) {
+    await page.locator(`#shopTab-${aisle}`).click();
+    await expect(page.locator(`#shopTab-${aisle}`)).toHaveText(label);
+    await expect(page.locator(`#shopTab-${aisle}`)).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('#shopItems .item')).toHaveCount(16);
+    if (aisle === 'ball') await expect(page.locator('#shopNote')).toBeVisible();
+    else await expect(page.locator('#shopNote')).toBeHidden();
+    // bought with coins, then worn, and it is the one marked in its aisle
+    await page.locator(`[data-item=${buy}] button`).click();
+    await expect(page.locator(`[data-item=${buy}] button`)).toHaveText('Equip');
+    await page.locator(`[data-item=${buy}] button`).click();
+    await expect(page.locator(`[data-item=${buy}] button`)).toHaveText('Equipped');
+    await expect(page.locator('[data-item=""] button')).toHaveText('Equip');
+  }
+  const worn = await page.evaluate(() => window.game!.state());
+  expect(worn.kit).toEqual({ club: 'mallet', ball: 'clay', accessory: 'comet' });
+  expect(worn.coins).toBe(500 - 160 - 140 - 60);
+  // the aisles keep what is worn when they are pressed again, and a second thing of an aisle takes the first’s place
+  await page.locator('#shopTab-club').click();
+  await expect(page.locator('[data-item=mallet] button')).toHaveText('Equipped');
+  await page.locator('#shopClose').click();
+  await expect(page.locator('#shop')).toBeHidden();
+  await play(page, 10, 'after the shop');
+  // and a stroke is played, by a drag, with the kit on
+  await landed(page);
+  await putt(page, 0, 70);
+  await play(page, 5, 'the stroke');
+  const after = await page.evaluate(() => window.game!.state());
+  expect(after.strokes).toBe(1);
+  expect(after.kit).toEqual({ club: 'mallet', ball: 'clay', accessory: 'comet' });
+  await untilReady(page, 'the stroke played with the kit');
+  expect(await page.evaluate(() => window.game!.invariants())).toEqual([]);
   expect(problems).toEqual([]);
 });
 

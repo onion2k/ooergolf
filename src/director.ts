@@ -209,12 +209,13 @@ export class Director {
   }
 
   /**
-   * What the aim view was worked out from: the club, the lie and the item equipped, since the glove, the wind sock and the
-   * rest change how far a shot reaches with the club and the lie as they were, and a view kept for the old reach would
-   * leave the new one off the top of the screen.
+   * What the aim view was worked out from: the club, the lie and the kit worn, since a club's power and loft, the wind and the
+   * sand and the rough change how far a shot reaches with the club and the lie as they were, and a view kept for the old
+   * reach would leave the new one off the top of the screen.
    */
   private keyOf(club: string, lie: number): string {
-    return `${club}|${lie}|${this.game?.item ?? ''}`;
+    const kit = this.game?.progress.save.kit;
+    return `${club}|${lie}|${kit ? `${kit.club}|${kit.ball}|${kit.accessory}` : ''}|${this.game?.opening ? 1 : 0}`;
   }
 
   /**
@@ -227,7 +228,14 @@ export class Director {
     const { world, ball, layout, inHand } = game;
     const lie = lieAt(layout, world.x[ball], world.y[ball]);
     this.aimedFor = this.keyOf(inHand.id, lie);
-    this.rig.aimAt(aimView(reachOf(inHand, lie, game.wind.speed, game.effects), this.aspect, this.height), now);
+    this.rig.aimAt(
+      aimView(
+        reachOf(inHand, lie, game.wind.speed, game.kit, game.opening ? game.kit.firstStroke.power : 1),
+        this.aspect,
+        this.height,
+      ),
+      now,
+    );
   }
 
   /**
@@ -242,7 +250,7 @@ export class Director {
     const { world, ball, layout } = game;
     const { rig, worked } = this;
     const [x, y, t] = [world.x[ball], world.y[ball], Math.PI / 2 - rig.headed];
-    const roll = rollsFor(game.hardest);
+    const roll = rollsFor(game.hardest, game.putRoll);
     if (x === worked.x && y === worked.y && t === worked.t && roll === worked.roll) return;
     [worked.x, worked.y, worked.t, worked.roll] = [x, y, t, roll];
     const reach = reachOnMinigolf(layout, x, y, t, roll);
@@ -281,8 +289,8 @@ export class Director {
     const { world, ball, layout, inHand } = game;
     const [x, y, t] = [world.x[ball], world.y[ball], Math.PI / 2 - this.rig.headed];
     const reach = layout.golf
-      ? reachOf(inHand, lieAt(layout, x, y), game.wind.speed, game.effects)
-      : reachOnMinigolf(layout, x, y, t, rollsFor(game.hardest));
+      ? reachOf(inHand, lieAt(layout, x, y), game.wind.speed, game.kit, game.opening ? game.kit.firstStroke.power : 1)
+      : reachOnMinigolf(layout, x, y, t, rollsFor(game.hardest, game.putRoll));
     out.x = x + reach * Math.cos(t);
     out.y = y + reach * Math.sin(t);
     out.z = heightAt(layout, x, y);

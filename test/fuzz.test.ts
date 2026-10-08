@@ -44,12 +44,14 @@ describe('the fuzzer', () => {
     // putters were replaced by items (the shop's actions draw the same, but a monkey that can no longer buy a harder putter
     // plays a different round on minigolf); seeds 26 and 3 did not move. Seed 3's (level golf) moved from 2670 to 2702 when the play items
     // began to act, since the monkey buys and equips them and plays on with one held (with every effect off it is 2670 again).
+    // Seed 3's went back from 2702 to 2670 on 8 October 2026 when the eighteen play items were withdrawn: with every effect off
+    // it is the 2670 it was before they acted, and the kit's shop (whose figures act through the kit alone) leaves it there.
     // Seed 26's moved from 3296 to 3142 when The Fair went on 8 October 2026, its best holes shared between the Shed and the
     // Waterworks: a monkey choosing among six courses, and playing their holes in a new order, plays another round; 17 and 3
     // did not move. Seeds 26 and 17 moved again, to 3140 and 3202, when stones that the ball meets were laid along the water's
     // edge off each hole's line of play (8 October 2026): the rounds are played differently where a ball comes back off one.
     // With no stones laid they are 3142 and 3100 to the draw, so 'roll at a stone' draws nothing of the monkey's own
-    expect([one.drawn, two.drawn, golf.drawn], "draws from the monkey's main stream").toEqual([3140, 3202, 2702]);
+    expect([one.drawn, two.drawn, golf.drawn], "draws from the monkey's main stream").toEqual([3140, 3202, 2670]);
     // the framing rule was asked of the camera, on golf and on minigolf, a good many times: a check that never ran passes in silence
     expect(one.framed + two.framed, 'times the framing was checked').toBeGreaterThan(300);
     expect(golf.framed, 'times it was checked on level golf').toBeGreaterThan(30);
@@ -72,6 +74,7 @@ describe('the fuzzer', () => {
       'equip',
       'face the flag',
       'fly to an island',
+      'line up a putt',
       'look from overhead',
       'play again',
       'putt by the break',
@@ -82,6 +85,7 @@ describe('the fuzzer', () => {
       'shoot as aimed',
       'shoot well',
       'shoot while rolling',
+      'unequip',
       'wait',
     ];
     expect(Object.keys(r.done).sort(), 'every action there is, and no other').toEqual(actions);

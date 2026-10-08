@@ -55,13 +55,13 @@ export const GHOST_FRAMES = 1500;
 export const GHOST_EVERY = 3;
 
 /**
- * What the ghost shot adds to a preview: the flight carried on past where it first came down, to where the ball comes to
- * rest. Nothing of it unless the item is held (`shown` is false and `n` nought), and the first landing's own fields are never
+ * What the rest adds to a preview: the flight carried on past where it first came down, to where the ball comes to
+ * rest. Nothing of it unless the kit asks for it (`shown` is false and `n` nought), and the first landing's own fields are never
  * changed by it. A ball lost in the water or out of bounds, or dropped in the cup, has no rest beyond where that happened,
  * and `end` says so. Written into buffers made once.
  */
 export class Rest {
-  /** Whether there is a rest to show: the item was held and the shot was a flight that came down. */
+  /** Whether there is a rest to show: the kit asked for it and the shot was a flight that came down. */
   shown = false;
   /** How many points of `points` are the path from the first landing to the rest (none for a ball that was lost at the landing). */
   n = 0;
@@ -247,13 +247,13 @@ export class Previewer {
       push(world.x[ball], world.y[ball], world.z[ball]);
     }
     this.finish(this.result, layout, from, club, angle, power);
-    // the ghost shot follows the ball on from its first landing, only where it is held: the flight above is what it was
-    if (this.rehearsal.effects.has('ghost')) this.carryOn(p, from);
+    // the rest follows the ball on from its first landing, only where the kit asks for it: the flight above is what it was
+    if (this.rehearsal.kit.rest) this.carryOn(p, from);
     return p;
   }
 
   /**
-   * The ghost shot: the rehearsal let run on from the first landing until the ball is ready again, drops in the cup, is lost
+   * The rest: the rehearsal let run on from the first landing until the ball is ready again, drops in the cup, is lost
    * or the frames are used up (`GHOST_FRAMES`), a point of its path every `GHOST_EVERY` frames, written into `p.rest`. Done after
    * the flight has been read, so nothing of it moves, and it ends where the game itself puts the ball, being the game.
    */
@@ -326,7 +326,7 @@ export class Previewer {
    * is a curve a player sees and not a number they are told. Nothing for a club that has loft (`run` is its own) or a swing
    * with no power.
    */
-  roll(from: { x: number; y: number }, club: BagClub, angle: number, power: number): Preview {
+  roll(from: { x: number; y: number }, club: BagClub, angle: number, power: number, shape = 0, spin = 0): Preview {
     const p = this.rolled;
     const g = this.rehearsal;
     const told = this.told;
@@ -336,8 +336,8 @@ export class Previewer {
     this.rolling = true;
     g.trial(from.x, from.y);
     g.pick(club.id);
-    g.setShape(0);
-    g.setSpin(0);
+    g.setShape(shape);
+    g.setSpin(spin);
     if (!g.shoot(angle, power)) return p;
     const { layout, world, ball } = g;
     p.rolled = true;
@@ -361,6 +361,18 @@ export class Previewer {
     }
     this.rolling = false;
     this.finish(p, layout, from, club, angle, power);
+    // a putt on minigolf is rolled all the way to where it rests, so the rangefinder's rest is the roll's own end: a ring there and no path past it
+    if (!layout.golf && g.kit.rest) {
+      const r = p.rest;
+      r.shown = true;
+      r.n = 0;
+      r.x = p.x;
+      r.y = p.y;
+      r.end = p.end === 'landed' ? 'rest' : p.end;
+      r.carry = p.carry;
+      r.lie = p.lie;
+      r.settled = p.end !== 'landed' || g.ready;
+    }
     return p;
   }
 
@@ -414,9 +426,11 @@ export class Previewer {
     // the square of
     // (a putt has none: it never scatters)
     if (p.rolled) return;
-    const { effects } = this.rehearsal;
-    const spread = maxScatter(club, lieAt(layout, from.x, from.y), power, effects);
-    const shortest = p.carry * (1 - lossOf(effects) * Math.min(1, power)) ** 2;
+    const { kit } = this.rehearsal;
+    const spread =
+      maxScatter(club, lieAt(layout, from.x, from.y), power, kit) *
+      (this.rehearsal.opening ? kit.firstStroke.scatter : 1);
+    const shortest = p.carry * (1 - lossOf(kit, club) * Math.min(1, power)) ** 2;
     p.footprint.across = p.carry * Math.sin(spread);
     p.footprint.along = (p.carry - shortest) / 2;
   }

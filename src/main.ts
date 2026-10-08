@@ -8,13 +8,25 @@
 import { createContext } from 'artshape-render/gpu/context';
 import { LightPool } from 'artshape-render/game/lights';
 import { GameRenderer, antialiasFor } from 'artshape-render/game/renderer';
-import { BALL, HARDEST_SHOT, KICKER, KIND_RADIUS, heightAt, kickerAt, lieAt, onSand, rollsFor } from './arena';
+import {
+  BALL,
+  HARDEST_SHOT,
+  KICKER,
+  KIND_RADIUS,
+  heightAt,
+  kickerAt,
+  lieAt,
+  onSand,
+  rollsFor,
+  strikeSpeed,
+} from './arena';
+import { bendRate } from './shaping';
 import { BAG, PUTTER, carryOf } from './bag';
 import { markScale, safeBox } from './aimview';
 import { framingProblems } from './invariants';
 import { CLIP, CameraRig, LEAD, TILT, overheadFit, standOf, tallOf } from './camera';
 import { Director } from './director';
-import { ITEMS } from './items';
+import { ITEMS, itemById } from './items';
 import { createApi } from './debug';
 import { holeFailureText, reasonOf } from './failure';
 import { frameCost } from './frame-cost';
@@ -35,7 +47,7 @@ import { fieldOf, flattenFor, grassOptionsOf, windOf } from './turf';
 import { AIM_REACH, Scene, boxOf, sunFitOf } from './scene';
 import { carryFrom } from './flight';
 import { clearings } from './scenery';
-import { cupBurst, splash, strikePuff } from './bursts';
+import { FIREWORK_STEPS, cupBurst, fireworkAt, fireworkEmits, splash, strikePuff } from './bursts';
 import { Input } from './input';
 import { SPARKLE, flash, glint, kickFlash } from './glints';
 import { Squash, squashInto, squashOf } from './squash';
@@ -133,6 +145,7 @@ async function main() {
       again: () => game?.newRound(),
       buy: (id) => game?.buy(id),
       equip: (id) => game?.equip(id),
+      unequip: (aisle) => game?.unequip(aisle),
       choose(name) {
         const course = COURSES.find((c) => c.name === name);
         if (!game || !course) return;
@@ -163,7 +176,7 @@ async function main() {
       flag() {
         faceFlag();
       },
-      // the Retake button: the Mulligan item's free retake, which the game says whether it took (and tells of, through `mulliganed`)
+      // the Retake button: the kit's free retake, which the game says whether it took (and tells of, through `mulliganed`)
       retake() {
         game?.mulligan();
       },
@@ -247,8 +260,12 @@ async function main() {
   let previewer: Previewer | null = null;
   /** Whether the hole being played is a hole of minigolf whose ground leans, which shows its break as golf's green does: the arrows, the putt's roll and the break in words. */
   let leans = false;
+  /** Whether the putt on this hole of minigolf is shown as the roll it makes, to where it rests: the ground leans, or the rangefinder is worn. */
+  let rolls = false;
+  /** The fireworks over the cup: when the hole was holed, in game time, and the next step to go off (all of them, once they are over). */
+  const fireworks = { at: 0, step: FIREWORK_STEPS };
   /** The shot the preview was last worked out for, so it is worked out again only when the aim, the club or the ball changes; and whether one is shown. */
-  const previewed = { x: NaN, y: NaN, angle: NaN, power: NaN, club: '', shape: NaN, spin: NaN };
+  const previewed = { x: NaN, y: NaN, angle: NaN, power: NaN, club: '', shape: NaN, spin: NaN, tick: NaN };
   let previewShown = false;
   /** The wind of the hole being played, read once as it begins: which way it blows across the ground and how hard in miles an hour. */
   const windNow = { x: 0, y: 0, speed: 0 };
@@ -326,18 +343,21 @@ async function main() {
         // the hole's own wind, which the grass bends in and the flag and the trees follow
         const wind = windOf(name);
         const fixed = scene.static(layout, name, game.obstacles, game.cup.radius);
-        // the items that show more are drawn on the holes begun with them, which is where their previews are made too
+        // the kit's accessories that show more are drawn on the holes begun with them (the pennant is still the flag in rainbow stripes until it is drawn fresh), which is where their previews are made too
         const moving = scene.dynamic(game.obstacles, layout, name, wind, {
-          ghost: game.effects.has('ghost'),
-          reader: game.effects.has('reader'),
-          rainbow: game.effects.has('rainbow'),
+          ghost: game.kit.rest,
+          reader: game.kit.chalk,
+          pennant: game.kit.pennant,
+          chalk: game.kit.chalk,
+          ball: itemById(game.slots.ball)?.look,
         });
         // the hole's rough, round the painted green: a hole too big for a field of grass is refused here, by its size
         const field = fieldOf(layout, name, clearings(layout, name));
         const grass = grassOptionsOf(layout);
         // the preview of this hole's shots is worked out in a rehearsal of it, made once here and let go with the hole
         const slopes = leansOnMinigolf(layout);
-        const rehearsal = layout.golf || slopes ? new Previewer(game) : null;
+        // a hole of minigolf is rehearsed when its ground leans, and when the rangefinder is worn, whose ring is where the roll rests
+        const rehearsal = layout.golf || slopes || game.kit.rest ? new Previewer(game) : null;
         const map = mapOfHole();
 
         // ---- shown ----
@@ -360,7 +380,10 @@ async function main() {
         // a hole of minigolf has its limits and its home view as it always had)
         director.started();
         leans = slopes;
+        rolls = slopes || (!layout.golf && game.kit.rest);
         previewer = rehearsal;
+        // the fireworks of the hole before are over with it
+        fireworks.step = FIREWORK_STEPS;
         previewed.club = '';
         previewShown = false;
         shownPreview = null;
@@ -470,10 +493,15 @@ async function main() {
         game.layout.cup.x,
         game.layout.cup.y,
         strokes === 1,
-        game.effects.has('confetti') ? 'confetti' : 'plain',
+        game.kit.streamers ? 'streamers' : 'plain',
       )) {
         renderer.emit(e);
         drawn.confetti += e.count;
+      }
+      // a birdie or better sends the fireworks up over the cup, a shell at a time, from game time
+      if (game.kit.fireworks && strokes < par) {
+        fireworks.at = game.t;
+        fireworks.step = 0;
       }
     },
     pickedUp: (strokes, par) => hud.done(strokes, par, true),
@@ -554,6 +582,7 @@ async function main() {
     // the camera as the frame drew it, held still for the drag
     hold: () => held.hold(cam),
     shoot: (angle, power) => played.shoot(angle, power),
+    touch: () => played.touch,
     zoom: (by) => rig.zoom(by),
     // the view from above dragged: the ground goes with the finger, over the height of the canvas
     pan: (dx, dy) => rig.pan(dx, dy, canvas.getBoundingClientRect().height),
@@ -676,7 +705,7 @@ async function main() {
     // hole being played; the break is worked out when the ball comes to rest and never again for it
     // (the break reader shows them off the green too, round the ball, for a putter in hand)
     const lie = lieAt(layout, x, y);
-    const aids = breakAids(lie, inHand.loft, played.effects.has('reader'), played.def.greens !== undefined);
+    const aids = breakAids(lie, inHand.loft, played.kit.chalk, played.def.greens !== undefined);
     const rested = played.ready && played.phase === 'play';
     scene.setArrows(rested && aids.arrows === 'green');
     const nearBall = rested && aids.arrows === 'near';
@@ -695,7 +724,7 @@ async function main() {
         putted.x = x;
         putted.y = y;
         puttedFor = aids.arrows;
-        hud.setPutt(puttText(breakOf(layout, x, y, played.greens)));
+        hud.setPutt(puttText(breakOf(layout, x, y, played.greens, played.ground)));
       }
     } else if (!Number.isNaN(putted.x)) {
       putted.x = NaN;
@@ -749,15 +778,29 @@ async function main() {
     const { world, ball, layout } = played;
     const x = world.x[ball],
       y = world.y[ball];
+    // what moves on a hole of minigolf is posed by game time, so the roll is worked out again a few times a second while the aim is held
+    const tick = played.obstacles.pushers.length ? Math.floor(played.t * 4) : 0;
     if (aimed && previewer) {
       if (
         previewed.x !== x ||
         previewed.y !== y ||
         previewed.angle !== aimed.angle ||
-        previewed.power !== aimed.power
+        previewed.power !== aimed.power ||
+        previewed.shape !== played.shape ||
+        previewed.spin !== played.spin ||
+        previewed.tick !== tick
       ) {
-        Object.assign(previewed, { x, y, angle: aimed.angle, power: aimed.power, club: PUTTER.id });
-        previewer.roll({ x, y }, PUTTER, aimed.angle, aimed.power);
+        Object.assign(previewed, {
+          x,
+          y,
+          angle: aimed.angle,
+          power: aimed.power,
+          club: PUTTER.id,
+          shape: played.shape,
+          spin: played.spin,
+          tick,
+        });
+        previewer.roll({ x, y }, PUTTER, aimed.angle, aimed.power, played.shape, played.spin);
       }
       shownPreview = previewer.rolled;
       scene.setShot(shownPreview, markScale(Math.min(rig.distance * tallOf(aspect), standOf(aspect))));
@@ -768,13 +811,15 @@ async function main() {
       previewed.club = '';
       previewShown = false;
     }
+    // the arrows over the floor and the break in words are for a hole whose ground leans; a level one shows only the roll
+    if (!leans) return;
     const resting = played.ready && played.phase === 'play';
     scene.setArrows(resting);
     if (resting) {
       if (putted.x !== x || putted.y !== y) {
         putted.x = x;
         putted.y = y;
-        hud.setPutt(puttText(breakOf(layout, x, y)));
+        hud.setPutt(puttText(breakOf(layout, x, y, undefined, played.ground)));
       }
     } else if (!Number.isNaN(putted.x)) {
       putted.x = NaN;
@@ -798,15 +843,35 @@ async function main() {
     // a putt, on a golf hole or a hole of minigolf, is aimed by its dots as it always was
     const flying = golf && previewer !== null && played.ready && played.inHand.loft > 0 ? input.aim : null;
     const reach = golf
-      ? carryFrom(played.inHand, 1, lieAt(played.layout, world.x[ball], world.y[ball]), played.effects) / AIM_REACH
-      : rollsFor(played.hardest) / rollsFor(HARDEST_SHOT);
+      ? carryFrom(
+          played.inHand,
+          1,
+          lieAt(played.layout, world.x[ball], world.y[ball]),
+          played.kit,
+          played.opening ? played.kit.firstStroke.power : 1,
+        ) / AIM_REACH
+      : rollsFor(played.hardest, played.putRoll) / rollsFor(HARDEST_SHOT);
     // and a putt on a hole whose greens are set is drawn as its roll as well, so the break is seen as a curve across the green
     const rolling =
       golf && previewer !== null && played.ready && played.inHand.loft === 0 && played.def.greens !== undefined
         ? input.aim
         : null;
-    const dots = played.ready && !flying ? scene.writeAim(world.x[ball], world.y[ball], input.aim, reach, played.t) : 0;
-    if (leans) aimOnSlope(played.ready ? input.aim : null);
+    // a putt that curves on minigolf has its dots laid along the curve, struck at the speed the drag would give it
+    const bend = golf ? 0 : bendRate(played.shape, played.kit);
+    const dots =
+      played.ready && !flying
+        ? scene.writeAim(
+            world.x[ball],
+            world.y[ball],
+            input.aim,
+            reach,
+            played.t,
+            bend,
+            bend !== 0 && input.aim ? strikeSpeed(input.aim.power, played.hardest) : 0,
+            played.putRoll,
+          )
+        : 0;
+    if (rolls) aimOnSlope(played.ready ? input.aim : null);
     if (golf) {
       // the club the game holds, shown in the bag whoever chose it (the game puts the putter in hand on the green by
       // itself), before the aim's words name it
@@ -816,6 +881,12 @@ async function main() {
       // the camera as it is this frame, which includes the glide to a new tee
       hud.setShaping(played.shape, played.spin);
       if (windNow.speed >= 0.5) hud.setWindArrow(windArrow(windNow.x, windNow.y, rig.view(played.t, turnNow).azimuth));
+    } else {
+      // the shape and the spin of a putt, for a kit that gives them: buttons on a hole of minigolf only then
+      hud.setPuttShaping(played.kit.bend > 0, played.kit.puttSpin > 0);
+      hud.setShaping(played.shape, played.spin);
+      // the chalk's line past the first bank, for the aim held (the scene draws it only on a hole begun with the chalk)
+      scene.setBankAim(world.x[ball], world.y[ball], played.ready ? input.aim : null, reach);
     }
     renderer.move(1, scene.aim, dots);
     // the nearest dot's size, as it was placed: nought for none
@@ -830,6 +901,18 @@ async function main() {
     renderer.time = played.t;
     shine();
     glowTrail();
+    flyFireworks();
+  }
+
+  /** The fireworks that are due by game time, thrown over the cup: none when none is under way. */
+  function flyFireworks() {
+    if (fireworks.step >= FIREWORK_STEPS) return;
+    const { cup } = played.layout;
+    const z = heightAt(played.layout, cup.x, cup.y);
+    while (fireworks.step < FIREWORK_STEPS && played.t - fireworks.at >= fireworkAt(fireworks.step)) {
+      for (const e of fireworkEmits(cup.x, cup.y, z, fireworks.step)) renderer.emit(e);
+      fireworks.step++;
+    }
   }
 
   /**
@@ -839,7 +922,7 @@ async function main() {
    */
   function glowTrail() {
     const { world, ball } = played;
-    if (!trailDrawn(played.effects.has('glow'), RUNGS[governor.rung])) {
+    if (!trailDrawn(played.kit.trail, RUNGS[governor.rung])) {
       trail.clear();
       if (drawn.trail) renderer.setSprites(trailSprites, (drawn.trail = 0));
       return;
@@ -1015,7 +1098,7 @@ async function main() {
     // the Retake button is up while pressing it would do something: the page tells the hud, which does not read the game
     hud.setRetake(
       retakeShown({
-        held: played.effects.has('mulligan'),
+        held: played.kit.retake,
         strokes: played.strokes,
         used: played.mulliganUsed,
         phase: played.phase,
@@ -1134,6 +1217,7 @@ async function main() {
     orbit: (turn, tilt) => rig.orbit(turn, tilt),
     overhead: (on) => setOverhead(on ?? !rig.overhead),
     faceFlag,
+    shopTab: (aisle) => hud.pressTab(aisle),
     measureFrame,
     judge,
     motions: () => ({

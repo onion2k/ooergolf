@@ -8,7 +8,8 @@
  * number the page drew and nobody could trust.
  */
 import { PHYSICS, TILE, heightAt, lieAt, slopeAt, slopeInto, tileAt, type Layout } from './arena';
-import { GREENS, LIE, rollOf } from './surfaces';
+import { NO_KIT, type Kit } from './items';
+import { GREENS, LIE, groundRoll, rollScale } from './surfaces';
 
 /** The steepest a contoured green is, as a slope (rise over run): 10 per cent, at a contour of one. A green's tilt is most of it; at a 3-yard cup and a 2-yard ball a break under the cup's radius is lost in the cup, and 5 per cent was. */
 export const GREEN = { steepest: 0.1 } as const;
@@ -165,7 +166,7 @@ const wrap = (a: number) => a - Math.PI * 2 * Math.round(a / (Math.PI * 2));
  *
  * How it is found. The ball is treated as a point on the same smoothed ground the physics rolls it on (`slopeAt`), pulled
  * along it by gravity (the slope over one and the slope squared) and slowed by the roll of whatever it is rolling over
- * (`rollOf`, the lie under it at each step), so a putt that runs from the fringe onto the green is slowed by each. The sum
+ * (`groundRoll`, the lie under it at each step, as the kit's ball rolls on it), so a putt that runs from the fringe onto the green is slowed by each. The sum
  * is done backward in time, from the cup, with the speed it arrives at and an arrival direction that is tried: the path
  * back is followed until it is as far from the cup as the ball is, and the direction is adjusted (a secant on the bearing
  * of where the path comes out, from the ball's own) until it comes out where the ball is. What is found there is the aim
@@ -178,14 +179,20 @@ const wrap = (a: number) => a - Math.PI * 2 * Math.round(a / (Math.PI * 2));
  * that hard, which is the aim of a putt that would arrive and which no putter can make, flagged by a `speed` past
  * `HARDEST_SHOT`: struck at the hardest it would rest short, with a break a little more than this, and no figure is better.
  */
-export function puttFrom(layout: Layout, x: number, y: number, greens: number = GREENS.normal): Putt {
+export function puttFrom(
+  layout: Layout,
+  x: number,
+  y: number,
+  greens: number = GREENS.normal,
+  kit: Kit = NO_KIT,
+): Putt {
   const { cup } = layout;
   const dx = cup.x - x,
     dy = cup.y - y;
   const length = Math.hypot(dx, dy);
   const toCup = Math.atan2(dy, dx);
   const rise = Number.isFinite(length) ? heightAt(layout, cup.x, cup.y) - heightAt(layout, x, y) : 0;
-  const level = Math.sqrt(2 * greens * (Math.min(length, PUTT.farthest) + PUTT.dead));
+  const level = Math.sqrt(2 * greens * rollScale(LIE.green, kit) * (Math.min(length, PUTT.farthest) + PUTT.dead));
   const none: Putt = {
     across: 0,
     rise,
@@ -198,13 +205,13 @@ export function puttFrom(layout: Layout, x: number, y: number, greens: number = 
 
   let work = 0;
   const slope: [number, number] = [0, 0];
-  const arriving = Math.sqrt(2 * rollOf(lieAt(layout, cup.x, cup.y), greens) * PUTT.dead);
+  const arriving = Math.sqrt(2 * groundRoll(lieAt(layout, cup.x, cup.y), greens, kit) * PUTT.dead);
   /** How the ball's velocity changes as it goes: slowed by the ground it rolls over and pulled down the slope, per second. */
   const accel = (px: number, py: number, ux: number, uy: number, out: [number, number]) => {
     work++;
     slopeInto(layout, px, py, slope);
     const speed = Math.hypot(ux, uy) || 1;
-    const roll = rollOf(lieAt(layout, px, py), greens);
+    const roll = groundRoll(lieAt(layout, px, py), greens, kit);
     const pull = PHYSICS.gravity / (1 + slope[0] * slope[0] + slope[1] * slope[1]);
     out[0] = -(roll * ux) / speed - pull * slope[0];
     out[1] = -(roll * uy) / speed - pull * slope[1];
@@ -286,8 +293,14 @@ export function puttFrom(layout: Layout, x: number, y: number, greens: number = 
  * hole's `HoleDef.greens`; `GREENS.normal` if it has none): `puttFrom`'s `across` and `rise`, which says how it is found and
  * what the signs mean.
  */
-export function breakOf(layout: Layout, x: number, y: number, greens: number = GREENS.normal): Break {
-  const { across, rise } = puttFrom(layout, x, y, greens);
+export function breakOf(
+  layout: Layout,
+  x: number,
+  y: number,
+  greens: number = GREENS.normal,
+  kit: Kit = NO_KIT,
+): Break {
+  const { across, rise } = puttFrom(layout, x, y, greens, kit);
   return { across, rise };
 }
 

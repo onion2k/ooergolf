@@ -13,9 +13,10 @@
  * stylesheet turns into the motion, or into none for a player who has asked
  * for less.
  */
-import type { Item } from './items';
+import { AISLES, type Aisle, type Item, type KitSlots } from './items';
 import type { Mode } from './gesture';
 import { windText } from './readout';
+import { swatchOf } from './swatch';
 import { SCORE_KINDS, againstPar, scoreKind, scoreName } from './score';
 
 /** Each kind of word the callout over the course says, which the stylesheet colours: a score's kind, the water, or out of bounds. */
@@ -29,11 +30,13 @@ export interface HudHandlers {
   courses(): void;
   buy(id: string): void;
   equip(id: string): void;
+  /** The slot of an aisle emptied. */
+  unequip(aisle: Aisle): void;
   /** The overhead button pressed: the view from above wanted on or off, the one it is not now. A drag is a pan while it is on. */
   overhead(on: boolean): void;
   /** The flag button pressed: the camera turned to face the cup. */
   flag(): void;
-  /** The Retake button pressed: the Mulligan item's one free retake of the last stroke. */
+  /** The Retake button pressed: the kit's one free retake of the last stroke. */
   retake(): void;
   /** A club of the bag chosen on a golf hole, by its id. */
   club(id: string): void;
@@ -106,13 +109,16 @@ const MAP_INK = {
   rings: ['#ffd23f', '#3aa0ff', '#ff5a4a', '#8de03a'],
 } as const;
 
+/** What the shop calls each aisle. */
+const AISLE_NAMES: Record<Aisle, string> = { club: 'Clubs', ball: 'Balls', accessory: 'Accessories' };
+
 /** What the shop needs to know of the save to show each item as for sale, owned, or equipped. */
 export interface Purse {
   coins: number;
   gems: number;
   owned: readonly string[];
-  /** The item equipped, '' for none. */
-  item: string;
+  /** The kit worn: each slot '' for none. */
+  kit: KitSlots;
 }
 
 /** What the help says a drag does, in each mode: a golf hole's is a swing, and a minigolf hole's a putt. */
@@ -128,6 +134,9 @@ export interface HoleInfo {
   name: string;
   par: number;
 }
+
+/** What the None row of each aisle says: playing with nothing from it is the plain game, not going without. */
+const NONE_WORDS = { club: 'The bag as it comes.', ball: 'The plain white ball.', accessory: 'Nothing worn.' } as const;
 
 export class Hud {
   private readonly panel = document.getElementById('strokes')!;
@@ -152,6 +161,14 @@ export class Hud {
   private readonly gems = document.getElementById('gems')!;
   private readonly shop = document.getElementById('shop')!;
   private readonly items = document.getElementById('shopItems')!;
+  private readonly shopCoins = document.getElementById('shopCoins')!;
+  private readonly shopGems = document.getElementById('shopGems')!;
+  private readonly shopNote = document.getElementById('shopNote')!;
+  private readonly tabs = AISLES.map((aisle) => document.getElementById(`shopTab-${aisle}`) as HTMLButtonElement);
+  /** The aisle the shop shows, which is remembered while the page is open and not after: the clubs when it opens. */
+  private tab: Aisle = 'club';
+  /** What the shop was last told of the save, so a tab pressed can show its rows without waiting for the game to tell again. */
+  private saved: Purse | null = null;
   private readonly start = document.getElementById('start')!;
   private readonly courseList = document.getElementById('courses')!;
   private readonly help = document.getElementById('help')!;
@@ -203,6 +220,8 @@ export class Hud {
   /** The shape and the spin the buttons show, and the turn the wind's arrow was last written at, so each is written only when it changes. */
   private shapeShown = 0;
   private spinShown = 0;
+  /** Which of the putt's shape and spin buttons a hole of minigolf shows (2 for the shape, 1 for the spin), or -1 for none said yet: so the page may say it every frame. */
+  private puttShown = -1;
   private windTurn = NaN;
 
   constructor(
@@ -218,6 +237,28 @@ export class Hud {
     document.getElementById('cardShop')!.addEventListener('click', open);
     document.getElementById('shopClose')!.addEventListener('click', () => {
       this.shop.hidden = true;
+    });
+    // the tabs are a tablist: a press chooses an aisle, and the arrow keys, home and end walk along them
+    this.tabs.forEach((tab, i) => {
+      tab.textContent = AISLE_NAMES[AISLES[i]];
+      tab.addEventListener('click', () => this.pressTab(AISLES[i]));
+      tab.addEventListener('keydown', (e) => {
+        const to =
+          e.key === 'ArrowRight'
+            ? i + 1
+            : e.key === 'ArrowLeft'
+              ? i - 1
+              : e.key === 'Home'
+                ? 0
+                : e.key === 'End'
+                  ? AISLES.length - 1
+                  : -1;
+        if (to < 0) return;
+        e.preventDefault();
+        const next = (to + AISLES.length) % AISLES.length;
+        this.pressTab(AISLES[next]);
+        this.tabs[next].focus();
+      });
     });
     // on a phone the hole's panel is a drawer off the screen's edge: the chip pulls it out, and it is shut by its button, a
     // tap on the course beside it or the escape key (the stylesheet says where it stands; on a desk none of this is shown)
@@ -324,6 +365,9 @@ export class Hud {
   setBag(clubs: readonly BagInfo[] | null, active = '') {
     this.bagList = clubs ?? [];
     this.setOverhead(this.mode === 'overhead');
+    // a golf hole's shaping is both buttons or none; a hole of minigolf says which it shows, with `setPuttShaping`
+    this.shapeButton.hidden = this.spinButton.hidden = false;
+    this.puttShown = -1;
     if (!clubs) {
       this.bag.hidden = true;
       this.shaping.hidden = true;
@@ -343,6 +387,22 @@ export class Hud {
     this.active = null;
     this.setClub(active);
     this.bag.hidden = !this.start.hidden;
+  }
+
+  /**
+   * The shape and spin buttons of a putt on a hole of minigolf, for a kit that gives them: the bag's panel up with only them
+   * in it (no clubs, and "Putter" over them), the shape button if the kit bends and the spin button if it spins, and the panel
+   * away if it does neither. Written only when it changes, so the page may say it every frame; away under the start screen.
+   */
+  setPuttShaping(shape: boolean, spin: boolean) {
+    const shown = (shape ? 2 : 0) + (spin ? 1 : 0);
+    if (shown === this.puttShown) return;
+    this.puttShown = shown;
+    this.shapeButton.hidden = !shape;
+    this.spinButton.hidden = !spin;
+    this.shaping.hidden = !shown;
+    this.bagInfo.textContent = shown ? 'Putter' : '';
+    this.bag.hidden = !shown || !this.start.hidden;
   }
 
   /** The club in hand: its pill stands up, and what it is and how far it carries is said above them. */
@@ -538,7 +598,7 @@ export class Hud {
     this.chip.hidden = false;
     this.help.hidden = false;
     this.modes.hidden = false;
-    this.bag.hidden = !this.bagList.length;
+    this.bag.hidden = !(this.bagList.length || this.puttShown > 0);
     this.mapPanel.hidden = !this.mapBase;
   }
 
@@ -602,16 +662,35 @@ export class Hud {
     this.show();
   }
 
-  /** The coins and gems, and the shop's items as the save now has them: one row for no item, then each item for sale. */
+  /** The shop shows `aisle`: its tab chosen and its rows drawn. */
+  pressTab(aisle: Aisle) {
+    this.tab = aisle;
+    this.items.scrollTop = 0;
+    if (this.saved) this.setPurse(this.saved);
+  }
+
+  /** The coins and gems, and the shop's items as the save now has them: the chosen aisle's row for no item, then each item for sale in it. */
   setPurse(p: Purse) {
+    this.saved = p;
     this.coins.textContent = String(p.coins);
     this.gems.textContent = String(p.gems);
+    this.shopCoins.textContent = String(p.coins);
+    this.shopGems.textContent = String(p.gems);
+    const aisle = this.tab;
+    this.tabs.forEach((tab, i) => {
+      const chosen = AISLES[i] === aisle;
+      tab.setAttribute('aria-selected', String(chosen));
+      tab.tabIndex = chosen ? 0 : -1;
+    });
+    this.items.setAttribute('aria-labelledby', `shopTab-${aisle}`);
+    // a ball's ground figures are built into the hole's world as it begins, so a new one takes hold at the next hole; a club is read at the strike
+    this.shopNote.hidden = aisle !== 'ball';
     const row = (
       id: string,
       name: string,
       effect: string,
       price: string,
-      colour: string,
+      swatchStyle: string,
       button: HTMLButtonElement,
     ) => {
       const el = document.createElement('div');
@@ -619,7 +698,7 @@ export class Hud {
       el.dataset.item = id;
       const swatch = document.createElement('span');
       swatch.className = 'swatch';
-      swatch.style.background = colour;
+      swatch.style.background = swatchStyle;
       const words = document.createElement('span');
       words.textContent = name;
       const detail = document.createElement('small');
@@ -634,10 +713,10 @@ export class Hud {
       el.append(swatch, words, button);
       return el;
     };
-    /** The row's button: a badge for the one equipped, Equip for one owned, and Buy for one that is not. */
+    /** The row's button: a badge for the one worn in its aisle, Equip for one owned, and Buy for one that is not. */
     const button = (id: string, owned: boolean, can: boolean) => {
       const b = document.createElement('button');
-      if (p.item === id) {
+      if (p.kit[aisle] === id) {
         // not a button to press but a badge, which the stylesheet draws as one
         b.textContent = 'Equipped';
         b.className = 'held';
@@ -645,7 +724,7 @@ export class Hud {
       } else if (owned) {
         b.textContent = 'Equip';
         b.className = 'quiet';
-        b.addEventListener('click', () => this.handlers.equip(id));
+        b.addEventListener('click', () => (id === '' ? this.handlers.unequip(aisle) : this.handlers.equip(id)));
       } else {
         b.textContent = 'Buy';
         b.disabled = !can;
@@ -654,23 +733,24 @@ export class Hud {
       return b;
     };
     this.items.replaceChildren(
-      row('', 'No item', 'Play the ball as it comes.', '', 'transparent', button('', true, true)),
-      ...this.catalogue.map((item) => {
-        const [r, g, b] = item.colour.map((c) => Math.round(Math.min(1, c) * 255));
-        const owned = p.owned.includes(item.id);
-        // each figure kept with its word, so a narrow shop breaks the line between them and never inside one
-        const price = owned
-          ? ''
-          : `${item.coins}\u00a0coins${item.gems ? ` +\u00a0${item.gems}\u00a0gem${item.gems > 1 ? 's' : ''}` : ''}`;
-        return row(
-          item.id,
-          item.name,
-          item.effect,
-          price,
-          `rgb(${r} ${g} ${b})`,
-          button(item.id, owned, p.coins >= item.coins && p.gems >= item.gems),
-        );
-      }),
+      row('', 'None', NONE_WORDS[aisle], '', 'transparent', button('', true, true)),
+      ...this.catalogue
+        .filter((item) => item.aisle === aisle)
+        .map((item) => {
+          const owned = p.owned.includes(item.id);
+          // each figure kept with its word, so a narrow shop breaks the line between them and never inside one
+          const price = owned
+            ? ''
+            : `${item.coins}\u00a0coins${item.gems ? ` +\u00a0${item.gems}\u00a0gem${item.gems > 1 ? 's' : ''}` : ''}`;
+          return row(
+            item.id,
+            item.name,
+            item.effect,
+            price,
+            swatchOf(item),
+            button(item.id, owned, p.coins >= item.coins && p.gems >= item.gems),
+          );
+        }),
     );
   }
 

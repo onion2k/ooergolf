@@ -26,6 +26,7 @@ import {
   highestTerrain,
   layoutOf,
   HARDEST_SHOT,
+  RAIL_HEIGHT,
   lieAt,
   onFloor,
   restingAbove,
@@ -36,16 +37,16 @@ import {
   tileAt,
   type Layout,
 } from './arena';
-import { BAG, PUTTER, bagClub, gloved, type BagClub } from './bag';
-import { ITEM_FIGURES, NO_EFFECTS, effectsOf, itemById, paid, scaled, type Effects } from './items';
+import { BAG, PUTTER, bagClub, boosted, isWedge, strikeFactor, tuned, type BagClub } from './bag';
+import { AISLES, NO_KIT, itemById, kitOf, paid, type Aisle, type Kit, type KitSlots } from './items';
 import { COURSE, CUP, type HoleDef } from './course';
-import { strike } from './flight';
+import { chipLoft, puttAngle, strike } from './flight';
 import { Obstacles } from './obstacles';
 import { PHYSICS, THE_CUP, makeWorld, type Cup, type World } from './physics';
 import { Progress, memoryStore } from './progress';
 import type { Random } from './random';
-import { curveRate, spunKeep, windDirection, windPush } from './shaping';
-import { GREENS, LANDING, LIE, SURFACES, rollOf } from './surfaces';
+import { PUTT_SHAPE, bendRate, curveRate, puttSpinFactor, spunKeep, windDirection, windPush } from './shaping';
+import { LANDING, LIE, SURFACES, groundRoll, rollScale } from './surfaces';
 import { hitCanopy, treeCone, turned, type Cone } from './trees';
 
 /** What happens, for whoever shows it. Every one may be left out. */
@@ -73,9 +74,9 @@ export interface GameEvents {
   splash?(x: number, y: number): void;
   /** The ball on the ground out of bounds at (x, y), on a golf hole: lost as one in water is, a stroke more, and put back. */
   outOfBounds?(x: number, y: number): void;
-  /** The waders took a ball lost at (x, y): it cost no stroke, and was put back where it was struck from. Told just before the splash or the out of bounds it saved, so a page can say that one cost nothing. */
+  /** The kit took a ball lost at (x, y): it cost no stroke, and was put back where it was struck from. Told just before the splash or the out of bounds it saved, so a page can say that one cost nothing. */
   waded?(x: number, y: number): void;
-  /** The mulligan taken: the last stroke undone, and the ball back at (x, y) where it was struck from. */
+  /** The retake taken: the last stroke undone, and the ball back at (x, y) where it was struck from. */
   mulliganed?(x: number, y: number): void;
   /** A consumable item used up by the hole it paid for: gone from what is owned and from the hand. */
   spent?(id: string): void;
@@ -87,7 +88,7 @@ export interface GameEvents {
   paid?(coins: number, gems: number): void;
   /** An item bought, for what it cost. */
   bought?(coins: number, gems: number): void;
-  /** A club put in hand: how hard it strikes. */
+  /** An item put on (its id), or a slot emptied (''). */
   equipped?(id: string): void;
 }
 
@@ -98,8 +99,12 @@ export interface GameOptions {
   course?: readonly HoleDef[];
   /** A game to try shots in and not to play: see `Game.rehearsal`. */
   rehearsal?: boolean;
-  /** The item effects in force, instead of those of the item the save has equipped: a rehearsal is handed its game's. */
-  effects?: Effects;
+  /** The kit in force, read each time it is asked for, instead of the one the save wears: a rehearsal is handed its game's. */
+  kit?: () => Kit;
+  /** Whether the game this one rehearses is on the first stroke of its hole, which the first stroke's gifts are for: read each time it is asked. */
+  opening?: () => boolean;
+  /** The game this one rehearses, whose moving obstacles it is posed with when a trial begins (minigolf only: golf has none). */
+  posed?: () => number;
 }
 
 /** Where a round is: a hole in play, a hole done and the next about to begin, or the round over. */
@@ -138,6 +143,9 @@ const LIP_SUNK = 0.02;
 /** How fast a ball woken from the lip of the cup is sent toward its middle, in yards a second: more than it sleeps at (2). */
 const LIP_PUSH = 3;
 
+/** The share of the way to a belt's speed that the physics pulls a ball on it each step (its own figure, which `pullBelts` repeats for a ball that is pulled otherwise). */
+const BELT_PULL = 0.12;
+
 export class Game {
   /** The holes a round is played over: the course, or a test's own. */
   course: readonly HoleDef[];
@@ -171,6 +179,8 @@ export class Game {
   private builtGreens: number | undefined;
   /** How hard the world sends a ball back off the rail, the posts and the kickers, as many times as the course's own: fixed with the world. */
   private builtBounce = 1;
+  /** The kit this hole's world was made with, which is how the ground rolls the ball (and the belts pull it) for the whole of the hole: fixed with the world, as the rail's bounce is. */
+  private builtKit: Kit = NO_KIT;
   /**
    * The shape chosen for the next lofted shot, from minus one (a draw) to one (a fade), nought straight; and its spin,
    * from minus one (backspin) to one (topspin), nought flat. Chosen a shot at a time: put back to nought when a shot is
@@ -184,6 +194,21 @@ export class Game {
    */
   private flightRate = 0;
   private flightSpin = 0;
+  /** How many times as strong the wedge made the spin of the shot in the air, latched with it. */
+  private flightSpinGain = 1;
+  /**
+   * What a putt on minigolf was struck with, latched at the strike like a flight's: how fast it curves along the ground, in
+   * radians a second, and how long that has left to run, in seconds (it ends at the first knock, or after
+   * `PUTT_SHAPE.seconds`); and how many times as fast its first knock sends it off, waiting for that knock until it is
+   * `spinPending`. All nought, one and false for a kit with neither.
+   */
+  private bending = 0;
+  private bendLeft = 0;
+  private knockSpin = 1;
+  private spinPending = false;
+  /** Where the floor stood under the ball when it was last struck as a chip, and whether that chip is still flying: the rail's height is held from there. */
+  private chipFloor = 0;
+  private chipping = false;
   /** The hole's wind, worked out once a hole, and how hard it pushes a ball in the air along x and along y, in yards a second a second. */
   private blowing = { x: 0, y: 0, speed: 0 };
   private windAx = 0;
@@ -206,14 +231,20 @@ export class Game {
   private firstStep = false;
   /** Whether this is a rehearsal, a game made to try shots in, which no one plays: only it may be `trial`led. */
   private readonly rehearsing: boolean;
-  /** The effects handed in, which stand in for the equipped item's; none for a game that is played. */
-  private readonly lent: Effects | undefined;
-  /** Whether the waders have taken a lost ball on this hole: given again by each hole. */
+  /** The kit handed in, which stands in for the one worn; none for a game that is played. */
+  private readonly lent: (() => Kit) | undefined;
+  /** What a rehearsal asks of the game it rehearses: whether it is on its first stroke, and the time its obstacles stand at. */
+  private readonly opened: (() => boolean) | undefined;
+  private readonly posed: (() => number) | undefined;
+  /** The slots the kit was last worked out for, and what it came to: worked out when the slots change and not each frame. */
+  private readonly kitFor: KitSlots = { club: '', ball: '', accessory: '' };
+  private worn: Kit = NO_KIT;
+  /** Whether the free loss has been used on this hole: given again by each hole. */
   private waded = false;
-  /** Whether the mulligan has been taken this round: given again by each round. */
+  /** Whether the retake has been taken this round: given again by each round. */
   private retaken = false;
-  /** Whether the lucky penny was in hand when this hole began, which is the hole it pays for. */
-  private penny = false;
+  /** The piggy bank's id if one was worn when this hole began, which is the hole it pays double for; '' otherwise. */
+  private piggy = '';
 
   constructor(
     readonly progress: Progress,
@@ -223,7 +254,9 @@ export class Game {
     this.random = options.random ?? Math.random;
     this.course = options.course ?? COURSE;
     this.rehearsing = options.rehearsal === true;
-    this.lent = options.effects;
+    this.lent = options.kit;
+    this.opened = options.opening;
+    this.posed = options.posed;
     this.begin(0);
   }
 
@@ -235,13 +268,14 @@ export class Game {
    * millisecond or so to make, and a trial in it a fraction of one.
    */
   rehearsal(events: GameEvents = {}): Game {
-    // the effects are looked up in this game each time, so an item equipped after the rehearsal is made is still agreed with
-    const effects: Effects = { has: (id) => this.effects.has(id) };
+    // the kit is looked up in this game each time, so an item put on after the rehearsal is made is still agreed with
     return new Game(new Progress(memoryStore()), events, {
       random: () => 0.5,
       course: [this.def],
       rehearsal: true,
-      effects,
+      kit: () => this.kit,
+      opening: () => this.strokes === 0,
+      posed: () => this.stepped,
     });
   }
 
@@ -258,6 +292,12 @@ export class Game {
     this.phase = 'play';
     this.strokes = 0;
     this.waded = false;
+    // what moves on a hole of minigolf is posed by game time alone, so a trial is struck at the time the game stands at
+    if (this.posed && !this.layout.golf && this.obstacles.pushers.length) {
+      this.stepped = this.posed();
+      this.owed = 0;
+      this.obstacles.update(this.stepped, 0);
+    }
     // a ball holed in a trial is a score on the card, which a rehearsal would keep for ever
     this.card.length = 0;
     this.moving = false;
@@ -271,6 +311,9 @@ export class Game {
   /** What was chosen for a shot, and what a shot in the air was struck with, put back to straight and flat. */
   private letGoOfShape() {
     this.shape = this.spin = this.flightRate = this.flightSpin = 0;
+    this.bending = this.bendLeft = 0;
+    this.knockSpin = 1;
+    this.spinPending = this.chipping = false;
   }
 
   /** The next shot's shape, set within its limits; a number that is not one leaves it as it was. */
@@ -297,7 +340,27 @@ export class Game {
    * What a putt reaches is worked out from it.
    */
   rollAt(x: number, y: number): number {
-    return this.layout.golf ? rollOf(lieAt(this.layout, x, y), this.greens) : ROLL.roll;
+    return this.layout.golf
+      ? groundRoll(lieAt(this.layout, x, y), this.greens, this.builtKit)
+      : ROLL.roll * rollScale(LIE.none, this.builtKit);
+  }
+
+  /**
+   * The kit this hole's ground was made with: how the ball rolls, hops and is pulled by a belt on it, which is fixed as
+   * the hole begins as the world is. What the autopilot's arithmetic and the break are given, so they roll the ball the
+   * world does.
+   */
+  get ground(): Kit {
+    return this.builtKit;
+  }
+
+  /**
+   * How steadily the minigolf green slows the ball in play, which a putt's power is a distance on: `ROLL`'s own with an
+   * empty kit. The hardest shot is struck as hard as that distance asks (see `hardest`), so a putt of any power rolls the
+   * same on the level with any ball.
+   */
+  get putRoll(): number {
+    return ROLL.roll * rollScale(LIE.none, this.builtKit);
   }
 
   /**
@@ -311,7 +374,7 @@ export class Game {
     return this.builtGreens;
   }
 
-  /** The club in hand, as the power glove has it, if it is held: the bag's own club otherwise, the very object. */
+  /** The club in hand, as the kit has it: the bag's own club, the very object, when the kit leaves its power alone. */
   get inHand(): BagClub {
     return this.club(this.picked);
   }
@@ -320,22 +383,22 @@ export class Game {
     this.picked = club;
   }
 
-  /** `club` as this game strikes it: its hardest the glove's 1.08 times as hard if that is held, and the bag's club itself if not. */
+  /** `club` as this game strikes it: its hardest as hard as the kit makes it, and the bag's club itself if the kit leaves it alone. */
   club(club: BagClub): BagClub {
-    return this.effects.has('glove') ? gloved(club) : club;
+    return tuned(club, this.kit);
   }
 
-  /** How many times as hard the rail, the posts and the kickers send the ball back, which the world of this hole was made with: one, or the rubber ball's. */
+  /** How many times as hard the rail, the posts and the kickers send the ball back, which the world of this hole was made with: the kit's rail figure. */
   get bounceScale(): number {
     return this.builtBounce;
   }
 
-  /** Whether the waders have saved a stroke on this hole: a second ball lost costs it. */
+  /** Whether the free loss has been used on this hole: a second ball lost costs a stroke. */
   get wadersUsed(): boolean {
     return this.waded;
   }
 
-  /** Whether this round's mulligan has been taken. */
+  /** Whether this round's retake has been taken. */
   get mulliganUsed(): boolean {
     return this.retaken;
   }
@@ -350,21 +413,56 @@ export class Game {
     return this.def.par + LIMIT_OVER_PAR;
   }
 
-  /** The item equipped, or '' for none. */
-  get item(): string {
-    return this.progress.save.item;
+  /** The kit worn: one item or none from each aisle. */
+  get slots(): Readonly<KitSlots> {
+    return this.progress.save.kit;
   }
 
-  /** What the item equipped does to the game: nothing at all with none, which is the game as it was. */
-  get effects(): Effects {
-    return this.lent ?? (this.progress.save.item ? effectsOf(this.progress.save.item) : NO_EFFECTS);
+  /**
+   * What the kit worn does to the game: every figure, `NO_KIT` itself with three empty slots, which is the game as it
+   * was. Worked out when a slot changes and kept, so asking for it each frame costs three comparisons.
+   */
+  get kit(): Kit {
+    if (this.lent) return this.lent();
+    const slots = this.progress.save.kit;
+    const { kitFor } = this;
+    if (slots.club !== kitFor.club || slots.ball !== kitFor.ball || slots.accessory !== kitFor.accessory) {
+      kitFor.club = slots.club;
+      kitFor.ball = slots.ball;
+      kitFor.accessory = slots.accessory;
+      this.worn = kitOf(slots);
+    }
+    return this.worn;
   }
 
-  /** The hardest the club in hand strikes: the bag's on a golf hole, and the course's putter's on any other. */
+  /**
+   * The exponent a drag's share of the hardest is raised to for its power: the kit's touch, with the putter in hand on either
+   * kind of course, and one (the drag as it always was) for a lofted club. The page gives it to the input; a shot set by
+   * power directly (the test API's, the fuzzer's) is not touched by it.
+   */
+  get touch(): number {
+    return this.layout.golf && this.inHand.loft > 0 ? 1 : this.kit.touch;
+  }
+
+  /** Whether the stroke about to be taken is the first of its hole: the first stroke's gift is for it alone. A rehearsal asks the game it rehearses, since its own count is always nought. */
+  get opening(): boolean {
+    return this.opened ? this.opened() : this.strokes === 0;
+  }
+
+  /** Whether the ball was struck as a chip on minigolf and has not yet come to rest, and (`chipBase`) the floor it left from: the rail's height is held from it. */
+  get chipFlying(): boolean {
+    return this.chipping;
+  }
+
+  get chipBase(): number {
+    return this.chipFloor;
+  }
+
+  /** The hardest the club in hand strikes: the bag's on a golf hole, and the course's putter's on any other, struck as hard again as the root of how much less the ball in play is slowed by the green, so that a putt's power stays how far it rolls on the level. */
   get hardest(): number {
     return this.layout.golf
       ? this.inHand.hardest
-      : HARDEST_SHOT * scaled(this.effects, 'glove', ITEM_FIGURES.glove.hardest);
+      : HARDEST_SHOT * strikeFactor(PUTTER, this.kit) * Math.sqrt(rollScale(LIE.none, this.builtKit));
   }
 
   /**
@@ -399,14 +497,13 @@ export class Game {
     this.layout = layoutOf(this.def.map, this.def.terrain);
     this.obstacles = new Obstacles(this.def.obstacles ?? [], this.layout);
     this.cones = this.layout.trees.map((t) => treeCone(t.x, t.y, heightAt(this.layout, t.x, t.y)));
-    // what changes the world itself is read once, here, and the world is made with it: the magnet's cup, the rubber ball's
-    // bounce and the slow roll's greens
-    const effects = this.effects;
-    this.cup = effects.has('magnet') ? { ...CUP, radius: ITEM_FIGURES.magnet.radius } : CUP;
-    this.builtBounce = scaled(effects, 'rubber', ITEM_FIGURES.rubber.bounce);
-    const greens = this.def.greens;
-    this.builtGreens =
-      this.layout.golf && effects.has('slow') ? (greens ?? GREENS.normal) * ITEM_FIGURES.slow.greens : greens;
+    // what changes the world itself is read once, here, and the world is made with it: the cup's width and the rail's
+    // bounce (the ball's roll joins them when the ground figures are wired)
+    const kit = this.kit;
+    this.cup = kit.cupRadius !== null ? { ...CUP, radius: kit.cupRadius } : CUP;
+    this.builtBounce = kit.rail;
+    this.builtKit = kit;
+    this.builtGreens = this.def.greens;
     this.world = makeWorld(
       this.layout,
       this.cup,
@@ -414,9 +511,16 @@ export class Game {
       this.obstacles.belted,
       this.builtGreens,
       this.builtBounce,
+      kit,
     );
+    // a moving bumper throws as the rail does, by the kit's figure
+    if (kit.rail !== 1)
+      for (const b of this.obstacles.barriers)
+        if (b.def.bounce !== undefined) b.pusher.restitution = b.def.bounce * kit.rail;
     this.world.pushers = this.obstacles.pushers;
-    this.world.belts = this.obstacles.belts;
+    // the physics pulls a ball onto a belt by a fixed share; a ball that is pulled otherwise has its belts pulled by the game
+    // (`pullBelts`) and the world is given none, so that the pull is the kit's and not both
+    this.world.belts = kit.belt === 1 ? this.obstacles.belts : [];
     this.obstacles.update(this.t, 0);
     // resting on the tee, at whatever height it stands: a ball put down at the height of its own radius on a tee higher
     // than that begins inside the ground, and the physics puts it right by the shortest way, which is sideways, to the
@@ -432,9 +536,9 @@ export class Game {
     this.strokes = 0;
     this.moving = false;
     this.phase = 'play';
-    // what an item gives a hole is given afresh: the waders again, and the penny only if it is in hand as the hole begins
+    // what the kit gives a hole is given afresh: the free loss again, and the piggy bank only if it is worn as the hole begins
     this.waded = false;
-    this.penny = effects.has('penny');
+    this.piggy = kit.piggy ? this.progress.save.kit.accessory : '';
     // a golf hole is begun with the driver, which is what a tee is for, and a minigolf hole with the putter
     this.picked = this.layout.golf ? bagClub('driver') : PUTTER;
     this.firstLanding = false;
@@ -508,21 +612,31 @@ export class Game {
     if (!this.ready || !(power > 0)) return false;
     const p = Math.min(1, power);
     const { world, ball } = this;
-    this.struckWith = this.hardest;
+    // the first stroke of a hole is struck as the kit's gift has it: harder, and on golf truer (one and one with no gift)
+    const first = this.opening ? this.kit.firstStroke : NO_KIT.firstStroke;
+    this.struckWith = this.hardest * first.power;
     this.lie.x = world.x[ball];
     this.lie.y = world.y[ball];
     // a ball ready is at rest, and asleep or held by a belt: what it has of the belt's speed is not the shot's
     world.vx[ball] = world.vy[ball] = world.vz[ball] = 0;
     if (this.layout.golf) {
-      const launch = strike(
-        this.inHand,
-        p,
-        angle,
-        lieAt(this.layout, this.lie.x, this.lie.y),
-        this.random,
-        this.effects,
-      );
       const lofted = this.inHand.loft > 0;
+      const lie = lieAt(this.layout, this.lie.x, this.lie.y);
+      // a putt is the player's own aim, missed by what the kit's putt scatter says (and no chance drawn without it)
+      const launch = strike(
+        boosted(this.inHand, first.power),
+        p,
+        lofted ? angle : puttAngle(angle, p, this.random, this.kit, first.scatter),
+        lie,
+        this.random,
+        this.kit,
+        first.scatter,
+      );
+      // a putt out of a bunker is struck as much harder as the kit says
+      if (!lofted && lie === LIE.sand && this.kit.sandPutt !== 1) {
+        launch.vx *= this.kit.sandPutt;
+        launch.vy *= this.kit.sandPutt;
+      }
       // a putt is struck along the ground, which climbs or falls: sent flat into a face that leans toward it, a hard one is
       // going into the ground by its speed times the slope, which a tenth of a slope at the putter's hardest makes a landing
       // that scrubs most of what it has. On the level there is no slope, and the putt is struck as it always was
@@ -530,11 +644,35 @@ export class Game {
       world.hit(ball, launch.vx, launch.vy, launch.vz + launch.vx * sx + launch.vy * sy);
       this.firstLanding = true;
       // a putt goes along the ground, where neither a shape nor a spin has anything to work on
-      this.flightRate = lofted ? curveRate(this.shape, this.inHand.loft, this.effects) : 0;
+      this.flightRate = lofted ? curveRate(this.shape, this.inHand.loft, this.kit) : 0;
       this.flightSpin = lofted ? this.spin : 0;
+      this.flightSpinGain = lofted && isWedge(this.inHand) ? this.kit.wedgeSpin : 1;
     } else {
-      const speed = strikeSpeed(p, this.hardest);
-      world.hit(ball, Math.cos(angle) * speed, Math.sin(angle) * speed, 0);
+      const { kit } = this;
+      const onSand = lieAt(this.layout, this.lie.x, this.lie.y) === LIE.sand;
+      const aimed = puttAngle(angle, p, this.random, kit);
+      let speed = strikeSpeed(p, this.hardest * first.power);
+      if (onSand) speed *= kit.sandPutt;
+      const loft = chipLoft(onSand, kit);
+      if (loft > 0) {
+        // chipped: along the ground by the cosine of the loft and up by the sine, but never so high that the ball clears the rail,
+        // which the physics has as a wall at any height and the picture as a rail a little over the ball
+        const rise = (loft * Math.PI) / 180;
+        const along = speed * Math.cos(rise);
+        const up = Math.min(speed * Math.sin(rise), Math.sqrt(2 * PHYSICS.gravity * RAIL_HEIGHT));
+        world.hit(ball, Math.cos(aimed) * along, Math.sin(aimed) * along, up);
+        this.chipFloor = world.floorAt(world.x[ball], world.y[ball]);
+        this.chipping = true;
+      } else {
+        world.hit(ball, Math.cos(aimed) * speed, Math.sin(aimed) * speed, 0);
+        this.chipping = false;
+      }
+      // a shape curves a putt along the ground for a second or until it first knocks, and a spin changes the speed it leaves that
+      // knock with; each is latched here, so choosing the next while this one rolls changes nothing of it
+      this.bending = bendRate(this.shape, kit);
+      this.bendLeft = this.bending !== 0 ? PUTT_SHAPE.seconds : 0;
+      this.knockSpin = puttSpinFactor(this.spin, kit);
+      this.spinPending = this.knockSpin !== 1;
     }
     // chosen for this shot, and so used up by it
     this.shape = this.spin = 0;
@@ -571,6 +709,8 @@ export class Game {
       this.obstacles.update(this.stepped, PHYSICS.step);
       const { world, ball } = this;
       this.blow(PHYSICS.step);
+      this.bend(PHYSICS.step);
+      this.pullBelts();
       const vx = world.vx[ball],
         vy = world.vy[ball],
         vz = world.vz[ball];
@@ -613,6 +753,7 @@ export class Game {
     }
     if (this.moving && this.ready) {
       this.moving = false;
+      this.chipping = false;
       // a ball come to rest on the putting green is for the putter, which the player may put back in the bag for another club
       if (this.layout.golf && lieAt(this.layout, this.world.x[this.ball], this.world.y[this.ball]) === LIE.green)
         this.picked = PUTTER;
@@ -622,13 +763,13 @@ export class Game {
   }
 
   /**
-   * The mulligan: the stroke just taken undone, the ball put back where it was struck from, as if the stroke had not been
-   * played. One a round, with the item in hand, on a hole in play and only after a stroke on it; it may be taken while the
+   * The retake: the stroke just taken undone, the ball put back where it was struck from, as if the stroke had not been
+   * played. One a round, with the kit asking for it, on a hole in play and only after a stroke on it; it may be taken while the
    * ball is still moving, which is the retake of the stroke just played. What the player chose (club, shape, spin) is left as
    * they left it, and no chance is drawn. Whether it did anything.
    */
   mulligan(): boolean {
-    if (this.retaken || this.phase !== 'play' || this.strokes < 1 || !this.effects.has('mulligan')) return false;
+    if (this.retaken || this.phase !== 'play' || this.strokes < 1 || !this.kit.retake) return false;
     this.retaken = true;
     this.strokes--;
     this.moving = false;
@@ -636,6 +777,8 @@ export class Game {
     this.firstStep = false;
     this.knockAt = -Infinity;
     this.flightRate = this.flightSpin = 0;
+    this.bending = this.bendLeft = 0;
+    this.spinPending = this.chipping = false;
     if (this.world.alive[this.ball]) this.world.remove(this.ball);
     const { x, y } = this.lie;
     // a ball struck from the cup's rim and put back there may fall in as it settles, as one put back after the water may
@@ -651,8 +794,8 @@ export class Game {
    * the limit, and the loss costs nothing past it.
    */
   private putBack(x: number, y: number, tell?: (x: number, y: number) => void) {
-    // the waders take the first loss of a hole: the stroke taken stands, and this one costs nothing more
-    const wading = !this.waded && this.effects.has('waders');
+    // the kit may take the first loss of a hole: the stroke taken stands, and this one costs nothing more
+    const wading = !this.waded && this.kit.freeLoss;
     if (wading) this.waded = true;
     else this.strokes = Math.min(this.limit, this.strokes + 1);
     this.moving = false;
@@ -748,9 +891,60 @@ export class Game {
         s = Math.sin(rate * dt);
       [vx, vy] = [vx * c + vy * s, vy * c - vx * s];
     }
-    const sock = scaled(this.effects, 'sock', ITEM_FIGURES.sock.push);
-    world.vx[ball] = vx + this.windAx * sock * dt;
-    world.vy[ball] = vy + this.windAy * sock * dt;
+    const { wind } = this.kit;
+    world.vx[ball] = vx + this.windAx * wind * dt;
+    world.vy[ball] = vy + this.windAy * wind * dt;
+  }
+
+  /**
+   * A putt's shape on minigolf, over one physics step of `dt`, done before the step's velocities are read as the air's work
+   * is: its speed across the ground turned by the rate it was struck with, a pure rotation that adds none and takes none,
+   * for as long as it has left of its first `PUTT_SHAPE.seconds` and only until it first knocks. Nothing for a putt struck with
+   * no shape, which is every putt without a kit that bends.
+   */
+  private bend(dt: number) {
+    if (this.bendLeft <= 0 || !this.moving) return;
+    const { world, ball } = this;
+    if (!world.alive[ball]) return;
+    this.bendLeft -= dt;
+    // clockwise from above for a fade, as a flight's is
+    const c = Math.cos(this.bending * dt),
+      s = Math.sin(this.bending * dt);
+    const vx = world.vx[ball],
+      vy = world.vy[ball];
+    world.vx[ball] = vx * c + vy * s;
+    world.vy[ball] = vy * c - vx * s;
+  }
+
+  /**
+   * The belts' pull on the ball, when the kit says a ball is pulled otherwise than the physics' fixed share of a belt's
+   * speed a step (the physics is given no belts then): the same pull, on the same ground, by `kit.belt` times as much.
+   * Nothing for a kit that leaves the belts as they were, which the physics pulls with itself.
+   */
+  private pullBelts() {
+    const { builtKit, world, ball } = this;
+    if (builtKit.belt === 1 || !world.alive[ball]) return;
+    const k = Math.min(1, BELT_PULL * builtKit.belt);
+    const x = world.x[ball],
+      y = world.y[ball];
+    for (const b of this.obstacles.belts) {
+      const dx = x - b.cx,
+        dy = y - b.cy;
+      const along = dx * b.dx + dy * b.dy,
+        across = -dx * b.dy + dy * b.dx;
+      if (
+        Math.abs(along) > b.half ||
+        Math.abs(across) > b.width / 2 ||
+        world.z[ball] - world.floorAt(x, y) > world.r[ball] + 0.6
+      )
+        continue;
+      if (world.asleep[ball]) world.wake(ball);
+      world.vx[ball] += (b.dx * b.speed - world.vx[ball]) * k;
+      world.vy[ball] += (b.dy * b.speed - world.vy[ball]) * k;
+      // gathered toward the centre line, so the belt delivers to one place
+      world.vx[ball] += -b.dy * -across * 0.6 * k;
+      world.vy[ball] += b.dx * -across * 0.6 * k;
+    }
   }
 
   /**
@@ -785,15 +979,15 @@ export class Game {
       ay = world.vy[ball] - ny * out,
       az = world.vz[ball] - nz * out;
     // a spin tells at the first landing only: after that the ball is on the ground, hopping and rolling as it always did
-    // and so does a sticky ball's: it keeps a share of what the surface would let it, at the first landing only
+    // and so does the ball's: it keeps a share of what the surface would let it, at the first landing only
     const keep =
-      spunKeep(surface.keep, this.firstLanding ? this.flightSpin : 0, this.effects) *
-      (this.firstLanding ? scaled(this.effects, 'sticky', ITEM_FIGURES.sticky.keep) : 1) *
+      spunKeep(surface.keep, this.firstLanding ? this.flightSpin : 0, this.kit, this.flightSpinGain) *
+      (this.firstLanding ? this.kit.keep : 1) *
       Math.exp((-LANDING.steep * into) / Math.max(1e-6, Math.hypot(ax, ay, az)));
     const tx = ax * keep,
       ty = ay * keep,
       tz = az * keep;
-    const back = into * surface.bounce;
+    const back = into * surface.bounce * this.kit.hop;
     world.vx[ball] = tx + nx * back;
     world.vy[ball] = ty + ny * back;
     world.vz[ball] = tz + nz * back;
@@ -812,7 +1006,7 @@ export class Game {
     if (!world.alive[ball]) return;
     const speed = Math.hypot(world.vx[ball], world.vy[ball]);
     // the ceiling on the flat first, which is nearly always enough, before what a fall down a slope adds to it
-    if (speed <= Math.max(this.hardest, this.struckWith) * FASTEST) return;
+    if (speed <= Math.max(this.hardest, this.struckWith) * FASTEST * Math.max(1, this.builtBounce)) return;
     const most = fastest(this, world.x[ball], world.y[ball]);
     if (speed <= most) return;
     world.vx[ball] *= most / speed;
@@ -841,6 +1035,17 @@ export class Game {
     if (this.stepped - this.knockAt < KNOCK.apart && hard <= this.knockHard) return;
     this.knockAt = this.stepped;
     this.knockHard = hard;
+    // the first knock along the ground ends a putt's bend, and a spin takes or gives it speed there, held after to the course's
+    // ceiling (a chip coming down is a knock too, and is neither a rail nor a post)
+    if ((this.bendLeft > 0 || this.spinPending) && Math.hypot(dx, dy) >= KNOCK.least) {
+      this.bendLeft = 0;
+      if (this.spinPending) {
+        this.spinPending = false;
+        world.vx[ball] *= this.knockSpin;
+        world.vy[ball] *= this.knockSpin;
+        this.heldToFastest();
+      }
+    }
     this.events.knocked?.(hard, world.x[ball], world.y[ball], dx / hard, dy / hard, dz / hard);
   }
 
@@ -862,7 +1067,7 @@ export class Game {
 
   /**
    * The hole finished, scored and told of, paid for, its best kept with the
-   * item equipped, and the save written; the next begins in a moment.
+   * kit worn, and the save written; the next begins in a moment.
    */
   private done(how: 'holed' | 'pickedUp') {
     const score = how === 'holed' ? this.strokes : this.limit;
@@ -872,23 +1077,24 @@ export class Game {
     this.moving = false;
     this.events[how]?.(score, this.def.par);
     const save = this.progress.save;
-    const pay = paid(score, this.def.par, how === 'pickedUp');
-    // the lucky penny doubles the coins of the hole it was in hand for, if it is finished, and is used up by it
-    const spend = this.penny && how === 'holed';
+    const pay = paid(score, this.def.par, how === 'pickedUp', this.kit.underParPay);
+    // the piggy bank doubles the coins of the hole it was worn for, if it is finished, and is used up by it
+    const spent = this.piggy;
+    const spend = spent !== '' && how === 'holed';
     if (spend) pay.coins *= 2;
     save.coins += pay.coins;
     save.gems += pay.gems;
     // a hole not yet holed has no best
     const best = Object.hasOwn(save.best, this.def.name) ? save.best[this.def.name] : undefined;
     if (how === 'holed' && (!best || score < best.strokes))
-      save.best[this.def.name] = { strokes: score, item: save.item };
+      save.best[this.def.name] = { strokes: score, kit: { ...save.kit } };
     if (spend) {
-      this.penny = false;
-      save.owned = save.owned.filter((id) => id !== 'penny');
-      if (save.item === 'penny') save.item = '';
+      this.piggy = '';
+      save.owned = save.owned.filter((id) => id !== spent);
+      for (const aisle of AISLES) if (save.kit[aisle] === spent) save.kit[aisle] = '';
     }
     this.persist();
-    if (spend) this.events.spent?.('penny');
+    if (spend) this.events.spent?.(spent);
     this.events.paid?.(pay.coins, pay.gems);
   }
 
@@ -905,14 +1111,22 @@ export class Game {
     return true;
   }
 
-  /** An item owned put on, in place of the one before, or none with the empty id; the save written. */
+  /** An item owned put on in its aisle's slot, in place of the one before; the save written. Refused for one not sold or not owned. */
   equip(id: string): boolean {
     const save = this.progress.save;
-    if (id !== '' && !save.owned.includes(id)) return false;
-    save.item = id;
+    const item = itemById(id);
+    if (!item || !save.owned.includes(id)) return false;
+    save.kit[item.aisle] = id;
     this.persist();
     this.events.equipped?.(id);
     return true;
+  }
+
+  /** The slot of `aisle` emptied; the save written. */
+  unequip(aisle: Aisle): void {
+    this.progress.save.kit[aisle] = '';
+    this.persist();
+    this.events.equipped?.('');
   }
 
   /** The strokes of the holes finished this round. */
@@ -1007,7 +1221,7 @@ export class Game {
  * fall, and gives it speed downward, not along the ground.
  */
 export function fastest(game: Game, x: number, y: number): number {
-  const most = Math.max(game.hardest, game.struckWith) * FASTEST;
+  const most = Math.max(game.hardest, game.struckWith) * FASTEST * Math.max(1, game.bounceScale);
   const drop = Math.max(0, highestTerrain(game.layout) - terrainAt(game.layout, x, y));
   return Math.sqrt(most * most + 2 * PHYSICS.gravity * drop);
 }

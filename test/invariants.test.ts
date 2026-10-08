@@ -97,9 +97,9 @@ describe('what must always hold', () => {
     save.owned.push('glow', 'glow');
     expect(checkInvariants(game).join('\n')).toMatch(/an item is owned twice/);
     save.owned.length = 0;
-    save.item = 'glove';
-    expect(checkInvariants(game).join('\n')).toMatch(/the item equipped, glove, is not owned/);
-    save.item = '';
+    save.kit.club = 'glove';
+    expect(checkInvariants(game).join('\n')).toMatch(/the club worn, glove, is not owned/);
+    save.kit.club = '';
     expect(checkInvariants(game)).toEqual([]);
   });
 

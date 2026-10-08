@@ -42,6 +42,7 @@ import {
   HARDEST_SHOT,
   KNOCK,
   PHYSICS,
+  RAIL_HEIGHT,
   fromPosts,
   fromTrees,
   TILE,
@@ -56,13 +57,14 @@ import {
 } from './arena';
 import { FLY_IN, TILT, VIEW, type CameraRig } from './camera';
 import type { Plan } from './autopilot';
-import { BAG, bagClub, carrying, type BagClub } from './bag';
+import { BAG, PUTTER, bagClub, carrying, strikeFactor, type BagClub } from './bag';
 import { CUP } from './course';
-import { ITEM_FIGURES, itemById } from './items';
+import { AISLES, CEILINGS, FIRST_STROKE_MOST, itemById, kitOf, type Kit } from './items';
 import { LIMIT_OVER_PAR, fastest, type Game } from './game';
 import type { Preview } from './preview';
+import type { Bank } from './bank';
 import { GREEN, READER, breakOf, greenArrows, leansOnMinigolf, readerArrows, type Arrow, type Break } from './green';
-import { GREENS, LANDING, LIE, SURFACES } from './surfaces';
+import { GREENS, LANDING, LIE, SURFACES, rollScale } from './surfaces';
 import { BARRIER, WINDMILL, flipperYaw, type Obstacles } from './obstacles';
 import { WIND, windPush, windReach } from './shaping';
 import { TREE, insideCanopy } from './trees';
@@ -292,7 +294,7 @@ export function breakProblems(game: Game, given?: Break): string[] {
   if (!world.alive[ball]) return out;
   const x = world.x[ball],
     y = world.y[ball];
-  const b = given ?? breakOf(layout, x, y, game.greens);
+  const b = given ?? breakOf(layout, x, y, game.greens, game.ground);
   if (!Number.isFinite(b.across)) out.push(`the break's across is ${b.across}`);
   if (!Number.isFinite(b.rise)) out.push(`the break's rise is ${b.rise}`);
   const far = Math.hypot(layout.cup.x - x, layout.cup.y - y);
@@ -360,8 +362,8 @@ export function checkInvariants(game: Game): string[] {
   if (layout.golf) {
     report('the ground', [...groundProblems(layout, { slope: greens !== undefined }), ...arrowProblems(layout)]);
     report('the break', breakProblems(game));
-    // the break reader's arrows round the ball are held to the ground a ball is played from, and to their bound
-    if (game.effects.has('reader') && world.alive[game.ball])
+    // the chalk's arrows round the ball are held to the ground a ball is played from, and to their bound
+    if (game.kit.chalk && world.alive[game.ball])
       report(
         'the ground',
         arrowProblems(layout, readerArrows(layout, world.x[game.ball], world.y[game.ball]), { anywhere: true }),
@@ -487,47 +489,84 @@ export function checkInvariants(game: Game): string[] {
     if (!Number.isInteger(save[key]) || save[key] < 0) out.push(`the ${key} are ${save[key]}`);
   for (const id of save.owned) if (!itemById(id)) out.push(`an item no one sells is owned: ${id}`);
   if (new Set(save.owned).size !== save.owned.length) out.push('an item is owned twice');
-  if (save.item !== '' && !save.owned.includes(save.item)) out.push(`the item equipped, ${save.item}, is not owned`);
-  // the bag's own club, or its copy as the power glove has it
+  // the bag's own club, or its copy as the kit tunes it
   if (layout.golf && !BAG.some((c) => game.club(c) === game.inHand))
     out.push(`the club in hand on a golf hole, ${game.inHand.id}, is not in the bag`);
-  report('an item', itemProblems(game));
+  report('the kit', kitProblems(game));
   out.push(...bumperProblems(game));
+  report('a chip', chipProblems(game));
   out.push(...boxProblems(game));
   report('a flipper', flipperProblems(game.obstacles));
   return out;
 }
 
 /**
- * What is wrong with what the item equipped has done to the game, which is fixed as a hole begins or read as the ball is
- * struck: at most one item is on (the save holds the one id, so it is a string and nothing else), the club in hand is the bag's
- * as the power glove has it (8% harder with it, as it was without), and on minigolf the hardest shot is the course's as
- * the glove has it, so the speed ceilings that follow the hardest follow the item too; the cup is the course's or the
- * magnet's, and the rail's bounce is the course's or the rubber ball's; and the waders and the retake are each used or
- * not, and no more than once, which a flag can only be.
+ * What is wrong with what the kit worn has done to the game, which is fixed as a hole begins or read as the ball is
+ * struck: each slot is empty or an owned item of its own aisle; the game's kit is the one the three slots come to
+ * (`kitOf`, worked out afresh) and each figure of it is inside its ceiling; the club in hand is the bag's as the kit
+ * tunes it, and on minigolf the hardest shot is the course's as the kit tunes the putter, so the speed ceilings that
+ * follow the hardest follow the kit too; the cup is the course's or the kit's, and the rail's bounce is the kit's;
+ * and the free loss and the retake are each used or not, and no more than once, which a flag can only be.
  */
-export function itemProblems(game: Game): string[] {
+export function kitProblems(game: Game): string[] {
   const out: string[] = [];
   const save = game.progress.save;
-  if (typeof save.item !== 'string') out.push(`the item equipped is ${JSON.stringify(save.item)}, not one id`);
-  const glove = game.effects.has('glove') ? ITEM_FIGURES.glove.hardest : 1;
+  for (const aisle of AISLES) {
+    const id = save.kit[aisle];
+    if (typeof id !== 'string') out.push(`the ${aisle} worn is ${JSON.stringify(id)}, not one id`);
+    else if (id !== '') {
+      if (!save.owned.includes(id)) out.push(`the ${aisle} worn, ${id}, is not owned`);
+      if (itemById(id)?.aisle !== aisle) out.push(`the ${aisle} slot holds ${id}, which is not of that aisle`);
+    }
+  }
+  const { kit } = game;
+  const slots = { club: save.kit.club, ball: save.kit.ball, accessory: save.kit.accessory };
+  const want = kitOf(slots);
+  if (JSON.stringify(kit) !== JSON.stringify(want))
+    out.push(
+      `the game's kit is not what the slots (${slots.club || '-'}, ${slots.ball || '-'}, ${slots.accessory || '-'}) come to`,
+    );
+  for (const [key, range] of Object.entries(CEILINGS)) {
+    const n = kit[key as keyof Kit] as number;
+    if (!Number.isFinite(n) || n < (range.least ?? -Infinity) - 1e-12 || n > (range.most ?? Infinity) + 1e-12)
+      out.push(`the kit's ${key} is ${n}, outside ${range.least ?? '-'} to ${range.most ?? '-'}`);
+  }
   const close = (a: number, b: number) => Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(b));
   if (game.layout.golf) {
-    const own = bagClub(game.inHand.id).hardest * glove;
+    const own = bagClub(game.inHand.id).hardest * strikeFactor(bagClub(game.inHand.id), kit);
     if (!close(game.inHand.hardest, own))
       out.push(
-        `the ${game.inHand.id} in hand strikes at most ${game.inHand.hardest}, where the bag's with ${glove === 1 ? 'no glove' : 'the glove'} is ${own}`,
+        `the ${game.inHand.id} in hand strikes at most ${game.inHand.hardest}, where the bag's with the kit is ${own}`,
       );
   }
-  if (!close(game.hardest, game.layout.golf ? game.inHand.hardest : HARDEST_SHOT * glove))
-    out.push(`the hardest shot is ${game.hardest}, which the item held (${save.item || 'none'}) does not make it`);
-  if (game.cup.radius !== CUP.radius && game.cup.radius !== ITEM_FIGURES.magnet.radius)
-    out.push(`the cup is ${game.cup.radius} across, neither the course's ${CUP.radius} nor the magnet's`);
-  if (game.bounceScale !== 1 && game.bounceScale !== ITEM_FIGURES.rubber.bounce)
-    out.push(`the rail and the posts return ${game.bounceScale} times what they did, which only the rubber ball does`);
+  // on minigolf, the putter's hardest as the kit makes it, struck as much harder as the ball's slower roll asks, so that a putt's
+  // power stays how far it rolls on the level
+  const putters = HARDEST_SHOT * strikeFactor(PUTTER, kit) * Math.sqrt(rollScale(LIE.none, game.ground));
+  if (!close(game.hardest, game.layout.golf ? game.inHand.hardest : putters))
+    out.push(`the hardest shot is ${game.hardest}, which the kit worn does not make it`);
+  // the three power figures together, not each alone: no club strikes more than the power ceiling's times as hard
+  for (const c of [...BAG, PUTTER]) {
+    const f = strikeFactor(c, kit);
+    if (!(f <= CEILINGS.power!.most! + 1e-12))
+      out.push(`the ${c.id} strikes ${f} times as hard, over ${CEILINGS.power!.most}`);
+  }
+  // the first stroke's gifts: harder by no more than the first stroke's ceiling, with no more than all and no less than a quarter of the scatter
+  const first = kit.firstStroke;
+  if (!(Number.isFinite(first.power) && first.power >= 1 && first.power <= FIRST_STROKE_MOST))
+    out.push(`the first stroke goes ${first.power} times as hard, outside 1 to ${FIRST_STROKE_MOST}`);
+  if (!(Number.isFinite(first.scatter) && first.scatter >= 0.25 && first.scatter <= 1))
+    out.push(`the first stroke keeps ${first.scatter} of its scatter, outside 0.25 to 1`);
+  // the cup and the rail are fixed as a hole begins, so they are held to the kit the hole was begun with and not to one put on since
+  const cup = game.ground.cupRadius ?? CUP.radius;
+  if (game.cup.radius !== cup)
+    out.push(`the cup is ${game.cup.radius} across, where the kit and the course make it ${cup}`);
+  if (game.bounceScale !== game.ground.rail)
+    out.push(
+      `the rail and the posts return ${game.bounceScale} times what they did, where the kit the hole was begun with says ${game.ground.rail}`,
+    );
   // read as what they may come to be and not as what they are typed, since a count that crept past one would be a number
   for (const [what, used] of [
-    ['waders', game.wadersUsed],
+    ['free loss', game.wadersUsed],
     ['retake', game.mulliganUsed],
   ] as [string, unknown][])
     if (typeof used !== 'boolean') out.push(`the ${what} are used ${String(used)} times, not nought or one`);
@@ -677,6 +716,75 @@ export function restProblems(game: Game, p: Preview): string[] {
 }
 
 /**
+ * What is wrong with the roll of a putt on minigolf that the rangefinder and the sloping floor show (`Previewer.roll`): its
+ * points are numbers, it grows in length, begins at the ball and ends where it says the putt comes to rest, stays on the
+ * hole, and carries a rest (a ring and no path) exactly when the kit asks for one. Nothing for a putt of no power.
+ */
+export function rollProblems(game: Game, from: { x: number; y: number }, p: Preview): string[] {
+  const out: string[] = [];
+  if (p.n === 0) return out;
+  if (!p.rolled) out.push("a putt's roll is not marked as one");
+  if (p.n < 2) out.push(`the roll has ${p.n} point`);
+  for (let k = 0; k < p.n; k++) {
+    for (let c = 0; c < 3; c++)
+      if (!Number.isFinite(p.points[k * 3 + c])) {
+        out.push(`a point of the roll is not a number: ${k}`);
+        return out;
+      }
+    if (k && p.length[k] < p.length[k - 1] - 1e-4) out.push(`the roll's length goes backwards at ${k}`);
+    if (tileAt(game.layout, p.points[k * 3], p.points[k * 3 + 1]) < 0)
+      out.push(`the roll is off the hole at point ${k}`);
+  }
+  if (Math.hypot(p.points[0] - from.x, p.points[1] - from.y) > 0.6)
+    out.push(`the roll does not begin at the ball: ${p.points[0]},${p.points[1]} from ${from.x},${from.y}`);
+  const last = (p.n - 1) * 3;
+  if (Math.hypot(p.points[last] - p.x, p.points[last + 1] - p.y) > 0.6)
+    out.push(`the roll ends at ${p.points[last]},${p.points[last + 1]}, not where it says it rests, ${p.x},${p.y}`);
+  if (!['landed', 'holed', 'water'].includes(p.end))
+    out.push(`the roll ended as ${p.end}, which a putt on minigolf cannot`);
+  // the rangefinder's ring: shown with the kit's asking for it, at the roll's own end, with no path past it
+  if (p.rest.shown !== game.kit.rest)
+    out.push(
+      `the roll's rest is ${p.rest.shown ? 'shown' : 'not shown'} with the rangefinder ${game.kit.rest ? 'worn' : 'not worn'}`,
+    );
+  if (p.rest.shown) {
+    if (p.rest.n !== 0) out.push(`the roll's rest has a path of ${p.rest.n} points, where it is a ring alone`);
+    if (Math.hypot(p.rest.x - p.x, p.rest.y - p.y) > 1e-6) out.push("the roll's rest is not where the roll ends");
+  }
+  out.push(...restProblems(game, p));
+  return out;
+}
+
+/**
+ * What is wrong with the chalk's first bank (`bankOf`) for an aim from `from` along `angle`: it is numbers, it is on ground
+ * the ball can be on, the tile just past it along the aim is one it cannot enter, the reflected direction is a unit vector,
+ * and it is no further along than the aim reaches (`most`).
+ */
+export function bankProblems(
+  game: Game,
+  from: { x: number; y: number },
+  angle: number,
+  most: number,
+  bank: Bank,
+): string[] {
+  const out: string[] = [];
+  if (![bank.x, bank.y, bank.along, bank.dx, bank.dy].every(Number.isFinite)) return ['the bank is not numbers'];
+  const { layout } = game;
+  const t = tileAt(layout, bank.x, bank.y);
+  if (t < 0 || layout.solid[t]) out.push(`the bank is in a tile the ball cannot be in, at ${bank.x},${bank.y}`);
+  if (!(bank.along >= 0 && bank.along <= most + 1e-6))
+    out.push(`the bank is ${bank.along} along an aim that reaches ${most}`);
+  if (Math.abs(Math.hypot(bank.dx, bank.dy) - 1) > 1e-9)
+    out.push(`the line past the bank is ${Math.hypot(bank.dx, bank.dy)} long, not a direction`);
+  if (Math.abs(Math.hypot(bank.x - from.x, bank.y - from.y) - bank.along) > 0.2)
+    out.push(`the bank is ${Math.hypot(bank.x - from.x, bank.y - from.y)} from the ball, where it says ${bank.along}`);
+  const past = tileAt(layout, bank.x + Math.cos(angle) * 0.2, bank.y + Math.sin(angle) * 0.2);
+  if (past >= 0 && !layout.solid[past])
+    out.push('the tile past the bank, along the aim, is not one the ball cannot enter');
+  return out;
+}
+
+/**
  * A moving bumper is a barrier that throws, and what it throws is held to the same ceiling as a post's (the ball's speed
  * rule above, which needs nothing of it): here, that what it was given to throw with is a number the game could have meant,
  * from nought to twice a post's, and that the box the physics shoves with keeps what its definition said.
@@ -686,12 +794,33 @@ export function bumperProblems(game: Game): string[] {
   const { obstacles } = game;
   obstacles.barriers.forEach((b) => {
     const throws = b.pusher.restitution ?? Number.NaN;
-    const said = b.def.bounce;
+    // as the kit's rail figure has it: a rail that returns more makes a bumper throw more, and the ceiling with it
+    const said = b.def.bounce === undefined ? undefined : b.def.bounce * game.bounceScale;
     if (said !== undefined && throws !== said)
       out.push(`the barrier at column ${b.def.at[0]} was given a bounce of ${said} and throws with ${throws}`);
-    if (said !== undefined && !(throws >= 0 && throws <= BUMPER.restitution * 2))
+    if (said !== undefined && !(throws >= 0 && throws <= BUMPER.restitution * 2 * Math.max(1, game.bounceScale)))
       out.push(`the barrier at column ${b.def.at[0]} throws with ${throws}, which no bumper may`);
   });
+  return out;
+}
+
+/**
+ * What is wrong with a chipped putt on minigolf: while the ball is flying from a chip, it stands no higher above the floor
+ * under it than the rail's top and a ball's radius (the chip's vertical speed is held so its apex stays under the rail). A
+ * drop off a step is a fall and not a rise, so the ball is let go once the floor under it is lower than where it left from.
+ * Nothing to be wrong on golf, for a ball not struck as a chip, or one come to rest.
+ */
+export function chipProblems(game: Game): string[] {
+  const out: string[] = [];
+  const { world, ball, layout } = game;
+  if (layout.golf || !game.chipFlying || !world.alive[ball]) return out;
+  const floor = world.floorAt(world.x[ball], world.y[ball]);
+  if (floor < game.chipBase - 0.3) return out;
+  const height = world.z[ball] - floor;
+  if (!(height <= RAIL_HEIGHT + world.r[ball] + 0.1))
+    out.push(
+      `a chipped ball is ${height.toFixed(2)} above the floor, higher than the rail's top ${RAIL_HEIGHT} and a ball's radius`,
+    );
   return out;
 }
 

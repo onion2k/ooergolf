@@ -107,20 +107,6 @@ describe('the aim view', () => {
     expect([rig.distance, rig.tilt, rig.lead]).toEqual([want.distance, want.tilt, want.lead]);
   });
 
-  it('is sent again when an item that changes the reach is put on, though the club and the lie are as they were (the glove, found by the fuzzer: seed 30 on The Links)', () => {
-    const { game } = golfGame(field('f'));
-    const { rig, director } = directed(game);
-    director.started();
-    run(director, 6);
-    const bare = [rig.distance, rig.tilt, rig.lead];
-    game.progress.save.owned.push('glove');
-    expect(game.equip('glove')).toBe(true);
-    run(director, 6);
-    const want = aimView(reachOf(game.inHand, LIE.tee, game.wind.speed, game.effects), ASPECT, HEIGHT);
-    expect(want.distance, 'the glove has the camera stand further back').toBeGreaterThan(bare[0]);
-    expect([rig.distance, rig.tilt, rig.lead]).toEqual([want.distance, want.tilt, want.lead]);
-  });
-
   it('is sent again when the ball is ready again, though the club and the lie are as they were', () => {
     const { game } = golfGame(field('f'));
     const { rig, director } = directed(game);

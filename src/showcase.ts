@@ -5,7 +5,8 @@
  * at and tuned, and what `smoke/models.spec.ts` pictures; without it, a
  * model would first be seen when a hole was built round it.
  *
- * `?model=name` parks the camera on one exhibit or one row, `?seed=N` dresses
+ * `?model=name` parks the camera on one exhibit or one row (`?model=balls` adds a lineup of today's ball and the shop's
+ * fifteen, side by side), `?seed=N` dresses
  * the decoration differently, and `?paused=1` stops the blades and the belt
  * until a test steps them. `window.showcase` is its test API.
  */
@@ -36,6 +37,7 @@ import {
   flag,
   flowers,
   golfBall,
+  BALL_LOOK,
   group,
   golfTree,
   boulder,
@@ -56,6 +58,7 @@ import {
   type Windmill,
 } from './models';
 import { flipper } from './models';
+import { ITEMS } from './items';
 
 declare global {
   interface Window {
@@ -272,6 +275,25 @@ function exhibits(seed: number): Exhibit[] {
   ];
 }
 
+/**
+ * The ball lineup of `?model=balls`: today's ball and then the fifteen in the shop, in its order, side by side across the
+ * front of the patch, each its own exhibit so it is labelled with its name. Only when asked for, so the showcase's other
+ * views and the pictures held of them are as they were.
+ */
+function ballExhibits(): Exhibit[] {
+  const looks = [
+    { id: 'today', name: "today's ball", look: BALL_LOOK },
+    ...ITEMS.filter((i) => i.aisle === 'ball' && i.look).map((i) => ({ id: i.id, name: i.name, look: i.look! })),
+  ];
+  const apart = 4.2;
+  return looks.map(({ id, name, look }, k) => ({
+    name: `ball-${id}`,
+    label: name,
+    row: 'course',
+    items: [{ model: golfBall(1, { look }), x: (k - (looks.length - 1) / 2) * apart, y: -12, z: 1 }],
+  }));
+}
+
 /** The box round an exhibit's items, placed, with room for the blades and the belt's chevrons to move in. */
 function exhibitBox(e: Exhibit): { min: V3; max: V3 } {
   const min: V3 = [Infinity, Infinity, Infinity],
@@ -312,6 +334,7 @@ async function main() {
   // ---- what stands still: the grass, the rail, the rough, and every exhibit ----
 
   const shown = exhibits(seed);
+  if (query.get('model') === 'balls') shown.push(...ballExhibits());
   /** Where the grass is left out: under the water and the bunker, which lie at or below it, and the cups' collars. */
   const cut: [number, number, number, number][] = [];
   for (const e of shown)
@@ -438,6 +461,9 @@ async function main() {
   for (const row of ['course', 'obstacles', 'decoration'] as Row[])
     views.set(row, { ...union(boxes.filter((b) => b.e.row === row).map((b) => b.box)), polar: POLAR.row });
   for (const { e, box: b } of boxes) views.set(e.name, { ...b, polar: POLAR.one });
+  // the lineup of balls, when it is asked for, as one view
+  const lined = boxes.filter((b) => b.e.name.startsWith('ball-'));
+  if (lined.length) views.set('balls', { ...union(lined.map((b) => b.box)), polar: POLAR.one });
 
   const tags = boxes.map(({ e, box: b }) => {
     const el = document.createElement('div');

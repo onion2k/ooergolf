@@ -61,12 +61,17 @@ for (const [where, device] of [
     }) => {
       const problems = watch(page);
       const found: Awaited<ReturnType<typeof faults>>[] = [];
-      // a club in hand, one owned and the rest for sale, some too dear: every kind of button the shop has
+      // a kit worn from each aisle, others owned and the rest for sale, some too dear: every kind of button the shop has
       await start(page, {
         seed: 11,
         paused: true,
         screen: true,
-        save: { coins: 130, gems: 1, owned: ['glow', 'rainbow'], item: 'glow' },
+        save: {
+          coins: 130,
+          gems: 1,
+          owned: ['mallet', 'bender', 'clay', 'marble', 'comet', 'pennant'],
+          kit: { club: 'mallet', ball: 'clay', accessory: 'comet' },
+        },
       });
       found.push(await faults(page, 'the start screen'));
       await page.evaluate(() => {
@@ -417,11 +422,16 @@ for (const [where, device] of [
       expect(problems).toEqual([]);
     });
 
-    test('the Retake button: up only with the Mulligan item held, a stroke taken, the retake unused and the hole in play; a thumb high, clear of the other panels and the edges, and pressed it takes the stroke back', async ({
+    test('the Retake button: up only with the Pocket Watch worn, a stroke taken, the retake unused and the hole in play; a thumb high, clear of the other panels and the edges, and pressed it takes the stroke back', async ({
       page,
     }) => {
       const problems = watch(page);
-      await start(page, { seed: 11, paused: true, screen: true, save: { owned: ['mulligan'], item: 'mulligan' } });
+      await start(page, {
+        seed: 11,
+        paused: true,
+        screen: true,
+        save: { owned: ['watch'], kit: { club: '', ball: '', accessory: 'watch' } },
+      });
       const settle = () =>
         page.evaluate(() => {
           for (const a of document.getAnimations()) a.finish();
@@ -474,7 +484,7 @@ for (const [where, device] of [
       expect(problems).toEqual([]);
     });
 
-    test('the cosmetic items through the page: the rainbow flag is six strips on a hole begun with it, the confetti cup throws more, and the glow ball leaves a trail only while the ball goes and the picture has the room', async ({
+    test('the cosmetic accessories through the page: the club pennant is one striped cloth on a hole begun with it, the party cup throws more, and the comet trail follows the ball only while it goes and the picture has the room', async ({
       page: first,
     }) => {
       const watched = [watch(first)];
@@ -486,15 +496,21 @@ for (const [where, device] of [
         page = await first.context().newPage();
         watched.push(watch(page));
         await page.setViewportSize(first.viewportSize()!);
-        await start(page, { seed: 11, paused: true, rung, save: { owned: item ? [item] : [], item } });
+        await start(page, {
+          seed: 11,
+          paused: true,
+          rung,
+          save: { owned: item ? [item] : [], kit: { club: '', ball: '', accessory: item } },
+        });
         await page.evaluate(() => window.game!.step(10));
         return page.evaluate(() => window.game!.motions());
       };
       const plain = await play('');
-      expect([plain.strips, plain.trail, plain.confetti], 'none of the three without an item').toEqual([1, 0, 0]);
-      expect((await play('rainbow')).strips).toBe(6);
-      // the glow ball: nothing at rest, a trail once the ball goes, fading away at rest again, and none on the lowest rung
-      await play('glow');
+      expect([plain.strips, plain.trail, plain.confetti], 'none of the three without an accessory').toEqual([1, 0, 0]);
+      // the pennant is one cloth whose stripes are its material's, so its count is the plain flag's; the picture holds how it looks
+      expect((await play('pennant')).strips).toBe(1);
+      // the comet trail: nothing at rest, a trail once the ball goes, fading away at rest again, and none on the lowest rung
+      await play('comet');
       expect(await page.evaluate(() => window.game!.motions().trail)).toBe(0);
       await page.evaluate(() => {
         window.game!.shoot(Math.PI / 2, 0.6);
@@ -506,14 +522,14 @@ for (const [where, device] of [
       expect(trailing).toBeLessThanOrEqual(48);
       await page.evaluate(() => window.game!.step(600));
       expect(await page.evaluate(() => window.game!.motions().trail), 'faded away once the ball has stopped').toBe(0);
-      await play('glow', 3);
+      await play('comet', 3);
       await page.evaluate(() => {
         window.game!.shoot(Math.PI / 2, 0.6);
         // a frame at a time: the trail takes one place a frame drawn, and `step(20)` draws only the last
         for (let f = 0; f < 20; f++) window.game!.step(1);
       });
       expect(await page.evaluate(() => window.game!.motions().trail), 'none on the lowest rung').toBe(0);
-      // the confetti cup throws more than the plain one, off the same shot
+      // the party cup throws more than the plain one, off the same shot
       const thrown = async (item: string) => {
         await play(item);
         await holeOut(page);
@@ -521,18 +537,22 @@ for (const [where, device] of [
         return page.evaluate(() => window.game!.motions().confetti);
       };
       const some = await thrown('');
-      const more = await thrown('confetti');
+      const more = await thrown('streamers');
       expect(some).toBeGreaterThan(0);
       expect(more).toBeGreaterThanOrEqual(some * 2.4);
       expect(more).toBeLessThanOrEqual(1024);
       expect(watched.flat()).toEqual([]);
     });
 
-    test('the Retake button is not there without the Mulligan item, however many strokes are taken', async ({
+    test('the Retake button is not there without the Pocket Watch, however many strokes are taken', async ({
       page,
     }) => {
       const problems = watch(page);
-      await start(page, { seed: 11, paused: true, save: { owned: ['glow'], item: 'glow' } });
+      await start(page, {
+        seed: 11,
+        paused: true,
+        save: { owned: ['comet'], kit: { club: '', ball: '', accessory: 'comet' } },
+      });
       await page.evaluate(() => {
         window.game!.shoot(Math.PI / 2, 0.3);
         window.game!.step(4);

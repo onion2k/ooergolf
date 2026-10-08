@@ -11,7 +11,7 @@
  * comes from the landing's `keep`, the share of its speed along the ground that it keeps when it comes down (a
  * real ball's impact takes most of it), with a moderate roll after, which a ball rolls down a steep slope past.
  */
-import { ITEM_FIGURES, type Effects } from './items';
+import type { Kit, RoughStrike, SandStrike } from './items';
 
 /**
  * The kinds of ground, the byte a tile of a golf hole names; nought is none, the minigolf's own grass. `cut` is the short
@@ -53,16 +53,28 @@ export const SURFACES: readonly Surface[] = [
   { name: 'first cut', roll: 23, keep: 0.36, bounce: 0.3, power: 0.97, loft: 0, wild: 1.1 },
 ];
 
-/** The sand as the sand wedge has it: only what a club takes from it changes, and how the ball lands and rolls on it does not. */
-const WEDGE_SAND: Surface = { ...SURFACES[LIE.sand], ...ITEM_FIGURES.wedge };
+/** The surfaces a club's strike override has made, one for each override: asked for on every read, and a copy made each time would be made every frame. */
+const OVERRIDDEN = new WeakMap<SandStrike | RoughStrike, Surface>();
+
+/** `base` with only what a club takes from it changed by `over`, and how the ball lands and rolls on it as it was. */
+function overridden(base: Surface, over: SandStrike | RoughStrike): Surface {
+  let s = OVERRIDDEN.get(over);
+  if (!s) {
+    s = { ...base, ...over };
+    OVERRIDDEN.set(over, s);
+  }
+  return s;
+}
 
 /**
- * The surface a club is struck from at `lie`, which is the table's own unless the sand wedge is held and the lie is sand:
- * read by the strike, the aim's carry, the time in the air and the scatter alike, so that the marker, the preview and the
- * shot agree. The landing and the roll read `SURFACES` itself.
+ * The surface a club is struck from at `lie`, which is the table's own unless the kit says sand or rough takes less
+ * off the shot: read by the strike, the aim's carry, the time in the air and the scatter alike, so that the marker, the
+ * preview and the shot agree. The landing and the roll read `SURFACES` itself.
  */
-export function surfaceFor(lie: Lie, effects: Effects): Surface {
-  return lie === LIE.sand && effects.has('wedge') ? WEDGE_SAND : SURFACES[lie];
+export function surfaceFor(lie: Lie, kit: Kit): Surface {
+  if (lie === LIE.sand && kit.sandStrike) return overridden(SURFACES[lie], kit.sandStrike);
+  if (lie === LIE.rough && kit.roughStrike) return overridden(SURFACES[lie], kit.roughStrike);
+  return SURFACES[lie];
 }
 
 /**
@@ -80,6 +92,28 @@ export function rollOf(lie: Lie, greens: number = GREENS.normal): number {
   if (lie === LIE.green) return greens;
   if (lie === LIE.cut) return SURFACES[LIE.cut].roll * (greens / GREENS.normal);
   return SURFACES[lie].roll;
+}
+
+/**
+ * How many times as much as the table's own the kit's ball is slowed by `lie`: its `roll` over every ground, and its own
+ * figure over sand, rough and the greens (the minigolf green, the putting green and its first cut, which runs as much
+ * slower than the green as it always did). One for no kit, to the digit, since a product with one is exact.
+ */
+export function rollScale(lie: Lie, kit: Kit): number {
+  const own =
+    lie === LIE.sand
+      ? kit.sand
+      : lie === LIE.rough
+        ? kit.rough
+        : lie === LIE.tee || lie === LIE.fairway
+          ? 1
+          : kit.green;
+  return kit.roll * own;
+}
+
+/** How steadily `lie` slows the kit's ball, in yards a second a second: `rollOf` scaled by `rollScale`, the one place the physics, the rules and the arithmetic all read it. */
+export function groundRoll(lie: Lie, greens: number | undefined, kit: Kit): number {
+  return rollOf(lie, greens) * rollScale(lie, kit);
 }
 
 /**

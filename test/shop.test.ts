@@ -28,13 +28,13 @@ describe('what a hole pays', () => {
     expect(paid(8, 3, true)).toEqual({ coins: 0, gems: 0 });
   });
 
-  it('is paid into the save when a hole is holed, told of, and the save written, with the best score and the item it was made with', () => {
+  it('is paid into the save when a hole is holed, told of, and the save written, with the best score and the kit it was made with', () => {
     const { game, told, store } = newGame();
     holeIn(game, 2);
     const due = paid(2, COURSE[0].par, false);
     expect(game.progress.save.coins).toBe(due.coins);
     expect(told).toContain(`paid ${due.coins} ${due.gems}`);
-    expect(game.progress.save.best[COURSE[0].name]).toEqual({ strokes: 2, item: '' });
+    expect(game.progress.save.best[COURSE[0].name]).toEqual({ strokes: 2, kit: { club: '', ball: '', accessory: '' } });
     expect(JSON.parse(store.json!)).toEqual(game.progress.save);
   });
 

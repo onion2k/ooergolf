@@ -161,6 +161,12 @@ describe('the game', () => {
     expect(store.json).toBe(null);
     game.persist();
     expect(store.json).toBe(JSON.stringify(game.progress.save));
-    expect(JSON.parse(store.json!)).toEqual({ coins: 0, gems: 0, owned: [], item: '', best: {} });
+    expect(JSON.parse(store.json!)).toEqual({
+      coins: 0,
+      gems: 0,
+      owned: [],
+      kit: { club: '', ball: '', accessory: '' },
+      best: {},
+    });
   });
 });

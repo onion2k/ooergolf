@@ -21,8 +21,8 @@ banks off the rail and comes to rest, and then it can be struck again, until
 it drops. The score is named against par (a birdie, a bogey), the next hole
 begins, and after the last the card is shown, with a button for another
 round. A hole pays coins, more for beating par, and a hole in one pays a
-gem; the shop sells finer putters that strike harder. The coins, the clubs
-and the best score on each hole are kept in the browser. The camera follows
+gem; the shop has three aisles of fifteen, clubs, balls and accessories, and
+you wear one from each. The coins, the kit you own and the best score on each hole are kept in the browser. The camera follows
 the ball; the wheel zooms on a desktop, and two fingers pinch on a phone. While you pull the ball back the camera turns to look the way you aim, and
 stays there if you think better of it; about one shot in five it follows
 the ball and otherwise holds the view of the shot, and it always keeps the ball and the furthest

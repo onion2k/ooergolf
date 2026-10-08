@@ -59,9 +59,11 @@ describe('the courses', () => {
       COURSES.find((c) => c.name === n)!.summary.holes ? holeNames(n) : [],
     );
     expect(names.length).toBe(18);
-    const best: Record<string, { strokes: number; item: string }> = {};
-    names.forEach((n, i) => (best[n] = { strokes: 2 + (i % 5), item: '' }));
-    const store = memoryStore(JSON.stringify({ coins: 0, gems: 0, owned: [], item: '', best }));
+    const best: Record<string, { strokes: number; kit: { club: string; ball: string; accessory: string } }> = {};
+    names.forEach((n, i) => (best[n] = { strokes: 2 + (i % 5), kit: { club: '', ball: '', accessory: '' } }));
+    const store = memoryStore(
+      JSON.stringify({ coins: 0, gems: 0, owned: [], kit: { club: '', ball: '', accessory: '' }, best }),
+    );
     const progress = new Progress(store);
     progress.persist();
     const again = new Progress(store);

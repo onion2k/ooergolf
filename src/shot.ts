@@ -27,7 +27,9 @@ type Ground = readonly [number, number] | null;
  * The shot a drag makes: from `press` to `now` on the screen, in pixels, and
  * the points on the ground under each. None for a drag too short to mean
  * anything, which is how a player takes a shot back, or for one with no
- * ground under it to take a direction from.
+ * ground under it to take a direction from. The drag's share of the hardest is raised to `touch`, the kit's feel of the
+ * putter: one is the drag as it always was, over one is gentle at first (a short putt is easier to judge), and a short
+ * drag is still a short drag at any touch, the dead zone and the full length being where they were.
  */
 export function shotFromDrag(
   press: Px,
@@ -35,13 +37,15 @@ export function shotFromDrag(
   pressGround: Ground,
   nowGround: Ground,
   shortSide: number,
+  touch = 1,
 ): Shot | null {
   const length = Math.hypot(now[0] - press[0], now[1] - press[1]) / shortSide;
   if (length < DRAG.dead || !pressGround || !nowGround) return null;
   const dx = pressGround[0] - nowGround[0],
     dy = pressGround[1] - nowGround[1];
   if (dx === 0 && dy === 0) return null;
-  return { angle: Math.atan2(dy, dx), power: Math.min(1, length / DRAG.full) };
+  const drag = Math.min(1, length / DRAG.full);
+  return { angle: Math.atan2(dy, dx), power: touch === 1 ? drag : drag ** touch };
 }
 
 /**

@@ -17,6 +17,7 @@
     "leaks": "esbuild scripts/leak-check.ts --bundle --platform=node --format=esm --outfile=node_modules/.cache/scripts/leaks.mjs --log-level=warning && node node_modules/.cache/scripts/leaks.mjs",
     "leaks:check": "esbuild scripts/leak-check.ts --bundle --platform=node --format=esm --outfile=node_modules/.cache/scripts/leaks.mjs --log-level=warning && node node_modules/.cache/scripts/leaks.mjs --minutes 10",
     "pace": "esbuild scripts/pace-check.ts --bundle --platform=node --format=esm --outfile=node_modules/.cache/scripts/pace.mjs --log-level=warning && node node_modules/.cache/scripts/pace.mjs",
+    "value": "esbuild scripts/value.ts --bundle --platform=node --format=esm --outfile=node_modules/.cache/scripts/value.mjs --log-level=warning && node node_modules/.cache/scripts/value.mjs",
     "pace:check": "esbuild scripts/pace-check.ts --bundle --platform=node --format=esm --outfile=node_modules/.cache/scripts/pace.mjs --log-level=warning && node node_modules/.cache/scripts/pace.mjs --check",
     "seed-search": "esbuild scripts/seed-search.ts --bundle --platform=node --format=esm --outfile=node_modules/.cache/scripts/seed-search.mjs --log-level=warning && node node_modules/.cache/scripts/seed-search.mjs",
     "bench": "esbuild scripts/bench.ts --bundle --platform=node --format=esm --outfile=node_modules/.cache/scripts/bench.mjs --log-level=warning && node node_modules/.cache/scripts/bench.mjs",

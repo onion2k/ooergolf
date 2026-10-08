@@ -15,7 +15,21 @@
 export type { Colour, Material, Model, Part, Pattern, V3 } from './models/part';
 export { PATTERN, bounds, group, triangles } from './models/part';
 export { FLAG_COLOURS, FLOWER_COLOURS, PALETTE, PENNANT_COLOURS, RAINBOW, ROUGH } from './models/palette';
-export { CUP, breakArrow, collar, cup, cupRing, flag, golfBall, teeMarkers, wideCollar } from './models/course';
+export {
+  BALL_FINISH,
+  BALL_LOOK,
+  CUP,
+  breakArrow,
+  collar,
+  cup,
+  cupRing,
+  flag,
+  golfBall,
+  teeMarkers,
+  wideCollar,
+  type BallLook,
+  type BallPattern,
+} from './models/course';
 export type { Conveyor, Footprint, Pond, Windmill } from './models/obstacles';
 export {
   BUNKER,

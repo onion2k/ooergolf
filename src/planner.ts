@@ -12,7 +12,7 @@
 import { fromTrees, lieAt, type Layout } from './arena';
 import type { BagClub } from './bag';
 import { lossOf, maxScatter } from './flight';
-import type { Effects } from './items';
+import type { Kit } from './items';
 import type { Game } from './game';
 import type { Route } from './route';
 import { LIE } from './surfaces';
@@ -44,8 +44,8 @@ export class Rehearsal {
   constructor(private readonly game: Game) {}
 
   /** What the item in hand does to the game this rehearses, which a swing's scatter and its loss are read through. */
-  get effects(): Effects {
-    return this.game.effects;
+  get kit(): Kit {
+    return this.game.kit;
   }
 
   /** The shot struck from where a ball lies at `from`, with `club`, toward `angle`, at `power`, struck true: what came of it. */
@@ -232,8 +232,8 @@ export function choose(
     let e = cand.main;
     // a club with no scatter is as good struck a little off as struck true, and a ball lost is lost already
     if (!r.trial.lost && c.club.spread > 0) {
-      const delta = 0.5 * maxScatter(c.club, lie, r.power, rehearsal.effects);
-      const short = r.power * (1 - lossOf(rehearsal.effects) * r.power);
+      const delta = 0.5 * maxScatter(c.club, lie, r.power, rehearsal.kit);
+      const short = r.power * (1 - lossOf(rehearsal.kit, c.club) * r.power);
       const off = [
         rehearsal.shot(from, c.club.id, r.angle - delta, r.power),
         rehearsal.shot(from, c.club.id, r.angle + delta, r.power),

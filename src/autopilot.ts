@@ -37,7 +37,7 @@ import {
   tileAt,
   type Layout,
 } from './arena';
-import { BAG, PUTTER, bagClub, carrying, type BagClub } from './bag';
+import { BAG, PUTTER, bagClub, carrying, loftOf, type BagClub } from './bag';
 import type { HoleDef } from './course';
 import { carryFrom } from './flight';
 import type { Game } from './game';
@@ -48,8 +48,8 @@ import { Route } from './route';
 import type { Random } from './random';
 import type { Shot } from './shot';
 import { windReach } from './shaping';
-import { NO_EFFECTS, type Effects } from './items';
-import { LANDING, LIE, SURFACES, rollOf, surfaceFor, type Lie } from './surfaces';
+import { NO_KIT, type Kit } from './items';
+import { LANDING, LIE, SURFACES, groundRoll, rollScale, surfaceFor, type Lie } from './surfaces';
 
 /** How fast a ball it means for the cup is going when it gets there: inside what the cup catches off its middle, 7. */
 const ARRIVE = 4;
@@ -66,6 +66,8 @@ const CLIMB = KIND_RADIUS[BALL] * 0.95;
 /** How much room it wants between its ball and anything moving, as it passes, and how long it waits for that at most, in seconds. */
 const MISS = 0.6,
   MOST_WAIT = 10;
+/** How many stopping places short of the one it means to go to it will try for a window, at most. */
+const MOST_PLACES = 8;
 
 /**
  * The speed to strike a ball so it arrives `distance` away still going at
@@ -73,22 +75,23 @@ const MISS = 0.6,
  * loses the square of its speed at the same rate over every unit it goes;
  * held by a test against what the physics does.
  */
-export function speedFor(distance: number, arrive: number): number {
-  return Math.sqrt(arrive * arrive + 2 * ROLL.roll * distance);
+export function speedFor(distance: number, arrive: number, roll: number = ROLL.roll): number {
+  return Math.sqrt(arrive * arrive + 2 * roll * distance);
 }
 
 /**
  * How steadily the ground slows a rolling ball at a point: sand's slowing on sand, and the green's elsewhere. On a golf hole
  * the putting green runs at the hole's speed (`greens`) and the first cut round it a share slower, which is the hole's own
  * and not the minigolf's; every other golf ground is still taken for the green, as it always was, since a shot rolled
- * across it is corrected by trial and a fairway's arithmetic is not worth a change to every shot of a flat hole.
+ * across it is corrected by trial and a fairway's arithmetic is not worth a change to every shot of a flat hole. The kit's
+ * ball rolls as it does: the grounds' slowing is multiplied by the kit's figures (`rollScale`), and one for an empty kit.
  */
-function slowingAt(l: Layout, x: number, y: number, greens?: number): number {
+function slowingAt(l: Layout, x: number, y: number, greens?: number, kit: Kit = NO_KIT): number {
   const t = tileAt(l, x, y);
-  if (t >= 0 && l.sand[t]) return SAND.roll;
-  if (!l.golf) return ROLL.roll;
+  if (t >= 0 && l.sand[t]) return SAND.roll * rollScale(LIE.sand, kit);
+  if (!l.golf) return ROLL.roll * rollScale(LIE.none, kit);
   const lie = lieAt(l, x, y);
-  return lie === LIE.green || lie === LIE.cut ? rollOf(lie, greens) : ROLL.roll;
+  return lie === LIE.green || lie === LIE.cut ? groundRoll(lie, greens, kit) : ROLL.roll * kit.roll;
 }
 
 /**
@@ -108,12 +111,13 @@ export function speedAcross(
   y1: number,
   arrive: number,
   greens?: number,
+  kit: Kit = NO_KIT,
 ): number {
   const d = Math.hypot(x1 - x0, y1 - y0);
   const n = Math.max(1, Math.ceil(d / 0.25));
   let lost = 2 * PHYSICS.gravity * (terrainAt(l, x1, y1) - terrainAt(l, x0, y0));
   for (let k = 0; k < n; k++)
-    lost += 2 * slowingAt(l, x0 + ((x1 - x0) * (k + 0.5)) / n, y0 + ((y1 - y0) * (k + 0.5)) / n, greens) * (d / n);
+    lost += 2 * slowingAt(l, x0 + ((x1 - x0) * (k + 0.5)) / n, y0 + ((y1 - y0) * (k + 0.5)) / n, greens, kit) * (d / n);
   return Math.sqrt(Math.max(0, arrive * arrive + lost));
 }
 
@@ -131,6 +135,7 @@ export function timeAlong(
   y1: number,
   speed: number,
   greens?: number,
+  kit: Kit = NO_KIT,
 ): number {
   const d = Math.hypot(x1 - x0, y1 - y0);
   const n = Math.max(1, Math.ceil(d / 0.25));
@@ -145,7 +150,7 @@ export function timeAlong(
     h += rise;
     // this piece's slowing: the ground's, and gravity's share along the slope
     const a =
-      slowingAt(l, x0 + ((x1 - x0) * (k + 0.5)) / n, y0 + ((y1 - y0) * (k + 0.5)) / n, greens) +
+      slowingAt(l, x0 + ((x1 - x0) * (k + 0.5)) / n, y0 + ((y1 - y0) * (k + 0.5)) / n, greens, kit) +
       (PHYSICS.gravity * rise) / ds;
     const left = v * v - 2 * a * ds;
     if (left < 0) return Infinity;
@@ -163,16 +168,16 @@ export function timeAlong(
  * slope. The physics counts a surface's drag as well, three quarters of it;
  * none of the game's surfaces has any, so only the steady slowing is here.
  */
-export function restsOn(l: Layout, x: number, y: number, greens?: number): boolean {
+export function restsOn(l: Layout, x: number, y: number, greens?: number, kit: Kit = NO_KIT): boolean {
   const [sx, sy] = slopeAt(l, x, y);
   const s = Math.hypot(sx, sy);
-  return s / Math.sqrt(1 + s * s) <= slowingAt(l, x, y, greens) / PHYSICS.gravity;
+  return s / Math.sqrt(1 + s * s) <= slowingAt(l, x, y, greens, kit) / PHYSICS.gravity;
 }
 
 /** How long a ball struck at `speed` takes to roll `distance`, or Infinity if it stops short of it. */
-export function timeTo(distance: number, speed: number): number {
-  const left = speed * speed - 2 * ROLL.roll * distance;
-  return left < 0 ? Infinity : (speed - Math.sqrt(left)) / ROLL.roll;
+export function timeTo(distance: number, speed: number, roll: number = ROLL.roll): number {
+  const left = speed * speed - 2 * roll * distance;
+  return left < 0 ? Infinity : (speed - Math.sqrt(left)) / roll;
 }
 
 /**
@@ -208,24 +213,27 @@ const LAY_UP = { share: 0.94, within: 0.98, most: 4 };
  * It lands short of the cup by this much, and a putt finishes the hole. The share is the same at every power to within
  * a hair (a driver's 20.4 per cent at full power is 20.1 at half), so it is worked out at the hardest.
  */
-export function runOn(club: BagClub, lie: Lie = LIE.fairway, effects: Effects = NO_EFFECTS): number {
+export function runOn(club: BagClub, lie: Lie = LIE.fairway, kit: Kit = NO_KIT): number {
   if (!(club.loft > 0)) return 0;
-  const from = surfaceFor(lie, effects);
+  const from = surfaceFor(lie, kit);
   // a ball played out of a hazard is guessed to come down in it, where nothing runs on, and any other onto the fairway
   const landsIn = lie === LIE.rough || lie === LIE.sand ? lie : LIE.fairway;
   const land = SURFACES[landsIn];
   const speed = strikeSpeed(1, club.hardest) * from.power;
-  const loft = ((club.loft + from.loft) * Math.PI) / 180;
+  // the loft the kit strikes it at (a club that lowers or lifts every flight), which the carry and the angle it comes down at both follow
+  const struck = loftOf(club, kit) + from.loft;
+  const loft = (struck * Math.PI) / 180;
   let along = speed * Math.cos(loft),
     into = speed * Math.sin(loft),
     run = 0;
   for (let hops = 0; hops < 32 && into >= LANDING.least; hops++) {
-    along *= land.keep * Math.exp((-LANDING.steep * into) / Math.max(1e-6, along));
-    into *= land.bounce;
+    // the kit's ball keeps what it says at its first landing only, and hops as much as it says at every one
+    along *= land.keep * (hops === 0 ? kit.keep : 1) * Math.exp((-LANDING.steep * into) / Math.max(1e-6, along));
+    into *= land.bounce * kit.hop;
     run += (along * 2 * into) / PHYSICS.gravity;
   }
-  run += (along * along) / (2 * rollOf(landsIn));
-  return run / carrying(speed, club.loft + from.loft);
+  run += (along * along) / (2 * groundRoll(landsIn, undefined, kit));
+  return run / carrying(speed, struck);
 }
 
 /**
@@ -237,7 +245,7 @@ export function windCarry(game: Game, club: BagClub, lie: Lie, angle: number): n
   const { x, y, speed } = game.wind;
   if (!(speed > 0)) return 0;
   const along = speed * (x * Math.cos(angle) + y * Math.sin(angle));
-  return Math.sign(along) * windReach(club, 1, Math.abs(along), lie, game.effects);
+  return Math.sign(along) * windReach(club, 1, Math.abs(along), lie, game.kit);
 }
 
 /**
@@ -257,9 +265,9 @@ export function golfCandidates(game: Game, x: number, y: number): Plan[] {
   const { greens } = game;
   // the clubs as the game strikes them, which the power glove makes harder
   const putter = game.club(PUTTER);
-  const { effects } = game;
+  const { kit } = game;
   const putt = (): Plan => {
-    const speed = speedAcross(layout, x, y, layout.cup.x, layout.cup.y, ARRIVE, greens);
+    const speed = speedAcross(layout, x, y, layout.cup.x, layout.cup.y, ARRIVE, greens, game.ground);
     return { angle, power: Math.min(1, powerFor(speed, putter.hardest)), club: PUTTER.id };
   };
   if (lie === LIE.green) return [putt()];
@@ -267,15 +275,14 @@ export function golfCandidates(game: Game, x: number, y: number): Plan[] {
   const reaching: Plan[] = [];
   for (const club of BAG.filter((c) => c !== PUTTER).reverse()) {
     const held = game.club(club);
-    const reach =
-      (carryFrom(held, 1, lie, effects) + windCarry(game, held, lie, angle)) * (1 + runOn(held, lie, effects));
+    const reach = (carryFrom(held, 1, lie, kit) + windCarry(game, held, lie, angle)) * (1 + runOn(held, lie, kit));
     if (reach >= distance) reaching.push({ angle, power: distance / reach, club: club.id });
   }
   const out = reaching.length ? reaching.slice(0, 2) : [{ angle, power: 1, club: BAG[0].id }];
   // the cut is rolled over as the fairway is, and a ball on the fringe is putted when the cup is near enough to roll to
   if ((lie === LIE.tee || lie === LIE.fairway || lie === LIE.cut) && distance <= CHIP_AND_RUN) {
     const roll = putt();
-    if (speedAcross(layout, x, y, layout.cup.x, layout.cup.y, ARRIVE, greens) <= putter.hardest) out.push(roll);
+    if (speedAcross(layout, x, y, layout.cup.x, layout.cup.y, ARRIVE, greens, kit) <= putter.hardest) out.push(roll);
   }
   return out;
 }
@@ -296,8 +303,7 @@ export function golfLayUps(game: Game, route: Route, x: number, y: number): Cand
   for (const club of BAG.filter((c) => c !== PUTTER).reverse()) {
     const held = game.club(club);
     const reach =
-      (carryFrom(held, 1, lie, game.effects) + windCarry(game, held, lie, bearing)) *
-      (1 + runOn(held, lie, game.effects));
+      (carryFrom(held, 1, lie, game.kit) + windCarry(game, held, lie, bearing)) * (1 + runOn(held, lie, game.kit));
     if (reach >= way * LAY_UP.within) continue;
     const to = route.waypoint(x, y, reach * LAY_UP.share);
     const distance = Math.hypot(to.x - x, to.y - y);
@@ -352,6 +358,11 @@ export class Autopilot {
   private ways: { def: HoleDef; route: Route } | null = null;
   /** When it began waiting to strike, in game time, or -1. */
   private waitingSince = -1;
+  /**
+   * The nearer shot it has settled for, on a hole of minigolf, because the way it planned has no window in `MOST_WAIT` to be
+   * waited for, and where the ball was when it settled; `undefined` before it has looked, and null when it keeps its plan.
+   */
+  private detour: { shot: Plan; x: number; y: number } | null | undefined = undefined;
 
   constructor(
     readonly game: Game,
@@ -363,14 +374,35 @@ export class Autopilot {
     const { game } = this;
     if (game.phase === 'over' && this.options.replay) game.newRound();
     if (game.ready) {
-      const shot = this.plan();
-      if (shot && this.waitingSince < 0) this.waitingSince = game.t;
+      let shot = this.plan();
+      if (shot && this.waitingSince < 0) {
+        this.waitingSince = game.t;
+        this.detour = undefined;
+      }
+      // the nearer place it settled for, while the ball is where it was settled for it
+      const { world, ball } = game;
+      if (shot && this.detour && Math.hypot(this.detour.x - world.x[ball], this.detour.y - world.y[ball]) < 0.5)
+        shot = this.detour.shot;
+      let blocked = shot !== null && this.inTheWay(shot);
       // what moves is in the way: wait, unless it has waited long enough that it never will not be
-      if (shot && this.inTheWay(shot) && game.t - this.waitingSince < MOST_WAIT) {
-        game.step(dt);
-        return;
+      if (blocked && game.t - this.waitingSince < MOST_WAIT) {
+        // on the first frame it is kept from its shot, it looks for a window in the time it will wait: a way with none, which a
+        // longer shot or a ball that goes faster can leave, is given up for a nearer stopping place that has one, where
+        // waiting out the time and striking blind knocked the ball back down the hole
+        if (this.detour === undefined) {
+          this.detour = this.settleFor(shot!, dt);
+          if (this.detour) {
+            shot = this.detour.shot;
+            blocked = this.inTheWay(shot);
+          }
+        }
+        if (blocked) {
+          game.step(dt);
+          return;
+        }
       }
       this.waitingSince = -1;
+      this.detour = undefined;
       if (shot) {
         // a golf hole's club, put in hand before the shot is taken
         if (shot.club) game.pick(shot.club);
@@ -386,8 +418,11 @@ export class Autopilot {
     game.step(dt);
   }
 
-  /** The shot it would take from where the ball lies, or none when no shot can be taken. */
-  plan(): Plan | null {
+  /**
+   * The shot it would take from where the ball lies, or none when no shot can be taken. `skip` is for a hole of minigolf: the
+   * shot at the place that many stopping places short of the one it means to go to (the cup, when it can, counts as the first).
+   */
+  plan(skip = 0): Plan | null {
     const { game } = this;
     if (!game.ready) return null;
     const { layout, world, ball } = game;
@@ -398,12 +433,12 @@ export class Autopilot {
     // the farthest point of the way it can see, the cup itself if it can, and if it can strike hard enough to get there:
     // straight through sand may take more than the club has
     let tx = layout.cup.x,
-      ty = layout.cup.y,
-      toCup = true;
-    if (!clear(layout, x, y, tx, ty) || speedAcross(layout, x, y, tx, ty, ARRIVE) > game.hardest) {
-      toCup = false;
-      [tx, ty] = path[0] ?? [layout.cup.x, layout.cup.y];
+      ty = layout.cup.y;
+    const toCup =
+      clear(layout, x, y, tx, ty) && speedAcross(layout, x, y, tx, ty, ARRIVE, undefined, game.ground) <= game.hardest;
+    if (!toCup || skip > 0) {
       // and somewhere a ball comes to rest: a point on the side of a slope it would roll away from
+      const places: [number, number][] = [];
       for (const [px, py] of path) {
         const d = Math.hypot(px - x, py - y) || 1;
         const past = d * OVERRUN.share + OVERRUN.more;
@@ -412,20 +447,50 @@ export class Autopilot {
         if (
           clear(layout, x, y, px, py) &&
           clear(layout, px, py, ox, oy) &&
-          speedAcross(layout, x, y, px, py, 0) <= game.hardest &&
-          restsOn(layout, px, py)
-        ) {
-          tx = px;
-          ty = py;
-        }
+          speedAcross(layout, x, y, px, py, 0, undefined, game.ground) <= game.hardest &&
+          restsOn(layout, px, py, undefined, game.ground)
+        )
+          places.push([px, py]);
       }
+      // the farthest first; the cup, where it can be gone straight to, is the first choice and the farthest place the second
+      const k = skip - (toCup ? 1 : 0);
+      if (k > 0 || toCup) {
+        const place = places[places.length - 1 - k] as [number, number] | undefined;
+        if (!place) return null;
+        [tx, ty] = place;
+      } else if (places.length) [tx, ty] = places[places.length - 1];
+      else [tx, ty] = path[0] ?? [layout.cup.x, layout.cup.y];
     }
-    const speed = speedAcross(layout, x, y, tx, ty, toCup ? ARRIVE : 0);
+    const atCup = toCup && skip === 0;
+    const speed = speedAcross(layout, x, y, tx, ty, atCup ? ARRIVE : 0, undefined, game.ground);
     return {
       angle: Math.atan2(ty - y, tx - x),
       power: Math.min(1, powerFor(speed, game.hardest)),
-      ...(toCup ? {} : { to: { x: tx, y: ty } }),
+      ...(atCup ? {} : { to: { x: tx, y: ty } }),
     };
+  }
+
+  /**
+   * On a hole of minigolf, a shot it would take instead of `shot`, which is kept from it by what moves: none if `shot` has a
+   * window in the time it will wait (it waits for it, as it always did), and otherwise the first stopping place short of it,
+   * the farthest first, that has one. Looked for once, at the frame it is first kept from its shot, a frame at a time as the
+   * waiting is, so it gives up only a way that would have been struck blind. Null where none has a window either.
+   */
+  private settleFor(shot: Plan, dt: number): { shot: Plan; x: number; y: number } | null {
+    const { game } = this;
+    if (game.layout.golf || this.opens(shot, dt)) return null;
+    for (let skip = 1; skip <= MOST_PLACES; skip++) {
+      const nearer = this.plan(skip);
+      if (!nearer) return null;
+      if (this.opens(nearer, dt)) return { shot: nearer, x: game.world.x[game.ball], y: game.world.y[game.ball] };
+    }
+    return null;
+  }
+
+  /** Whether `shot` is clear of what moves at some frame within the time it will wait, from now. */
+  private opens(shot: Plan, dt: number): boolean {
+    for (let k = 0; k * dt < MOST_WAIT; k++) if (!this.inTheWay(shot, k * dt)) return true;
+    return false;
   }
 
   /**
@@ -511,9 +576,9 @@ export class Autopilot {
    * Whether anything that moves would be in the way of its ball, struck so,
    * as it passes: the ball followed along its line, a unit at a time, to where
    * it stops, and at each the moment it gets there, and every barrier and
-   * gate put where it will be at that moment.
+   * gate put where it will be at that moment. `later` is how many seconds from now it would be struck, for looking ahead to a window.
    */
-  private inTheWay(shot: Shot): boolean {
+  private inTheWay(shot: Shot, later = 0): boolean {
     const { game } = this;
     const defs = game.def.obstacles ?? [];
     if (!defs.some((d) => d.kind !== 'conveyor')) return false;
@@ -522,16 +587,16 @@ export class Autopilot {
     const ahead = this.foresight.obstacles;
     const { world, ball } = game;
     const v0 = strikeSpeed(shot.power, game.hardest);
-    const reach = rollsFor(v0);
+    const reach = rollsFor(v0, game.putRoll);
     const c = Math.cos(shot.angle),
       s = Math.sin(shot.angle);
     const r = KIND_RADIUS[BALL] + MISS;
     for (let d = 1; d < reach * 0.98; d += 1) {
       const x = world.x[ball] + c * d,
         y = world.y[ball] + s * d;
-      const when = timeAlong(game.layout, world.x[ball], world.y[ball], x, y, v0);
+      const when = timeAlong(game.layout, world.x[ball], world.y[ball], x, y, v0, undefined, game.ground);
       if (when === Infinity) break;
-      ahead.update(game.t + when, 1 / 120);
+      ahead.update(game.t + later + when, 1 / 120);
       for (const p of ahead.pushers) {
         // in the box's own frame, since a flipper's arm is turned; a barrier's and a gate's are not, and are as they were
         const lx = Math.cos(p.yaw) * (x - p.x) + Math.sin(p.yaw) * (y - p.y),

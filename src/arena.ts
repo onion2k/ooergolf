@@ -97,9 +97,9 @@ export const TERRAIN = { step: 0.5 } as const;
 /** The characters of a golf hole's map that name a kind of ground. */
 const GOLF_TILES: Record<string, Lie> = { f: LIE.fairway, r: LIE.rough, g: LIE.green, t: LIE.tee, c: LIE.cut };
 
-/** How far a ball struck at `speed` rolls on the green before it stops. */
-export function rollsFor(speed: number): number {
-  return (speed * speed) / (2 * ROLL.roll);
+/** How far a ball struck at `speed` rolls on the green before it stops: on the green's own slowing, or on `roll` if the ball is one that rolls otherwise. */
+export function rollsFor(speed: number, roll: number = ROLL.roll): number {
+  return (speed * speed) / (2 * roll);
 }
 
 /**
@@ -116,6 +116,12 @@ export function strikeSpeed(power: number, hardest: number): number {
 export function powerFor(speed: number, hardest: number): number {
   return (speed / hardest) ** 2;
 }
+
+/**
+ * How high the rail stands above the grass, which is drawn and which a ball chipped on minigolf is held under: the
+ * rail is a wall to the physics at any height, and a ball that cleared it would be a ball that left the hole.
+ */
+export const RAIL_HEIGHT = 1.6;
 
 /**
  * How high a step of raised grass is, a digit in a map a step: less than

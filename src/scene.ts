@@ -24,6 +24,7 @@ import {
   BUMPER,
   KICKER,
   KIND_RADIUS,
+  RAIL_HEIGHT,
   TILE,
   WATER_LEVEL,
   heightAt,
@@ -105,13 +106,14 @@ import {
 import { SPARKLE, sparkle, sparkles as sparkleShares } from './glints';
 import { MARK, markSize } from './marker';
 import type { Preview } from './preview';
+import type { BallLook } from './models/course';
 import { pulse } from './pulse';
+import { PUTT_SHAPE } from './shaping';
 import type { Shot } from './shot';
 import { PALETTE as COLOURS } from './models/palette';
+import { makeBank, bankOf } from './bank';
 import { annulus, at, built } from './models/shapes';
 
-/** How tall the rail stands above the grass: a little over the ball, so it reads as the thing the ball banks off. */
-const RAIL_HEIGHT = 1.6;
 /** How far below the grass the rough lies: below the bottom of the cup, so the cup is seen into. */
 export const ROUGH_DEPTH = 3;
 /** How many rows of tiles each mown stripe of the grass is. */
@@ -170,6 +172,8 @@ export const PALETTE = {
   /** The sides of grass raised on a step: the earth under the turf. */
   bank: [0.2, 0.3, 0.08, 0.9],
   ball: [0.98, 0.98, 0.96, 0.25],
+  /** The chalk's dots past a bank on minigolf: chalk white, apart from the aim's green to red. */
+  chalk: [0.97, 0.97, 0.92, 0.6],
   /** The ring where a lofted ball first came down. */
   marker: [1.0, 0.86, 0.18, 0.4],
   /**
@@ -197,6 +201,18 @@ export const PALETTE = {
 export const AIM_DOTS = 14;
 export const AIM_REACH = 18;
 const AIM_RADIUS = 0.36;
+/** How many dots the chalk draws past a rail's bank at most, and how big each is as a share of the aim's. */
+export const BANK_DOTS = 8;
+const BANK_SIZE = 0.75;
+/** How long a piece of a curved aim's path is worked out in, in the dots' own units. */
+const CURVE_PIECE = 0.5;
+
+/** How many seconds a ball struck at `speed` and slowed steadily by `slowing` takes to have rolled `distance`, or to stop if that is short of it. */
+function timeAt(distance: number, speed: number, slowing: number): number {
+  if (!(slowing > 0)) return distance / speed;
+  const left = speed * speed - 2 * slowing * distance;
+  return left <= 0 ? speed / slowing : (speed - Math.sqrt(left)) / slowing;
+}
 
 /** The scenery's models, one of each kind, built once, low-poly as the title has them: the flowers are made in each of their colours. */
 const SCENERY_MODELS: Record<Exclude<SceneryKind, 'flowers'>, Model> = {
@@ -446,8 +462,13 @@ export class Scene {
   private reading: { entry: Entry; layout: Layout } | null = null;
   /** The ghost shot's dots and ring, when the hole was begun with the item. */
   private ghosting: { dots: Entry; ring: Entry } | null = null;
+  /** The aim the chalk's bank dots are laid for on a hole of minigolf, set each frame by the page: nothing is drawn for none. */
+  private banking: { on: boolean; x: number; y: number; angle: number; power: number; reach: number } | null = null;
+  private readonly bankHit = makeBank();
+  private readonly bankNext = makeBank();
   /** How many pieces the flag's cloth is drawn in: one, or six on a hole begun with the rainbow flag; none before a hole. */
   private strips = 0;
+  private banked: Entry | null = null;
   /** The shot in hand as the page last handed it, and how much bigger its marks are drawn for the view, and which way it is aimed. */
   private shot: { preview: Preview; scale: number } | null = null;
   /** What the last frame placed of its preview, for the page to read back: the arc, the ring, the spread and the knock. */
@@ -949,13 +970,22 @@ export class Scene {
     layout?: Layout,
     name = '',
     wind: Wind = STILL,
-    items: { ghost?: boolean; reader?: boolean; rainbow?: boolean } = {},
+    items: {
+      ghost?: boolean;
+      reader?: boolean;
+      rainbow?: boolean;
+      pennant?: boolean;
+      chalk?: boolean;
+      /** How the ball is drawn, if the ball worn says; none is the ball it has always been. */
+      ball?: BallLook;
+    } = {},
   ): GameGroup[] {
-    // the ball, round and smooth, with one band round its middle so its roll is seen
+    // the ball, round and smooth, with one band round its middle so its roll is seen, or the look of the ball worn
     const [br, bg, bb, brough] = PALETTE.ball;
-    const [theBall] = golfBall(KIND_RADIUS[BALL], { colour: [br, bg, bb], band: PALETTE.ballBand }).parts;
+    const worn = items.ball;
+    const [theBall] = golfBall(KIND_RADIUS[BALL], { colour: [br, bg, bb], band: PALETTE.ballBand, look: worn }).parts;
     const out: GameGroup[] = [
-      group({ ...theBall, material: [br, bg, bb, brough] }, this.ball),
+      group(worn ? theBall : { ...theBall, material: [br, bg, bb, brough] }, this.ball),
       { mesh: ball(AIM_RADIUS, 4, 8), matrices: this.aim, count: 0, materials: this.aimLooks },
     ];
     this.moving = [];
@@ -968,6 +998,7 @@ export class Scene {
     this.arrowsOn = false;
     this.reading = null;
     this.ghosting = null;
+    this.banked = null;
     this.strips = 0;
     const pool = (model: { parts: Model['parts'] }, write: (out: Float32Array, t: number) => void, count = 1) => {
       const matrices = new Float32Array(16 * count);
@@ -979,7 +1010,10 @@ export class Scene {
     if (layout) {
       const { cup } = layout;
       // the cloth: one part, or the rainbow's six strips on a hole begun with the item, each moved as the one is
-      const cloth = flag(FLAG_COLOURS.red, { rainbow: items.rainbow === true }).parts.filter((p) => isCloth(p.name));
+      const cloth = flag(FLAG_COLOURS.red, {
+        rainbow: items.rainbow === true,
+        pennant: items.pennant === true,
+      }).parts.filter((p) => isCloth(p.name));
       this.strips = cloth.length;
       // the flag flies downwind, and the trees lean with it, in the same gusts the grass bends in; and it waggles as the
       // ball drops
@@ -1083,7 +1117,73 @@ export class Scene {
       this.shotGroups(layout, out);
       this.arrowGroups(layout, out);
     }
+    // the rangefinder's ring where a putt on minigolf will rest, and the chalk's dots past its first bank: each only on a hole of
+    // minigolf begun with the item, so a hole without them has the groups it had
+    if (layout && !layout.golf) {
+      if (items.ghost) this.ghostGroups(layout, out);
+      if (items.chalk) this.bankGroup(layout, out);
+    }
     return out;
+  }
+
+  /**
+   * The chalk's dots on a hole of minigolf: a few more along the aim's line from where it meets the first rail, in the
+   * direction that rail's face sends it (`bankOf`), as far as the putt would still roll and no further than the next rail.
+   * A pool made once for the hole and written from the aim the page last handed in (`setBankAim`), each frame it is drawn.
+   */
+  private bankGroup(layout: Layout, out: GameGroup[]) {
+    const matrices = new Float32Array(16 * BANK_DOTS);
+    const entry: Entry = {
+      matrices,
+      count: 0,
+      write: (m) => {
+        const a = this.banking;
+        entry.count = 0;
+        if (!a || !a.on) return;
+        // how far the aim's own dots reach, and how far apart they are
+        const dots = Math.max(2, Math.round(AIM_DOTS * a.power));
+        const reach = AIM_REACH * a.reach * a.power;
+        const along = KIND_RADIUS[BALL] + 0.6 + reach;
+        if (!bankOf(layout, a.x, a.y, a.angle, along, this.bankHit)) return;
+        const hit = this.bankHit;
+        const spacing = reach / dots;
+        let left = along - hit.along;
+        // the line carried on stops at the next rail, as the putt would
+        if (bankOf(layout, hit.x, hit.y, Math.atan2(hit.dy, hit.dx), left, this.bankNext)) left = this.bankNext.along;
+        const n = Math.min(BANK_DOTS, Math.floor(left / spacing));
+        for (let k = 0; k < n; k++) {
+          const d = spacing * (k + 1);
+          const x = hit.x + hit.dx * d,
+            y = hit.y + hit.dy * d;
+          place(m, k, x, y, heightAt(layout, x, y) + AIM_RADIUS * BANK_SIZE + 0.05, 0, BANK_SIZE);
+        }
+        entry.count = n;
+      },
+    };
+    this.moving.push(entry);
+    this.banked = entry;
+    const [r, g, b, rough] = PALETTE.chalk;
+    out.push({ mesh: ball(AIM_RADIUS, 4, 8), matrices, count: 0, albedo: [r, g, b], roughness: rough });
+  }
+
+  /**
+   * The aim the chalk's bank dots are laid for on a hole of minigolf begun with the item: from (x, y) along the shot, with
+   * the aim's `reach` (as `writeAim` is given it); none puts them away. Written into a record made once.
+   */
+  setBankAim(x: number, y: number, shot: Shot | null, reach: number) {
+    const a = (this.banking ??= { on: false, x: 0, y: 0, angle: 0, power: 0, reach: 1 });
+    a.on = shot !== null;
+    if (!shot) return;
+    a.x = x;
+    a.y = y;
+    a.angle = shot.angle;
+    a.power = shot.power;
+    a.reach = reach;
+  }
+
+  /** How many dots of the chalk's line past a bank the last frame drew: for the test API. */
+  bankDrawn(): number {
+    return this.banked?.count ?? 0;
   }
 
   /**
@@ -1211,7 +1311,8 @@ export class Scene {
         ring.count = 0;
         const p = s?.preview;
         const r = p?.rest;
-        if (!s || !p || !r || !r.shown || p.n < 2 || r.n < 2) return;
+        // a putt on minigolf is rolled to where it rests, so its rest is a ring and no path past the roll's end
+        if (!s || !p || !r || !r.shown || p.n < 2 || (r.n < 2 && !p.rolled)) return;
         const size = MARK.radius * ARC.ring * 0.8 * s.scale;
         slopeInto(layout, r.x, r.y, slope);
         const lift = ringLift(layout, r.x, r.y, slope[0], slope[1], size, size, 0) * Math.hypot(slope[0], slope[1], 1);
@@ -1461,10 +1562,21 @@ export class Scene {
    * The aim's dots from the ball along the shot, as far as its power reaches
    * (and further by `scale` for a club that strikes harder), coloured from
    * soft to hard, and pulsing at game time `now`: how many are placed, none
-   * for no shot.
+   * for no shot. A putt that curves (`bend`, radians a second, a fade positive, from a kit that bends) has its dots laid along
+   * the path the turn makes over `PUTT_SHAPE.seconds`, and straight on after: the ball struck at `speed` and slowed
+   * steadily by `slowing`, as the game turns it, worked out by arithmetic on the level. None for a straight one, whose dots are
+   * exactly what they were.
    */
-  writeAim(x: number, y: number, shot: Shot | null, scale = 1, now = 0): number {
+  writeAim(x: number, y: number, shot: Shot | null, scale = 1, now = 0, bend = 0, speed = 0, slowing = 0): number {
     if (!shot) return 0;
+    const curved = bend !== 0 && speed > 0;
+    const dotted = KIND_RADIUS[BALL] + 0.6 + AIM_REACH * scale * shot.power;
+    // the dots are laid over a stretch that is not the roll's length, so a place along them is a share of the whole way the ball rolls
+    const rolled = slowing > 0 ? (speed * speed) / (2 * slowing) : dotted;
+    // the path so far: where it has got to, how far along it, and the heading it is on at the middle of the next piece
+    let px = x,
+      py = y,
+      gone = 0;
     const reach = AIM_REACH * scale * shot.power;
     const n = Math.max(2, Math.round(AIM_DOTS * shot.power));
     const c = Math.cos(shot.angle),
@@ -1473,8 +1585,21 @@ export class Scene {
       [hr, hg, hb] = PALETTE.aimHard;
     for (let k = 0; k < n; k++) {
       const along = KIND_RADIUS[BALL] + 0.6 + (reach * (k + 1)) / n;
-      const ax = x + c * along,
+      let ax = x + c * along,
         ay = y + s * along;
+      if (curved) {
+        while (gone < along) {
+          const piece = Math.min(CURVE_PIECE, along - gone);
+          const heading =
+            shot.angle -
+            bend * Math.min(PUTT_SHAPE.seconds, timeAt(((gone + piece / 2) / dotted) * rolled, speed, slowing));
+          px += Math.cos(heading) * piece;
+          py += Math.sin(heading) * piece;
+          gone += piece;
+        }
+        ax = px;
+        ay = py;
+      }
       // on the ground under each dot, raised or sloped, not at nought under it, and sitting on it as it swells
       const size = pulse(now, k);
       place(this.aim, k, ax, ay, (this.layout ? heightAt(this.layout, ax, ay) : 0) + AIM_RADIUS * size + 0.05, 0, size);

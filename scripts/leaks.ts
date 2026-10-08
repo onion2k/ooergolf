@@ -39,7 +39,11 @@ export const WATCH: Partial<Record<string, { ceiling: number; steady?: boolean }
   // a best is kept for each hole by its name and is written and never read, so the save only grows, a hole at a time, to
   // every hole of every course done with every item owned: about 42 bytes a hole, 1,915 for the forty-three there were
   // and about 2,380 for six courses of nine and four of them of the minigolf; 3,000 leaves room for a few holes beyond
-  'save bytes': { ceiling: 3_000 },
+  // (8 October 2026: a best now carries a kit of three ids, about 104 bytes a hole. Measured with all forty-five items
+  // owned and worn, and a best of ten strokes on each of the fifty-four holes of the six courses, each best with a kit of
+  // the three longest ids (streamers, fireworks, horseshoe): 5,830 bytes, which `test/leaks.test.ts` holds to the byte.
+  // 6,500 is that and about six holes more, since a seventh course would otherwise fail the gate before it failed the test)
+  'save bytes': { ceiling: 6_500 },
   // emptied at every new round: never more than a score a hole
   'card scores': { ceiling: COURSE.length },
   // the bodies in the rehearsal a golf hole's shots are previewed in: the ball, however many shots are tried, and the

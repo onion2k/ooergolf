@@ -23,7 +23,8 @@ import {
   type Layout,
 } from './arena';
 import type { Random } from './random';
-import { LIE, rollOf } from './surfaces';
+import { NO_KIT, type Kit } from './items';
+import { LIE, groundRoll, rollScale } from './surfaces';
 import { TREE } from './trees';
 
 export { World, type Belt, type Pusher } from 'artshape-physics/world';
@@ -87,8 +88,10 @@ export const THE_CUP = 0;
  * window, and hung in its mouth; it banks off a rail of tiles as off one
  * flat wall; and a fast one is looked at every half radius it goes, so no
  * shot passes through the rail or a blade. `bounce` is how many times as hard
- * the rail, the posts and the kickers send a ball back (the rubber ball's),
- * and one leaves them as they were; trees and moving barriers are not scaled.
+ * the rail, the posts, the kickers and the trees send a ball back (the kit's
+ * rail figure), and one leaves them as they were; plain moving barriers are not
+ * scaled. `kit` is how the ball in play rolls: each surface's slowing is its
+ * own times the kit's, and the kit worn is no change at all.
  */
 export function makeWorld(
   layout: Layout,
@@ -97,6 +100,7 @@ export function makeWorld(
   belted: ReadonlySet<number> = new Set(),
   greens?: number,
   bounce = 1,
+  kit: Kit = NO_KIT,
 ): World {
   const { cols, rows, solid } = layout;
   // a belt carries what lies on it at its own speed, and the green's steady slowing would hold it back to a third of it
@@ -121,10 +125,10 @@ export function makeWorld(
     // the green, which is all else a ball rolls on: water is a floor below the bottom, and the rest is rock
     surface,
     surfaces: [
-      { drag: 0, roll: ROLL.roll },
+      { drag: 0, roll: ROLL.roll * rollScale(LIE.none, kit) },
       { drag: 0, roll: 0 },
-      { drag: 0, roll: SAND.roll },
-      ...(layout.golf ? GOLF_LIES.map((k) => ({ drag: 0, roll: rollOf(k, greens) })) : []),
+      { drag: 0, roll: SAND.roll * rollScale(LIE.sand, kit) },
+      ...(layout.golf ? GOLF_LIES.map((k) => ({ drag: 0, roll: groundRoll(k, greens, kit) })) : []),
     ],
     random,
     // a step is met as a change of floor and not as a ledge with an edge: with v0.8.0's edges a ball climbs a riser only
@@ -156,7 +160,7 @@ export function makeWorld(
       y: t.y,
       radius: TREE.trunk,
       top: heightAt(layout, t.x, t.y) + TREE.base,
-      restitution: TREE.restitution,
+      restitution: TREE.restitution * bounce,
     })),
   );
   // and each kicker, a post as far as the physics knows, with a bounce of its own

@@ -33,7 +33,7 @@ import { BOWL, SIDE_HILL } from '../test/hills';
 import { STREAM_HOLE } from '../test/stream-hole';
 import { wideHole } from '../test/wide-hole';
 import { smallHole } from './bighole';
-import { drag, puttingHole, start, watch } from './game';
+import { drag, landed, puttingHole, start, watch } from './game';
 import { openDrawer } from './panels';
 
 /** How far the pictures may differ before it is a change and not the GPU: a fiftieth of the pixels, each well off. */
@@ -576,17 +576,40 @@ test.describe('what it looks like', () => {
     expect(problems).toEqual([]);
   });
 
-  test('the shop, with a club in hand, one owned and the rest for sale', async ({ page }) => {
+  /** A save that owns three of each kind of thing, wears one of each, and has coins for some of the rest. */
+  const SHOPPER = {
+    coins: 130,
+    gems: 1,
+    owned: ['mallet', 'bender', 'clay', 'marble', 'comet', 'pennant'],
+    kit: { club: 'mallet', ball: 'clay', accessory: 'comet' },
+  };
+
+  test('the shop’s clubs aisle, a mallet worn, another owned and the rest for sale', async ({ page }) => {
     const problems = watch(page);
-    await start(page, {
-      seed: 11,
-      paused: true,
-      save: { coins: 130, gems: 1, owned: ['glow', 'rainbow'], item: 'glow' },
-    });
+    await start(page, { seed: 11, paused: true, save: SHOPPER });
     await page.evaluate(() => window.game!.step(60));
     await hideStats(page);
+    await landed(page);
     await page.locator('#shopOpen').click();
-    await expect(page).toHaveScreenshot('shop.png', TOLERANCE);
+    await page.evaluate(() => window.game!.shopTab('club'));
+    await expect(page).toHaveScreenshot('shop-clubs.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
+  test('the shop’s balls aisle, each ball’s look in its swatch, a clay ball worn and a note that a new ball waits for the next hole', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true, save: SHOPPER });
+    await page.evaluate(() => window.game!.step(60));
+    await hideStats(page);
+    await landed(page);
+    await page.locator('#shopOpen').click();
+    await page.evaluate(() => window.game!.shopTab('ball'));
+    // the list scrolled to the clay ball worn, so the row marked Equipped is in the picture
+    await page.locator('[data-item=clay]').scrollIntoViewIfNeeded();
+    await page.evaluate(() => window.game!.step(2));
+    await expect(page).toHaveScreenshot('shop-balls.png', TOLERANCE);
     expect(problems).toEqual([]);
   });
 
@@ -1134,16 +1157,26 @@ test.describe('what it looks like', () => {
       expect(problems).toEqual([]);
     });
 
-    test('the shop, on a phone', async ({ page }) => {
+    test('the shop’s balls aisle, on a phone', async ({ page }) => {
       const problems = watch(page);
       await start(page, {
         seed: 11,
         paused: true,
-        save: { coins: 130, gems: 1, owned: ['glow', 'rainbow'], item: 'glow' },
+        save: {
+          coins: 130,
+          gems: 1,
+          owned: ['mallet', 'bender', 'clay', 'marble', 'comet', 'pennant'],
+          kit: { club: 'mallet', ball: 'clay', accessory: 'comet' },
+        },
       });
       await page.evaluate(() => window.game!.step(60));
+      await landed(page);
       await page.locator('#shopOpen').click();
-      await expect(page).toHaveScreenshot('phone-shop.png', TOLERANCE);
+      await page.evaluate(() => window.game!.shopTab('ball'));
+      // the list scrolled to the clay ball worn, so the row marked Equipped is in the picture
+      await page.locator('[data-item=clay]').scrollIntoViewIfNeeded();
+      await page.evaluate(() => window.game!.step(2));
+      await expect(page).toHaveScreenshot('phone-shop-balls.png', TOLERANCE);
       expect(problems).toEqual([]);
     });
 
@@ -1613,14 +1646,21 @@ test('The Mill Race with its windmill listed first, from its tee: the barrier on
 });
 
 /**
- * What the shop's items draw: the glow ball's trail, the confetti cup, the rainbow flag, the ghost shot's carry-on, the
- * break reader's arrows off the green and the Retake button. Each is set from a save that owns and equips the item, with the
- * game paused and seeded, and stepped a frame at a time where the picture needs the frames before it (a trail is made of the
- * frames that came first, and `step(n)` draws only once, after the n).
+ * What the shop's accessories, balls and clubs draw: the comet's trail, the party cup's streamers, the club pennant, the
+ * fireworks over the cup, the rangefinder's ring where a putt or a drive will rest, the chalk's line past a bank and its
+ * break arrows off the green, the Retake button, a Super Ball and a Gem Ball on the course, and the Shaper Irons' curved
+ * dots. Each is set from a save that owns and wears the item, with the game paused and seeded, and stepped a frame at a
+ * time where the picture needs the frames before it (a trail is made of the frames that came first, and `step(n)` draws
+ * only once, after the n).
  */
 test.describe("the shop's items", () => {
-  /** A save that owns one item and has it on, with coins to spare. */
-  const holding = (item: string) => ({ coins: 200, gems: 1, owned: [item], item });
+  /** A save that owns one thing and wears it in its aisle, with coins to spare. */
+  const holding = (item: string, aisle: 'club' | 'ball' | 'accessory' = 'accessory') => ({
+    coins: 200,
+    gems: 1,
+    owned: [item],
+    kit: { club: '', ball: '', accessory: '', [aisle]: item },
+  });
 
   /** The autopilot's shots from the tee of the hole in play, until the ball is in the cup: stops on the first frame of the confetti. */
   async function holeIt(page: Page) {
@@ -1634,9 +1674,9 @@ test.describe("the shop's items", () => {
     });
   }
 
-  test('the glow ball rolling on minigolf: its trail behind it, a few frames after the stroke', async ({ page }) => {
+  test('the comet trail on minigolf: its trail behind the ball, a few frames after the stroke', async ({ page }) => {
     const problems = watch(page);
-    await start(page, { seed: 11, paused: true, save: holding('glow') });
+    await start(page, { seed: 11, paused: true, save: holding('comet') });
     await page.evaluate(() => {
       const g = window.game!;
       g.step(60);
@@ -1647,13 +1687,13 @@ test.describe("the shop's items", () => {
     });
     expect(await page.evaluate(() => window.game!.motions().trail), 'the trail is drawn').toBeGreaterThan(2);
     await hideStats(page);
-    await expect(page.locator('#view')).toHaveScreenshot('items-glow-trail.png', TOLERANCE);
+    await expect(page.locator('#view')).toHaveScreenshot('items-comet-trail.png', TOLERANCE);
     expect(problems).toEqual([]);
   });
 
-  test('the glow ball in the air on a drive: its trail along the flight', async ({ page }) => {
+  test('the comet trail in the air on a drive: its trail along the flight', async ({ page }) => {
     const problems = watch(page);
-    await start(page, { seed: 11, paused: true, save: holding('glow') });
+    await start(page, { seed: 11, paused: true, save: holding('comet') });
     await page.evaluate(() => {
       const g = window.game!;
       g.chooseCourse('The Links');
@@ -1666,30 +1706,30 @@ test.describe("the shop's items", () => {
     });
     expect(await page.evaluate(() => window.game!.motions().trail), 'the trail is drawn').toBeGreaterThan(2);
     await hideStats(page);
-    await expect(page.locator('#view')).toHaveScreenshot('items-glow-trail-drive.png', TOLERANCE);
+    await expect(page.locator('#view')).toHaveScreenshot('items-comet-trail-drive.png', TOLERANCE);
     expect(problems).toEqual([]);
   });
 
-  test('the confetti cup a few frames after a hole is holed, close on the cup', async ({ page }) => {
+  test('the party cup a few frames after a hole is holed, streamers over the cup', async ({ page }) => {
     const problems = watch(page);
-    await start(page, { seed: 11, paused: true, save: holding('confetti') });
+    await start(page, { seed: 11, paused: true, save: holding('streamers') });
     await page.evaluate(() => window.game!.step(60));
     await holeIt(page);
     await page.evaluate(() => {
       const g = window.game!;
       const { cup } = g.content();
-      g.look(cup.x, cup.y - 4, 14);
-      for (let f = 0; f < 8; f++) g.step(1);
+      g.look(cup.x, cup.y - 8, 26);
+      for (let f = 0; f < 28; f++) g.step(1);
     });
-    expect(await page.evaluate(() => window.game!.motions().confetti), 'confetti was thrown').toBeGreaterThan(0);
+    expect(await page.evaluate(() => window.game!.motions().confetti), 'streamers were thrown').toBeGreaterThan(0);
     await hideStats(page);
-    await expect(page.locator('#view')).toHaveScreenshot('items-confetti.png', TOLERANCE);
+    await expect(page.locator('#view')).toHaveScreenshot('items-streamers.png', TOLERANCE);
     expect(problems).toEqual([]);
   });
 
-  test('the rainbow flag close to, on the cup, its cloth in the wind', async ({ page }) => {
+  test('the club pennant close to, on the cup, its striped cloth in the wind', async ({ page }) => {
     const problems = watch(page);
-    await start(page, { seed: 11, paused: true, save: holding('rainbow') });
+    await start(page, { seed: 11, paused: true, save: holding('pennant') });
     await page.evaluate(() => {
       const g = window.game!;
       g.step(75);
@@ -1697,17 +1737,67 @@ test.describe("the shop's items", () => {
       g.look(cup.x, cup.y - 3, 12);
       g.step(40);
     });
-    expect(await page.evaluate(() => window.game!.motions().strips), 'the cloth is in strips').toBe(6);
     await hideStats(page);
-    await expect(page.locator('#view')).toHaveScreenshot('items-rainbow-flag.png', TOLERANCE);
+    await expect(page.locator('#view')).toHaveScreenshot('items-pennant-flag.png', TOLERANCE);
     expect(problems).toEqual([]);
   });
 
-  test('the ghost shot: a drive part-pulled on Water Carry, its line carried on past the first landing to the ring where it rests', async ({
+  test('the fireworks over the cup, a moment after a hole is holed in under par', async ({ page }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true, save: holding('fireworks') });
+    // the first hole of The Meadow the autopilot beats par on, holed; then the camera close on the cup, and game time
+    // stepped a frame at a time to a moment the second shell's burst is up
+    const under = await page.evaluate(() => {
+      const g = window.game!;
+      for (let h = 0; h < 9; h++) {
+        g.startHole(h);
+        g.step(60);
+        for (let s = 0; s < 30 && g.state().phase === 'play' && g.motions().confetti === 0; s++) {
+          const shot = g.suggest();
+          if (shot) g.shoot(shot.angle, shot.power);
+          for (let f = 0; f < 900 && g.motions().confetti === 0 && !g.state().ready; f++) g.step(1);
+        }
+        const st = g.state();
+        if (st.phase === 'done' && st.strokes < st.par) return { hole: h, strokes: st.strokes, par: st.par };
+      }
+      return null;
+    });
+    expect(under, 'a hole was holed under par').not.toBeNull();
+    await page.evaluate(() => {
+      const g = window.game!;
+      const { cup } = g.content();
+      g.followShots('always');
+      g.look(cup.x, cup.y + 2, 36);
+      // the first shell's burst six tenths of a second old and the second's two tenths
+      for (let f = 0; f < 66; f++) g.step(1);
+    });
+    await hideStats(page);
+    // the score's sticker is over the sky the shells burst in
+    await page.locator('#toast').evaluate((el: HTMLElement) => (el.style.visibility = 'hidden'));
+    await expect(page.locator('#view')).toHaveScreenshot('items-fireworks.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
+  test('the rangefinder on minigolf: a putt part-pulled on the first hole, its line carried on to the ring where it will rest', async ({
     page,
   }) => {
     const problems = watch(page);
-    await start(page, { seed: 11, paused: true, save: holding('ghost') });
+    await start(page, { seed: 11, paused: true, save: holding('scope') });
+    await page.evaluate(() => window.game!.step(75));
+    await aim(page, 0.55);
+    // `motions().shot` reads the first landing's ring, which a putt has none of, so the rest ring of minigolf is the picture's to show
+    expect(await page.evaluate(() => window.game!.aiming()), 'a putt is aimed').not.toBeNull();
+    await hideStats(page);
+    await expect(page.locator('#view')).toHaveScreenshot('items-scope-minigolf.png', TOLERANCE);
+    await page.mouse.up();
+    expect(problems).toEqual([]);
+  });
+
+  test('the rangefinder on a drive: a drive part-pulled on Water Carry, its line carried on past the first landing to the ring where it rests', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true, save: holding('scope') });
     await page.evaluate(() => {
       window.game!.chooseCourse('The Links');
       window.game!.startHole(1);
@@ -1717,12 +1807,27 @@ test.describe("the shop's items", () => {
     const shot = await page.evaluate(() => window.game!.motions().shot);
     expect(shot?.rest, 'the carry-on is drawn').not.toBeNull();
     await hideStats(page);
-    await expect(page).toHaveScreenshot('items-ghost-shot.png', TOLERANCE);
+    await expect(page).toHaveScreenshot('items-scope-shot.png', TOLERANCE);
     await page.mouse.up();
     expect(problems).toEqual([]);
   });
 
-  test('the break reader: a putt aimed from the fairway, the arrows over the green and the words in the panel', async ({
+  test('the chalk on minigolf: a putt aimed across the first hole at its rail, the line carried on past the bank', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true, save: holding('chalk') });
+    await page.evaluate(() => window.game!.step(75));
+    // pulled back and across, so the shot goes up the hole and out to the side, to meet the rail at a slant
+    await aim(page, 1, 330);
+    expect(await page.evaluate(() => window.game!.aiming()), 'a shot is aimed').not.toBeNull();
+    await hideStats(page);
+    await expect(page.locator('#view')).toHaveScreenshot('items-chalk-bank.png', TOLERANCE);
+    await page.mouse.up();
+    expect(problems).toEqual([]);
+  });
+
+  test('the chalk on golf: a putt aimed from the fairway, the arrows over the green and the words in the panel', async ({
     page,
   }) => {
     const problems = watch(page);
@@ -1738,7 +1843,7 @@ test.describe("the shop's items", () => {
       if (y < layout.cup.y - 8 && far < at.far) at = { x, y, far };
     }
     expect(at.far, 'a fairway tile was found').toBeLessThan(40);
-    await start(page, { seed: 11, paused: true, save: holding('reader') });
+    await start(page, { seed: 11, paused: true, save: holding('chalk') });
     await page.evaluate(
       ([h, p]) => {
         const g = window.game!;
@@ -1756,14 +1861,59 @@ test.describe("the shop's items", () => {
     expect(arrows.shown, 'the arrows are up off the green').toBe(true);
     await aim(page, 0.5);
     await hideStats(page);
-    await expect(page).toHaveScreenshot('items-reader-fairway.png', TOLERANCE);
+    await expect(page).toHaveScreenshot('items-chalk-fairway.png', TOLERANCE);
     await page.mouse.up();
     expect(problems).toEqual([]);
   });
 
-  /** One stroke taken with the Mulligan in hand, and the ball at rest: the Retake button is up. */
+  /** A ball struck once on the first hole and come to rest, the camera close on it: the ball's look on the course. */
+  async function ballClose(page: Page, id: string) {
+    await start(page, { seed: 11, paused: true, save: holding(id, 'ball') });
+    await page.evaluate(() => {
+      const g = window.game!;
+      g.step(60);
+      const shot = g.suggest()!;
+      g.shoot(shot.angle, shot.power * 0.5);
+      for (let f = 0; f < 900 && !g.state().ready; f++) g.step(1);
+      g.step(30);
+      const b = g.ball();
+      g.look(b.x, b.y - 1.5, 5);
+      g.step(2);
+    });
+    await hideStats(page);
+  }
+
+  test('the Super Ball on the course, close, after a stroke: pink with a cyan swirl and a gloss', async ({ page }) => {
+    const problems = watch(page);
+    await ballClose(page, 'super');
+    await expect(page.locator('#view')).toHaveScreenshot('items-ball-super.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
+  test('the Gem Ball on the course, close, after a stroke', async ({ page }) => {
+    const problems = watch(page);
+    await ballClose(page, 'gem');
+    await expect(page.locator('#view')).toHaveScreenshot('items-ball-gem.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
+  test('the Shaper Irons on minigolf: a putt set to draw, its dots curving off the straight', async ({ page }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true, save: holding('bender', 'club') });
+    await page.evaluate(() => window.game!.step(75));
+    await expect(page.locator('#shapeButton'), 'the shape button is up with a club that bends').toBeVisible();
+    await page.locator('#shapeButton').click();
+    expect(await page.evaluate(() => window.game!.motions().controls.shape), 'a draw is chosen').not.toBe(0);
+    await aim(page, 0.6);
+    await hideStats(page);
+    await expect(page.locator('#view')).toHaveScreenshot('items-bend-putt.png', TOLERANCE);
+    await page.mouse.up();
+    expect(problems).toEqual([]);
+  });
+
+  /** One stroke taken with the Pocket Watch worn, and the ball at rest: the Retake button is up. */
   async function afterAStroke(page: Page) {
-    await start(page, { seed: 11, paused: true, save: holding('mulligan') });
+    await start(page, { seed: 11, paused: true, save: holding('watch') });
     await page.evaluate(() => {
       const g = window.game!;
       g.step(60);
@@ -1777,7 +1927,7 @@ test.describe("the shop's items", () => {
     await hideStats(page);
   }
 
-  test('the Retake button on a desk, after a stroke with the Mulligan equipped', async ({ page }) => {
+  test('the Retake button on a desk, after a stroke with the Pocket Watch worn', async ({ page }) => {
     const problems = watch(page);
     await afterAStroke(page);
     await expect(page).toHaveScreenshot('items-retake.png', TOLERANCE);
@@ -1787,7 +1937,7 @@ test.describe("the shop's items", () => {
   test.describe('on a phone', () => {
     test.use({ viewport: { width: 400, height: 860 }, hasTouch: true, isMobile: true });
 
-    test('the Retake button on a phone, after a stroke with the Mulligan equipped', async ({ page }) => {
+    test('the Retake button on a phone, after a stroke with the Pocket Watch worn', async ({ page }) => {
       const problems = watch(page);
       await afterAStroke(page);
       await expect(page).toHaveScreenshot('phone-items-retake.png', TOLERANCE);

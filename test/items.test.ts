@@ -1,176 +1,117 @@
-/** The shop's items: the catalogue, buying and equipping one at a time, the save it is kept in, and golf paying into it. */
+/** The shop's kit: the empty shop, the neutral kit, what a save of the three aisles reads as, and golf paying into it. */
 import { describe, expect, it } from 'vitest';
-import { ITEMS, NO_EFFECTS, PAY, effectsOf, itemById, paid } from '../src/items';
+import { AISLES, CEILINGS, ITEMS, NO_KIT, PAY, itemById, kitOf, paid } from '../src/items';
 import { checkInvariants } from '../src/invariants';
 import { Progress, memoryStore } from '../src/progress';
 import { golfGame, field, newGame, DT } from './helpers';
 
-const IDS = [
-  'glow',
-  'confetti',
-  'rainbow',
-  'ghost',
-  'mulligan',
-  'penny',
-  'magnet',
-  'grip',
-  'glove',
-  'spin',
-  'curve',
-  'sock',
-  'wedge',
-  'waders',
-  'rubber',
-  'sticky',
-  'reader',
-  'slow',
-];
-
-const rich = () => newGame(1, JSON.stringify({ coins: 10_000, gems: 20 }));
-
 describe('the catalogue', () => {
-  it('has the eighteen items, each id once, each priced and described, in a kind', () => {
-    expect(ITEMS.map((i) => i.id).sort()).toEqual([...IDS].sort());
+  it('has fifteen items in each aisle, with unique ids, and sells nothing by an id that was withdrawn', () => {
+    for (const aisle of AISLES) expect(ITEMS.filter((i) => i.aisle === aisle)).toHaveLength(15);
     expect(new Set(ITEMS.map((i) => i.id)).size).toBe(ITEMS.length);
-    expect(ITEMS.filter((i) => i.kind === 'cosmetic').map((i) => i.id)).toEqual(['glow', 'confetti', 'rainbow']);
-    for (const i of ITEMS) {
-      expect(i.name.length, i.id).toBeGreaterThan(0);
-      expect(i.effect.length, i.id).toBeGreaterThan(10);
-      expect(Number.isInteger(i.coins) && i.coins > 0, i.id).toBe(true);
-      expect(Number.isInteger(i.gems) && i.gems >= 0 && i.gems <= 3, i.id).toBe(true);
-      expect(
-        i.colour.every((c) => c >= 0 && c <= 1),
-        i.id,
-      ).toBe(true);
-      expect(i.coins, i.id).toBeGreaterThanOrEqual(i.kind === 'cosmetic' ? 60 : 120);
-      expect(i.coins, i.id).toBeLessThanOrEqual(i.kind === 'cosmetic' ? 120 : 400);
+    for (const id of ['', 'putter', 'glow', 'glove', 'penny', 'mulligan']) expect(itemById(id), id).toBeUndefined();
+  });
+});
+
+describe('the kit', () => {
+  it('is NO_KIT itself for three empty slots, and for slots no one sells', () => {
+    expect(kitOf({ club: '', ball: '', accessory: '' })).toBe(NO_KIT);
+    expect(kitOf({ club: 'glove', ball: 'x', accessory: '' })).toBe(NO_KIT);
+  });
+
+  it('has every neutral figure inside its ceiling', () => {
+    for (const [key, range] of Object.entries(CEILINGS)) {
+      const n = NO_KIT[key as keyof typeof NO_KIT] as number;
+      expect(n, key).toBeGreaterThanOrEqual(range.least ?? -Infinity);
+      expect(n, key).toBeLessThanOrEqual(range.most ?? Infinity);
     }
-    for (const id of ['glove', 'magnet', 'waders', 'mulligan']) expect(itemById(id)!.gems, id).toBeGreaterThan(0);
-    expect(itemById('')).toBeUndefined();
-    expect(itemById('putter')).toBeUndefined();
+    expect(NO_KIT.underParPay).toBe(PAY.underPar);
   });
 
-  it('is set against a round: a cosmetic is within two rounds of nine holes at par, the dearest within nine', () => {
-    const round = 9 * PAY.finish;
-    for (const i of ITEMS) expect(i.coins / round, i.id).toBeLessThanOrEqual(i.kind === 'cosmetic' ? 3 : 9);
-  });
-
-  it('says what is on through Effects: nothing for no item, and only the equipped one', () => {
-    for (const i of ITEMS) expect(NO_EFFECTS.has(i.id)).toBe(false);
-    const fx = effectsOf('magnet');
-    expect(fx.has('magnet')).toBe(true);
-    expect(fx.has('glove')).toBe(false);
-    expect(effectsOf('').has('')).toBe(false);
-    expect(effectsOf('nonsense').has('nonsense')).toBe(false);
+  it('is the game’s own with nothing worn, and the rehearsal’s too', () => {
+    const { game } = newGame(1, JSON.stringify({ coins: 10_000, gems: 20 }));
+    expect(game.kit).toBe(NO_KIT);
+    expect(game.rehearsal().kit).toBe(NO_KIT);
+    expect(game.slots).toEqual({ club: '', ball: '', accessory: '' });
+    expect(checkInvariants(game)).toEqual([]);
   });
 });
 
 describe('buying and equipping', () => {
-  it('buys for the price, once, with coins and gems both, and refuses what is not sold', () => {
-    const { game, told } = newGame(1, JSON.stringify({ coins: 399, gems: 3 }));
-    expect(game.buy('glove'), 'a coin short').toBe(false);
-    game.progress.save.coins += 1;
-    expect(game.buy('glove')).toBe(true);
-    expect(game.progress.save).toMatchObject({ coins: 0, gems: 0, owned: ['glove'] });
-    expect(told).toContain('bought 400 3');
-    expect(game.buy('glove'), 'not twice').toBe(false);
-    expect(game.buy('putter')).toBe(false);
+  it('refuses what is not sold, and an aisle emptied stays empty', () => {
+    const { game } = newGame(1, JSON.stringify({ coins: 10_000, gems: 20 }));
+    expect(game.buy('glove')).toBe(false);
     expect(game.buy('')).toBe(false);
-    const poor = newGame(1, JSON.stringify({ coins: 400, gems: 2 })).game;
-    expect(poor.buy('glove'), 'a gem short').toBe(false);
-    expect(poor.progress.save.coins).toBe(400);
+    expect(game.equip('glove')).toBe(false);
+    for (const aisle of AISLES) game.unequip(aisle);
+    expect(game.slots).toEqual({ club: '', ball: '', accessory: '' });
+    expect(game.progress.save.coins).toBe(10_000);
+  });
+});
+
+describe('buying, wearing one from each aisle and taking it off', () => {
+  it('charges coins and gems, refuses what cannot be paid for or is owned, and tells of it', () => {
+    const { game, told } = newGame(1, JSON.stringify({ coins: 170, gems: 0 }));
+    expect(game.buy('gold'), 'a gold set wants gems').toBe(false);
+    expect(game.buy('mallet'), 'a mallet wants 160').toBe(true);
+    expect(game.progress.save.coins).toBe(10);
+    expect(told).toContain('bought 160 0');
+    expect(game.buy('mallet'), 'owned already').toBe(false);
+    expect(game.buy('clay'), 'too dear now').toBe(false);
+    expect(game.progress.save.owned).toEqual(['mallet']);
   });
 
-  it('equips only an item owned, one at a time, and none with the empty id', () => {
-    const { game, told } = rich();
-    expect(game.item).toBe('');
-    expect(game.equip('glow'), 'not owned yet').toBe(false);
-    game.buy('glow');
-    game.buy('spin');
-    expect(game.item, 'buying does not equip').toBe('');
-    expect(game.equip('glow')).toBe(true);
-    expect(game.item).toBe('glow');
-    expect(told).toContain('equipped');
-    expect(game.equip('spin')).toBe(true);
-    expect(game.item, 'the second replaces the first').toBe('spin');
-    expect(game.equip('curve'), 'not owned').toBe(false);
-    expect(game.item).toBe('spin');
-    expect(game.equip('')).toBe(true);
-    expect(game.item).toBe('');
-    expect(game.progress.save.owned, 'unequipping keeps it').toEqual(['glow', 'spin']);
+  it('wears one from each aisle at once, a second of an aisle in the place of the first, and takes one off', () => {
+    const { game, told } = newGame(1, JSON.stringify({ coins: 5000, gems: 20 }));
+    for (const id of ['mallet', 'bender', 'clay', 'comet']) expect(game.buy(id)).toBe(true);
+    expect(game.equip('lob'), 'not owned').toBe(false);
+    for (const id of ['mallet', 'clay', 'comet']) expect(game.equip(id), id).toBe(true);
+    expect(game.slots).toEqual({ club: 'mallet', ball: 'clay', accessory: 'comet' });
+    expect(game.kit.touch).toBe(1.5);
+    expect(game.kit.roll).toBe(1.15);
+    expect(game.kit.trail).toBe(true);
+    game.equip('bender');
+    expect(game.slots.club).toBe('bender');
+    expect(game.kit.touch, 'the mallet is off').toBe(1);
+    expect(game.kit.curve).toBe(2);
+    expect(game.kit.roll, 'the ball stays on').toBe(1.15);
+    game.unequip('ball');
+    expect(game.slots).toEqual({ club: 'bender', ball: '', accessory: 'comet' });
+    expect(game.kit.roll).toBe(1);
+    expect(told.filter((t) => t.startsWith('equipped')).length).toBe(5);
     expect(checkInvariants(game)).toEqual([]);
-  });
-
-  it('puts the equipped item into the game’s effects, none by default, and into a rehearsal of it', () => {
-    const { game } = rich();
-    for (const i of ITEMS) expect(game.effects.has(i.id)).toBe(false);
-    game.buy('sock');
-    game.equip('sock');
-    expect(game.effects.has('sock')).toBe(true);
-    expect(game.effects.has('slow')).toBe(false);
-    expect(game.rehearsal().effects.has('sock'), 'the rehearsal agrees').toBe(true);
-    game.equip('');
-    expect(game.rehearsal().effects.has('sock')).toBe(false);
-  });
-
-  it('writes the save on buying and on equipping, and a reload keeps both', () => {
-    const { game, store } = rich();
-    game.buy('rainbow');
-    expect(new Progress(memoryStore(store.json)).save.owned).toEqual(['rainbow']);
-    game.equip('rainbow');
-    const again = new Progress(memoryStore(store.json)).save;
-    expect(again.item).toBe('rainbow');
-    expect(again.coins).toBe(10_000 - itemById('rainbow')!.coins);
-  });
-
-  it('stamps a best with the item equipped when the hole was holed', () => {
-    const { game } = rich();
-    game.buy('glow');
-    game.equip('glow');
-    const { cup } = game.layout;
-    game.place(cup.x, cup.y - 4);
-    game.shoot(Math.PI / 2, 0.1);
-    for (let f = 0; f < 600 && game.phase === 'play'; f++) game.step(DT);
-    expect(game.phase).toBe('done');
-    expect(Object.values(game.progress.save.best)[0].item).toBe('glow');
+    // and it is saved: a game opened on the save wears the same
+    const again = new Progress(memoryStore(JSON.stringify(game.progress.save))).save;
+    expect(again.kit).toEqual({ club: 'bender', ball: '', accessory: 'comet' });
   });
 });
 
 describe('the save', () => {
-  it('drops an owned id the shop does not sell and any repeat, and an item not owned', () => {
+  it('reads the kit slot by slot, only an owned item of its own aisle, and drops an old save’s item', () => {
     const save = new Progress(
-      memoryStore(JSON.stringify({ owned: ['glow', 'brass', 'glow', 'magnet'], item: 'brass' })),
+      memoryStore(JSON.stringify({ owned: ['glow', 'brass'], item: 'glow', kit: { club: 'brass', ball: 7 } })),
     ).save;
-    expect(save.owned).toEqual(['glow', 'magnet']);
-    expect(save.item).toBe('');
-    expect(new Progress(memoryStore(JSON.stringify({ owned: ['glow'], item: 'magnet' }))).save.item).toBe('');
-    expect(new Progress(memoryStore(JSON.stringify({ owned: ['glow'], item: 7 }))).save.item).toBe('');
+    expect(save.owned).toEqual([]);
+    expect(save.kit).toEqual({ club: '', ball: '', accessory: '' });
+    expect(Object.keys(save)).not.toContain('item');
   });
 
-  it('reads a best’s old `club` as its item, tolerates an unknown one, and writes `item`', () => {
+  it('reads a best’s old `item` or `club` as an empty kit, tolerates an unknown one, and writes `kit`', () => {
     const store = memoryStore(
       JSON.stringify({
         best: { A: { strokes: 2, club: 'glove' }, B: { strokes: 3, item: 'zzz' }, C: { strokes: 4 } },
       }),
     );
     const progress = new Progress(store);
+    const none = { club: '', ball: '', accessory: '' };
     expect(progress.save.best).toEqual({
-      A: { strokes: 2, item: 'glove' },
-      B: { strokes: 3, item: '' },
-      C: { strokes: 4, item: '' },
+      A: { strokes: 2, kit: none },
+      B: { strokes: 3, kit: none },
+      C: { strokes: 4, kit: none },
     });
     progress.persist();
     const written = JSON.parse(store.json!) as { best: Record<string, unknown> };
-    expect(written.best.A).toEqual({ strokes: 2, item: 'glove' });
-    expect(Object.keys(written)).not.toContain('club');
-  });
-
-  it('round-trips a save with every item owned', () => {
-    const progress = new Progress(memoryStore());
-    progress.save.owned = ITEMS.map((i) => i.id);
-    progress.save.item = 'slow';
-    const store = memoryStore(JSON.stringify(progress.save));
-    expect(new Progress(store).save).toEqual(progress.save);
+    expect(written.best.A).toEqual({ strokes: 2, kit: none });
   });
 });
 

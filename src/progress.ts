@@ -1,7 +1,7 @@
 /**
  * What the player has done, and where it is kept: the coins and gems, the
- * items owned and the one equipped, and the best score on each hole with the
- * item it was made with, in the browser's storage or, for the game run
+ * items owned and the kit worn (one thing from each aisle), and the best score on
+ * each hole with the kit it was made with, in the browser's storage or, for the game run
  * without a page, anywhere.
  *
  * Old saves must still load. A field a save does not have takes its default,
@@ -9,12 +9,12 @@
  * game no longer knows is dropped without complaint: every shape ever
  * written is in `test/saves/`.
  */
-import { itemById } from './items';
+import { AISLES, emptySlots, itemById, type KitSlots } from './items';
 
 export interface Best {
   strokes: number;
-  /** The item equipped when it was made ('' for none), so a score is a score with a given item. */
-  item: string;
+  /** The kit worn when it was made (each slot '' for none), so a score is a score with a given kit. */
+  kit: KitSlots;
 }
 
 export interface Save {
@@ -22,8 +22,8 @@ export interface Save {
   gems: number;
   /** The ids of the items owned, each of them one the shop sells. */
   owned: string[];
-  /** The item equipped, one at a time: '' for none, and otherwise always one owned. */
-  item: string;
+  /** The kit worn, one thing from each aisle: each slot '' for none, and otherwise always an owned item of its aisle. */
+  kit: KitSlots;
   /** The best score on each hole, by the hole's name. */
   best: Record<string, Best>;
 }
@@ -80,7 +80,7 @@ export function memoryStore(json: string | null = null): SaveStore & { json: str
   };
 }
 
-const fresh = (): Save => ({ coins: 0, gems: 0, owned: [], item: '', best: {} });
+const fresh = (): Save => ({ coins: 0, gems: 0, owned: [], kit: emptySlots(), best: {} });
 
 /** A count from a save: a whole number, not below nought, or the default. */
 function count(v: unknown, or: number): number {
@@ -105,16 +105,27 @@ function read(json: string | null): Save {
   if (Array.isArray(from.owned))
     for (const id of from.owned)
       if (typeof id === 'string' && itemById(id) && !save.owned.includes(id)) save.owned.push(id);
-  if (typeof from.item === 'string' && save.owned.includes(from.item)) save.item = from.item;
+  // an old save's `item` is one id of a shop since withdrawn, so it is not read; the kit is, slot by slot
+  if (typeof from.kit === 'object' && from.kit !== null && !Array.isArray(from.kit)) {
+    const slots = from.kit as Record<string, unknown>;
+    for (const aisle of AISLES) {
+      const id = slots[aisle];
+      if (typeof id === 'string' && save.owned.includes(id) && itemById(id)?.aisle === aisle) save.kit[aisle] = id;
+    }
+  }
   if (typeof from.best === 'object' && from.best !== null && !Array.isArray(from.best))
     for (const [hole, b] of Object.entries(from.best as Record<string, unknown>)) {
       if (typeof b !== 'object' || b === null) continue;
-      const { strokes, item, club } = b as Record<string, unknown>;
+      const { strokes, kit } = b as Record<string, unknown>;
       if (count(strokes, 0) < 1) continue;
-      // a best made with a putter, or with an item since withdrawn, was made with none the shop sells now; the old
-      // `club` is read as the item it has become
-      const made = typeof item === 'string' ? item : club;
-      save.best[hole] = { strokes: strokes as number, item: typeof made === 'string' && itemById(made) ? made : '' };
+      // a best made with an item since withdrawn (an old best's `item` or `club`) was made with an empty kit
+      const made = emptySlots();
+      if (typeof kit === 'object' && kit !== null && !Array.isArray(kit))
+        for (const aisle of AISLES) {
+          const id = (kit as Record<string, unknown>)[aisle];
+          if (typeof id === 'string' && itemById(id)?.aisle === aisle) made[aisle] = id;
+        }
+      save.best[hole] = { strokes: strokes as number, kit: made };
     }
   return save;
 }

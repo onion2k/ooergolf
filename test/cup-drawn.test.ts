@@ -12,20 +12,23 @@ import { area as ringArea } from '../src/clip';
 import { COURSES, CUP, type HoleDef } from '../src/course';
 import { Game } from '../src/game';
 import { GROUND, cupGround, groundOf } from '../src/ground';
-import { ITEMS, ITEM_FIGURES } from '../src/items';
+import { NO_KIT } from '../src/items';
 import { cupRing, wideCollar, type V3 } from '../src/models';
 import { PALETTE } from '../src/models/palette';
 import { Progress, memoryStore } from '../src/progress';
 import { seeded } from '../src/random';
 import { Scene } from '../src/scene';
 import { windOf } from '../src/turf';
-import { FLAT, SAMPLE_HOLES } from './helpers';
+import { SAMPLE_HOLES } from './helpers';
 import { HILLS } from './hills';
 
-/** A game on `holes` with `item` worn, as a save has it, which is how the page comes by it. */
-function wearing(item: string, holes: readonly HoleDef[]) {
-  const save = JSON.stringify({ owned: item ? [item] : [], item });
-  return new Game(new Progress(memoryStore(save)), {}, { random: seeded(1), course: holes });
+/** The width of a cup that is wider than its tile: what the kit's `cupRadius` can make a mouth. */
+const WIDE = 1.9;
+
+/** A game on `holes` with a kit that widens the cup to `WIDE` if `wide` is asked for (and the plain kit if not), as the kit hands it to the game. */
+function wearing(wide: string, holes: readonly HoleDef[]) {
+  const kit = { ...NO_KIT, cupRadius: wide ? WIDE : null };
+  return new Game(new Progress(memoryStore()), {}, { random: seeded(1), course: holes, kit: () => kit });
 }
 
 /** A hole drawn as the page draws it as it begins: the scene's still part for the layout, the obstacles and the cup the game made, and its moving part. */
@@ -33,19 +36,19 @@ function drawn(game: Game, name = game.def.name) {
   const scene = new Scene();
   const still = scene.static(game.layout, name, game.obstacles, game.cup.radius);
   const moving = scene.dynamic(game.obstacles, game.layout, name, windOf(name), {
-    ghost: game.effects.has('ghost'),
-    reader: game.effects.has('reader'),
-    rainbow: game.effects.has('rainbow'),
+    ghost: game.kit.rest,
+    reader: game.kit.chalk,
+    rainbow: game.kit.pennant,
   });
   return { scene, still, moving };
 }
 
 const course = (name: string) => COURSES.find((c) => c.name === name)!.holes;
 
-describe('a hole begun with the magnet cup worn', () => {
+describe('a hole begun with a kit that widens the cup', () => {
   it('is a cup wider than a tile, which is what the scene was never asked to draw', () => {
     const game = wearing('magnet', course('The Meadow'));
-    expect(game.cup.radius).toBe(ITEM_FIGURES.magnet.radius);
+    expect(game.cup.radius).toBe(WIDE);
     expect(game.cup.radius).toBeGreaterThan(TILE / 2);
     expect(CUP.radius).toBeLessThan(TILE / 2);
   });
@@ -60,15 +63,6 @@ describe('a hole begun with the magnet cup worn', () => {
 
   it('is drawn on every kind of hole there is: each hole of the minigolf courses and a few of golf', () => {
     for (const hole of SAMPLE_HOLES) expect(() => drawn(wearing('magnet', [hole])), hole.name).not.toThrow();
-  });
-});
-
-describe('a hole begun with any item of the shop worn', () => {
-  it('is drawn, as the page draws it, on a hole of minigolf and on a hole of golf', () => {
-    const minigolf = course('The Meadow')[0];
-    for (const item of ITEMS)
-      for (const hole of [minigolf, FLAT.long])
-        expect(() => drawn(wearing(item.id, [hole])), `${item.id} on ${hole.name}`).not.toThrow();
   });
 });
 
@@ -160,7 +154,7 @@ describe('the grass round a cup whose mouth is wider than its tile', () => {
 
   it('leaves the mouth open, and every other point of the grass covered once, on a flat hole, a slope, a step, sand and a wall', () => {
     for (const [name, l] of holes) {
-      const radius = ITEM_FIGURES.magnet.radius;
+      const radius = WIDE;
       const { flat } = made(l, radius);
       let inside = 0,
         beyond = 0;
@@ -178,7 +172,7 @@ describe('the grass round a cup whose mouth is wider than its tile', () => {
 
   it('is the ground, whole, less the mouth, where the grass round the cup is level: nothing lost and nothing twice', () => {
     const l = layoutOf(FLAT_MAP);
-    const radius = ITEM_FIGURES.magnet.radius;
+    const radius = WIDE;
     const { grass, collarMesh } = made(l, radius);
     const area = (meshes: Mesh[]) => meshes.reduce((a, m) => a + areaOf(m), 0);
     const plain = groundOf(l);
@@ -191,7 +185,7 @@ describe('the grass round a cup whose mouth is wider than its tile', () => {
 
   it('lies on the ground at every corner it makes, level or on a slope, and facing as the slope does', () => {
     for (const [name, l] of holes) {
-      const { z, grass, collarMesh } = made(l, ITEM_FIGURES.magnet.radius);
+      const { z, grass, collarMesh } = made(l, WIDE);
       const cupTile = tileAt(l, l.cup.x, l.cup.y);
       /** Every corner of a mesh laid at (dx, dy, dz): the ground's height at a tile's edge is its own tile's, so the tile is the triangle's. */
       const check = (mesh: Mesh, label: string, [dx, dy, dz]: V3, tileOf?: number) => {
@@ -219,7 +213,7 @@ describe('the grass round a cup whose mouth is wider than its tile', () => {
 
   it('has every corner of the mouth for a corner of the grass, at the height the lining begins at', () => {
     for (const [name, l] of holes) {
-      const radius = ITEM_FIGURES.magnet.radius;
+      const radius = WIDE;
       const { z, grass, collarMesh } = made(l, radius);
       const corners: V3[] = [];
       for (const [mesh, [dx, dy, dz]] of [
@@ -259,7 +253,7 @@ describe('the grass round a cup whose mouth is wider than its tile', () => {
     const plain = grassOf(''),
       wide = grassOf('magnet');
     expect(plain.game.cup.radius).toBe(CUP.radius);
-    expect(wide.game.cup.radius).toBe(ITEM_FIGURES.magnet.radius);
+    expect(wide.game.cup.radius).toBe(WIDE);
     // the wider mouth leaves that much more ground uncovered, to the last digits
     expect(plain.area - wide.area).toBeCloseTo(
       ringArea(cupRing(wide.game.cup.radius)) - ringArea(cupRing(CUP.radius)),

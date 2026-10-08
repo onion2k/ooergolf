@@ -33,6 +33,8 @@ export interface GestureOptions {
   shortSide(): number;
   /** The point on the ground under a spot on the screen, or null for sky. */
   ground(x: number, y: number): [number, number] | null;
+  /** The exponent a drag's share of the hardest is raised to for its power: one, as it always was, if not given. */
+  touch?(): number;
 }
 
 const NONE: Gesturing = { kind: 'none' };
@@ -134,7 +136,14 @@ export class Gesture {
   private shotTo(x: number, y: number): Shot | null {
     const d = this.drag;
     if (!d) return null;
-    return shotFromDrag(d.px, [x, y], d.ground, this.options.ground(x, y), this.options.shortSide());
+    return shotFromDrag(
+      d.px,
+      [x, y],
+      d.ground,
+      this.options.ground(x, y),
+      this.options.shortSide(),
+      this.options.touch?.() ?? 1,
+    );
   }
 
   /** How far apart the two pointers down are. */

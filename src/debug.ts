@@ -48,10 +48,10 @@ export interface GameState {
   card: number[];
   coins: number;
   gems: number;
-  /** The item equipped ('' for none), and the items owned. */
-  item: string;
+  /** The kit worn (each slot '' for none), and the items owned. */
+  kit: { club: string; ball: string; accessory: string };
   owned: string[];
-  /** Whether the waders have saved a stroke on this hole, and whether this round's mulligan has been taken. */
+  /** Whether the kit's free loss has been used on this hole, and whether this round's retake has been taken. */
   wadersUsed: boolean;
   mulliganUsed: boolean;
   /** The hardest the club in hand strikes. */
@@ -182,8 +182,12 @@ export interface GameApi {
   newRound(): void;
   /** An item bought, as the shop's button does; whether it was. */
   buy(id: string): boolean;
-  /** An item owned put on, or none with the empty id; whether it was. */
+  /** An item owned put on in its aisle's slot; whether it was. */
   equip(id: string): boolean;
+  /** The slot of an aisle emptied. */
+  unequip(aisle: 'club' | 'ball' | 'accessory'): void;
+  /** A tab of the shop pressed, as a click on it does (the shop need not be open): the aisle it shows. */
+  shopTab(aisle: 'club' | 'ball' | 'accessory'): void;
   /** The mulligan: the last stroke undone and the ball back where it was struck from; whether it did anything. */
   mulligan(): boolean;
   /** The save written now, and what it is. */
@@ -397,6 +401,7 @@ export interface DebugHost {
   orbit(turn: number, tilt: number): void;
   overhead(on?: boolean): boolean;
   faceFlag(): boolean;
+  shopTab(aisle: 'club' | 'ball' | 'accessory'): void;
   measureFrame(warmup?: number): Promise<number>;
   judge(gap: number, work: number): number;
   motions(): Motions;
@@ -446,7 +451,7 @@ export function createApi(host: DebugHost): GameApi {
         card: [...game.card],
         coins: game.progress.save.coins,
         gems: game.progress.save.gems,
-        item: game.progress.save.item,
+        kit: { ...game.progress.save.kit },
         owned: [...game.progress.save.owned],
         wadersUsed: game.wadersUsed,
         mulliganUsed: game.mulliganUsed,
@@ -535,6 +540,8 @@ export function createApi(host: DebugHost): GameApi {
     newRound: () => game.newRound(),
     buy: (id) => game.buy(id),
     equip: (id) => game.equip(id),
+    unequip: (aisle) => game.unequip(aisle),
+    shopTab: (aisle) => host.shopTab(aisle),
     mulligan: () => game.mulligan(),
     aiming: () => host.aiming(),
     map: () => host.map(),

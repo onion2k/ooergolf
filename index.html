@@ -680,10 +680,73 @@
     --lip: var(--grape-deep);
     width: min(420px, calc(100vw / var(--ui, 1) - 32px));
   }
+  #shop:not([hidden]) {
+    display: flex;
+    flex-direction: column;
+    /* the rows scroll under the tabs and above the way out, which stay where they are */
+    overflow: hidden;
+  }
   #shop p {
     margin: 0 0 8px;
     font-weight: 600;
     color: var(--ink-soft);
+  }
+  #shopHead {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    column-gap: 12px;
+  }
+  #shopPurse {
+    font-weight: 700;
+    color: var(--ink-soft);
+  }
+  #shopPurse b {
+    font-weight: 900;
+    color: var(--ink);
+  }
+  /* the aisles as one pill cut in three: the chosen one is raised in the shop's own grape, the others lie flat */
+  #shopTabs {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+    margin-bottom: 8px;
+    padding: 4px;
+    border-radius: 999px;
+    background: var(--mist);
+  }
+  #shop #shopTabs button {
+    min-width: 0;
+    padding: 0 6px;
+    font-size: 15px;
+    background: transparent;
+    box-shadow: none;
+  }
+  #shop #shopTabs button[aria-selected='true'] {
+    color: var(--grape-ink);
+    background: var(--paper);
+    box-shadow:
+      inset 0 0 0 3px var(--grape),
+      0 3px 0 var(--grape-deep);
+  }
+  #shop #shopTabs button:active {
+    translate: 0 3px;
+    box-shadow: none;
+  }
+  #shopNote {
+    padding: 6px 12px;
+    border-radius: 12px;
+    background: var(--sky-tint);
+    color: var(--sky-ink) !important;
+  }
+  #shopItems {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    /* the rows' buttons stand on a lip that the scroll box would cut off at its edges */
+    padding-bottom: 6px;
   }
   .item {
     display: grid;
@@ -724,8 +787,21 @@
     box-shadow: inset 0 0 0 2px var(--leaf);
   }
   #shopClose {
+    flex: none;
     width: 100%;
     margin-top: 12px;
+  }
+  /* the aisles are all the same height, so a tab pressed never moves the way out */
+  #shop {
+    height: min(660px, calc(100% - 32px));
+  }
+  /* on a phone the shop fills the screen, with the tabs at the top and the way out at the foot, and the rows between scroll */
+  @media (max-width: 600px), (max-height: 500px) {
+    #shop {
+      width: calc(100vw / var(--ui, 1) - 16px);
+      height: calc(100dvh / var(--ui, 1) - 16px);
+      max-height: none;
+    }
   }
 
   #start {
@@ -1596,9 +1672,41 @@
   </div>
 </div>
 <div class="panel" id="shop" hidden>
-  <h2>The pro shop</h2>
-  <p>Wear one item at a time. Coins and gems come from holes played, on any course.</p>
-  <div id="shopItems"></div>
+  <div id="shopHead">
+    <h2>The pro shop</h2>
+    <span id="shopPurse"
+      ><b id="shopCoins">0</b> coins<span aria-hidden="true"> · </span><b id="shopGems">0</b> gems</span
+    >
+  </div>
+  <p>Wear one thing from each aisle. Coins and gems come from holes played, on any course.</p>
+  <div id="shopTabs" role="tablist" aria-label="Aisles">
+    <button
+      role="tab"
+      id="shopTab-club"
+      aria-controls="shopItems"
+      aria-selected="true"
+      tabindex="0"
+      type="button"
+    ></button>
+    <button
+      role="tab"
+      id="shopTab-ball"
+      aria-controls="shopItems"
+      aria-selected="false"
+      tabindex="-1"
+      type="button"
+    ></button>
+    <button
+      role="tab"
+      id="shopTab-accessory"
+      aria-controls="shopItems"
+      aria-selected="false"
+      tabindex="-1"
+      type="button"
+    ></button>
+  </div>
+  <p id="shopNote" hidden>A new ball takes hold at the next hole.</p>
+  <div id="shopItems" role="tabpanel"></div>
   <button id="shopClose">Back to the course</button>
 </div>
 <div class="panel" id="start" hidden>

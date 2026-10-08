@@ -11,9 +11,9 @@
  * is meant to be: a wind is a thing to be read on a hole that is a few seconds of ball.
  */
 import { PHYSICS, strikeSpeed } from './arena';
-import type { BagClub } from './bag';
+import { loftOf, type BagClub } from './bag';
 import { seeded } from './random';
-import { ITEM_FIGURES, NO_EFFECTS, scaled, type Effects } from './items';
+import { NO_KIT, type Kit } from './items';
 import { LIE, surfaceFor, type Lie } from './surfaces';
 
 /**
@@ -34,7 +34,28 @@ export const SHAPE = { turn: 0.19, straight: 72 } as const;
  * A spin: how much more of its speed along the ground a ball keeps at the landing for the fullest topspin, and how much
  * less for the fullest backspin (which is more than all of it, so that a ball is checked and comes back a little).
  */
-export const SPIN = { top: 1, back: 1.4 } as const;
+export const SPIN = { top: 1, back: 1.4, keepMost: 1.2 } as const;
+
+/**
+ * The shape and the spin of a putt on minigolf, for a club that gives them: a shape curves it along the ground for its first
+ * `seconds` or until it first knocks, whichever comes first (so a ball could never be steered along a rail for good), and a
+ * spin changes the speed it leaves its first knock with: topspin adds up to `top` of it and backspin takes up to `back`,
+ * as golf's spin tells at the first landing.
+ */
+export const PUTT_SHAPE = { seconds: 1, top: 0.3, back: 0.4 } as const;
+
+/** How fast a putt struck with `shape` curves along the ground, in radians a second, a fade positive as golf's is; nought for no bend in the kit. */
+export function bendRate(shape: number, kit: Kit): number {
+  if (!Number.isFinite(shape) || kit.bend === 0) return 0;
+  return Math.max(-1, Math.min(1, shape)) * kit.bend;
+}
+
+/** How many times as fast a putt struck with `spin` leaves its first knock: one for a kit with no putt spin, or a flat putt. */
+export function puttSpinFactor(spin: number, kit: Kit): number {
+  if (!Number.isFinite(spin) || kit.puttSpin === 0) return 1;
+  const s = Math.max(-1, Math.min(1, spin));
+  return 1 + (s > 0 ? PUTT_SHAPE.top : PUTT_SHAPE.back) * s * kit.puttSpin;
+}
 
 /** A seed from a name: FNV-1a, so the same hole grows the same grass and blows the same wind, every time. */
 export function nameSeed(name: string): number {
@@ -64,15 +85,10 @@ export function windPush(speed: number): number {
  * behind it, which is clockwise from above, the heading angle (from +x toward +y) growing smaller; a draw is negative and
  * turns it left. A shape beyond its limits is held to them, and one that is not a number is none.
  */
-export function curveRate(shape: number, loft = 0, effects: Effects = NO_EFFECTS): number {
+export function curveRate(shape: number, loft = 0, kit: Kit = NO_KIT): number {
   if (!Number.isFinite(shape)) return 0;
   const s = Math.max(-1, Math.min(1, shape));
-  return (
-    s *
-    SHAPE.turn *
-    Math.max(0, 1 - Math.max(0, loft) / SHAPE.straight) *
-    scaled(effects, 'curve', ITEM_FIGURES.curve.rate)
-  );
+  return s * SHAPE.turn * Math.max(0, 1 - Math.max(0, loft) / SHAPE.straight) * kit.curve;
 }
 
 /**
@@ -80,12 +96,12 @@ export function curveRate(shape: number, loft = 0, effects: Effects = NO_EFFECTS
  * (from minus one, backspin, to one, topspin): the plain `keep` times more for topspin, and less for backspin, which at the
  * fullest is below nought, a ball checked so hard that it comes back along the ground.
  */
-export function spunKeep(keep: number, spin: number, effects: Effects = NO_EFFECTS): number {
+export function spunKeep(keep: number, spin: number, kit: Kit = NO_KIT, gain = 1): number {
   if (!Number.isFinite(spin)) return keep;
   const s = Math.max(-1, Math.min(1, spin));
-  const kept = keep * (1 + (s > 0 ? SPIN.top : SPIN.back) * s * scaled(effects, 'spin', ITEM_FIGURES.spin.strength));
+  const kept = keep * (1 + (s > 0 ? SPIN.top : SPIN.back) * s * kit.spin * gain);
   // twice the topspin would send a ball on faster than it came down, which the plain table never does by more than a sixth
-  return effects.has('spin') ? Math.min(kept, ITEM_FIGURES.spin.keepMost) : kept;
+  return kit.spin !== 1 || gain !== 1 ? Math.min(kept, SPIN.keepMost) : kept;
 }
 
 /**
@@ -93,11 +109,11 @@ export function spunKeep(keep: number, spin: number, effects: Effects = NO_EFFEC
  * nought for a club that has no loft. The carry's own arithmetic (twice the climb over gravity), with what the lie does to
  * the speed and the loft; measured against the game, it is within a physics step of it.
  */
-export function airTime(club: BagClub, power: number, lie: Lie = LIE.tee, effects: Effects = NO_EFFECTS): number {
+export function airTime(club: BagClub, power: number, lie: Lie = LIE.tee, kit: Kit = NO_KIT): number {
   if (!(club.loft > 0)) return 0;
-  const surface = surfaceFor(lie, effects);
+  const surface = surfaceFor(lie, kit);
   const speed = strikeSpeed(Math.max(0, Math.min(1, power)), club.hardest) * surface.power;
-  return (2 * speed * Math.sin(((club.loft + surface.loft) * Math.PI) / 180)) / PHYSICS.gravity;
+  return (2 * speed * Math.sin(((loftOf(club, kit) + surface.loft) * Math.PI) / 180)) / PHYSICS.gravity;
 }
 
 /**
@@ -105,13 +121,7 @@ export function airTime(club: BagClub, power: number, lie: Lie = LIE.tee, effect
  * (and how far a headwind takes off it, and a crosswind turns it aside at the landing): a steady push for as long as it is in the
  * air, so half its push times the time in the air, squared.
  */
-export function windReach(
-  club: BagClub,
-  power: number,
-  speed: number,
-  lie: Lie = LIE.tee,
-  effects: Effects = NO_EFFECTS,
-): number {
-  const t = airTime(club, power, lie, effects);
-  return 0.5 * windPush(speed) * scaled(effects, 'sock', ITEM_FIGURES.sock.push) * t * t;
+export function windReach(club: BagClub, power: number, speed: number, lie: Lie = LIE.tee, kit: Kit = NO_KIT): number {
+  const t = airTime(club, power, lie, kit);
+  return 0.5 * windPush(speed) * kit.wind * t * t;
 }

@@ -204,15 +204,22 @@ export function wideCollar(
   };
 }
 
+/** The club pennant's two colours, and how fine its stripes are (the bands' scale for the cloth's own height: about five stripes down it). */
+const PENNANT = { colour: PALETTE.plastic.blue, stripe: PALETTE.cream, scale: 1.87 } as const;
+
 /**
  * The pin and its flag: a round pole, banded, from the bottom of the cup up
  * to `height` above the grass, a gold ball on its top, and a pennant of
  * `colour` flying from just under it toward +X in soft folds. The game turns
  * the whole of it about Z to set which way the flag flies. With `rainbow`, the cloth is six strips of the rainbow's
  * colours, from the top down, parts named `flag0` to `flag5`, which together are the very cloth of the plain flag (one
- * part named `flag`, in `colour`, which is what it is without the option).
+ * part named `flag`, in `colour`, which is what it is without the option). With `pennant`, the cloth is the one part in a club's
+ * blue with cream stripes running along it, five or so down its depth, drawn by the renderer's bands from the cloth's own height.
  */
-export function flag(colour: Colour, { height = 9, depth = CUP.depth, radius = 0.12, rainbow = false } = {}): Model {
+export function flag(
+  colour: Colour,
+  { height = 9, depth = CUP.depth, radius = 0.12, rainbow = false, pennant = false } = {},
+): Model {
   const knob = 0.28;
   const top = height - knob * 2 - 0.08;
   const [long, deep] = [3.4, 2.4];
@@ -250,7 +257,16 @@ export function flag(colour: Colour, { height = 9, depth = CUP.depth, radius = 0
             // the top strip is the first; each is a closed solid of its own, hemmed all round
             mesh: cloth(radius * 0.5, top, long, deep, [1 - (k + 1) / RAINBOW.length, 1 - k / RAINBOW.length]),
           }))
-        : [{ name: 'flag', material: matte(colour, 0.45), mesh: cloth(radius * 0.5, top, long, deep) }]),
+        : [
+            {
+              name: 'flag',
+              material: matte(pennant ? PENNANT.colour : colour, 0.45),
+              mesh: cloth(radius * 0.5, top, long, deep),
+              ...(pennant
+                ? { pattern: { kind: PATTERN.bands, scale: PENNANT.scale, seed: 0, second: PENNANT.stripe } }
+                : {}),
+            },
+          ]),
     ],
     moving: [],
   };
@@ -394,21 +410,84 @@ export function teeMarkers(spacing: number, { radius = 0.5, colour = PALETTE.pla
   return { name: 'tee markers', parts: [{ name: 'markers', mesh, material: matte(colour, 0.18) }], moving: [] };
 }
 
+/** How a ball's surface is finished: the toy gloss the course has always had, a dull one, or a hard bright one, as the material's roughness. */
+export const BALL_FINISH = { toy: 0.25, matte: 0.85, glossy: 0.08 } as const;
+
+/** The patterns a ball may wear: none, one band round its middle, two bands either side of it, a twisting stripe, veins, or flecks. */
+export type BallPattern = 'plain' | 'bands' | 'twoBands' | 'swirl' | 'marbling' | 'speckle';
+
+/**
+ * How a ball looks: its colour, a second colour the pattern is drawn in, the pattern, how fine it is (its scale for a ball
+ * of radius one, so a ball of any size wears the same pattern) and the finish. A plain ball has no pattern and so no use
+ * for its second colour, which is kept equal to its first. `BALL_LOOK` is today's ball, which a ball with no look wears.
+ */
+export interface BallLook {
+  colour: Colour;
+  second: Colour;
+  pattern: BallPattern;
+  scale: number;
+  finish: keyof typeof BALL_FINISH;
+}
+
+/** The ball as it has always been drawn: cream, with one red band round its middle, in the toy's gloss. */
+export const BALL_LOOK: BallLook = {
+  colour: [0.98, 0.98, 0.96],
+  second: [0.9, 0.16, 0.12],
+  pattern: 'bands',
+  scale: 0.64,
+  finish: 'toy',
+};
+
+/** The renderer's kind for each pattern, and the seed that places it: the bands' wave is cut so one band is round the middle (a quarter) or two stand either side of it (three quarters). */
+const BALL_PATTERNS: Record<
+  Exclude<BallPattern, 'plain'>,
+  { kind: (typeof PATTERN)[keyof typeof PATTERN]; seed: number }
+> = {
+  bands: { kind: PATTERN.bands, seed: 0.25 },
+  twoBands: { kind: PATTERN.bands, seed: 0.75 },
+  swirl: { kind: PATTERN.swirl, seed: 0.1 },
+  marbling: { kind: PATTERN.marbling, seed: 0.3 },
+  speckle: { kind: PATTERN.speckle, seed: 0.6 },
+};
+
 /**
  * The ball, of `radius`, the physics' own: a sphere shaded round, fine
  * enough that its outline is round however near it is seen, in `colour`
  * with a `band` round its middle, which turns with it so its roll is seen.
+ * Given a `look`, it wears that instead (and `colour` and `band` are not read); without one it is exactly the ball it was.
  */
 export function golfBall(
   radius: number,
-  { colour = PALETTE.cream, band = PALETTE.plastic.red }: { colour?: Colour; band?: Colour } = {},
+  {
+    colour = PALETTE.cream,
+    band = PALETTE.plastic.red,
+    look,
+  }: { colour?: Colour; band?: Colour; look?: BallLook } = {},
 ): Model {
+  const mesh = built((b) => lathe(b, at(0, 0, 0), 32, ballProfile(radius, 16)));
+  if (look) {
+    const worn = look.pattern === 'plain' ? undefined : BALL_PATTERNS[look.pattern];
+    return {
+      name: 'ball',
+      parts: [
+        {
+          name: 'ball',
+          mesh,
+          material: matte(look.colour, BALL_FINISH[look.finish]),
+          ...(worn
+            ? { pattern: { kind: worn.kind, scale: look.scale / radius, seed: worn.seed, second: look.second } }
+            : {}),
+        },
+      ],
+      moving: [],
+    };
+  }
   return {
     name: 'ball',
     parts: [
       {
         name: 'ball',
-        mesh: built((b) => lathe(b, at(0, 0, 0), 32, ballProfile(radius, 16))),
+        mesh,
         material: matte(colour, 0.25),
         // the bands pattern is a wave along the mesh's own Z, a quarter turn on so it peaks at nought, and at this
         // scale one band round the middle, positive only within a third of the radius of it

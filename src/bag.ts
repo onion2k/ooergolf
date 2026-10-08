@@ -10,7 +10,10 @@
  * measured in the game, since a landing on real ground is not the formula's.
  */
 import { HARDEST_SHOT, PHYSICS, strikeSpeed } from './arena';
-import { ITEM_FIGURES } from './items';
+import { CEILINGS, type Kit } from './items';
+
+/** The most any club strikes, as many times as hard as it does with nothing worn: the product of the kit's power figures is held to it. */
+const POWER_MOST = CEILINGS.power!.most!;
 
 export interface BagClub {
   id: string;
@@ -58,15 +61,51 @@ export function carryOf(club: BagClub, power: number): number {
   return carrying(strikeSpeed(power, club.hardest), club.loft);
 }
 
-/** The gloved copies made, one a club: a club is gloved on every read, and a copy made each time would be made every frame. */
-const GLOVED = new WeakMap<BagClub, BagClub>();
+/** Whether `club` is a wood: the driver and the 3-wood. */
+export const isWood = (club: BagClub): boolean => club.id === 'driver' || club.id === '3-wood';
 
-/** `club` as the power glove has it, every figure as it was but its hardest: the same copy each time it is asked for. */
-export function gloved(club: BagClub): BagClub {
-  let g = GLOVED.get(club);
-  if (!g) {
-    g = { ...club, hardest: club.hardest * ITEM_FIGURES.glove.hardest };
-    GLOVED.set(club, g);
+/** Whether `club` is an iron: the 5, 7 and 9. */
+export const isIron = (club: BagClub): boolean => club.id.endsWith('-iron');
+
+/** Whether `club` is a wedge: the pitching and the sand. */
+export const isWedge = (club: BagClub): boolean => club.id.endsWith('-wedge');
+
+/** How many times as hard the kit makes `club` strike: one with an empty kit. */
+export function strikeFactor(club: BagClub, kit: Kit): number {
+  // each figure is held to its ceiling alone, so the three together are held too: a mallet with the shoes would strike 1.219
+  return Math.min(kit.power * (isWood(club) ? kit.woods : 1) * (club.loft > 0 ? 1 : kit.putterPower), POWER_MOST);
+}
+
+/** The loft, in degrees, `club` is struck at in `kit`'s hands: its own, with the kit's offsets for a lofted club and for a wedge, and nought for the putter. */
+export function loftOf(club: BagClub, kit: Kit): number {
+  return club.loft > 0 ? club.loft + kit.loft + (isWedge(club) ? kit.wedgeLoft : 0) : 0;
+}
+
+/** The tuned copies made, one a club: a club is tuned on every read, and a copy made each time would be made every frame. */
+const TUNED = new WeakMap<BagClub, { factor: number; club: BagClub }>();
+
+/** `club` as the kit has it, every figure as it was but its hardest: the bag's own club, the very object, when the kit leaves it as it was, and otherwise the same copy each time it is asked for. */
+export function tuned(club: BagClub, kit: Kit): BagClub {
+  const factor = strikeFactor(club, kit);
+  if (factor === 1) return club;
+  let t = TUNED.get(club);
+  if (!t || t.factor !== factor) {
+    t = { factor, club: { ...club, hardest: club.hardest * factor } };
+    TUNED.set(club, t);
   }
-  return g;
+  return t.club;
+}
+
+/** The opening copies made, one a club and a factor: a club struck for the first time on a hole is asked for on every read of the preview, and a copy made each time would be made each frame. */
+const BOOSTED = new WeakMap<BagClub, { factor: number; club: BagClub }>();
+
+/** `club` struck `factor` times as hard (the lucky tee's first stroke): the club itself for a factor of one, and otherwise the same copy each time it is asked for. */
+export function boosted(club: BagClub, factor: number): BagClub {
+  if (factor === 1) return club;
+  let t = BOOSTED.get(club);
+  if (!t || t.factor !== factor) {
+    t = { factor, club: { ...club, hardest: club.hardest * factor } };
+    BOOSTED.set(club, t);
+  }
+  return t.club;
 }
