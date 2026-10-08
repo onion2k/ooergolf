@@ -195,6 +195,8 @@ export class Hud {
   /** The club in hand and how far it carries, which the words over the bag say: until a shot is aimed. */
   private club = '';
   private carryLine = '';
+  /** The id of the club the bag shows in hand, so the page may say it every frame and the bag is written only when it changes. */
+  private active: string | null = null;
   /** The clubs the picker has, none on a hole of minigolf; and what a drag does, which the help says. */
   private bagList: readonly BagInfo[] = [];
   private mode: Mode = 'aim';
@@ -338,12 +340,15 @@ export class Hud {
         return b;
       }),
     );
+    this.active = null;
     this.setClub(active);
     this.bag.hidden = !this.start.hidden;
   }
 
   /** The club in hand: its pill stands up, and what it is and how far it carries is said above them. */
   setClub(active: string) {
+    if (active === this.active) return;
+    this.active = active;
     for (const b of Array.from(this.bagClubs.querySelectorAll('button')))
       b.setAttribute('aria-pressed', String(b.dataset.club === active));
     const c = this.bagList.find((x) => x.id === active);

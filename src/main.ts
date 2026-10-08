@@ -801,6 +801,9 @@ async function main() {
     const dots = played.ready && !flying ? scene.writeAim(world.x[ball], world.y[ball], input.aim, reach, played.t) : 0;
     if (leans) aimOnSlope(played.ready ? input.aim : null);
     if (golf) {
+      // the club the game holds, shown in the bag whoever chose it (the game puts the putter in hand on the green by
+      // itself), before the aim's words name it
+      hud.setClub(played.inHand.id);
       aimOnGolf(flying, rolling);
       // the shape and the spin the game holds, shown on their buttons whoever chose them; and the wind's arrow turned by
       // the camera as it is this frame, which includes the glide to a new tee

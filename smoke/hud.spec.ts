@@ -171,6 +171,46 @@ for (const [where, device] of [
       expect(problems).toEqual([]);
     });
 
+    test('the bag shows the putter in hand once a ball comes to rest on the putting green, as the game puts it there', async ({
+      page,
+    }) => {
+      const problems = watch(page);
+      await start(page, { seed: 11, paused: true, screen: true });
+      // a golf hole of the test's own that is all putting green but the tee's box, so a chip from the tee rests on the green
+      await page.evaluate(() => {
+        const cols = 41,
+          rows = 70;
+        const map = Array.from({ length: rows }, (_, r) =>
+          Array.from({ length: cols }, (_, c) => {
+            if (r === 0 || r === rows - 1 || c === 0 || c === cols - 1) return '#';
+            if (r === rows - 4) return c === 20 ? 'T' : c === 19 || c === 21 ? 't' : 'g';
+            if (r === 2 && c === 3) return 'C';
+            return 'g';
+          }).join(''),
+        );
+        const g = window.game!;
+        g.chooseCourse('The Meadow');
+        g.playCourse([{ name: 'All Green', par: 3, map }]);
+        g.step(60);
+      });
+      // the wedge chosen as a player chooses it, and a short chip played with it
+      await page.locator('#bagClubs button[data-club="sand-wedge"]').click();
+      await expect(page.locator('#bagClubs button[data-club="sand-wedge"]')).toHaveAttribute('aria-pressed', 'true');
+      const rested = await page.evaluate(() => {
+        const g = window.game!;
+        if (!g.shoot(Math.PI / 2, 0.15)) return null;
+        for (let i = 0; i < 1200 && !g.state().ready; i++) g.step(1);
+        g.step(1);
+        return { ready: g.state().ready, inHand: g.state().inHand };
+      });
+      expect(rested, 'the chip came to rest with the putter in the game').toEqual({ ready: true, inHand: 'putter' });
+      await expect(page.locator('#bagClubs button[aria-pressed="true"]')).toHaveCount(1);
+      await expect(page.locator('#bagClubs button[data-club="putter"]')).toHaveAttribute('aria-pressed', 'true');
+      await expect(page.locator('#bagInfo')).toContainText('Putter');
+      await expect(page.locator('#bagShaping')).toBeHidden();
+      expect(problems).toEqual([]);
+    });
+
     test("the hole's words: a chip and a drawer on a phone that is shut by its button, a tap beside it or escape and is never a shot, and the panel as it was on a desk", async ({
       page,
     }) => {
