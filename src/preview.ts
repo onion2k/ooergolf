@@ -223,7 +223,7 @@ export class Previewer {
     p.clear();
     told.landed = told.splash = told.out = false;
     if (!(club.loft > 0) || !(power > 0)) return p;
-    g.trial(from.x, from.y);
+    g.trial(from.x, from.y, true);
     g.pick(club.id);
     g.setShape(shape);
     g.setSpin(spin);
@@ -334,7 +334,7 @@ export class Previewer {
     told.landed = told.splash = told.out = false;
     if (club.loft > 0 || !(power > 0)) return p;
     this.rolling = true;
-    g.trial(from.x, from.y);
+    g.trial(from.x, from.y, true);
     g.pick(club.id);
     g.setShape(shape);
     g.setSpin(spin);

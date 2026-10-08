@@ -283,9 +283,10 @@ export class Game {
    * A rehearsal made ready for the next trial: the ball down at (x, y) as a real ball lies there (put where it is,
    * never refused for being near the cup or on a slope, since a real ball may lie so), no stroke taken, and the hole
    * begun again in every way that matters, however the last trial ended, holed or lost in the water. Only a
-   * rehearsal may be tried in: a trial in a game that is played would take its card and its strokes away.
+   * rehearsal may be tried in: a trial in a game that is played would take its card and its strokes away. With `where`
+   * the ball is kept at (x, y) even if one put down there would creep on down a slope, as a preview needs.
    */
-  trial(x: number, y: number) {
+  trial(x: number, y: number, where = false) {
     if (!this.rehearsing) throw new Error('a trial is made only in a rehearsal, which no one plays');
     const { world } = this;
     if (world.alive[this.ball]) world.remove(this.ball);
@@ -306,6 +307,19 @@ export class Game {
     this.knockAt = -Infinity;
     this.letGoOfShape();
     this.spawnAt(x, y);
+    // the settling above lets a ball put down on a slope roll on to where it would rest, which is not where a real ball
+    // lies: one that is ready may still be creeping (`KEPT_MOVING`), and is struck from where it is, so the trial is
+    // too. It keeps the height above the ground it settled at, which a slope makes more than a ball's radius. Asked for
+    // by the preview alone (`where`): the autopilot's trials have always been struck from where the ball settles, and
+    // what it plays on The Fells is held to a hash.
+    const { ball } = this;
+    if (where && world.alive[ball] && Math.hypot(world.x[ball] - x, world.y[ball] - y) > 1e-3) {
+      const above = world.z[ball] - world.floorAt(world.x[ball], world.y[ball]);
+      world.x[ball] = x;
+      world.y[ball] = y;
+      world.z[ball] = world.floorAt(x, y) + above;
+      world.vx[ball] = world.vy[ball] = world.vz[ball] = 0;
+    }
   }
 
   /** What was chosen for a shot, and what a shot in the air was struck with, put back to straight and flat. */
