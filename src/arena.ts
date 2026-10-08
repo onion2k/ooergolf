@@ -172,6 +172,11 @@ export interface Layout extends Ground {
   bumpers: { x: number; y: number }[];
   /** Where each kicker stands: in the middle of its tile, on grass. A post that throws harder; see `KICKER`. */
   kickers: { x: number; y: number }[];
+  /**
+   * The stones along the water's edge (`stonesOf`): where each stands, in the water, how wide it is, and how high its
+   * top is, which is a floor to what lands on it. None on a hole without water.
+   */
+  stones: Stone[];
   /** How high the floor stands on each tile: nought for level grass, a step a digit, and far below for water. */
   floor: Float32Array;
   /** How high the ground slopes on each tile, at its middle, on top of its step: all nought on a hole that is flat. */
@@ -298,7 +303,7 @@ export function layoutOf(map: readonly string[], terrain?: readonly string[] | F
     for (const t of treeTiles) lie[t] = LIE.rough;
   }
   const heights = terrainOf(terrain, cols, rows);
-  return {
+  const out: Layout = {
     cols,
     rows,
     originX,
@@ -313,12 +318,15 @@ export function layoutOf(map: readonly string[], terrain?: readonly string[] | F
     trees,
     bumpers,
     kickers,
+    stones: [],
     floor,
     terrain: heights,
     tee: { x: teeX, y: teeY },
     cup: { x: cupX, y: cupY },
     bounds,
   };
+  out.stones = stonesOf(out);
+  return out;
 }
 
 /** The tile a point is in, or -1 off the grid. */
@@ -496,6 +504,136 @@ export const KICKER = { radius: 1, height: 1.6, restitution: 1.8 } as const;
 export function fromKickers(l: Layout, x: number, y: number): number {
   let near = Infinity;
   for (const k of l.kickers) near = Math.min(near, Math.hypot(x - k.x, y - k.y) - KICKER.radius);
+  return near;
+}
+
+/**
+ * A stone at the water's edge, as the title picture lines its river: a body the physics has, as a post is, standing in
+ * the water where it meets ground a ball can be on. `radius` is a minigolf stone's (a golf hole's are `golf` times it,
+ * since its ball is struck further and the stones are seen from further back), each from 0.85 to 1.15 of it by where it
+ * is. `proud` is how far its top stands above the ground beside it: over a resting ball's middle, so a ball rolled at
+ * one is met by its side and thrown back, where at less the physics lets it ride up the stone's round edge and over it
+ * into the water; and a ball that lands on one can rest on its top. `inset` is how far into the water its middle stands
+ * from the edge, as a share of its radius: less than one, so it overlaps the bank and leaves no slot between them for a
+ * ball to fall into and be squeezed in. `share` is the sides of the edge that have one, two in five, so a pond has stones
+ * along it and gaps a ball can roll through, and is never fenced in; and `restitution` how much of its speed a ball keeps
+ * off one straight on, a stone's dull knock and not a post's throw.
+ */
+export const STONE = { radius: 0.9, golf: 1.6, proud: 1.1, inset: 0.7, share: 0.4, restitution: 0.5 } as const;
+
+/** A stone at the water's edge: its middle, its radius, and the height of its top. */
+export interface Stone {
+  x: number;
+  y: number;
+  r: number;
+  top: number;
+}
+
+/** A number from a tile and a side, the same every time, so where the stones stand comes from the map alone. */
+function stoneHash(c: number, r: number, side: number): number {
+  let h = Math.imul(c + 1, 73856093) ^ Math.imul(r + 1, 19349663) ^ Math.imul(side + 1, 83492791);
+  h = Math.imul(h ^ (h >>> 13), 0x5bd1e995);
+  return (h ^ (h >>> 15)) >>> 0;
+}
+
+/**
+ * The stones along a hole's water: one in the water beside a share of the sides where a tile of water meets ground a
+ * ball can be on (not water, not rail, not rock), chosen and sized by `stoneHash` and never by the game's chance, its top
+ * `STONE.proud` above that ground. A stream is a belt and not water to the map, and has none.
+ */
+export function stonesOf(l: Layout): Stone[] {
+  const out: Stone[] = [];
+  const land = (c: number, r: number) => {
+    if (c < 0 || r < 0 || c >= l.cols || r >= l.rows) return false;
+    const t = r * l.cols + c;
+    return !l.water[t] && !l.rail[t] && l.solid[t] === 0;
+  };
+  const play = lineOfPlay(l);
+  const sides: [number, number][] = [
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+  ];
+  for (let t = 0; t < l.cols * l.rows; t++) {
+    if (!l.water[t]) continue;
+    const c = t % l.cols,
+      r = Math.floor(t / l.cols);
+    sides.forEach(([dc, dr], side) => {
+      if (!land(c + dc, r + dr) || play[(r + dr) * l.cols + c + dc]) return;
+      const h = stoneHash(c, r, side);
+      if ((h % 1000) / 1000 >= STONE.share) return;
+      const radius = STONE.radius * (l.golf ? STONE.golf : 1) * (0.85 + (((h >>> 10) % 1000) / 1000) * 0.3);
+      const along = (((h >>> 20) % 1000) / 1000 - 0.5) * 0.5 * TILE;
+      const cx = l.originX + (c + 0.5) * TILE,
+        cy = l.originY + (r + 0.5) * TILE;
+      const edge = TILE / 2 - radius * STONE.inset;
+      const x = cx + dc * edge + (dr !== 0 ? along : 0),
+        y = cy + dr * edge + (dc !== 0 ? along : 0);
+      // the ground beside it, at the middle of that tile
+      const ground = heightAt(l, l.originX + (c + dc + 0.5) * TILE, l.originY + (r + dr + 0.5) * TILE);
+      out.push({ x, y, r: radius, top: ground + STONE.proud });
+    });
+  }
+  return out;
+}
+
+/**
+ * The ground a stone may not stand beside, one byte a tile: within a tile of the hole's line of play, so the stones
+ * line the banks a player does not play along and a hole is played as it was drawn (the user's choice of 8 October
+ * 2026, after stones on every bank stopped The Causeway's straight putt and took the autopilot two strokes over par on
+ * Pond). On minigolf the line is the shortest way over ground a ball can be on from the tee to the cup; on golf it is
+ * the fairway, the green, its first cut and the tee, so a lake's stones stand by its rough.
+ */
+function lineOfPlay(l: Layout): Uint8Array {
+  const n = l.cols * l.rows;
+  const line = new Uint8Array(n);
+  if (l.golf) {
+    for (let t = 0; t < n; t++) {
+      const lie = l.lie[t];
+      if (!l.oob[t] && (lie === LIE.fairway || lie === LIE.green || lie === LIE.cut || lie === LIE.tee)) line[t] = 1;
+    }
+  } else {
+    // a search outward from the tee over the ground a ball can be on, and the way back from the cup along it
+    const at = (x: number, y: number) =>
+      Math.floor((y - l.originY) / TILE) * l.cols + Math.floor((x - l.originX) / TILE);
+    const from = at(l.tee.x, l.tee.y),
+      to = at(l.cup.x, l.cup.y);
+    const back = new Int32Array(n).fill(-2);
+    back[from] = -1;
+    const queue = new Int32Array(n);
+    let head = 0,
+      tail = 0;
+    queue[tail++] = from;
+    while (head < tail) {
+      const t = queue[head++];
+      if (t === to) break;
+      const c = t % l.cols;
+      for (const u of [c > 0 ? t - 1 : -1, c < l.cols - 1 ? t + 1 : -1, t - l.cols, t + l.cols])
+        if (u >= 0 && u < n && back[u] === -2 && !l.water[u] && !l.rail[u] && l.solid[u] === 0) {
+          back[u] = t;
+          queue[tail++] = u;
+        }
+    }
+    for (let t = to; t >= 0 && back[t] !== -2; t = back[t]) line[t] = 1;
+  }
+  // and a tile round it
+  const near = new Uint8Array(n);
+  for (let t = 0; t < n; t++) {
+    if (!line[t]) continue;
+    const c = t % l.cols,
+      r = Math.floor(t / l.cols);
+    for (let dr = -1; dr <= 1; dr++)
+      for (let dc = -1; dc <= 1; dc++)
+        if (c + dc >= 0 && c + dc < l.cols && r + dr >= 0 && r + dr < l.rows) near[(r + dr) * l.cols + c + dc] = 1;
+  }
+  return near;
+}
+
+/** How far a point is from the side of the nearest stone, or Infinity on a hole with none. */
+export function fromStones(l: Layout, x: number, y: number): number {
+  let near = Infinity;
+  for (const s of l.stones) near = Math.min(near, Math.hypot(x - s.x, y - s.y) - s.r);
   return near;
 }
 

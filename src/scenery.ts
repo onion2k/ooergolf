@@ -1,8 +1,9 @@
 /**
- * The scenery round a hole: trees, hedges, flowers and rocks on the rough, for
+ * The scenery round a hole: trees, bushes, flowers and rocks on the rough, for
  * fun, which the physics never sees; and the hole's dressing, bunting strung
  * round three sides of it, beds of flowers at the foot of its rail, and
- * rocks in clusters. Where each stands comes from the hole's
+ * rocks in clusters; and round a hole of golf, woods and scrub on the plain
+ * past its map, where nobody plays. Where each stands comes from the hole's
  * name and never from the game's chance, so the same hole looks the same
  * every time, and a round played from a seed is not moved by the drawing.
  *
@@ -11,7 +12,12 @@
 import { TILE, tileAt, type Layout } from './arena';
 import { seeded } from './random';
 
-export type SceneryKind = 'round tree' | 'pine' | 'hedge' | 'flowers' | 'rock';
+/**
+ * What a piece is, named for what is drawn: low-poly since 8 October 2026, when a round tree became a broadleaf, a
+ * pine a conifer and a hedge a bush (drawn as a fern for some variants). A fern of its own is only ever beyond a golf
+ * hole, so the scatter of minigolf draws the chance it always drew.
+ */
+export type SceneryKind = 'broadleaf' | 'conifer' | 'bush' | 'fern' | 'flowers' | 'rock';
 
 export interface Piece {
   kind: SceneryKind;
@@ -20,7 +26,7 @@ export interface Piece {
   /** Which way it is turned, and how much bigger or smaller than its model. */
   yaw: number;
   scale: number;
-  /** For flowers, which of their colours. */
+  /** For flowers, which of their colours; for a bush, whether it is drawn as a fern (`variant` of one). */
   variant: number;
 }
 
@@ -56,9 +62,9 @@ const CLEARING_MARGIN = 0.6;
 
 /** How often each kind is chosen. */
 const WEIGHTS: [SceneryKind, number][] = [
-  ['round tree', 3],
-  ['pine', 2],
-  ['hedge', 1.5],
+  ['broadleaf', 3],
+  ['conifer', 2],
+  ['bush', 1.5],
   ['flowers', 2.5],
   ['rock', 1],
 ];
@@ -262,4 +268,91 @@ export function scatter(layout: Layout, name: string): Piece[] {
 export function clearings(layout: Layout, name: string): { x: number; y: number; r: number }[] {
   const rocks = [...dress(layout, name).rocks, ...scatter(layout, name).filter((p) => p.kind === 'rock')];
   return rocks.map((r) => ({ x: r.x, y: r.y, r: ROCK_SIZE * r.scale + CLEARING_MARGIN }));
+}
+
+/**
+ * The scenery beyond a golf hole: how far past the map's edge it begins (`margin`), how far out it goes (`reach`), how
+ * many clumps it has for each unit of the map's perimeter (`per`), how far a clump's pieces spread (`clump`), how many
+ * pieces a clump has at the most, and the ceiling on all of them, which the triangle budget is reckoned against. Woods
+ * and scrub in clumps, as the title has them, and not a sprinkle: a clump is a wood (conifers and broadleaves) two times
+ * in three and scrub (bushes, ferns and rocks) the third.
+ */
+export const BEYOND = { margin: 6, reach: 120, per: 1 / 18, clump: 12, size: 9, most: 900 } as const;
+
+/** What a wood and what scrub are made of, and how often each. */
+const WOOD: [SceneryKind, number][] = [
+  ['conifer', 3],
+  ['broadleaf', 2],
+  ['bush', 1],
+];
+const SCRUB: [SceneryKind, number][] = [
+  ['bush', 3],
+  ['fern', 3],
+  ['rock', 2],
+];
+
+/** A kind from `weights`, by a draw of `random`. */
+function pick(weights: [SceneryKind, number][], random: () => number): SceneryKind {
+  let left = random() * weights.reduce((a, [, n]) => a + n, 0);
+  for (const [k, n] of weights) if ((left -= n) < 0) return k;
+  return weights[weights.length - 1][0];
+}
+
+/**
+ * The woods and scrub round a hole of golf, laid out as `layout` and called `name`: clumps on the ground no ball can
+ * reach, which is the empty ground past its out of bounds (beyond the wall that stands there) and the plain past its
+ * map, each piece `BEYOND.margin` clear of every tile a ball can be on and no further than its reach past the map. None
+ * round a hole of minigolf, whose scatter is its own. From the hole's name, with a chance of its own, so a hole looks
+ * the same every time and nothing of the game is moved by it.
+ */
+export function beyond(layout: Layout, name: string): Piece[] {
+  if (!layout.golf) return [];
+  const random = seeded(seedOf(`${name} beyond`));
+  const x0 = layout.originX,
+    y0 = layout.originY,
+    x1 = layout.originX + layout.cols * TILE,
+    y1 = layout.originY + layout.rows * TILE;
+  const { margin, reach } = BEYOND;
+  // whether a point is on ground no ball can be on: off the map, or on its empty ground (rock and no rail)
+  const off = (x: number, y: number) => {
+    const t = tileAt(layout, x, y);
+    return t < 0 || (layout.solid[t] === 1 && layout.rail[t] === 0);
+  };
+  // and clear of the course by the margin all round, and within the reach of the map's edge
+  const free = (x: number, y: number) => {
+    if (Math.max(x0 - x, x - x1, y0 - y, y - y1) > reach) return false;
+    for (let a = 0; a < 16; a++) {
+      const c = Math.cos((a / 16) * Math.PI * 2),
+        s = Math.sin((a / 16) * Math.PI * 2);
+      for (const r of [0, margin / 2, margin]) if (!off(x + c * r, y + s * r)) return false;
+    }
+    return true;
+  };
+  const clumps = Math.ceil(2 * (x1 - x0 + y1 - y0) * BEYOND.per);
+  const pieces: Piece[] = [];
+  for (let c = 0; c < clumps && pieces.length < BEYOND.most; c++) {
+    // a clump's middle anywhere free: drawn in the box round the map until it falls there
+    let cx = 0,
+      cy = 0;
+    for (let tries = 0; tries < 30; tries++) {
+      cx = x0 - reach + random() * (x1 - x0 + 2 * reach);
+      cy = y0 - reach + random() * (y1 - y0 + 2 * reach);
+      if (free(cx, cy)) break;
+    }
+    if (!free(cx, cy)) continue;
+    const wood = random() < 0.65;
+    const count = 3 + Math.floor(random() * (BEYOND.size - 2));
+    for (let k = 0; k < count && pieces.length < BEYOND.most; k++) {
+      const a = random() * Math.PI * 2,
+        r = Math.sqrt(random()) * BEYOND.clump * 0.75;
+      const x = cx + Math.cos(a) * r,
+        y = cy + Math.sin(a) * r;
+      const kind = pick(wood ? WOOD : SCRUB, random);
+      const yaw = random() * Math.PI * 2,
+        scale = SCALE.least + random() * SCALE.spread,
+        variant = Math.floor(random() * 3);
+      if (free(x, y)) pieces.push({ kind, x, y, yaw, scale, variant });
+    }
+  }
+  return pieces;
 }

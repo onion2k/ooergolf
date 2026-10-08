@@ -108,6 +108,8 @@ export interface Content {
   posts: { x: number; y: number }[];
   /** Where each kicker on this hole stands: a post that throws the ball harder. */
   kickers: { x: number; y: number }[];
+  /** Where each stone at the water's edge stands, how wide it is and how high its top: a body the ball meets. */
+  stones: { x: number; y: number; r: number; top: number }[];
   /** Where each tree of a golf hole stands: its trunk, with its canopy over it. */
   trees: { x: number; y: number }[];
   /** How many arrows stand over the hole's putting green to show which way it leans: none on a green that is level. */
@@ -218,8 +220,10 @@ export interface GameApi {
     mode: 'aim' | 'overhead';
     /** How far the view is blended up to the overhead view: nought is the normal view, one the view from above. */
     blend: number;
-    /** The renderer's far plane, which is raised while the view is from above. */
+    /** The renderer's far plane, which is raised while the view is from above and while a hole is flown in to. */
     farPlane: number;
+    /** Whether the camera is flying in to the hole: low behind the tee looking to the horizon, easing to the play view. */
+    flying: boolean;
     azimuth: number;
     /** The azimuth the camera is turning to: its own azimuth when it is turning to none. */
     heading: number;
@@ -494,6 +498,7 @@ export function createApi(host: DebugHost): GameApi {
       sand: sandTiles(game.layout),
       posts: game.layout.bumpers.map((p) => ({ ...p })),
       kickers: game.layout.kickers.map((p) => ({ ...p })),
+      stones: game.layout.stones.map((st) => ({ ...st })),
       trees: game.layout.trees.map((t) => ({ ...t })),
       arrows: greenArrows(game.layout).length,
     }),

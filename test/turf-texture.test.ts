@@ -86,8 +86,9 @@ describe('the turf on the ground', () => {
     expect(TURF.layer).toBe(1);
   });
 
-  it('has the figures chosen by looking at three strengths: a layer, 1.4 units a tile, a third of the colour and a third of the height', () => {
-    expect(TURF).toEqual({ layer: 1, repeat: 1 / 1.4, albedo: 0.2, shade: 0.15 });
+  it('has the figures chosen by looking: a layer, 1.4 units a tile, 0.3 of the colour and 0.22 of the height', () => {
+    // 0.2 and 0.15, chosen from three on 4 October 2026, were raised with the checker mow on 8 October 2026
+    expect(TURF).toEqual({ layer: 1, repeat: 1 / 1.4, albedo: 0.3, shade: 0.22 });
   });
 
   it('is on the mown grounds of a golf hole and not on its rough or its out of bounds', () => {

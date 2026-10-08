@@ -34,6 +34,7 @@ import {
   breakProblems,
   checkInvariants,
   framingProblems,
+  flyInProblems,
   kickerProblems,
   knockProblems,
   landingProblems,
@@ -181,6 +182,8 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
   /** How often the framing rule was asked, and the page's own camera director (made once the game's screen is known), which is told of each hole begun. */
   let framed = 0;
   let directing: Director | null = null;
+  /** When the hole being played began, in game time, which the fly-in's rule is held to. */
+  let holeBegan = 0;
   const events: GameEvents = new Proxy(
     {},
     {
@@ -195,7 +198,10 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
           if (name === 'spent') lately.spent++;
           if (name === 'holed' || name === 'pickedUp')
             lately.finished = { holed: name === 'holed', score: args[0], par: args[1] };
-          if (name === 'started' && playing && directing) directing.started();
+          if (name === 'started' && playing && directing) {
+            directing.started();
+            holeBegan = playing.t;
+          }
           // a stroke struck: the camera is told, which has it follow the ball for one in five and hold still for the rest
           if (name === 'struck' && playing && directing) directing.struck();
           if (name === 'knocked' && playing) told.push(...knockProblems(playing, ...(args as Knock)));
@@ -589,6 +595,7 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
           playing = game;
           director.use(game);
           director.started();
+          holeBegan = game.t;
           pennyOnHole = game.effects.has('penny');
           const loaded = JSON.stringify(game.progress.save);
           if (loaded !== kept) throw new Error(`the save was ${kept} and loaded as ${loaded}`);
@@ -604,13 +611,15 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
     let skewedAt = -Infinity;
     // the page's own camera director, which the flag button is pressed through here as there, and which sends the camera
     // where the aim view says in every frame of the game
-    const director = new Director(rig);
+    // the fly-in to each hole too, as the page has it, so what a monkey does while one is under way is played and it is cut short
+    const director = new Director(rig, { flyIn: true });
     directing = director;
     // the camera's own tosses (which side of the flag it looks to), from a number of the seed's own and no chance of the game's
     director.setSeed(seed * 41 + 9);
     director.use(game);
     director.setScreen(SCREEN.w / SCREEN.h, SCREEN.h);
     director.started();
+    holeBegan = game.t;
     const cam = new Camera();
     cam.aspect = SCREEN.w / SCREEN.h;
     cam.fov = rig.fov;
@@ -657,7 +666,7 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
         // and the ball is not asked to be on the screen for a few seconds, as the game catches the camera's time up
         if (!game.ready) skewedAt = game.t;
         const bounds = game.layout.bounds;
-        rig.setOverhead(true, { bounds, distance: overheadFit(bounds, rig.azimuth, cam.aspect) });
+        rig.setOverhead(true, { bounds, distance: overheadFit(bounds, rig.azimuth, cam.aspect) }, game.t);
         input.setMode('overhead');
         const at = () => [between(0, SCREEN.w), between(0, SCREEN.h)] as const;
         for (let k = 0, fingers = 1 + Math.floor(random() * 3); k < fingers; k++) {
@@ -760,7 +769,7 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
       if (facer() < 0.5) {
         // from above there is no way to face the cup: the button does nothing, and the camera stays as it was
         const bounds = layout.bounds;
-        rig.setOverhead(true, { bounds, distance: overheadFit(bounds, rig.azimuth, cam.aspect) });
+        rig.setOverhead(true, { bounds, distance: overheadFit(bounds, rig.azimuth, cam.aspect) }, game.t);
         input.setMode('overhead');
         const was = JSON.stringify([rig.azimuth, rig.turning]);
         if (director.faceFlag(false) || JSON.stringify([rig.azimuth, rig.turning]) !== was)
@@ -924,6 +933,26 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
       if (game.shoot(angle, power)) {
         did('strike a kicker');
         busy = Math.floor(between(10, 40));
+      }
+    };
+    /**
+     * A player rolling the ball at the water's edge, where a stone stands: aimed at a stone's middle or a little off it,
+     * soft or firm, from wherever the ball lies, so it is met by a stone, rolls through a gap into the water, or comes to
+     * rest against one or on one. Done on a chance of its own and only on a hole with stones, so every run on a hole
+     * without water plays as it did. Whatever comes of it the rules hold: never inside a stone, never at rest over the
+     * water on one (it is in the water then), and at rest on its top only where it stands.
+     */
+    const stoner = seeded(seed * 29 + 11);
+    const rollAtStone = () => {
+      const { world, ball, layout } = game;
+      if (!game.ready || !layout.stones.length) return;
+      const st = layout.stones[Math.floor(stoner() * layout.stones.length)];
+      const angle = Math.atan2(st.y - world.y[ball], st.x - world.x[ball]) + (stoner() - 0.5) * 0.5;
+      const power = 0.1 + 0.6 * stoner();
+      if (game.shoot(angle, power)) {
+        did('roll at a stone');
+        // the wait from its own stream too, so the monkey's main one is drawn from as it was on a hole with stones
+        busy = Math.floor(10 + stoner() * 30);
       }
     };
     /**
@@ -1198,6 +1227,7 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
       if (aimer() < 0.01) aimAndTakeBack();
       if (bumped() < 0.03) bump();
       if (game.layout.kickers.length && striker() < 0.03) strike();
+      if (game.layout.stones.length && stoner() < 0.03) rollAtStone();
       if (game.obstacles.streamed.size && streamer() < 0.03) strikeOntoStream();
       if (laneOf(game.def) && driver() < 0.03) driveTheLane();
       if (game.layout.golf && islandsOf(game.def).length && islander() < 0.03) flyToIsland();
@@ -1210,6 +1240,12 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
       game.step(DT);
       afterwards(was);
       director.frame(DT, false);
+      // the fly-in is held to its rule every frame, as the camera's turn is: tilted within its limit, and over in its time
+      {
+        const bad = flyInProblems(rig, game.t, holeBegan);
+        if (bad.length) return fail(bad);
+        if (rig.flying(game.t)) count(checked, 'flying');
+      }
       // a kicker throws the hardest of anything on a course, so what it does to the ball is checked in every frame
       if (game.layout.kickers.length) {
         const bad = kickerProblems(game);

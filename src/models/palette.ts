@@ -21,27 +21,29 @@ export const shown = (r: number, g: number, b: number): Colour => [linear(r), li
 
 /**
  * The green's middle colour, already linear, and how much lighter and darker
- * its two mown stripes are: a vivid yellow-green, as a toy's grass is, which
- * the deep blue-green of the rough frames.
+ * its two mown stripes are: a warm yellow-green, as the title picture's grass
+ * is (chosen from a sheet on 8 October 2026: the greens before it were a
+ * cooler green, twice as red and a third as blue now), which the deeper green
+ * of the rough frames.
  */
-const GREEN = [0.105, 0.41, 0.024] as const,
+const GREEN = [0.21, 0.41, 0.0072] as const,
   STRIPE = 0.11;
 /**
  * A golf hole's other grounds, already linear: the rough a player plays from, darker and a hair yellower than the
  * fairway that is the game's own green, and out of bounds, the dry pale grass beyond the stakes; the putting green, finer and lighter, in the same two stripes; and the tee's
  * box, paler still, mown flat.
  */
-const PLAY_ROUGH = [0.056, 0.235, 0.024] as const,
-  OUT_OF_BOUNDS = [0.16, 0.27, 0.045] as const,
-  PUTTING = [0.15, 0.5, 0.034] as const,
-  TEE_BOX = [0.19, 0.5, 0.09] as const;
+const PLAY_ROUGH = [0.0952, 0.235, 0.0084] as const,
+  OUT_OF_BOUNDS = [0.15, 0.36, 0.03] as const,
+  PUTTING = [0.285, 0.51, 0.0119] as const,
+  TEE_BOX = [0.361, 0.51, 0.0315] as const;
 /**
  * The first cut, already linear: the fringe round a putting green and the strip along a fairway's edges. Mown, but longer
  * than either, so it is between the fairway's grass and the green's finer one in light, and one colour and not two stripes:
  * it is a tile wide, and a stripe across a fringe would read as a seam. It is also yellower than both, for the two mown
  * stripes of each are an eighth either side of their middle, and a cut of the same hue is one of them.
  */
-const FIRST_CUT = [0.17, 0.43, 0.03] as const;
+const FIRST_CUT = [0.34, 0.43, 0.009] as const;
 /** The rail's paint, already linear: a warm timber. */
 const RAIL_PAINT = [0.52, 0.25, 0.09] as const;
 
@@ -53,7 +55,7 @@ export const PALETTE = {
    */
   grass: rgb(GREEN.map((c) => c * (1 - STRIPE))),
   grassMown: rgb(GREEN.map((c) => c * (1 + STRIPE))),
-  rough: [0.0455882, 0.1823529, 0.0694118] as Colour,
+  rough: [0.0775, 0.1823529, 0.0242941] as Colour,
   playRough: rgb(PLAY_ROUGH),
   oobGround: rgb(OUT_OF_BOUNDS),
   puttingGreen: rgb(PUTTING.map((c) => c * (1 - STRIPE))),
@@ -122,16 +124,23 @@ export const PALETTE = {
   windmillDoor: shown(0.3, 0.17, 0.1),
   roof: shown(0.86, 0.26, 0.18),
 
-  trunk: shown(0.55, 0.33, 0.16),
-  leaves: shown(0.22, 0.52, 0.14),
+  trunk: shown(0.5, 0.31, 0.16),
+  leaves: shown(0.42, 0.74, 0.16),
   /** A round tree's crown, lighter than the puffs below it, as a canopy is lit from above. */
-  leavesLight: shown(0.4, 0.68, 0.2),
-  pine: shown(0.1, 0.44, 0.34),
+  leavesLight: shown(0.6, 0.86, 0.24),
+  pine: shown(0.13, 0.46, 0.22),
   /** Clipped box: a fresher green than the trees, so a hedge reads as kept and not wild. */
-  hedge: shown(0.2, 0.56, 0.24),
+  hedge: shown(0.3, 0.62, 0.16),
+  /** The spiky fern of the title's foreground: a deep green, darker than a bush, so its blades read against the grass. */
+  fern: shown(0.12, 0.5, 0.18),
+  /** A cloud: white, a little blue, so it keeps its shape against a pale sky and does not glare in the sun. */
+  cloud: shown(0.98, 0.98, 1.0),
+  /** The hills round a hole, a soft green of the grass's, and the mountains behind them, blue with the distance. */
+  hill: shown(0.48, 0.74, 0.22),
+  mountain: shown(0.42, 0.56, 0.78),
   stem: shown(0.26, 0.56, 0.18),
   /** A pebble: a warm stone and not a cool grey, so it keeps a colour in the shade; darker than a cream, which glared in the rough. */
-  rock: shown(0.64, 0.61, 0.56),
+  rock: shown(0.7, 0.68, 0.67),
   paint: shown(0.98, 0.97, 0.95),
   string: shown(0.94, 0.92, 0.86),
 } as const satisfies Record<string, Colour | Record<string, Colour>>;

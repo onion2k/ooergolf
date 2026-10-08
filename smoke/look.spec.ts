@@ -204,6 +204,54 @@ test.describe('what it looks like', () => {
     expect(problems).toEqual([]);
   });
 
+  test('the fly-in to the first hole of The Meadow: low behind the tee, the hills, the forest and the sky past it', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true, flyIn: true });
+    await page.evaluate(() => window.game!.step(3));
+    expect((await page.evaluate(() => window.game!.view())).flying).toBe(true);
+    await hideStats(page);
+    await expect(page.locator('#view')).toHaveScreenshot('flyin-meadow.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
+  test("the fly-in to The Links' first hole: the woods round it, the hills, the lake, the mountains and the clouds", async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true, flyIn: true });
+    await page.evaluate(() => {
+      window.game!.chooseCourse('The Links');
+      window.game!.step(3);
+    });
+    expect((await page.evaluate(() => window.game!.view())).flying).toBe(true);
+    await hideStats(page);
+    await expect(page.locator('#view')).toHaveScreenshot('flyin-links.png', TOLERANCE);
+    // and halfway down to the view a shot is played from
+    await page.evaluate(() => window.game!.step(80));
+    await expect(page.locator('#view')).toHaveScreenshot('flyin-links-mid.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
+  test("the stones along the Pond's banks, off its line of play", async ({ page }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true });
+    await page.evaluate(() => {
+      const g = window.game!;
+      g.startHole(g.content().holes.findIndex((h) => h.name === 'Pond'));
+      g.step(90);
+      const { stones } = g.content();
+      const x = stones.reduce((a, s) => a + s.x, 0) / stones.length,
+        y = stones.reduce((a, s) => a + s.y, 0) / stones.length;
+      g.look(x, y - 10, 34);
+      g.step(1);
+    });
+    await hideStats(page);
+    await expect(page.locator('#view')).toHaveScreenshot('pond-stones.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
   test('aiming: the dots from the ball, from a soft putt to the hardest shot', async ({ page }) => {
     const problems = watch(page);
     await start(page, { seed: 11, paused: true });
@@ -1045,6 +1093,18 @@ test.describe('what it looks like', () => {
 
   test.describe('on a phone', () => {
     test.use({ viewport: { width: 400, height: 860 }, hasTouch: true, isMobile: true });
+
+    test("the fly-in to The Links' first hole on a phone held upright", async ({ page }) => {
+      const problems = watch(page);
+      await start(page, { seed: 11, paused: true, flyIn: true });
+      await page.evaluate(() => {
+        window.game!.chooseCourse('The Links');
+        window.game!.step(3);
+      });
+      await hideStats(page);
+      await expect(page.locator('#view')).toHaveScreenshot('phone-flyin-links.png', TOLERANCE);
+      expect(problems).toEqual([]);
+    });
 
     test('the course, upright, with the words over it', async ({ page }) => {
       const problems = watch(page);

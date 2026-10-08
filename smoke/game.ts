@@ -7,6 +7,8 @@
 import { expect, type Page } from '@playwright/test';
 import type { GameApi } from '../src/debug';
 import type { Save } from '../src/progress';
+import { BALL, KIND_RADIUS, layoutOf, tileAt } from '../src/arena';
+import { COURSES } from '../src/course';
 
 declare global {
   interface Window {
@@ -45,9 +47,11 @@ export async function start(
     rung?: number;
     // the title screen is left out of every page but one that asks for it, so no test waits on a fade
     title?: boolean;
+    // and the fly-in to each hole, so a picture a second into a hole is of the view a shot is played from
+    flyIn?: boolean;
   } = {},
 ) {
-  const { save, seed, paused, screen, rung, title } = options;
+  const { save, seed, paused, screen, rung, title, flyIn } = options;
   if (save)
     await page.addInitScript((s) => {
       if (sessionStorage.getItem('ooergolf-test-seeded')) return;
@@ -56,6 +60,7 @@ export async function start(
     }, save);
   const query = new URLSearchParams();
   if (!title) query.set('title', '0');
+  if (!flyIn) query.set('flyin', '0');
   if (rung !== undefined) query.set('rung', String(rung));
   if (seed !== undefined) query.set('seed', String(seed));
   if (paused) query.set('paused', '1');
@@ -181,3 +186,34 @@ export function puttingHole(greens: number | null = 12) {
 
 /** The same hole, as the page builds it: its terrain a `Float32Array`. */
 export type PuttingHole = ReturnType<typeof puttingHole>;
+
+/**
+ * An aim from the Pond's tee straight into its water through a gap in the stones along its banks: the first angle, from up
+ * the hole turning left, whose line meets water with no stone within a ball's width of it, so a test that putts into the
+ * pond is not stopped by a stone (8 October 2026, when the banks were lined with them off the line of play).
+ */
+export function intoThePond(): number {
+  const pond = COURSES.flatMap((c) => c.holes).find((h) => h.name === 'Pond')!;
+  const l = layoutOf(pond.map);
+  for (let off = 0.1; off < 1.2; off += 0.02) {
+    const angle = Math.PI / 2 + off;
+    const dx = Math.cos(angle),
+      dy = Math.sin(angle);
+    for (let d = 0; d < 30; d += 0.25) {
+      const x = l.tee.x + dx * d,
+        y = l.tee.y + dy * d;
+      const t = tileAt(l, x, y);
+      if (t < 0 || l.rail[t]) break;
+      if (l.water[t]) {
+        // no stone near the line from the tee to here, a ball's radius and its own clear of it
+        const clear = l.stones.every((s) => {
+          const along = Math.max(0, Math.min(d, (s.x - l.tee.x) * dx + (s.y - l.tee.y) * dy));
+          return Math.hypot(l.tee.x + dx * along - s.x, l.tee.y + dy * along - s.y) > s.r + KIND_RADIUS[BALL] + 0.2;
+        });
+        if (clear) return angle;
+        break;
+      }
+    }
+  }
+  throw new Error('no way into the Pond past its stones');
+}

@@ -1,144 +1,32 @@
 /**
- * The decoration: trees, hedges, flowers, rocks, bunting and fences, for fun
- * and for a hole to be somewhere. The physics never sees any of it, so its
- * sizes are for the eye, but each stands on the grass at its origin, and
- * each is cheap: a hole is dressed with forty or so, and the budget is what
- * keeps that from costing a frame. What varies from one to the next comes
- * from `seed`, so the same hole is dressed the same every time.
+ * The decoration that is made by people: flowers in beds and clumps, bunting,
+ * fences and the stakes of out of bounds, for fun and for a hole to be
+ * somewhere. The physics never sees any of it, so its sizes are for the eye,
+ * but each stands on the grass at its origin, and each is cheap. What varies
+ * from one to the next comes from `seed`, so the same hole is dressed the
+ * same every time. What grows wild round a hole, trees, bushes and rocks, is
+ * low-poly, in `lowpoly.ts`.
  *
- * Everything round is moulded smooth, as a toy is, from `smooth.ts`: a
- * canopy of puffs, a pine of rounded tiers, a pebble, a hedge rounded at
- * every edge, flowers of fat petals. Only what is flat, a pennant or a
- * picket, is cut with hard edges.
+ * Everything round here is moulded smooth, as a toy is, from `smooth.ts`:
+ * posts, knobs, strings and flowers of fat petals. Only what is flat, a
+ * pennant or a picket, is cut with hard edges.
  */
 import type { MeshBuilder } from 'artshape-render/mesh/types';
 import { PALETTE, PENNANT_COLOURS, ROUGH } from './palette';
 import { matte, type Colour, type Model, type Part, type V3 } from './part';
 import { at, built, slab } from './shapes';
-import { arc, ball, lathe, roundedBlock, tube } from './smooth';
+import { arc, ball, lathe, tube } from './smooth';
 import { seeded } from '../random';
 
 /** How finely a round thing is cut: enough round its edge that it reads round at the size it is seen. */
 const ROUND = {
-  canopy: [8, 14],
-  puff: [6, 10],
   trunk: 8,
-  tier: 14,
   mound: 12,
   stem: 4,
   bloom: [3, 20],
   heart: [3, 6],
   knob: [4, 12],
-  pebble: [7, 12],
 } as const;
-
-/**
- * A tree `height` tall, standing on the grass at its origin, on a trunk that
- * flares at its foot. A round one is a canopy of puffs: a ring of them
- * below, and a lighter crown on top, as a canopy is lit from above. A pine
- * is three rounded cones stacked.
- */
-export function tree(kind: 'round' | 'pine', { height = 7, seed = 1 } = {}): Model {
-  const random = seeded(seed * 104729 + 7);
-  const s = height / 7;
-  if (kind === 'round') {
-    const R = 0.34 * height;
-    const crownR = 0.6 * R;
-    // the crown's top is the tree's height; the ring of puffs sits a little below its middle
-    const crownZ = height - crownR;
-    const ringZ = crownZ - 0.55 * R;
-    const turn = random() * Math.PI * 2;
-    const puffs = 4 + (random() < 0.5 ? 1 : 0);
-    const leaves = built((b) => {
-      for (let k = 0; k < puffs; k++) {
-        const a = turn + (k / puffs) * Math.PI * 2 + (random() - 0.5) * 0.4;
-        const r = R * (0.52 + random() * 0.08);
-        const out = R * (0.48 + random() * 0.06);
-        const z = ringZ + (random() - 0.5) * 0.16 * R;
-        ball(b, at(Math.cos(a) * out, Math.sin(a) * out, z, a), [r, r, r * 0.92], ...ROUND.puff);
-      }
-    });
-    const aside = turn + Math.PI * (0.8 + random() * 0.4);
-    const crown = built((b) => {
-      ball(b, at(0, 0, crownZ, turn), [crownR, crownR, crownR], ...ROUND.canopy);
-      // a smaller puff to one side, so no two crowns are round alike
-      const r = crownR * (0.62 + random() * 0.1);
-      const out = R * 0.42;
-      ball(b, at(Math.cos(aside) * out, Math.sin(aside) * out, crownZ - 0.25 * R, aside), [r, r, r], ...ROUND.puff);
-    });
-    return {
-      name: 'round tree',
-      parts: [
-        { name: 'trunk', material: matte(PALETTE.trunk, ROUGH.wood), mesh: trunk(0.42 * s, 0.26 * s, 0.55 * height) },
-        { name: 'leaves', mesh: leaves, material: matte(PALETTE.leaves, ROUGH.leaves) },
-        { name: 'crown', mesh: crown, material: matte(PALETTE.leavesLight, ROUGH.leaves) },
-      ],
-      moving: [],
-    };
-  }
-  const leaves = built((b) => {
-    for (let k = 0; k < 3; k++) {
-      const z0 = height * (0.18 + 0.2 * k);
-      const z1 = k === 2 ? height : z0 + height * 0.42;
-      const r = height * (0.3 - 0.06 * k) * (0.92 + random() * 0.16);
-      lathe(b, at(0, 0, 0), tier(r, z0, z1, k === 2), ROUND.tier, random() * Math.PI);
-    }
-  });
-  return {
-    name: 'pine',
-    parts: [
-      { name: 'trunk', material: matte(PALETTE.trunk, ROUGH.wood), mesh: trunk(0.3 * s, 0.2 * s, 0.35 * height) },
-      { name: 'leaves', mesh: leaves, material: matte(PALETTE.pine, ROUGH.leaves) },
-    ],
-    moving: [],
-  };
-}
-
-/** How many sides a golf tree's tier has: a hole may have a hundred of them, so fewer than the decoration's, which are few. */
-const GOLF_TIER = 10;
-
-/** The figures of a golf tree that the game tests a ball against: its trunk, and its canopy's base, width and tip. */
-export interface GolfTreeFigures {
-  trunk: number;
-  base: number;
-  radius: number;
-  apex: number;
-}
-
-/**
- * A tree of golf: a trunk standing up into a canopy of two rounded tiers, a wide low one and a narrower one above it, to
- * the figures the game gives its physics (the canopy's base, its width there, and its tip, over a post for the trunk),
- * so what is seen is what the ball meets. The tiers lie a whisker inside the physics' cone, which is a ball's radius
- * bigger than they are all round by the time it is met, so a ball is never seen inside a branch.
- */
-export function golfTree({ trunk: post, base, radius, apex }: GolfTreeFigures, { seed = 1 } = {}): Model {
-  const random = seeded(seed * 7919 + 3);
-  const h = apex - base;
-  const leaves = built((b) => {
-    lathe(
-      b,
-      at(0, 0, 0),
-      tier(radius * (0.95 + random() * 0.03), base, base + 0.62 * h, false),
-      GOLF_TIER,
-      random() * Math.PI,
-    );
-    lathe(
-      b,
-      at(0, 0, 0),
-      tier(radius * (0.66 + random() * 0.03), base + 0.4 * h, apex, true),
-      GOLF_TIER,
-      random() * Math.PI,
-    );
-  });
-  return {
-    name: 'golf tree',
-    parts: [
-      { name: 'trunk', material: matte(PALETTE.trunk, ROUGH.wood), mesh: trunk(post, post * 0.8, base + 0.3 * h) },
-      { name: 'leaves', mesh: leaves, material: matte(PALETTE.pine, ROUGH.leaves) },
-    ],
-    moving: [],
-  };
-}
 
 /**
  * A stake that marks out of bounds: a slim white post with a red cap, standing on the ground at its origin, a yard or
@@ -165,57 +53,6 @@ export function stake({ height = 1.8, radius = 0.2 } = {}): Model {
     parts: [
       { name: 'post', material: matte(PALETTE.cream, ROUGH.wood), mesh: post },
       { name: 'cap', material: matte(PALETTE.plastic.red, ROUGH.wood), mesh: cap },
-    ],
-    moving: [],
-  };
-}
-
-/** A trunk from `r0` at the grass to `r1` at `top`, flaring at its foot, open at both ends: its top is in the leaves. */
-function trunk(r0: number, r1: number, top: number) {
-  return built((b) =>
-    lathe(
-      b,
-      at(0, 0, 0),
-      [
-        [r0 * 1.35, 0],
-        [r0 * 1.02, top * 0.12],
-        [r0 * 0.9, top * 0.3],
-        [r1, top],
-      ],
-      ROUND.trunk,
-    ),
-  );
-}
-
-/**
- * One tier of a pine, as its outline from the axis under it round to its
- * tip: a flat underside, a rim rounded as a cushion's, a straight side, and
- * a tip rounded off, the side meeting each rounding square so it has no
- * crease. The top tier's tip is rounder, since it is seen.
- */
-function tier(r: number, z0: number, z1: number, top: boolean): [number, number][] {
-  const rim = r * 0.22,
-    tip = top ? r * 0.16 : r * 0.1;
-  // the rim's and the tip's circles, and the side the tangent to both on the outside
-  const [c1r, c1z] = [r - rim, z0 + rim],
-    [c2r, c2z] = [0, z1 - tip];
-  const dr = c2r - c1r,
-    dz = c2z - c1z;
-  const side = Math.atan2(dz, dr) - Math.acos((rim - tip) / Math.hypot(dr, dz));
-  return [[0, z0], ...arc(c1r, c1z, rim, -Math.PI / 2, side, 3), ...arc(c2r, c2z, tip, side, Math.PI / 2, top ? 3 : 1)];
-}
-
-/** A clipped hedge `w` along X, `d` deep and `h` high, standing on the grass at its origin, rounded at every edge. */
-export function hedge(w: number, d: number, h: number): Model {
-  const r = Math.min(0.4 * d, 0.4 * h, w / 2);
-  return {
-    name: 'hedge',
-    parts: [
-      {
-        name: 'hedge',
-        material: matte(PALETTE.hedge, ROUGH.leaves),
-        mesh: built((b) => roundedBlock(b, at(0, 0, h / 2), w / 2, d / 2, h / 2, r, 4)),
-      },
     ],
     moving: [],
   };
@@ -291,19 +128,6 @@ export function flowers(colour: Colour, { seed = 1, count = 3 } = {}): Model {
     ],
     moving: [],
   };
-}
-
-/** A pebble about `size` across each way from its middle, sunk a little into the grass at its origin, its own shape for its seed. */
-export function rock(size: number, { seed = 1 } = {}): Model {
-  const random = seeded(seed * 7727 + 1);
-  const [p, q, w] = [random(), random(), random()].map((v) => v * Math.PI * 2);
-  // pushed gently in and out, never so far it has a dent: a pebble the sea has worn, not a lump
-  const push = (x: number, y: number, z: number) =>
-    1 - 0.07 * (1 + Math.sin(2.2 * x + p) * Math.cos(1.9 * y + q)) - 0.05 * (1 + Math.sin(2.6 * z + w));
-  const mesh = built((b) =>
-    ball(b, at(0, 0, -size * 0.12, random() * Math.PI * 2), [size, size * 0.85, size * 0.7], ...ROUND.pebble, push),
-  );
-  return { name: 'rock', parts: [{ name: 'rock', mesh, material: matte(PALETTE.rock, ROUGH.rock) }], moving: [] };
 }
 
 /** A post of radius `r` up to `height`, with a ball on top as wide as `knob`: smooth, as the bunting's and the fence's are. */

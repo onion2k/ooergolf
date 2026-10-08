@@ -9,7 +9,7 @@ import { BALL, KIND_RADIUS, STEP, TILE, WATER_LEVEL, heightAt, layoutOf, terrain
 import { COURSES, CUP } from '../src/course';
 import { SAMPLE_HOLES } from './helpers';
 import { HILLS } from './hills';
-import { GROUND, RAIL, cupGround, groundOf, railsOf, type Rails } from '../src/ground';
+import { CHECKER, GROUND, RAIL, cupGround, groundOf, mownAt, railsOf, type Rails } from '../src/ground';
 import { BUDGET, collar, type V3 } from '../src/models';
 import { PALETTE as MODELS } from '../src/models/palette';
 import { PALETTE } from '../src/scene';
@@ -66,19 +66,23 @@ describe('the ground', () => {
     ['flat', layoutOf(MAP)],
     ['sloped', layoutOf(MAP, TERRAIN)],
   ] as const) {
-    it(`covers every tile of grass on a ${label} hole once, in its stripes, and none of the rest`, () => {
+    it(`covers every tile of grass on a ${label} hole once, in its checker, and none of the rest`, () => {
       const g = groundOf(l);
       const area = [...triangles(g.green), ...triangles(g.mown)].reduce((a, t) => a + flatArea(t), 0);
       expect(area).toBeCloseTo(grassTiles(l) * TILE * TILE, 3);
-      // each stripe on its own rows only, two rows of tiles each, and both there
-      for (const [mesh, stripe] of [
-        [g.mown, 1],
-        [g.green, 0],
+      // each tone of the mown checker on its own squares only, two tiles a side, and both there
+      for (const [mesh, mown] of [
+        [g.mown, true],
+        [g.green, false],
       ] as const) {
         expect(triangles(mesh).length).toBeGreaterThan(0);
         for (const [a, b, c] of triangles(mesh)) {
-          const row = Math.floor(((a[1] + b[1] + c[1]) / 3 - l.originY) / TILE);
-          expect(Math.floor(row / 2) % 2, `a triangle of stripe ${stripe} on row ${row}`).toBe(stripe);
+          const col = Math.floor(((a[0] + b[0] + c[0]) / 3 - l.originX) / TILE),
+            row = Math.floor(((a[1] + b[1] + c[1]) / 3 - l.originY) / TILE);
+          expect(
+            (Math.floor(col / 2) + Math.floor(row / 2)) % 2 === 1,
+            `a triangle mown ${mown} at ${col},${row}`,
+          ).toBe(mown);
         }
       }
       for (const tri of [...triangles(g.green), ...triangles(g.mown)]) {
@@ -603,5 +607,22 @@ describe('the earth round a pond', () => {
     const tops = walls.flatMap((tri) => tri.map((p) => p[2]));
     expect(Math.max(...tops)).toBeCloseTo(step, 5);
     expect(Math.min(...tops)).toBeCloseTo(WATER_LEVEL, 5);
+  });
+});
+
+describe('the mown checker', () => {
+  it('is squares of two tiles a side on minigolf and four on golf, the two tones turn about', () => {
+    for (const [golf, n] of [
+      [false, 2],
+      [true, 4],
+    ] as const) {
+      const l = { golf };
+      for (let ty = 0; ty < 3 * n; ty++)
+        for (let tx = 0; tx < 3 * n; tx++)
+          expect(mownAt(l, tx, ty), `${golf ? 'golf' : 'minigolf'} ${tx},${ty}`).toBe(
+            (Math.floor(tx / n) + Math.floor(ty / n)) % 2 === 1,
+          );
+      expect(n).toBe(golf ? CHECKER.golf : CHECKER.minigolf);
+    }
   });
 });

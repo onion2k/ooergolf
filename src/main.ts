@@ -32,7 +32,7 @@ import { seeded } from './random';
 import { titlePage } from './titlepage';
 import { roll } from './roll';
 import { fieldOf, flattenFor, grassOptionsOf, windOf } from './turf';
-import { AIM_REACH, Scene, boxOf } from './scene';
+import { AIM_REACH, Scene, boxOf, sunFitOf } from './scene';
 import { carryFrom } from './flight';
 import { clearings } from './scenery';
 import { cupBurst, splash, strikePuff } from './bursts';
@@ -204,8 +204,11 @@ async function main() {
   };
   const scene = new Scene();
   const rig = new CameraRig();
-  /** What is done to the camera as the game goes on: the aim view, the tee, the flag and the follow. */
-  const director = new Director(rig);
+  /**
+   * What is done to the camera as the game goes on: the aim view, the tee, the flag and the follow; and the fly-in to each
+   * hole, which a test's page leaves out with `?flyin=0` so its pictures are of the view a shot is played from.
+   */
+  const director = new Director(rig, { flyIn: new URLSearchParams(location.search).get('flyin') !== '0' });
   /** The ball squashed by its last knock, until it springs back. */
   const squash = new Squash();
   /**
@@ -350,7 +353,7 @@ async function main() {
         // nothing is pressed on a new hole: the grass stands as it was grown
         renderer.clearPresses();
         renderer.wind = wind;
-        renderer.setSunShadow(boxOf(layout));
+        renderer.setSunShadow(boxOf(layout), sunFitOf(layout));
         // the camera glides to the tee from wherever it was looking, but for the first hole, with nowhere it was; and the
         // ball on the tee is round
         // (a golf hole lets the camera stand back as far as a drive needs, and begins looking at the tee shot from there;
@@ -565,7 +568,11 @@ async function main() {
   function setOverhead(on: boolean): boolean {
     if (on && choosing) return rig.overhead;
     const bounds = played.layout.bounds;
-    const wanted = rig.setOverhead(on, on ? { bounds, distance: overheadFit(bounds, rig.azimuth, aspect) } : undefined);
+    const wanted = rig.setOverhead(
+      on,
+      on ? { bounds, distance: overheadFit(bounds, rig.azimuth, aspect) } : undefined,
+      played.t,
+    );
     input.setMode(wanted ? 'overhead' : 'aim');
     hud.setOverhead(wanted);
     return wanted;
@@ -1002,8 +1009,9 @@ async function main() {
   function draw(dt: number): number {
     // nothing is drawn once the page is stopped on the boot screen: the scene is left as the build that failed left it
     if (stopped()) return performance.now();
-    // the far plane is further while the view from above is up, so the whole of a big hole is inside it
-    cam.far = rig.farPlane;
+    // the far plane is further while the view from above is up, so the whole of a big hole is inside it, and as far as the
+    // horizon while a hole is flown in to, so the world past it is drawn
+    cam.far = rig.farPlaneAt(played.t);
     // the Retake button is up while pressing it would do something: the page tells the hud, which does not read the game
     hud.setRetake(
       retakeShown({
@@ -1118,6 +1126,7 @@ async function main() {
       mode: input.mode,
       blend: rig.blend,
       farPlane: cam.far,
+      flying: rig.flying(played.t),
       ...rig.view(played.t),
       putt: hud.puttDrawn().putt,
       greens: hud.puttDrawn().greens,

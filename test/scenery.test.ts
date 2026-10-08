@@ -4,7 +4,21 @@ import { describe, expect, it } from 'vitest';
 import { TILE, layoutOf, tileAt } from '../src/arena';
 import { COURSE } from '../src/course';
 import { HILLS } from './hills';
-import { DRESSING, REFERENCE, ROCK_SIZE, SCENERY, SCALE, bigness, clearings, dress, scatter } from '../src/scenery';
+import {
+  BEYOND,
+  DRESSING,
+  REFERENCE,
+  ROCK_SIZE,
+  SCENERY,
+  SCALE,
+  beyond,
+  bigness,
+  clearings,
+  dress,
+  scatter,
+} from '../src/scenery';
+import { FLAT_HOLES } from './level';
+import { links } from '../src/links';
 
 describe('the scenery', () => {
   for (const hole of COURSE) {
@@ -37,7 +51,7 @@ describe('the scenery', () => {
     expect(scatter(l, COURSE[0].name)).toEqual(scatter(l, COURSE[0].name));
     expect(scatter(l, 'another name')).not.toEqual(scatter(l, COURSE[0].name));
     const kinds = new Set(COURSE.flatMap((h) => scatter(layoutOf(h.map), h.name).map((s) => s.kind)));
-    for (const kind of ['round tree', 'pine', 'hedge', 'flowers', 'rock']) expect(kinds, kind).toContain(kind);
+    for (const kind of ['broadleaf', 'conifer', 'bush', 'flowers', 'rock']) expect(kinds, kind).toContain(kind);
   });
 
   it('turns and sizes each piece a little, so no two trees are alike', () => {
@@ -159,6 +173,11 @@ describe('the scenery of a big hole', () => {
       ),
     );
 
+  /**
+   * The names the kinds had when the hash was written, before they were drawn low-poly (8 October 2026) and named for
+   * what is drawn: a broadleaf, a conifer, and a bush (or a fern, by its variant).
+   */
+  const WRITTEN_AS: Record<string, string> = { broadleaf: 'round tree', conifer: 'pine', bush: 'hedge' };
   /** Every hole that exists: its scatter, its dressing and its clearings, hashed, written before any of it grew. */
   const GOLDEN = '79bc75c85fe56b7ccbc4ccaf640b47c7accf5015a328c9f104d9d2e5eb6254ee';
   /**
@@ -179,7 +198,9 @@ describe('the scenery of a big hole', () => {
     for (const hole of ORIGINAL) {
       const l = layoutOf(hole.map, hole.terrain);
       expect(bigness(l), hole.name).toBe(1);
-      all.update(JSON.stringify([scatter(l, hole.name), dress(l, hole.name), clearings(l, hole.name)]));
+      // the kinds named as they were when the hash was written, so it holds every piece's place, size and turn as it was
+      const asWritten = scatter(l, hole.name).map((p) => ({ ...p, kind: WRITTEN_AS[p.kind] ?? p.kind }));
+      all.update(JSON.stringify([asWritten, dress(l, hole.name), clearings(l, hole.name)]));
       holes++;
     }
     expect(holes).toBe(11);
@@ -280,5 +301,70 @@ describe('the scenery of a big hole', () => {
       expect(strings, `${hole.name}: one a side`).toBe(3);
     }
     expect(dress(open(45, 51), 'big').bunting.length).toBeGreaterThan(3);
+  });
+});
+
+describe('the kinds of scenery', () => {
+  it('are named for what is drawn: a broadleaf, a conifer, a bush, flowers and a rock', () => {
+    const kinds = new Set(COURSE.flatMap((h) => scatter(layoutOf(h.map), h.name).map((p) => p.kind)));
+    expect([...kinds].sort()).toEqual(['broadleaf', 'bush', 'conifer', 'flowers', 'rock']);
+  });
+});
+
+describe('the scenery beyond a golf hole', () => {
+  const holes = [...FLAT_HOLES, links()[0], links()[4]];
+
+  it('stands off the course, its margin clear of every tile a ball can be on, within its reach, and nearer than the map’s edge', () => {
+    for (const hole of holes) {
+      const l = layoutOf(hole.map, hole.terrain);
+      const pieces = beyond(l, hole.name);
+      expect(pieces.length, hole.name).toBeGreaterThan(20);
+      // a tile a ball can be on is any of the hole's but the empty ones past its out of bounds, beyond the wall there
+      const playable = (x: number, y: number) => {
+        const t = tileAt(l, x, y);
+        return t >= 0 && (l.solid[t] === 0 || l.rail[t] === 1);
+      };
+      const x0 = l.originX,
+        y0 = l.originY,
+        x1 = l.originX + l.cols * TILE,
+        y1 = l.originY + l.rows * TILE;
+      let inside = 0;
+      for (const p of pieces) {
+        for (let a = 0; a < 16; a++)
+          for (const r of [0, BEYOND.margin / 2, BEYOND.margin])
+            expect(
+              playable(p.x + Math.cos((a / 16) * Math.PI * 2) * r, p.y + Math.sin((a / 16) * Math.PI * 2) * r),
+              `${hole.name}: a piece within its margin of the course at ${p.x.toFixed(1)},${p.y.toFixed(1)}`,
+            ).toBe(false);
+        expect(Math.max(x0 - p.x, p.x - x1, y0 - p.y, p.y - y1), `${hole.name}: within its reach`).toBeLessThanOrEqual(
+          BEYOND.reach,
+        );
+        if (tileAt(l, p.x, p.y) >= 0) inside++;
+      }
+      // a golf hole made by the generator has empty ground round its out of bounds, and the woods begin there, near the
+      // course; a level hole of the tests' own has none
+      const empty = Array.from({ length: l.cols * l.rows }, (_, t) => l.solid[t] === 1 && l.rail[t] === 0).some(
+        Boolean,
+      );
+      if (empty) expect(inside, `${hole.name}: some on the empty ground inside the map`).toBeGreaterThan(0);
+    }
+  });
+
+  it('is the same for a hole every time, another for another, and none on a hole of minigolf', () => {
+    const l = layoutOf(links()[0].map, links()[0].terrain);
+    expect(beyond(l, 'The Opener')).toEqual(beyond(l, 'The Opener'));
+    expect(beyond(l, 'another')).not.toEqual(beyond(l, 'The Opener'));
+    for (const hole of COURSE) expect(beyond(layoutOf(hole.map), hole.name)).toEqual([]);
+  });
+
+  it('is woods and scrub in clumps: every kind, and most pieces near another, never more than its ceiling', () => {
+    for (const hole of holes) {
+      const l = layoutOf(hole.map, hole.terrain);
+      const pieces = beyond(l, hole.name);
+      expect(pieces.length).toBeLessThanOrEqual(BEYOND.most);
+      expect(new Set(pieces.map((p) => p.kind))).toEqual(new Set(['broadleaf', 'conifer', 'bush', 'fern', 'rock']));
+      const near = pieces.filter((p) => pieces.some((q) => q !== p && Math.hypot(q.x - p.x, q.y - p.y) < BEYOND.clump));
+      expect(near.length / pieces.length, hole.name).toBeGreaterThan(0.8);
+    }
   });
 });

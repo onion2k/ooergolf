@@ -139,4 +139,5 @@ describe('the hole map', () => {
 });
 
 /** The hash of that hole's map at 100 by 230, written down when the first cut was added to the map (1 October 2026). */
-const PICTURE = 4280028507;
+// written again on 8 October 2026, when the course's palette became the title picture's warmer greens, which the map paints in
+const PICTURE = 2929960609;

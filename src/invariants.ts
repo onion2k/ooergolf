@@ -34,7 +34,7 @@
  */
 import type { Camera } from 'artshape-render/gpu/camera';
 import type { SafeBox } from './aimview';
-import { KICKER, fromKickers } from './arena';
+import { KICKER, WATER_LEVEL, fromKickers } from './arena';
 import {
   BUMPER,
   KINDS,
@@ -54,7 +54,7 @@ import {
   tileAt,
   type Layout,
 } from './arena';
-import { TILT, VIEW, type CameraRig } from './camera';
+import { FLY_IN, TILT, VIEW, type CameraRig } from './camera';
 import type { Plan } from './autopilot';
 import { BAG, bagClub, carrying, type BagClub } from './bag';
 import { CUP } from './course';
@@ -112,6 +112,22 @@ export function viewProblems(rig: CameraRig, turningFor = 0): string[] {
     if (!(x >= b.minX - 1e-9 && x <= b.maxX + 1e-9 && y >= b.minY - 1e-9 && y <= b.maxY + 1e-9))
       out.push(`the overhead view looks at ${x},${y}, which is off the hole`);
   }
+  return out;
+}
+
+/**
+ * The fly-in's rules (`FLY_IN`), at game time `t` for a hole begun at `began`: the view, eased as it is drawn, tilted no
+ * lower than the fly-in's own tilt and no higher than the play view's least; and no fly-in still under way past its hold,
+ * its time and a cut short at the last moment of it. Its own rule, since it goes lower than `viewProblems` lets the play
+ * view go, which `rig.tilt` (the play view's) still holds.
+ */
+export function flyInProblems(rig: CameraRig, t: number, began: number): string[] {
+  const out: string[] = [];
+  const { tilt } = rig.view(t);
+  if (!(tilt <= FLY_IN.tilt + 1e-6 && tilt >= TILT.least - 1e-6))
+    out.push(`the view is tilted to ${tilt}, past the fly-in's ${FLY_IN.tilt} or the least ${TILT.least}`);
+  if (rig.flying(t) && t - began > FLY_IN.hold + FLY_IN.time + FLY_IN.cut + 1e-6)
+    out.push(`the fly-in is still under way ${(t - began).toFixed(2)} seconds after the hole began`);
   return out;
 }
 
@@ -392,6 +408,16 @@ export function checkInvariants(game: Game): string[] {
     const into = -fromPosts(layout, world.x[ball], world.y[ball]) + world.r[ball];
     const postTop = heightAt(layout, world.x[ball], world.y[ball]) + BUMPER.height;
     if (into > 0.1 && world.z[ball] < postTop) out.push(`the ball is inside a post, ${into.toFixed(2)} into it`);
+    // and into a stone at the water's edge the same, below its top, while any of the ball is above the water's surface: one
+    // wholly under it is sinking out of the world and out of sight, between the bank and the stone, which the physics does
+    // not part as it falls
+    for (const st of layout.stones) {
+      const sunk = st.r + world.r[ball] - Math.hypot(world.x[ball] - st.x, world.y[ball] - st.y);
+      if (sunk > 0.1 && world.z[ball] < st.top && world.z[ball] + world.r[ball] > WATER_LEVEL)
+        out.push(
+          `the ball is inside a stone, ${sunk.toFixed(2)} into it: ${at(ball)} going ${[world.vx[ball], world.vy[ball], world.vz[ball]].map((v) => v.toFixed(2)).join(',')}, the stone at ${st.x.toFixed(2)},${st.y.toFixed(2)} r ${st.r.toFixed(2)} top ${st.top.toFixed(2)}`,
+        );
+    }
     out.push(...kickerProblems(game));
     // a ball played never lies out of bounds: it is lost the moment it is on the ground there
     if (layout.golf && world.asleep[ball]) {
@@ -423,12 +449,15 @@ export function checkInvariants(game: Game): string[] {
       const onPost =
         (Math.abs(bottom - postTop) < 0.05 && fromPosts(layout, world.x[ball], world.y[ball]) < 0) ||
         (Math.abs(bottom - (heightAt(layout, x, y) + KICKER.height)) < 0.05 && fromKickers(layout, x, y) < 0);
+      const onStone = layout.stones.some(
+        (st) => Math.abs(bottom - st.top) < 0.05 && Math.hypot(x - st.x, y - st.y) < st.r,
+      );
       const onBox = game.obstacles.pushers.some((p) => {
         // in the box's own frame: a flipper's is turned, a barrier's is not
         const [lx, ly] = inBox(p, world.x[ball], world.y[ball]);
         return Math.abs(bottom - (p.z + p.hz)) < 0.05 && Math.abs(lx) < p.hx && Math.abs(ly) < p.hy;
       });
-      if (!onFloor && !onBox && !onPost) out.push(`at rest in the air: ${at(ball)}`);
+      if (!onFloor && !onBox && !onPost && !onStone) out.push(`at rest in the air: ${at(ball)}`);
     }
     // inside a barrier's or a gate's box by more than the physics lets a ball sink into one
     for (const p of game.obstacles.pushers) {

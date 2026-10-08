@@ -14,7 +14,7 @@
  */
 import { BALL, KIND_RADIUS, heightAt, lieAt, rollsFor } from './arena';
 import { aimView, fitsHome, floorFor, reachOf, reachOnMinigolf, safeBox, screenOf } from './aimview';
-import { CameraRig, LEAD, TILT, VIEW, catchUp, facing, standOf, tallOf, wrap } from './camera';
+import { CameraRig, FLY_IN, LEAD, TILT, VIEW, catchUp, facing, standOf, tallOf, wrap } from './camera';
 import type { Game } from './game';
 import { hashed } from './random';
 import type { Shot } from './shot';
@@ -101,7 +101,14 @@ export class Director {
    */
   private toFlag = false;
 
-  constructor(readonly rig: CameraRig) {}
+  /**
+   * `flyIn`: each hole begun with the fly-in (`FLY_IN`), as the page and the fuzzer have it; left out, a hole is glided to
+   * as it always was, which the tests of the director that were written before it rest on.
+   */
+  constructor(
+    readonly rig: CameraRig,
+    private readonly options: { flyIn?: boolean } = {},
+  ) {}
 
   /** The game it directs for: the page's, or a test's own, which may be swapped for another. */
   use(game: Game) {
@@ -146,6 +153,7 @@ export class Director {
     if (!game) return;
     this.handing = false;
     this.toFlag = false;
+    this.rig.cutShort(game.t);
     this.chasing =
       this.mode === 'always'
         ? true
@@ -175,7 +183,9 @@ export class Director {
     const { layout, t } = game;
     const { rig } = this;
     const teeZ = heightAt(layout, layout.tee.x, layout.tee.y);
-    if (glide) rig.glide(layout.tee.x, layout.tee.y, teeZ, t);
+    const flyIn = this.options.flyIn === true;
+    if (flyIn) rig.jump(layout.tee.x, layout.tee.y, teeZ);
+    else if (glide) rig.glide(layout.tee.x, layout.tee.y, teeZ, t);
     else rig.jump(layout.tee.x, layout.tee.y, teeZ);
     rig.setGolf(layout.golf);
     this.aimedFor = '';
@@ -184,7 +194,17 @@ export class Director {
     this.handing = false;
     this.toFlag = false;
     this.wasReady = game.ready;
-    if (layout.golf) this.aimFor(!glide);
+    // the aim view at once for a fly-in, which eases from its own low view to it
+    if (layout.golf) this.aimFor(flyIn || !glide);
+    if (flyIn) {
+      // from up the hole toward the cup, a share of the way and no further than `FLY_IN.most`, on the ground there
+      const { tee, cup } = layout;
+      const d = Math.hypot(cup.x - tee.x, cup.y - tee.y);
+      const along = d > 0 ? Math.min(FLY_IN.most, FLY_IN.share * d) / d : 0;
+      const ax = (cup.x - tee.x) * along,
+        ay = (cup.y - tee.y) * along;
+      rig.flyIn(tee.x, tee.y, teeZ, t, [ax, ay, heightAt(layout, tee.x + ax, tee.y + ay) - teeZ]);
+    }
     this.looked = true;
   }
 
@@ -425,6 +445,8 @@ export class Director {
     const game = this.game;
     // a drag held is the player's say in where the camera looks: the turn to the flag a ball come to rest was waiting on is not made
     if (aim) this.toFlag = false;
+    // a player who drags means to play: a fly-in under way is cut short
+    if (game && aim) this.rig.cutShort(game.t);
     if (!game || !aim || !game.ready || this.rig.overhead || aim.power < AIM_TURN.least) return;
     const off = wrap(aim.angle - (Math.PI / 2 - this.rig.headed));
     if (Math.abs(off) <= AIM_DEAD.half) return;
@@ -451,6 +473,7 @@ export class Director {
     const game = this.game;
     if (!game || held || this.rig.overhead) return false;
     this.toFlag = false;
+    this.rig.cutShort(game.t);
     const to = this.nearFlag();
     if (to === null) return false;
     this.rig.turnTo(to);

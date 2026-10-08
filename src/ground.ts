@@ -21,8 +21,18 @@ type V3 = [number, number, number];
 /** How many pieces each tile of grass is cut into along each side: enough that a slope's curve does not show. */
 export const GROUND = { pieces: 3 } as const;
 
-/** How many rows of tiles each mown stripe is. */
-export const STRIPE_ROWS = 2;
+/**
+ * How many tiles a side each square of the mown checker is: four on a golf hole, where a tile is three yards and the
+ * squares read from two hundred back, and two on minigolf. A lawn mown both ways, as the title picture's is (chosen from a
+ * sheet on 8 October 2026; it was mown in stripes two rows wide).
+ */
+export const CHECKER = { golf: 4, minigolf: 2 } as const;
+
+/** Whether the tile at column `tx` and row `ty` is in the checker's lighter, mown tone: the one place it is said. */
+export function mownAt(l: { golf: boolean }, tx: number, ty: number): boolean {
+  const n = l.golf ? CHECKER.golf : CHECKER.minigolf;
+  return (Math.floor(tx / n) + Math.floor(ty / n)) % 2 === 1;
+}
 
 export interface Ground {
   /** The grass in its lighter stripe, and in its darker: on a golf hole, the fairway's. */
@@ -92,7 +102,7 @@ export function groundOf(l: Layout, mouth?: Ring): Ground {
     const x0 = l.originX + tx * TILE,
       y0 = l.originY + ty * TILE;
     if (grass) {
-      const odd = Math.floor(ty / STRIPE_ROWS) % 2 === 1;
+      const odd = mownAt(l, tx, ty);
       let b = odd ? mown : green;
       if (l.golf) {
         const lie = l.lie[t];

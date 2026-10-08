@@ -134,7 +134,8 @@ describe('open water', () => {
 describe('a hole’s water, in the scene', () => {
   it('is open water on a golf hole, whose scene has none of the rings, the splash ring or the streaks', () => {
     const { fixed, scene } = sceneOf(GOLF_POND);
-    expect(open(fixed).length, 'a bed of waves').toBe(1);
+    // the pond's, and the far lake's past the hills, which is the hole's water too
+    expect(open(fixed).length, 'a bed of waves').toBe(2);
     // the same hole in ripples has a pool of rings for its pond and a ring for a ball that went in, and this has neither
     const moving = scene.writeMoving(3).length;
     OCEAN_ON.golf = false;
@@ -157,7 +158,7 @@ describe('a hole’s water, in the scene', () => {
 
   it('is open water on a minigolf hole too, in finer waves, with no rings, splash ring, sparkles or streaks', () => {
     const base = sceneOf(MINI_POND);
-    expect(open(base.fixed).length, 'a bed of waves').toBe(1);
+    expect(open(base.fixed).length, 'a bed of waves, and the far lake').toBe(2);
     expect(open(base.fixed)[0].patterns?.[1], 'in minigolf’s waves').toBeCloseTo(OCEAN.minigolfScale, 6);
     expect(
       base.scene.writeMoving(3).filter((m) => m.looks && m.matrices.length > 16),

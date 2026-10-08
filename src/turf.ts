@@ -79,8 +79,8 @@ export const KINDS: readonly GrassKind[] = [
     height: 1.2,
     heightSpread: 0.5,
     width: 0.11,
-    base: [0.025, 0.1, 0.04],
-    tip: [0.06, 0.24, 0.09],
+    base: [0.0425, 0.1, 0.014],
+    tip: [0.102, 0.24, 0.0315],
     variation: 0.45,
     roughness: 0.9,
     lean: 0.45,
@@ -103,11 +103,10 @@ export const KINDS: readonly GrassKind[] = [
 export const GOLF_ROUGH_DENSITY = 80;
 export const GOLF_FAIRWAY_DENSITY = 100;
 /**
- * The painted fairway's green, already linear, and how much lighter and darker its two mown stripes are than its
- * middle: `models/palette.ts`'s own, kept here too so the turf imports no models, and held equal to them by a test.
+ * The painted fairway's green, already linear: `models/palette.ts`'s own, kept here too so the turf imports no models,
+ * and held equal to it by a test.
  */
-const FAIRWAY_GREEN = [0.105, 0.41, 0.024] as const,
-  FAIRWAY_STRIPE = 0.11;
+const FAIRWAY_GREEN = [0.21, 0.41, 0.0072] as const;
 /**
  * The fairway's blades, from a root darker than the green to a tip lighter. The renderer averages a blade to its root
  * and 1/1.7 of the way to its tip (`grassGround`), so the tip is where that average is the green exactly, and the
@@ -118,15 +117,12 @@ const ROOT = 0.7,
 const FAIRWAY_BASE = FAIRWAY_GREEN.map((c) => c * ROOT) as [number, number, number],
   FAIRWAY_TIP = FAIRWAY_GREEN.map((c) => c * TIP) as [number, number, number];
 
-/** How many rows of tiles each of the fairway's mown stripes is: `ground.ts`'s, held equal by a test. */
-export const FAIRWAY_STRIPE_ROWS = 2;
-
 /**
- * The kinds of a golf hole laid out as `layout`. A chunk of the field holds at most 255 lattice points a side, so a
+ * The kinds of a golf hole. A chunk of the field holds at most 255 lattice points a side, so a
  * field of the coarsest cell takes 112 blades a square unit at the most: both densities are inside it, which a test holds
  * on a hole of that cell, and no hole has to be thinned for the cell it is grown in.
  */
-function golfKinds(layout: Layout): GrassKind[] {
+function golfKinds(): GrassKind[] {
   const fairway: GrassKind = {
     density: GOLF_FAIRWAY_DENSITY,
     height: 0.3,
@@ -138,12 +134,8 @@ function golfKinds(layout: Layout): GrassKind[] {
     roughness: 0.9,
     lean: 0.35,
     give: 0.3,
-    stripes: {
-      width: FAIRWAY_STRIPE_ROWS * TILE,
-      angle: 0,
-      offset: -layout.originY,
-      shade: 2 * FAIRWAY_STRIPE,
-    },
+    // not striped: the ground under it is mown in a checker (`mownAt` in ground.ts), which the renderer's stripes, bands
+    // at one angle, cannot follow; plain blades in the middle green let the painted checker read between them
   };
   return [{ ...KINDS[ROUGH], density: GOLF_ROUGH_DENSITY }, fairway];
 }
@@ -276,7 +268,7 @@ function golfFieldOf(layout: Layout, name: string, bare: readonly Clearing[], ce
       }
   }
   clearDiscs(mask, origin, cell, cols, rows, bare);
-  return { origin, cell, cols, rows, mask, heights, kinds: golfKinds(layout), seed: nameSeed(name) };
+  return { origin, cell, cols, rows, mask, heights, kinds: golfKinds(), seed: nameSeed(name) };
 }
 
 /** `mask` cleared in each of the `bare` discs: a cell when its middle is in the disc, and at a cell coarser than the finest, when any of it is. */

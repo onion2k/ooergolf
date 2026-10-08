@@ -46,8 +46,10 @@ describe('the fuzzer', () => {
     // began to act, since the monkey buys and equips them and plays on with one held (with every effect off it is 2670 again).
     // Seed 26's moved from 3296 to 3142 when The Fair went on 8 October 2026, its best holes shared between the Shed and the
     // Waterworks: a monkey choosing among six courses, and playing their holes in a new order, plays another round; 17 and 3
-    // did not move
-    expect([one.drawn, two.drawn, golf.drawn], "draws from the monkey's main stream").toEqual([3142, 3100, 2702]);
+    // did not move. Seeds 26 and 17 moved again, to 3140 and 3202, when stones that the ball meets were laid along the water's
+    // edge off each hole's line of play (8 October 2026): the rounds are played differently where a ball comes back off one.
+    // With no stones laid they are 3142 and 3100 to the draw, so 'roll at a stone' draws nothing of the monkey's own
+    expect([one.drawn, two.drawn, golf.drawn], "draws from the monkey's main stream").toEqual([3140, 3202, 2702]);
     // the framing rule was asked of the camera, on golf and on minigolf, a good many times: a check that never ran passes in silence
     expect(one.framed + two.framed, 'times the framing was checked').toBeGreaterThan(300);
     expect(golf.framed, 'times it was checked on level golf').toBeGreaterThan(30);
@@ -69,11 +71,13 @@ describe('the fuzzer', () => {
       'choose a course',
       'equip',
       'face the flag',
+      'fly to an island',
       'look from overhead',
       'play again',
       'putt by the break',
       'read the break',
       'reload',
+      'roll at a stone',
       'shoot',
       'shoot as aimed',
       'shoot well',
@@ -82,7 +86,13 @@ describe('the fuzzer', () => {
     ];
     expect(Object.keys(r.done).sort(), 'every action there is, and no other').toEqual(actions);
     for (const action of actions) expect(r.done[action], action).toBeGreaterThan(0);
-    expect(r.happened.struck, 'the ball struck').toBe(r.done.shoot + r.done['shoot well'] + r.done['shoot as aimed']);
+    expect(r.happened.struck, 'the ball struck').toBe(
+      r.done.shoot +
+        r.done['shoot well'] +
+        r.done['shoot as aimed'] +
+        r.done['roll at a stone'] +
+        r.done['fly to an island'],
+    );
     expect(r.happened.stopped, 'and come to rest').toBeGreaterThan(0);
     expect(r.happened.holed, 'holed out').toBeGreaterThan(0);
     expect(r.happened.finished, 'round the whole course').toBeGreaterThan(0);

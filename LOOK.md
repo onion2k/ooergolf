@@ -22,10 +22,13 @@ green wants surfaces as smooth as it is.
 
 What the look is made of, each a rule a stage is held to:
 
-- **Shapes are chunky and rounded.** Every edge a player sees is bevelled
-  and catches the light; nothing is a bare box or a faceted lump. Shapes
-  are few and bold, and detail goes where the eye goes, on the cup, the
-  flag and the ball, and not everywhere.
+- **What the ball meets is chunky and rounded; what grows round it is
+  low-poly.** Every edge of the ball, the cup, the flag, the rail and the
+  obstacles is bevelled and catches the light, and none is a bare box or a
+  faceted lump. The trees, bushes, rocks, stones, hills and clouds round a
+  course are cut in flat facets, as the title picture has them (decided on
+  8 October 2026; until then they were moulded smooth too). Shapes are few
+  and bold, and detail goes where the eye goes.
 - **Colour is saturated and harmonised.** A small named palette, bright in
   the sun and never grey in the shade. The shade is a cool blue-violet of
   the colour, not a darker grey of it.
@@ -432,6 +435,38 @@ determinism, leaks, perf or bench, so their cost was not measured then; the chec
 has no square grid, since the grid is what showed at the stronger
 strengths. A stream's surface would need a pattern that follows its belt
 before it can ripple. The turntable was dropped.
+
+## After the stages: the title's look
+
+On 8 October 2026 the user asked for the game to look more like its title picture (`src/title_sq.png`): low-poly trees,
+conifers, rocks and bushes, better light, stones along the water, hills, a lake and clouds seen from a low view, a texture
+on the lawn, and shadows the same everywhere. A sheet of candidates was put to the user beside the picture (chunky or fine
+facets, today's palette or the title's, today's light or a warmer one, stripes or a checker), and the picks were built:
+
+- **The scenery is low-poly** (`models/lowpoly.ts`): broadleaves, conifers, boulders, bushes and ferns, chunky (a lump of
+  three rings and six segments), on minigolf in place of the puffball trees, pines, hedges and pebbles, and round a golf
+  hole on the empty ground past its out of bounds (`beyond` in `scenery.ts`), in clumps of wood and scrub. The golf tree
+  is a faceted conifer inside the cone its physics has.
+- **The palette is the title's**: the greens about twice as red and a third as blue, the rough less so, so it still frames
+  the course; lime broadleaves, deep conifers, grey stone.
+- **The light is warmer**: a stronger, warmer sun, a sea-green shade where it was blue-violet, a bluer sky light, a softer
+  rim. The shadow's edge is softened over a texel and a half, open water takes the shadow too, and on golf the sun's map
+  is fitted to the view (artshape-render v0.28.0), so the shadows of a long hole are as sharp at its far end as at the tee
+  and fall on the woods past it.
+- **The lawn is mown in a checker**, squares of four tiles on golf and two on minigolf, with the turf texture at 0.3 of
+  its colour and 0.22 of its height.
+- **Stones line the water** off each hole's line of play, and the ball meets them; see `CLAUDE.md`.
+- **The world past a hole** (`backdrop.ts`): faceted hills round it, blue mountains, a lake, a thousand far trees and
+  drifting clouds, under a sky gradient. Only the fly-in sees it: each hole begins with the camera low behind the tee,
+  where the horizon is a third of the way down the screen, and eases to the play view over two and a half seconds.
+
+What it costs, timed in turn with its parent commit on a quiet machine: the play view 3.21 to 3.24 ms against 3.19 to
+3.25, the biggest hole 3.50 against 3.46, The Isles' Home Waters 3.80 against 3.75, and 4 kB more to download; the fly-in
+at its worst 5.17 ms (The Meadow, a desk, the top rung), inside the 6.
+
+What is left open: the rough of minigolf reads a darker, bluer green than the title's, as the warm light's sky fills it; a
+shadow darkens the ground by about a fifth, where the title's by two fifths; and the world past a hole is seen only in the
+fly-in. Each is a matter of taste for the user to judge in play.
 
 ## Across every stage
 

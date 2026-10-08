@@ -32,10 +32,11 @@ export {
   streamBed,
   windmill,
 } from './models/obstacles';
-export { bunting, fence, flowers, golfTree, hedge, rock, stake, tree } from './models/decor';
+export { bunting, fence, flowers, stake } from './models/decor';
+export { FACETS, boulder, broadleaf, bush, cloud, conifer, farTree, fern, golfTree, stone } from './models/lowpoly';
 export { kicker } from './models/kicker';
 export { flipper } from './models/obstacles';
-export { OCEAN, OCEAN_ON, STREAM, stream, oceanFor, oceanScaleFor } from './models/obstacles';
+export { OCEAN, OCEAN_ON, RIPPLE, STREAM, stream, oceanFor, oceanScaleFor } from './models/obstacles';
 
 /**
  * How many triangles each model may have at the largest the game will ask
@@ -71,17 +72,25 @@ export const BUDGET = {
   'water bed': 90,
   'stream bed': 80,
   conveyor: 120,
-  tree: 860,
   golfTree: 320,
   stake: 120,
   breakArrow: 8,
-  hedge: 300,
   flowers: 650,
-  rock: 150,
   bunting: 540,
   fence: 1000,
   hole: 20000,
   golfHole: 60000,
   kicker: 420,
   flipper: 120,
+  /** The low-poly scenery, chunky as chosen: a broadleaf is four lumps of twenty-four facets on a trunk of six. */
+  broadleaf: 120,
+  conifer: 60,
+  boulder: 40,
+  bush: 80,
+  fern: 40,
+  cloud: 100,
+  stone: 50,
+  /** The world past a hole: its hills, mountains and lake, a far tree for each of its trees, and its clouds. */
+  backdrop: 24000,
+  farTree: 16,
 } as const;

@@ -22,7 +22,7 @@ import {
   grassOptionsOf,
   trampleOf,
 } from '../src/turf';
-import { STRIPE_ROWS } from '../src/ground';
+import { CHECKER, mownAt } from '../src/ground';
 import { KIND_RADIUS } from '../src/arena';
 import { PALETTE } from '../src/models/palette';
 import { LIE } from '../src/surfaces';
@@ -392,21 +392,12 @@ describe('the kinds of grass of a golf hole', () => {
       expect(ground[c], `channel ${c}`).toBeCloseTo((PALETTE.grass[c] + PALETTE.grassMown[c]) / 2, 2);
   });
 
-  it('mows the fairway in the stripes it is painted in: the same width, the same rows, the lighter band on the same side, the same strength', () => {
-    const s = fairway.stripes!;
-    expect(s).toBeDefined();
-    expect(s.width).toBe(STRIPE_ROWS * TILE);
+  it("grows the fairway unstriped over ground mown in a checker, which the renderer's stripes cannot follow, in its middle green", () => {
+    expect(fairway.stripes, 'the fairway is not striped').toBeUndefined();
     expect(rough.stripes, 'the rough is not mown').toBeUndefined();
-    // the renderer's band of a blade: its distance across the stripes (north, as the angle is nought) over the width
-    const band = (y: number) => Math.floor((y + (s.offset ?? 0)) / s.width);
-    for (let ty = 0; ty < ROWS; ty++) {
-      const y = layout.originY + (ty + 0.5) * TILE;
-      const painted = Math.floor(ty / STRIPE_ROWS) % 2;
-      expect(((band(y) % 2) + 2) % 2, `row ${ty}`).toBe(painted);
-    }
-    // the stripes' shade is the painted pair's: lighter over darker by the same ratio
-    const painted = PALETTE.grassMown[1] / PALETTE.grass[1];
-    expect((1 + 0.5 * s.shade) / (1 - 0.5 * s.shade)).toBeCloseTo(painted, 1);
+    // the painted fairway's two tones are an eighth either side of the green the blades average to
+    expect(mownAt(layout, 0, 0)).not.toBe(mownAt(layout, CHECKER.golf, 0));
+    expect(mownAt(layout, 0, 0)).toBe(mownAt(layout, CHECKER.golf, CHECKER.golf));
   });
 
   it('is a field the renderer takes on a hole too big for the finest cell, where a chunk holds fewer blades, with both densities in what it holds', () => {
@@ -428,7 +419,6 @@ describe('the kinds of grass of a golf hole', () => {
       f.kinds.map((k) => k.density),
       'not thinned for the cell',
     ).toEqual([rough.density, fairway.density]);
-    expect(f.kinds[FAIRWAY].stripes!.offset).toBeCloseTo(-big.originY, 5);
   });
 
   it('is the turf minigolf has on a hole of minigolf: one kind, eighty blades, 1.2 tall, and the rings are the same', () => {

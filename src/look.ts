@@ -32,12 +32,40 @@ export const OCCLUSION = { strength: 2, radius: 2.5, direct: 0.3 } as const;
  * pale, and the course stands out against it. Half of what is behind it is
  * lost over this many world units.
  */
-export const HAZE = { halfWay: 3000, colour: [0.2, 0.3, 0.42] as [number, number, number] } as const;
+export const HAZE = {
+  halfWay: 3000,
+  colour: [0.2, 0.42, 0.85] as [number, number, number],
+  reach: 3000,
+  height: 250,
+} as const;
+
+/**
+ * The sky, as the title picture's: a deep blue overhead going pale toward the horizon, which only the fly-in sees (the
+ * view a shot is played from looks under the horizon). The haze is the sky's blue too, and reaches as far as the
+ * mountains, so the hills pale with distance into it. Chosen from a sheet on 8 October 2026.
+ */
+export const SKY = {
+  zenith: [0.03, 0.33, 0.9] as [number, number, number],
+  horizon: [0.36, 0.77, 0.98] as [number, number, number],
+  height: 0.2,
+} as const;
+
+/**
+ * The sun's shadow: how far past what stands round a hole its box reaches (`margin`), how high (`top`, over a golf
+ * tree's tip and the tallest of the woods past it), the side of the square of ground its map covers on a hole of golf
+ * (`reach`, about what a driver's aim view sees from the camera on) and how much of the square's edge its shadows fade out
+ * over (`fade`), and how soft their edge is, in texels of its map (`softness`). A golf hole is long, so its map is fitted
+ * to the view and its shadows are as sharp at the far end as at the tee and fall on the woods past it; a minigolf hole
+ * is small, and its map is the whole box, as it always was. Chosen so every thing casts and every surface catches,
+ * water too, at one softness (8 October 2026).
+ */
+export const SHADOW = { margin: 4, top: 24, reach: 420, fade: 0.15, softness: 1.5 } as const;
 
 /**
  * The clean toy of `LOOK.md`: edges drawn at four samples a pixel, the toon
  * bands eased over a narrow width so a band's edge on a curve is a clean line,
- * the shade a cool blue-violet of a colour rather than a grey of it, a warm
+ * the shade a deep sea-green of a colour rather than a grey of it, as the
+ * title picture's shadows are (blue-violet until 8 October 2026), a warm
  * rim where a thing turns from the camera, the sky's light from above with a
  * warm bounce off the grass from below, and the form light, which keeps some
  * of the sun's fall-off in the top band. Without that last, every slope a
@@ -52,13 +80,16 @@ export const HAZE = { halfWay: 3000, colour: [0.2, 0.3, 0.42] as [number, number
 export const TOY = {
   antialias: 'msaa',
   bandSoftness: 0.06,
-  shadeColour: [0.36, 0.38, 0.78] as [number, number, number],
-  rim: 0.35,
+  shadeColour: [0.3, 0.55, 0.62] as [number, number, number],
+  rim: 0.25,
   rimColour: [1, 0.95, 0.85] as [number, number, number],
   rimWidth: 0.18,
-  skyLight: [0.5, 0.6, 0.75] as [number, number, number],
-  groundLight: [0.38, 0.34, 0.22] as [number, number, number],
+  skyLight: [0.5, 0.66, 0.9] as [number, number, number],
+  groundLight: [0.42, 0.42, 0.18] as [number, number, number],
   form: 2.5,
+  // every shadow at one softness, the title picture's soft edge, and open water darkened in one as the ground beside it is
+  shadowSoftness: SHADOW.softness,
+  waterShadow: true,
 } as const;
 
 /**
@@ -107,10 +138,11 @@ export async function daylight(renderer: GameRenderer, ctx: Gpu): Promise<void> 
     ...renderer.look,
     sunDir: SUN,
     // toon light is at a colour's full strength, so the sun is bright and the colours are shown straight
-    sunColour: [2.55, 2.42, 2.22],
+    sunColour: [2.75, 2.55, 2.2],
     exposure: 1,
     ambient: 1,
-    background: [0.45, 0.72, 0.98],
+    background: SKY.horizon,
+    sky: { zenith: SKY.zenith, horizon: SKY.horizon, height: SKY.height },
     shading: 'toon',
     occlusion: OCCLUSION.strength,
     occlusionRadius: OCCLUSION.radius,
@@ -121,11 +153,11 @@ export async function daylight(renderer: GameRenderer, ctx: Gpu): Promise<void> 
     ...noFog(MM_PER_UNIT),
     density: Math.LN2 / HAZE.halfWay,
     base: -10,
-    height: 1000,
+    height: HAZE.height,
     colour: HAZE.colour,
     ambient: 0.4,
     anisotropy: 0,
-    reach: 600,
+    reach: HAZE.reach,
     steps: 16,
     cones: 0,
   };

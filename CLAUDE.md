@@ -206,6 +206,8 @@ today, and what the next features must hand it:
   without that kind plays as it did: it strikes a moving bumper where the barrier is, strikes a kicker, strikes at
   a flipper through every phase of its swing, and strikes onto a stream, where the ball must be carried and never told lost
   (`lostOnStreamProblems`, checked as a loss is told).
+  On a hole with stones it rolls the ball at one (`roll at a stone`, on a stream of its own, so a hole with none plays as
+  it did), and the fly-in to every hole is held to `flyInProblems` every frame (`checked.flying` counts the frames it was).
   On a hole with a wood's lane it drives along the lane from the tee, slipped, and on a hole with land wholly in water it
   plays the shortest club that carries to the middle of it from wherever the ball lies (each on a chance of its own, so no
   other run changes, and both count in `done`).
@@ -444,8 +446,8 @@ angle, roll)` is how far the putter's hardest putt rolls along an angle before t
   on the rough as a raised green: the rough lies `ROUGH_DEPTH` below the
   grass, under the bottom of the cup, so the cup is seen into, and the rail
   comes down to meet it. The look is `LOOK.md`'s clean toy, toon daylight
-  on artshape-render v0.27.1 (0.23.0 brought the surface that flows, which the ponds
-  use; 0.24.0 and 0.25.0 particles blown by a wash of air, which the game does not yet use; 0.26.0 the ground texture; 0.27.0 open water, which a golf pond wears; 0.27.1 its sky no longer repeats: the sheet is bent by a slow warp and the swell is weaker), in `src/look.ts`, shared by the game and the
+  on artshape-render v0.28.0 (0.23.0 brought the surface that flows, which the ponds
+  use; 0.24.0 and 0.25.0 particles blown by a wash of air, which the game does not yet use; 0.26.0 the ground texture; 0.27.0 open water, which a golf pond wears; 0.27.1 its sky no longer repeats: the sheet is bent by a slow warp and the swell is weaker; 0.28.0 a sky gradient, the sun's shadow fitted to the view, a soft shadow edge and open water in shadow, each only when asked), in `src/look.ts`, shared by the game and the
   showcase: edges drawn at four samples a pixel (the post pass one rung
   down the ladder, and none on the last), the toon bands eased at their
   edges, a cool blue-violet shade, a warm rim, the sky's light from above
@@ -677,6 +679,29 @@ minigolf: true }`, read through `oceanFor`) is the one switch: `waterBed` and `s
   edge lies on a tile's. What a hole costs to begin grows with its tiles,
   about 8 microseconds each, and not with its cells: the `perf` gate holds
   the biggest.
+- **The title's look** (8 October 2026; `LOOK.md` says what was chosen and what it costs). The scenery is low-poly
+  (`src/models/lowpoly.ts`: `broadleaf`, `conifer`, `boulder`, `bush`, `fern`, `cloud`, `stone`, `farTree` and the golf
+  tree, flat-faced from `shapes.ts`'s `lump` and `frustum`); the scatter's kinds are named for what is drawn (`broadleaf`,
+  `conifer`, `bush`, a bush of variant one drawn as a fern, `flowers`, `rock`), and the scenery hash test maps them back to
+  the names it was written with, so every piece's place is held. Round a golf hole `beyond(layout, name)` in `scenery.ts`
+  puts clumps of wood and scrub on the ground no ball can reach (the empty tiles past out of bounds and the plain past the
+  map), `BEYOND.margin` clear of every playable tile, at most `BEYOND.most`. The lawn is mown in a checker (`mownAt` and
+  `CHECKER` in `ground.ts`, the one place it is said: squares of four tiles on golf, two on minigolf), and a fairway's
+  blades are unstriped over it. The sun's shadow box (`boxOf`) holds what stands round a hole and is `SHADOW.top` high;
+  on golf its map is fitted to the view (`sunFitOf`, `SHADOW` in `look.ts`), softened, and falls on water too.
+  **Stones** stand along the water (`stonesOf`, `STONE` and `fromStones` in `arena.ts`): worked out from the map by a hash
+  and never chance, on two water sides in five that meet playable ground, never within a tile of the line of play (the
+  shortest way over playable ground from tee to cup on minigolf; the fairway, green, cut and tee on golf), a body of the
+  physics as a post is, 1.1 above the bank and overlapping it, with a dull knock. A ball at rest on one over the water is in
+  the water (`Game.onStoneInWater`); the invariants hold the ball out of a stone while any of it is above the water, and at
+  rest on its top; the autopilot's line check knows them; `place` refuses a ball on one. **The world past a hole**
+  (`src/backdrop.ts`, `backdropOf` and `cloudAt`): faceted hills from `BACKDROP.gap` past the hole and its scenery,
+  mountains, a lake in a gap of them (the hole's water too, so it follows `OCEAN_ON`), a thousand far trees and clouds that
+  drift by game time along the hole's wind, within `BUDGET.backdrop` triangles. **The fly-in** shows it: `FLY_IN` in
+  `camera.ts`, `rig.flyIn` and `rig.cutShort` (once only, since a held drag tells it every frame), the far plane out to
+  `CLIP.horizon` while it flies (`farPlaneAt`); the Director's `{ flyIn: true }`, which the page and the fuzzer pass and a
+  test's page leaves out with `?flyin=0` (`start(page, { flyIn: true })` asks for it); cut short by a drag, the flag button,
+  Overhead or a stroke; held by `flyInProblems`.
 - `src/debug.ts` is `window.game`, the test API. `src/invariants.ts` lists
   the rules that must always hold. `src/autopilot.ts` plays the game by
   itself, for the gates and for par; its route over the tiles (`pathToCup`)
@@ -1039,7 +1064,7 @@ What to copy the shape of, when building something new:
 it. Time: `pause`, `resume`, `step(frames)`, `seed(n)`, and `?seed=N` and
 `?paused=1` on the page. Reading: `state` (with `strokes` and `ready`),
 `ball`, `bodies`, `content` (the hole's grass, tee and cup, its sand and
-posts, kickers, trees, the hardest shot, and every hole's name and par), `events`,
+posts, kickers, stones, trees, the hardest shot, and every hole's name and par), `events`,
 `invariants`, and `aiming`,
 the shot a drag under way would make. `state` has the hole, its par, the
 phase (`play`, `done`, `over`), the card, the coins and gems, the club in
@@ -1067,7 +1092,7 @@ picture is on and whether the grass sways (`swaying`), what a drag is (`mode`,
 `aim` or `overhead`) and how the view is turned and tilted (`azimuth`, `tilt`), the azimuth it is turning to (`heading`; its own
 when it is turning to none) and where the flag button would turn it from where the ball lies (`flag`, null at the cup), how far it is
 blended to the overhead view (`blend`) and the renderer's far plane (`farPlane`, raised while it is), whether it is following the ball
-for the stroke played (`following`), and the framing rule as it stands (`framing`: where the ball and the reach point are in NDC, the
+for the stroke played (`following`), whether it is flying in to the hole (`flying`), and the framing rule as it stands (`framing`: where the ball and the reach point are in NDC, the
 safe box, whether the view has settled and the problems `framingProblems` finds, empty when it holds); `orbit(turn, tilt)` is a test's
 own setter for the turn and the tilt, which no player can reach (a drag does not move it), `overhead(on?)` presses the Overhead
 button's action (the other way to now when not told; refused under the start screen) and says whether it is on after,

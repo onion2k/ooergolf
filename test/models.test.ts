@@ -24,7 +24,14 @@ import {
   WATER,
   WINDMILL,
   barrier,
+  boulder,
   bounds,
+  broadleaf,
+  bush,
+  cloud,
+  conifer,
+  fern,
+  stone,
   breakArrow,
   bumper,
   bunker,
@@ -40,12 +47,9 @@ import {
   golfBall,
   golfTree,
   group,
-  hedge,
   placeBlades,
-  rock,
   stake,
   teeMarkers,
-  tree,
   triangles,
   water,
   wideCollar,
@@ -118,17 +122,22 @@ function catalogue(): [string, Model][] {
     ['bunker', bunker(9, 6)],
     ['sand bed', sandBed(BUNKER_TILES, 3)],
     ['conveyor', conveyor(6, 12)],
-    ['round tree', tree('round')],
-    ['pine', tree('pine', { height: 10, seed: 3 })],
     ['golf tree', golfTree(TREE, { seed: 2 })],
     ['stake', stake()],
     ['break arrow', breakArrow()],
     ['long headed break arrow', breakArrow({ headShare: 0.5 })],
-    ['hedge', hedge(6, 1.5, 1.8)],
     ['flowers', flowers(FLOWER_COLOURS[0])],
-    ['rock', rock(1.5)],
     ['bunting', bunting(12)],
     ['fence', fence(6)],
+    ['broadleaf', broadleaf()],
+    ['tall broadleaf', broadleaf({ height: 12, seed: 4 })],
+    ['conifer', conifer()],
+    ['two-tier conifer', conifer({ height: 5, tiers: 2, seed: 3 })],
+    ['boulder', boulder(1.4)],
+    ['bush', bush(1.8)],
+    ['fern', fern(2.2)],
+    ['cloud', cloud()],
+    ['stone', stone()],
   ];
 }
 
@@ -338,13 +347,8 @@ const SMOOTH = new Set([
  * a time, as a pennant, a picket and everything the ball meets are.
  */
 const ROUND: Partial<Record<string, readonly string[]>> = {
-  'round tree': ['trunk', 'leaves', 'crown'],
-  pine: ['trunk', 'leaves'],
-  'golf tree': ['trunk', 'leaves'],
   stake: ['post', 'cap'],
-  hedge: ['hedge'],
   flowers: ['leaves', 'petals', 'hearts'],
-  rock: ['rock'],
   bunting: ['posts', 'string'],
   fence: ['posts', 'rails'],
 };
@@ -1115,67 +1119,6 @@ describe('the obstacles are drawn to exactly the size the physics gives them', (
 });
 
 describe('the decoration', () => {
-  for (const kind of ['round', 'pine'] as const) {
-    it(`a ${kind} tree stands on the ground to its height, differently for each seed`, () => {
-      for (const height of [5, 8, 12]) {
-        const m = tree(kind, { height, seed: 1 });
-        const b = bounds(m.parts);
-        expect(b.min[2]).toBeCloseTo(0, 5);
-        expect(b.max[2]).toBeCloseTo(height, 5);
-        expect(partNamed(m, 'trunk').material).not.toEqual(partNamed(m, 'leaves').material);
-      }
-      const a = tree(kind, { seed: 1 }),
-        b = tree(kind, { seed: 2 });
-      expect(Array.from(partNamed(a, 'leaves').mesh.positions)).not.toEqual(
-        Array.from(partNamed(b, 'leaves').mesh.positions),
-      );
-      expect(Array.from(partNamed(tree(kind, { seed: 1 }), 'leaves').mesh.positions)).toEqual(
-        Array.from(partNamed(a, 'leaves').mesh.positions),
-      );
-    });
-  }
-
-  it('a round tree is a canopy of puffs, lighter at its crown, on a trunk that goes up inside it, round from above', () => {
-    for (const seed of [1, 2, 3]) {
-      const m = tree('round', { height: 7, seed });
-      const [trunk, leaves, crown] = ['trunk', 'leaves', 'crown'].map((n) => bounds([partNamed(m, n)]));
-      const canopy = bounds([partNamed(m, 'leaves'), partNamed(m, 'crown')]);
-      // the trunk's top is hidden in the canopy, and the canopy stands clear of the grass
-      expect(trunk.max[2]).toBeGreaterThan(canopy.min[2] + 0.5);
-      expect(trunk.max[2]).toBeLessThan(canopy.max[2] - 1);
-      expect(canopy.min[2]).toBeGreaterThan(1.5);
-      // the crown on top of the puffs round it
-      expect(crown.max[2]).toBeGreaterThan(leaves.max[2]);
-      expect(crown.min[2]).toBeGreaterThan(leaves.min[2]);
-      // round from above: centred over its trunk, and about as wide one way as the other
-      const across = canopy.max[0] - canopy.min[0],
-        along = canopy.max[1] - canopy.min[1];
-      expect(across / along).toBeGreaterThan(0.75);
-      expect(across / along).toBeLessThan(1.34);
-      for (const a of [0, 1])
-        expect(Math.abs(canopy.max[a] + canopy.min[a]) / 2, 'off its trunk').toBeLessThan(0.07 * across);
-    }
-    // lit from above as a canopy is: the crown a lighter green than below it
-    const m = tree('round');
-    const light = (p: Part) => p.material[0] + p.material[1] + p.material[2];
-    expect(light(partNamed(m, 'crown'))).toBeGreaterThan(light(partNamed(m, 'leaves')) * 1.15);
-  });
-
-  it('a hedge is as long, deep and high as asked, and rounded at every edge by a good part of its depth', () => {
-    const m = hedge(6, 1.5, 1.8);
-    const b = bounds(m.parts);
-    near(b.min, [-3, -0.75, 0], 5);
-    near(b.max, [3, 0.75, 1.8], 5);
-    // the flat of each side and end stops a third of the depth short of the top, and of the ends: the rest is rounding
-    const pts = points(m.parts[0].mesh);
-    const side = pts.filter(([, y]) => y > 0.75 - NEAR);
-    expect(side.length).toBeGreaterThan(0);
-    expect(Math.max(...side.map(([, , z]) => z)), 'the side up to the rounding').toBeLessThan(1.8 - 0.5);
-    expect(Math.max(...side.map(([x]) => x)), 'the side along to the rounding').toBeLessThan(3 - 0.5);
-    const end = pts.filter(([x]) => x > 3 - NEAR);
-    expect(Math.max(...end.map(([, , z]) => z)), 'the end up to the rounding').toBeLessThan(1.8 - 0.5);
-  });
-
   it('flowers bloom in the colour asked', () => {
     for (const c of FLOWER_COLOURS) expect(partNamed(flowers(c), 'petals').material.slice(0, 3)).toEqual([...c]);
     const b = bounds(flowers(FLOWER_COLOURS[1]).parts);
@@ -1198,17 +1141,6 @@ describe('the decoration', () => {
         // placed at the smallest scale a scattered clump is: 0.8 of its size
         for (const z of tops) expect(z * SCALE.least, 'a bloom lost in the grass').toBeGreaterThan(canopy);
       }
-  });
-
-  it('a rock sits in the ground, about its size, and is its own shape for its seed', () => {
-    const b = bounds(rock(1.5).parts);
-    expect(b.max[0] - b.min[0]).toBeGreaterThan(1.5 * 1.4);
-    expect(b.max[0] - b.min[0]).toBeLessThan(1.5 * 2.6);
-    expect(b.min[2]).toBeLessThan(0);
-    expect(b.max[2]).toBeGreaterThan(0.4);
-    expect(Array.from(rock(1.5, { seed: 2 }).parts[0].mesh.positions)).not.toEqual(
-      Array.from(rock(1.5, { seed: 3 }).parts[0].mesh.positions),
-    );
   });
 
   it('bunting hangs between two posts as far apart as asked, the longer the more pennants', () => {
@@ -1254,8 +1186,9 @@ describe('the golf tree and the stake', () => {
       expect(all.min[2]).toBeCloseTo(0, 5);
       expect(all.max[2]).toBeCloseTo(TREE.apex, 5);
       expect(leaves.min[2], 'the canopy’s underside is at the base').toBeCloseTo(TREE.base, 5);
-      // as wide at its base as the tree says, to a twentieth, and centred on its trunk
-      const wide = (leaves.max[0] - leaves.min[0]) / 2;
+      // as wide at its base as the tree says, to a twentieth, at its corners (it is faceted, so across its flats it is
+      // narrower), and centred on its trunk
+      const wide = Math.max(...points(partNamed(m, 'leaves').mesh).map((q) => Math.hypot(q[0], q[1])));
       expect(wide).toBeGreaterThan(TREE.radius * 0.9);
       expect(wide).toBeLessThan(TREE.radius * 1.02);
       for (const a of [0, 1]) expect(Math.abs(leaves.max[a] + leaves.min[a]) / 2).toBeLessThan(0.05 * TREE.radius);
@@ -1276,10 +1209,14 @@ describe('the golf tree and the stake', () => {
         insideCanopy(cone, [x, y, z], KIND_RADIUS[BALL]),
         `${x.toFixed(2)},${y.toFixed(2)},${z.toFixed(2)}`,
       ).toBeGreaterThan(0);
-    // and it is not a much bigger cone than the tree: some of the leaves reach close to its surface
+    // and it is not a much bigger cone than the tree: some of the leaves' corners reach close to the physics' own cone,
+    // which a ball's surface meets (a faceted cone with its corners on that cone is exactly a ball's radius inside the
+    // bigger one, so it is the physics' own that the corners are held to)
     let nearest = Infinity;
-    for (const [x, y, z] of points(partNamed(m, 'leaves').mesh))
-      nearest = Math.min(nearest, insideCanopy(cone, [x, y, z], KIND_RADIUS[BALL]));
+    for (const [x, y, z] of points(partNamed(m, 'leaves').mesh)) {
+      const d = insideCanopy(cone, [x, y, z], 0);
+      if (d > 0) nearest = Math.min(nearest, d);
+    }
     expect(nearest).toBeLessThan(0.5);
   });
 
@@ -1365,13 +1302,6 @@ describe('the arrow that shows which way a green leans', () => {
 });
 
 describe('every model keeps to its triangle budget', () => {
-  it('a tree is under 860, whatever its kind, size and seed', () => {
-    expect(BUDGET.tree).toBeLessThanOrEqual(860);
-    for (const kind of ['round', 'pine'] as const)
-      for (let seed = 0; seed < 20; seed++)
-        expect(triangles(tree(kind, { seed, height: 4 + seed / 2 }))).toBeLessThan(BUDGET.tree);
-  });
-
   it('each at the largest the game will ask for', () => {
     const at: [keyof typeof BUDGET, Model][] = [
       ['cup', cup(3)],
@@ -1387,15 +1317,20 @@ describe('every model keeps to its triangle budget', () => {
       ['water', water(15, 15)],
       ['bunker', bunker(15, 15)],
       ['conveyor', conveyor(6, 24)],
-      ['hedge', hedge(9, 1.5, 2)],
       // a bed at the foot of the rail, which has the most blooms the game asks for
       ['flowers', flowers(FLOWER_COLOURS[2], { seed: 9, count: 5 })],
-      ['rock', rock(3)],
       ['bunting', bunting(24)],
       ['fence', fence(12)],
       ['golfTree', golfTree(TREE, { seed: 9 })],
       ['stake', stake({ height: 2.4, radius: 0.3 })],
       ['breakArrow', breakArrow()],
+      ['broadleaf', broadleaf({ height: 12, seed: 9 })],
+      ['conifer', conifer({ height: 14, seed: 9 })],
+      ['boulder', boulder(3, { seed: 9 })],
+      ['bush', bush(3, { seed: 9 })],
+      ['fern', fern(3, { seed: 9 })],
+      ['cloud', cloud({ seed: 9 })],
+      ['stone', stone({ seed: 9 })],
     ];
     for (const [name, m] of at) expect(triangles(m), name).toBeLessThanOrEqual(BUDGET[name]);
   });
@@ -1412,11 +1347,11 @@ describe('every model keeps to its triangle budget', () => {
     const decor: Model[] = [];
     for (let k = 0; k < 40; k++) {
       const pick = k % 8;
-      if (pick === 0) decor.push(tree('round', { seed: k, height: 8 }));
-      else if (pick === 1) decor.push(tree('pine', { seed: k, height: 10 }));
-      else if (pick === 2) decor.push(hedge(6, 1.5, 1.8));
+      if (pick === 0) decor.push(broadleaf({ seed: k, height: 8 }));
+      else if (pick === 1) decor.push(conifer({ seed: k, height: 10 }));
+      else if (pick === 2) decor.push(bush(1.8, { seed: k }));
       else if (pick === 3) decor.push(flowers(FLOWER_COLOURS[k % FLOWER_COLOURS.length], { seed: k }));
-      else if (pick === 4) decor.push(rock(1.5, { seed: k }));
+      else if (pick === 4) decor.push(boulder(1.5, { seed: k }));
       else if (pick === 5) decor.push(bunting(12, { seed: k }));
       else if (pick === 6) decor.push(fence(6));
       else decor.push(flowers(FLOWER_COLOURS[(k + 1) % FLOWER_COLOURS.length], { seed: k }));
@@ -1437,6 +1372,98 @@ describe('every model keeps to its triangle budget', () => {
     const total = [...decor, ...course].reduce((n, m) => n + triangles(m), 0);
     expect(total).toBeLessThan(BUDGET.hole);
     expect(BUDGET.hole).toBeLessThanOrEqual(20000);
+  });
+});
+
+describe('the low-poly scenery', () => {
+  const MODELS: [string, (seed: number) => Model][] = [
+    ['broadleaf', (seed) => broadleaf({ height: 7, seed })],
+    ['conifer', (seed) => conifer({ height: 8, seed })],
+    ['boulder', (seed) => boulder(1.4, { seed })],
+    ['bush', (seed) => bush(1.8, { seed })],
+    ['fern', (seed) => fern(2.2, { seed })],
+    ['cloud', (seed) => cloud({ seed })],
+  ];
+
+  it('is cut with flat faces: every corner of every triangle faces exactly as its triangle does', () => {
+    for (const [name, make] of MODELS)
+      for (const part of make(3).parts) {
+        const { normals: n, indices: ix } = part.mesh;
+        for (let t = 0; t < ix.length; t += 3) {
+          const [a, b, c] = [ix[t] * 3, ix[t + 1] * 3, ix[t + 2] * 3];
+          for (const [i, j] of [
+            [a, b],
+            [b, c],
+          ])
+            expect(n[i] * n[j] + n[i + 1] * n[j + 1] + n[i + 2] * n[j + 2], `${name} ${part.name}`).toBeGreaterThan(
+              0.9999,
+            );
+        }
+      }
+  });
+
+  it('is the same for a seed and another for another seed, within its budget for every seed', () => {
+    for (const [name, make] of MODELS) {
+      const flat = (m: Model) => m.parts.flatMap((q) => Array.from(q.mesh.positions));
+      expect(flat(make(5)), name).toEqual(flat(make(5)));
+      expect(flat(make(5)), name).not.toEqual(flat(make(6)));
+      for (let seed = 0; seed < 20; seed++)
+        expect(triangles(make(seed)), name).toBeLessThanOrEqual(BUDGET[name as keyof typeof BUDGET]);
+    }
+  });
+
+  it('a broadleaf is as tall as asked, its canopy clear of the ground on a trunk that goes up into it, lighter at its crown', () => {
+    for (const height of [5, 7, 12]) {
+      const m = broadleaf({ height, seed: height });
+      const all = bounds(m.parts);
+      expect(all.max[2]).toBeCloseTo(height, 5);
+      expect(all.min[2]).toBeCloseTo(0, 5);
+      const canopy = bounds([partNamed(m, 'leaves'), partNamed(m, 'crown')]);
+      expect(canopy.min[2]).toBeGreaterThan(0.3 * height);
+      expect(bounds([partNamed(m, 'trunk')]).max[2]).toBeGreaterThan(canopy.min[2]);
+      const sum = (c: readonly number[]) => c[0] + c[1] + c[2];
+      expect(sum(partNamed(m, 'crown').material)).toBeGreaterThan(sum(partNamed(m, 'leaves').material));
+    }
+  });
+
+  it('a conifer is as tall as asked, its tiers narrowing as they rise, standing on its trunk', () => {
+    const m = conifer({ height: 10, seed: 2 });
+    const all = bounds(m.parts);
+    expect(all.max[2]).toBeCloseTo(10, 5);
+    expect(all.min[2]).toBeCloseTo(0, 5);
+    const leaves = points(partNamed(m, 'leaves').mesh);
+    const wide = (lo: number, hi: number) =>
+      Math.max(...leaves.filter((q) => q[2] >= lo && q[2] < hi).map((q) => Math.hypot(q[0], q[1])));
+    expect(wide(1.5, 3)).toBeGreaterThan(wide(6, 9));
+  });
+
+  it('a boulder sits in the ground, no wider than asked, and lower than it is wide', () => {
+    for (const size of [0.6, 1.4, 3]) {
+      const b = bounds(boulder(size, { seed: 7 }).parts);
+      expect(b.min[2]).toBeLessThan(0);
+      expect(b.min[2]).toBeGreaterThan(-0.3 * size);
+      expect(Math.max(-b.min[0], b.max[0], -b.min[1], b.max[1])).toBeLessThanOrEqual(size * 1.0001);
+      expect(b.max[2]).toBeLessThan(size);
+    }
+  });
+
+  it('a fern and a bush stand on the ground, and a cloud is a unit across, flat underneath', () => {
+    for (const m of [fern(2.2), bush(1.8)]) expect(bounds(m.parts).min[2]).toBeGreaterThan(-0.5);
+    expect(bounds(fern(2.2).parts).max[2]).toBeLessThanOrEqual(2.2);
+    const c = bounds(cloud().parts);
+    expect(c.max[0] - c.min[0]).toBeGreaterThan(1.4);
+    expect(c.max[0] - c.min[0]).toBeLessThan(2.6);
+    expect(c.max[2]).toBeGreaterThan(-c.min[2]);
+  });
+
+  it('a golf tree is cut so too, a faceted cone and not a lathe', () => {
+    const m = golfTree(TREE);
+    expect(m.name).toBe('golf tree');
+    const { normals: n, indices: ix } = partNamed(m, 'leaves').mesh;
+    for (let t = 0; t < ix.length; t += 3) {
+      const [a, b] = [ix[t] * 3, ix[t + 1] * 3];
+      expect(n[a] * n[b] + n[a + 1] * n[b + 1] + n[a + 2] * n[b + 2]).toBeGreaterThan(0.9999);
+    }
   });
 });
 

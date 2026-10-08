@@ -18,7 +18,7 @@
  *
  * It is handed the game, and knows nothing of the page.
  */
-import { fromKickers } from './arena';
+import { fromKickers, fromStones } from './arena';
 import {
   BALL,
   KIND_RADIUS,
@@ -563,7 +563,7 @@ function clear(l: Layout, x0: number, y0: number, x1: number, y1: number): boole
   for (let s = 0; s <= d; s += 0.25) {
     const px = x0 + ((x1 - x0) * s) / (d || 1),
       py = y0 + ((y1 - y0) * s) / (d || 1);
-    if (fromPosts(l, px, py) < reach || fromKickers(l, px, py) < reach) return false;
+    if (fromPosts(l, px, py) < reach || fromKickers(l, px, py) < reach || fromStones(l, px, py) < reach) return false;
     for (const [k, side] of [-reach, 0, reach].entries()) {
       const sx = px + nx * side,
         sy = py + ny * side;

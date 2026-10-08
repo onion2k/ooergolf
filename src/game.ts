@@ -13,7 +13,7 @@
  * keep a note of it. Nothing here waits on anything there, so the same game
  * runs in the page and in Node, and what the tests try is what is played.
  */
-import { fromKickers } from './arena';
+import { fromKickers, fromStones } from './arena';
 import {
   BALL,
   FASTEST,
@@ -588,6 +588,11 @@ export class Game {
       this.heldToFastest();
       this.knock(vx, vy, vz);
       if (fell.holed || fell.wet) break;
+      // come to rest on a stone over the water, it is in the water: a ball is never left lying on a tile of it
+      if (this.onStoneInWater()) {
+        Object.assign(fell, { wet: true, x: world.x[ball], y: world.y[ball] });
+        break;
+      }
     }
     if (this.phase !== 'play') return;
     if (fell.holed) return this.done('holed');
@@ -666,6 +671,14 @@ export class Game {
    * Whether the ball is on the ground over out of bounds, on a golf hole: as near the ground as a ball resting there,
    * so one in flight over the line is not, and a hop off it is not until it lands.
    */
+  /** Whether the ball is at rest over a tile of water, which only a stone's top can hold it over. */
+  private onStoneInWater(): boolean {
+    const { world, ball, layout } = this;
+    if (!layout.stones.length || world.asleep[ball] !== 1) return false;
+    const t = tileAt(layout, world.x[ball], world.y[ball]);
+    return t >= 0 && layout.water[t] === 1 && layout.solid[t] === 0;
+  }
+
   private isOut(): boolean {
     const { world, ball, layout } = this;
     if (!layout.golf || !world.alive[ball]) return false;
@@ -938,6 +951,7 @@ export class Game {
     }
     if (fromPosts(layout, x, y) < r + 0.1) throw new Error(`the ball cannot be put down at ${x},${y}: on a post`);
     if (fromKickers(layout, x, y) < r + 0.1) throw new Error(`the ball cannot be put down at ${x},${y}: on a kicker`);
+    if (fromStones(layout, x, y) < r + 0.1) throw new Error(`the ball cannot be put down at ${x},${y}: on a stone`);
     if (layout.oob[tileAt(layout, x, y)]) throw new Error(`the ball cannot be put down at ${x},${y}: out of bounds`);
     if (fromTrees(layout, x, y) < r + 0.1)
       throw new Error(`the ball cannot be put down at ${x},${y}: on a tree's trunk`);

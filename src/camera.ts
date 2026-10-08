@@ -97,7 +97,7 @@ export const OVERHEAD = { tilt: 0.05, ease: 4, near: 60, far: 3000, margin: 1.08
  * times as deep as it is back), and a fixed 800 cut off a hole whose fit is 868 to 948 back. Only then, since a far plane
  * further out costs the depth buffer its precision, which the normal view has no need to spend.
  */
-export const CLIP = { far: 800, overhead: 2.5 } as const;
+export const CLIP = { far: 800, overhead: 2.5, horizon: 6000 } as const;
 /** The ground a hole covers, the corners of a layout's `bounds`. */
 export interface Bounds {
   minX: number;
@@ -157,6 +157,17 @@ export function facing(from: { x: number; y: number }, to: { x: number; y: numbe
  */
 export const GLIDE = 0.8;
 
+/**
+ * The fly-in: a hole begun with the camera low behind the tee, looking down the hole to the horizon as the title picture
+ * does, the only view that sees the hills, the lake and the clouds past a hole (the user's choice of 8 October 2026; the
+ * play view looks no higher than thirteen degrees under the horizon). `tilt` is how far from the vertical it looks then,
+ * which puts the horizon about a third of the way down the screen; `hold` how long it stays there before easing; `time`
+ * how long it eases to the play view; `cut` how long the rest of it takes once a player drags, presses the flag or the
+ * Overhead button, or strikes; and `share` and `most` how far up the hole it looks, a share of the way to the cup and
+ * at most so far, so the cup's end is in the view and not the far edge of the world.
+ */
+export const FLY_IN = { tilt: 1.45, hold: 0.5, time: 2.2, cut: 0.4, share: 0.3, most: 90 } as const;
+
 export class CameraRig {
   readonly fov = VIEW.fov;
   /** Where it looks, on the ground. */
@@ -191,6 +202,12 @@ export class CameraRig {
   private easeTurn = 0;
   private easeTilt = 0;
   private glidFrom = -Infinity;
+  /** How long the glide waits before it eases, and how long it eases for: `GLIDE` and none, but for a fly-in. */
+  private glideHold = 0;
+  private glideTime: number = GLIDE;
+  /** Whether the glide under way is a fly-in, which draws as far as the horizon, and whether it has been cut short. */
+  private flown = false;
+  private cut = false;
   /** The view `place` works from, written and never made. */
   private readonly seen = { azimuth: 0, tilt: 0 };
   /** Where it looks, glide and all, written by `looking` for `place`. */
@@ -210,6 +227,10 @@ export class CameraRig {
     this.target[2] = z;
     this.behind[0] = this.behind[1] = this.behind[2] = 0;
     this.glidFrom = -Infinity;
+    this.glideHold = 0;
+    this.glideTime = GLIDE;
+    this.flown = false;
+    this.cut = false;
   }
 
   /**
@@ -236,6 +257,57 @@ export class CameraRig {
     this.easeTilt = tilt - TILT.home;
   }
 
+  /**
+   * A hole begun at game time `t` with a fly-in: looking at (x, y) on ground `z` high in the end, as `glide` does, but from
+   * a place `ahead` of it (up the hole toward the cup), tilted down to `FLY_IN.tilt`, held there `FLY_IN.hold` and eased to
+   * the play view over `FLY_IN.time`. It follows the ball all the while, as a glide does.
+   */
+  flyIn(x: number, y: number, z: number, t: number, ahead: readonly [number, number, number]) {
+    this.jump(x, y, z);
+    this.behind[0] = ahead[0];
+    this.behind[1] = ahead[1];
+    this.behind[2] = ahead[2];
+    this.glidFrom = t;
+    this.glideHold = FLY_IN.hold;
+    this.glideTime = FLY_IN.time;
+    this.flown = true;
+    this.heading = null;
+    this.azimuth = 0;
+    // eased from the fly-in's tilt to whatever the play view's is, which a golf hole's aim view has set by now
+    this.easeTurn = 0;
+    this.easeTilt = FLY_IN.tilt - this.tilt;
+  }
+
+  /**
+   * A fly-in cut short at game time `t`, by a player who means to play: what is left of it eased away over `FLY_IN.cut`
+   * from exactly where it is, so nothing jumps. Nothing when no fly-in is under way, or it has been cut short already: a drag
+   * held tells it every frame, and an ease begun again each frame would never end.
+   */
+  cutShort(t: number) {
+    if (!this.flying(t) || this.cut) return;
+    this.cut = true;
+    const k = this.left(t);
+    for (let a = 0; a < 3; a++) this.behind[a] *= k;
+    this.easeTurn *= k;
+    this.easeTilt *= k;
+    this.glidFrom = t;
+    this.glideHold = 0;
+    this.glideTime = FLY_IN.cut;
+  }
+
+  /** Whether a fly-in is still under way at game time `t`. */
+  flying(t: number): boolean {
+    return this.flown && this.left(t) > 0;
+  }
+
+  /**
+   * How far the renderer's far plane must be at game time `t`: `farPlane`, and as far as the horizon while a fly-in is
+   * under way, since it is the view that sees the world past the hole.
+   */
+  farPlaneAt(t: number): number {
+    return this.flying(t) ? Math.max(this.farPlane, CLIP.horizon) : this.farPlane;
+  }
+
   /** How far it has still to glide to its place at game time `t`, in world units: nought when it is not gliding. */
   gliding(t: number): number {
     const k = this.left(t);
@@ -249,7 +321,7 @@ export class CameraRig {
 
   /** The share of a glide still to go at game time `t`, eased at both ends: one as it begins, nought from its end on. */
   private left(t: number): number {
-    const u = (t - this.glidFrom) / GLIDE;
+    const u = (t - this.glidFrom - this.glideHold) / this.glideTime;
     if (!(u < 1)) return 0;
     const v = Math.max(0, u);
     return 1 - v * v * (3 - 2 * v);
@@ -471,7 +543,9 @@ export class CameraRig {
    * switching on without ever having been fitted, or to a fit that is not a hole, does nothing. Whether it is on. Switched
    * off, the normal view is exactly as it was: it was never touched.
    */
-  setOverhead(on: boolean, fit?: OverheadFit): boolean {
+  setOverhead(on: boolean, fit?: OverheadFit, t?: number): boolean {
+    // a player who looks from overhead means to look: a fly-in under way is cut short
+    if (on && t !== undefined) this.cutShort(t);
     if (!on) {
       this.wanted = false;
       return false;

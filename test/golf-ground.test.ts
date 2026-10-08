@@ -31,13 +31,18 @@ const CUT_MAP = [
   '#########',
 ];
 
-/** How many tiles of each kind the map draws, by its letters, and how many of the two mown stripes each is on. */
+/**
+ * How many tiles of each kind the map draws, by its letters, and how many of each of the mown checker's two tones each is
+ * on: squares of four tiles a side on a golf hole, worked out here from the column and the row.
+ */
 function tilesOf(kinds: string) {
   const l = layoutOf(MAP);
   const out = [0, 0];
   MAP.forEach((row, r) => {
     const ty = l.rows - 1 - r;
-    for (const c of row) if (kinds.includes(c)) out[Math.floor(ty / 2) % 2]++;
+    [...row].forEach((c, tx) => {
+      if (kinds.includes(c)) out[(Math.floor(tx / 4) + Math.floor(ty / 4)) % 2]++;
+    });
   });
   return out;
 }

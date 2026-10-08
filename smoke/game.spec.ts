@@ -20,7 +20,7 @@ import { noiseGround } from '../src/noise';
 import { clearings } from '../src/scenery';
 import { BLADE_ROOM, GOLF_FAIRWAY_DENSITY, GOLF_ROUGH_DENSITY, cellFor } from '../src/turf';
 import { BUDGET } from './budget';
-import { drag, start, touches, watch } from './game';
+import { drag, intoThePond, start, touches, watch } from './game';
 import { holeOut, read, toCard } from './panels';
 
 /** How many frames the page draws in a second. */
@@ -333,8 +333,9 @@ test.describe('the water and the sand', () => {
       const g = window.game!;
       g.startHole(g.content().holes.findIndex((h) => h.name === 'Pond'));
       g.step(30);
-      g.shoot(Math.PI / 2 + 0.25, 0.45);
     });
+    // into the pond through a gap in the stones along its banks
+    await page.evaluate((angle) => window.game!.shoot(angle, 0.45), intoThePond());
     // the ring is read every frame from the stroke to a second and a half after the ball went in, and is never there
     const went = await page.evaluate(() => {
       const g = window.game!;
