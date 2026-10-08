@@ -336,7 +336,7 @@ test.describe('what it looks like', () => {
     return { x: x / n, y: y / n };
   };
 
-  test('the water, close to: sunk below the grass in its earth, foam and bands, veined, with its rings spreading and the sun on it', async ({
+  test('the water, close to: sunk below the grass in its earth, foam and bands, open water in its finer waves, the sky mirrored and the glitter on the crests, with no rings on it', async ({
     page,
   }) => {
     const problems = watch(page);
@@ -346,20 +346,16 @@ test.describe('what it looks like', () => {
       const g = window.game!;
       g.startHole(g.content().holes.findIndex((h) => h.name === 'Pond'));
       g.step(90);
-      // on to a moment the sun is on the water in two places at least, so the picture has its sparkles in it
-      for (let f = 0; f < 240 && g.motions().sparkles < 2; f++) g.step(1);
       g.look(c.x, c.y - 6, 22);
       g.step(1);
     }, at);
-    expect((await page.evaluate(() => window.game!.motions())).sparkles, 'the sun on the water').toBeGreaterThanOrEqual(
-      2,
-    );
+    expect((await page.evaluate(() => window.game!.motions())).sparkles, 'no sparkle over the waves').toBe(0);
     await hideStats(page);
     await expect(page.locator('#view')).toHaveScreenshot('water.png', TOLERANCE);
     expect(problems).toEqual([]);
   });
 
-  test('a ball splashing into the pond, a third of a second after: the ring spreading from where it went in', async ({
+  test('a ball splashing into the pond, a third of a second after: the water thrown up, and no ring on the waves', async ({
     page,
   }) => {
     const problems = watch(page);
@@ -375,7 +371,7 @@ test.describe('what it looks like', () => {
       g.look(c.x, c.y - 4, 24);
       g.step(1);
     }, at);
-    expect((await page.evaluate(() => window.game!.motions())).splash, 'a ring').toBeGreaterThan(0.3);
+    expect((await page.evaluate(() => window.game!.motions())).splash, 'no ring on open water').toBe(0);
     await hideStats(page);
     await expect(page.locator('#view')).toHaveScreenshot('splash.png', TOLERANCE);
     expect(problems).toEqual([]);
@@ -1504,7 +1500,7 @@ test.describe('the flag button', () => {
 });
 
 test.describe('a stream', () => {
-  test('running water in a channel, close to: foam at its edges, ripples on it, level with the grass', async ({
+  test('running water in a channel, close to: foam at its edges, open water in it with no streaks, level with the grass', async ({
     page,
   }) => {
     const problems = watch(page);

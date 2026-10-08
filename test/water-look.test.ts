@@ -1,14 +1,25 @@
 /**
- * What is drawn on a hole's ponds: the rings that spread and fade over each, the sparkles that twinkle on them, and
- * the ring where a ball went in. Where each is, and how it is coloured, from the game's time alone, headless.
+ * What is drawn on a hole's ponds in the rippling look: the rings that spread and fade over each, the sparkles that
+ * twinkle on them, and the ring where a ball went in. Where each is, and how it is coloured, from the game's time alone,
+ * headless. No hole wears the rippling look now, since every hole's water is open water, but it is kept behind
+ * `OCEAN_ON` so a kind of hole can be given it back by that figure; so it is held here with minigolf's switch turned off,
+ * and put back after, and `test/water-ocean.test.ts` holds open water.
  */
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Wind } from 'artshape-render/game/grass';
 import { TILE, WATER_LEVEL, layoutOf } from '../src/arena';
 import { SPARKLE } from '../src/glints';
+import { OCEAN_ON } from '../src/models';
 import { PALETTE as MODELS } from '../src/models/palette';
 import { Scene } from '../src/scene';
 import { SPLASH_RING } from '../src/sway';
+
+beforeAll(() => {
+  OCEAN_ON.minigolf = false;
+});
+afterAll(() => {
+  OCEAN_ON.minigolf = true;
+});
 
 const WIND: Wind = { direction: [1, 0], strength: 0.5, gustSize: 8, gustSpeed: 5 };
 /** Two ponds, a wide one and a small one, and the rest grass. */

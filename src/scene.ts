@@ -63,6 +63,7 @@ import {
   stream,
   streamBed,
   oceanFor,
+  oceanScaleFor,
   windmill,
   type Model,
   STREAM,
@@ -567,7 +568,10 @@ export class Scene {
     if (!cells.length) return [];
     const at = new Float32Array(16);
     place(at, 0, layout.originX, layout.originY, 0);
-    return groups(waterBed(cells, TILE, { seed: first + 1, look: lookOf(layout) }), at);
+    return groups(
+      waterBed(cells, TILE, { seed: first + 1, look: lookOf(layout), scale: oceanScaleFor(layout.golf) }),
+      at,
+    );
   }
 
   /**
@@ -581,7 +585,14 @@ export class Scene {
       .map((t): [number, number] => [t % layout.cols, Math.floor(t / layout.cols)]);
     const at = new Float32Array(16);
     place(at, 0, layout.originX, layout.originY, 0);
-    return groups(streamBed(cells, TILE, { seed: cells[0][0] * 7 + cells[0][1] + 1, look: lookOf(layout) }), at);
+    return groups(
+      streamBed(cells, TILE, {
+        seed: cells[0][0] * 7 + cells[0][1] + 1,
+        look: lookOf(layout),
+        scale: oceanScaleFor(layout.golf),
+      }),
+      at,
+    );
   }
 
   /** The sand on a hole, as one bed over all its tiles, with the lip only where it meets the grass. */

@@ -336,35 +336,42 @@ export const RIPPLE = { scale: 0.5, speed: 1.5 } as const;
  * term, so the sun glints on the crests and the glitter follows the camera as it moves. `scale` is how many of the biggest
  * wave's cells fit a world unit (a yard on golf), `speed` how fast the waves go, `tilt` how steeply they turn the normal,
  * `body` the deep colour seen through the surface (a brighter, bluer one than three.js's green-black, so a pond reads as
- * water from the tee), and `tint` the sky the waves mirror.
+ * water from the tee), and `tint` the sky the waves mirror. `minigolfScale` is the finer waves of a minigolf hole, whose
+ * ponds are a few tiles across and seen from twenty or thirty units back: at golf's size a pond there showed about a wave
+ * and read as flat, with hardly a glint (the sheet of 8 October 2026).
  */
 export const OCEAN = {
   scale: 0.3,
+  minigolfScale: 0.6,
   speed: 0.55,
   tilt: 0.8,
   body: shown(0.05, 0.4, 0.9),
   tint: shown(0.7, 0.9, 1),
 } as const;
 
-/** The open water's pattern, one for every bed that wears it: the waves, and the sky they mirror. */
-const OCEAN_PATTERN: Part['pattern'] = {
+/** The open water's pattern, for every bed that wears it: the waves at `scale`, and the sky they mirror. */
+const oceanPattern = (scale: number): Part['pattern'] => ({
   kind: PATTERN.ocean,
-  scale: OCEAN.scale,
+  scale,
   seed: 0,
   speed: OCEAN.speed,
   glow: OCEAN.tilt,
   second: OCEAN.tint,
-};
+});
 
 /**
- * Where the open-water look is switched on: golf only, since minigolf's rippling ponds and streaks are held as they
- * were. Both beds are built for either look, so turning minigolf on, its streams too, is this one figure; it is
- * written to by a test and put back, and by nothing else.
+ * Where the open-water look is switched on: every hole, golf and minigolf, ponds and streams, chosen by the user on
+ * 8 October 2026 over the rippling ponds and the marbled, streaked streams. Both beds are still built for either look, so
+ * a kind of hole is given the ripples back by this one figure; it is written to by a test and put back, and by nothing
+ * else.
  */
-export const OCEAN_ON: { golf: boolean; minigolf: boolean } = { golf: true, minigolf: false };
+export const OCEAN_ON: { golf: boolean; minigolf: boolean } = { golf: true, minigolf: true };
 
 /** Whether a hole of this kind draws its water as open water, with no rings, no splash ring and no streaks over it. */
 export const oceanFor = (golf: boolean): boolean => (golf ? OCEAN_ON.golf : OCEAN_ON.minigolf);
+
+/** How big the open water's waves are on a hole of this kind: golf's, or minigolf's finer ones. */
+export const oceanScaleFor = (golf: boolean): number => (golf ? OCEAN.scale : OCEAN.minigolfScale);
 
 /** A pond: a model, with the room on its water a ripple or a sparkle has, and how wide a ring may spread. */
 export interface Pond extends Model {
@@ -478,13 +485,13 @@ function bed(
  * A bed of water over the tiles `cells`, each `tile` across: the pond's bands, the foam, the shallows and the mid water,
  * only along the sides where a tile meets what is not water, and the deep veined water filling everything inside them,
  * so a channel between two ponds is one water and a pond of any shape has one edge. The surface lies at the game's
- * `WATER_LEVEL`, as a pond's does, and ripples (`RIPPLE`) or, as `look` says, is open water (`OCEAN`) and a deeper, brighter
- * body. The seed is still taken, since the scene hands one, but neither has a seed to shift, as the marbling had.
+ * `WATER_LEVEL`, as a pond's does, and ripples (`RIPPLE`) or, as `look` says, is open water (`OCEAN`, in waves of
+ * `scale`) and a deeper, brighter body. The seed is still taken, since the scene hands one, but neither has a seed to shift, as the marbling had.
  */
 export function waterBed(
   cells: readonly (readonly [number, number])[],
   tile: number,
-  { look = 'ripple' }: { seed?: number; look?: 'ripple' | 'ocean' } = {},
+  { look = 'ripple', scale = OCEAN.scale }: { seed?: number; look?: 'ripple' | 'ocean'; scale?: number } = {},
 ): Model {
   const { foam } = WATER;
   const band = Math.min(WATER.band, (tile - 2 * foam) / 8);
@@ -503,7 +510,7 @@ export function waterBed(
         ? {
             name: 'water bed',
             material: water(OCEAN.body),
-            pattern: OCEAN_PATTERN,
+            pattern: oceanPattern(scale),
           }
         : {
             name: 'water bed',
@@ -524,12 +531,12 @@ export function waterBed(
  * A bed of running water over the tiles `cells` of every belt drawn as water, each `tile` across: the stream's bank,
  * foam and shallows only along the sides where a tile meets what is not a stream, so belts that touch are one channel
  * and not a channel each with a gap of bank between. A hair above the grass, as a stream lies. Its surface is marbled
- * and streaked, or, as `look` says, open water (`OCEAN`).
+ * and streaked, or, as `look` says, open water (`OCEAN`, in waves of `scale`).
  */
 export function streamBed(
   cells: readonly (readonly [number, number])[],
   tile: number,
-  { seed = 1, look = 'ripple' }: { seed?: number; look?: 'ripple' | 'ocean' } = {},
+  { seed = 1, look = 'ripple', scale = OCEAN.scale }: { seed?: number; look?: 'ripple' | 'ocean'; scale?: number } = {},
 ): Model {
   const bank = Math.min(STREAM.bank, tile / 12);
   const foam = Math.min(STREAM.foam, tile / 10);
@@ -549,7 +556,7 @@ export function streamBed(
       ...(look === 'ocean'
         ? {
             material: water(OCEAN.body),
-            pattern: OCEAN_PATTERN,
+            pattern: oceanPattern(scale),
           }
         : {
             material: water(PALETTE.water),

@@ -503,8 +503,8 @@ angle, roll)` is how far the putter's hardest putt rolls along an angle before t
   ball at rest toward flat, as a coin, so its turn is no good for this),
   and the ball wears a band so the roll shows; `src/sway.ts` flies the flag
   down the hole's wind and leans the trees with it, in the renderer's own
-  gusts, and the ripples that spread over a pond (`ripples`, `ringPlace`)
-  and the ring where a ball went in (`splashRing`); `src/bursts.ts` is the
+  gusts, and, for rippling water, which no hole wears now (see `OCEAN_ON`), the ripples that spread over a pond
+  (`ripples`, `ringPlace`) and the ring where a ball went in (`splashRing`); `src/bursts.ts` is the
   particles for a stroke (grass, or sand from a bunker), the cup and water. The particles move only as a
   frame is drawn, so a test that pictures them steps a frame at a time, and
   their gravity is set on the renderer in world units (30, as Miner has).
@@ -515,8 +515,8 @@ angle, roll)` is how far the putter's hardest putt rolls along an angle before t
   and `src/squash.ts` flattens the drawn ball against what it met and
   springs it round again within a tenth of a second; `waggle` in `sway.ts`
   swings the flag as a ball drops and `flash` in `glints.ts` lights the gold,
-  and `sparkle` there twinkles the sun on the water (at most six on a hole,
-  in the effects the gold leaves free);
+  and `sparkle` there twinkles the sun on rippling water (at most six on a hole,
+  in the effects the gold leaves free; none on open water, so none on any hole now);
   `src/pulse.ts` swells the aim's dots while a drag is held; and the
   camera's `glide` eases it to each new tee.
 - `src/models.ts` and `src/models/` are the models: the cup with its
@@ -527,28 +527,27 @@ angle, roll)` is how far the putter's hardest putt rolls along an angle before t
   (bumper, kicker, barrier, windmill with its turning blades, flipper, water, bunker,
   conveyor, stream). Water lies `WATER_LEVEL` (0.3) below the grass, in the
   earth `ground.ts` brings down to it from every edge of grass or sand that
-  meets it, in a rim of foam, two bands of shallows and deep water that
-  ripples, filling its tiles exactly. The deep water's surface is the renderer's
-  ripple kind (`PATTERN.ripple`, 5, drawn through the flowing build): the pattern
-  travels east along the mesh's own +x by the game's clock (`renderer.time`, which
-  `main.ts` already sets from game time, so a paused game is still and a picture is
-  the same every run) at `RIPPLE.speed` 1.5 units a second, in cells of `RIPPLE.scale`
-  0.5 a unit (two tiles across a cell), the crests in `PALETTE.waterVein`, the normal
-  turned by the slope so the sun glints on it; it costs a frame 0.4 to 0.6 ms on The Rapids and under 0.3 on The Meadow's Pond. **A golf hole's water is open water instead**: `PATTERN.ocean` (8, held equal to the renderer's
-  `FLOW_WATER` by `test/water-ocean.test.ts`), waves that turn the normal in the world and mirror the sky, so the sun
-  glints on the crests and the glitter moves with the camera, in `OCEAN`'s figures (`scale` 0.3, `speed` 0.55, `tilt` 0.8, a
-  `body` brighter and bluer than three.js's and a `tint` of sky). There are no circles on it: no idle rings, no splash ring
-  (`splashedAt` keeps none, so `motions().splash` reads 0 on golf) and no stream streaks, and no sparkles (a pond is still in `ponds`, with a share of
-  none, since the waves' own glints are the twinkle). `OCEAN_ON` (`{ golf: true, minigolf: false }`, read through `oceanFor`) is the one switch: `waterBed` and
-  `streamBed` are built for either `look`, so giving minigolf the new look, its streams too, is that one figure, and a
-  minigolf hole as it stands is held to a hash of its beds and by the rings tests. The cost of a golf pond in open water
-  is not yet measured: the figures here are the ripple's. A stream's surface keeps its
-  marbling, since a pattern runs east and a stream may run any way, and its streaks
-  already move along it. A part's pattern with a flow kind has a `speed` where the old
+  meets it, in a rim of foam, two bands of shallows and deep water, filling its tiles exactly. **Every hole's water is
+  open water**, golf and minigolf, ponds and streams, chosen by the user on 8 October 2026 from a sheet of the choices
+  (the ripple, open water for the ponds alone, and open water with and without the streams' streaks): `PATTERN.ocean`
+  (8, held equal to the renderer's `FLOW_WATER` by `test/water-ocean.test.ts`), waves that turn the normal in the world
+  and mirror the sky, so the sun glints on the crests and the glitter moves with the camera, in `OCEAN`'s figures
+  (`scale` 0.3 on golf and `minigolfScale` 0.6 on minigolf, read through `oceanScaleFor`, since a minigolf pond is a few
+  tiles across and seen from close and at golf's size read as flat; `speed` 0.55, `tilt` 0.8, a `body` brighter and bluer
+  than three.js's and a `tint` of sky), moving by the game's clock (`renderer.time`, which `main.ts` sets from game time,
+  so a paused game is still and a picture is the same every run). There are no circles on it: no idle rings, no splash
+  ring (`splashedAt` keeps none, so `motions().splash` reads 0) and no stream streaks, and no sparkles (a pond is still in
+  `ponds`, with a share of none, since the waves' own glints are the twinkle). So a stream shows no way it runs: the
+  user chose it so over streaks on the waves, and its tiles are painted as water on the map. `OCEAN_ON` (`{ golf: true,
+minigolf: true }`, read through `oceanFor`) is the one switch: `waterBed` and `streamBed` are built for either `look`,
+  and the rippling look is kept behind it, bit for bit (a hash of its beds, and a test that turning the switch off gives
+  minigolf its ripples, rings, splash ring and streaks again): the deep water in the renderer's ripple kind
+  (`PATTERN.ripple`, 5), travelling east at `RIPPLE.speed` 1.5 in cells of `RIPPLE.scale` 0.5, the crests in
+  `PALETTE.waterVein`, three idle rings a pond, and a stream marbled with streaks along it. The ripple cost a frame 0.4 to
+  0.6 ms on The Rapids and under 0.3 on The Meadow's Pond. Open water costs The Rapids from its tee about 0.2 ms a frame more than the ripple did (2.91 and 3.02 against 2.63 and 2.88), the whole of it 0.07 more, and the Pond nothing (3.18 to 3.20 both ways), timed in turn with the parent commit on 8 October 2026. A part's pattern with a flow kind has a `speed` where the old
   kinds have a seed (`group` writes it with the renderer's `packFlow`); `look.ts`
   hands the renderer a group with no placements and a flow kind at boot, so the
-  flowing build is compiled before the first hole is drawn. The three idle rings are
-  kept over the ripple. The scene draws a hole's
+  flowing build is compiled before the first hole is drawn. The scene draws a hole's
   water as one bed over all its tiles (`waterBed`, built as `sandBed` is:
   the bands only along sides that meet what is not water, mitred at the
   corners), so a pond of any shape has one edge and a channel between
@@ -592,8 +591,8 @@ angle, roll)` is how far the putter's hardest putt rolls along an angle before t
   never lost on or splashed; water only to the eye and the map. It is drawn level with the grass, every stream of a hole as one bed over
   the tiles of its belts (`models/obstacles.ts` `streamBed`, built as `waterBed` and `sandBed` are: a thin earth edge, foam
   and shallows only along the sides that meet what is not a stream, so belts that touch are one channel; `stream` is the
-  one-belt model, which the ripples' streak is taken from), its ripples carried along it at the belt's
-  speed from game time (`streamRipples` in `sway.ts`, a pool sized once), and its tiles painted as water on the hole map
+  one-belt model, which the rippling look's streak is taken from), in open water as every hole's water is (the rippling
+  look's streaks, carried along it at the belt's speed, `streamRipples` in `sway.ts`, are not drawn), and its tiles painted as water on the hole map
   (`Obstacles.streamed`, read by `holemap.ts`). **No stream can be crossed**: a belt pulls a ball's velocity toward its own by
   an eighth a step whatever its speed, and a belt is a tile deep, so a full-power shot across one dies 2.3 units in and is
   carried off, and a ball carried at 6 units a second is counted at rest while it rides, so a hole's streams run beside the

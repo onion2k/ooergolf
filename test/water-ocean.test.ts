@@ -1,15 +1,16 @@
 /**
- * Open water, which a golf hole's ponds are drawn in: the renderer's `FLOW_WATER` on the pond's bed, and none of the
- * rings, the splash ring or the streaks that the rippling water of minigolf wears, since the waves are the whole of it.
- * Minigolf's water is held to what it was, bit for bit, and the one switch (`OCEAN_ON`) that would give it the new look
- * is held to change both beds and everything drawn over them together.
+ * Open water, which every hole's ponds and streams are drawn in: the renderer's `FLOW_WATER` on the water's bed, and none
+ * of the rings, the splash ring or the streaks that the rippling water wore, since the waves are the whole of it. A
+ * minigolf hole's waves are finer than a golf hole's (`OCEAN.minigolfScale`), since its ponds are a few tiles across and
+ * seen from close. The rippling water is kept, bit for bit, behind the one switch (`OCEAN_ON`), which is held to change
+ * both beds and everything drawn over them together, so a hole can be given it back by that figure alone.
  */
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { FLOW_WATER } from 'artshape-render/game/flow';
 import { layoutOf } from '../src/arena';
 import { Obstacles } from '../src/obstacles';
-import { OCEAN, OCEAN_ON, oceanFor, streamBed, waterBed } from '../src/models';
+import { OCEAN, OCEAN_ON, oceanFor, oceanScaleFor, streamBed, waterBed } from '../src/models';
 import { PALETTE } from '../src/models/palette';
 import { PATTERN } from '../src/models/part';
 import type { Model } from '../src/models/part';
@@ -74,10 +75,22 @@ describe('open water', () => {
     expect(PATTERN.ocean).toBe(FLOW_WATER);
   });
 
-  it('is on for golf and off for minigolf, by one switch', () => {
+  it('is on for golf and for minigolf, by one switch', () => {
     expect(oceanFor(true)).toBe(true);
-    expect(oceanFor(false)).toBe(false);
-    expect(OCEAN_ON).toEqual({ golf: true, minigolf: false });
+    expect(oceanFor(false)).toBe(true);
+    expect(OCEAN_ON).toEqual({ golf: true, minigolf: true });
+  });
+
+  it('has waves of golf’s size on golf, and finer ones on minigolf, whose ponds are small and seen from close', () => {
+    expect(oceanScaleFor(true)).toBe(OCEAN.scale);
+    expect(OCEAN.scale).toBe(0.3);
+    expect(oceanScaleFor(false)).toBe(OCEAN.minigolfScale);
+    expect(OCEAN.minigolfScale).toBe(0.6);
+    expect(surfaceOf(waterBed(CELLS, 3, { look: 'ocean' })).pattern?.scale, 'a bed told nothing is golf’s').toBe(
+      OCEAN.scale,
+    );
+    expect(surfaceOf(waterBed(CELLS, 3, { look: 'ocean', scale: 0.6 })).pattern?.scale).toBe(0.6);
+    expect(surfaceOf(streamBed(CELLS, 3, { look: 'ocean', scale: 0.6 })).pattern?.scale).toBe(0.6);
   });
 
   it('draws a pond’s deep water in its waves and body, and leaves the foam and the shallows as they are', () => {
@@ -142,16 +155,25 @@ describe('a hole’s water, in the scene', () => {
     for (let t = 0; t < 30; t += 0.1) expect(scene.sparkles(t)).toEqual([]);
   });
 
-  it('is rippling on a minigolf hole, with its rings, its splash ring and its streaks all as they were', () => {
+  it('is open water on a minigolf hole too, in finer waves, with no rings, splash ring, sparkles or streaks', () => {
     const base = sceneOf(MINI_POND);
-    expect(open(base.fixed)).toEqual([]);
-    expect(base.scene.writeMoving(3).filter((m) => m.looks && m.matrices.length > 16).length, 'a pool a pond').toBe(1);
+    expect(open(base.fixed).length, 'a bed of waves').toBe(1);
+    expect(open(base.fixed)[0].patterns?.[1], 'in minigolf’s waves').toBeCloseTo(OCEAN.minigolfScale, 6);
+    expect(
+      base.scene.writeMoving(3).filter((m) => m.looks && m.matrices.length > 16),
+      'no pool of rings',
+    ).toEqual([]);
     base.scene.splashedAt(10, 10, 2);
-    expect(base.scene.splashReach(2.3)).toBeGreaterThan(0);
+    expect(base.scene.splashReach(2.3), 'no splash ring').toBe(0);
+    for (let t = 0; t < 30; t += 0.1) expect(base.scene.sparkles(t)).toEqual([]);
     const l = layoutOf(STREAM_HOLE.map);
     const stream = sceneOf(STREAM_HOLE.map, new Obstacles(STREAM_HOLE.obstacles!, l));
-    expect(open(stream.fixed)).toEqual([]);
-    expect(stream.scene.writeMoving(3).length, 'the streaks are there').toBeGreaterThan(0);
+    expect(open(stream.fixed).length, 'the streams in waves').toBeGreaterThan(0);
+    // a streak is coloured by its fade, so whatever else moves on the hole, nothing tinted is a streak
+    expect(
+      stream.scene.writeMoving(3).filter((m) => m.looks),
+      'and no streaks over them',
+    ).toEqual([]);
   });
 
   it('changes everywhere together when the switch is turned: beds, rings, splash ring and streaks', () => {
@@ -161,16 +183,18 @@ describe('a hole’s water, in the scene', () => {
       pond: sceneOf(MINI_POND).scene.writeMoving(3).length,
       stream: sceneOf(STREAM_HOLE.map, mk()).scene.writeMoving(3).length,
     };
-    OCEAN_ON.minigolf = true;
+    OCEAN_ON.minigolf = false;
     try {
       const pond = sceneOf(MINI_POND);
-      expect(open(pond.fixed).length, 'the pond is open water').toBe(1);
-      expect(pond.scene.writeMoving(3).length, 'and its rings are gone').toBeLessThan(asWas.pond);
+      expect(open(pond.fixed), 'the pond is rippling again').toEqual([]);
+      expect(pond.scene.writeMoving(3).length, 'with its rings').toBeGreaterThan(asWas.pond);
+      pond.scene.splashedAt(10, 10, 2);
+      expect(pond.scene.splashReach(2.3), 'and its splash ring').toBeGreaterThan(0);
       const stream = sceneOf(STREAM_HOLE.map, mk());
-      expect(open(stream.fixed).length, 'the stream is').toBe(1);
-      expect(stream.scene.writeMoving(3).length, 'and its streaks').toBeLessThan(asWas.stream);
+      expect(open(stream.fixed), 'the stream is marbled').toEqual([]);
+      expect(stream.scene.writeMoving(3).length, 'with its streaks').toBeGreaterThan(asWas.stream);
     } finally {
-      OCEAN_ON.minigolf = false;
+      OCEAN_ON.minigolf = true;
     }
     OCEAN_ON.golf = false;
     try {
