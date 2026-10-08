@@ -26,6 +26,7 @@ import { laneOf } from '../src/golf';
 import { holdsBall } from '../src/slopes';
 import { breakOf } from '../src/green';
 
+import { AIM_DEAD } from '../src/director';
 import { glint } from '../src/glints';
 import { LIE } from '../src/surfaces';
 import { BOWL, SIDE_HILL } from '../test/hills';
@@ -672,7 +673,7 @@ test.describe('what it looks like', () => {
       expect(problems).toEqual([]);
     });
 
-    test('a drive aimed thirty degrees off the hole with the drag held: the camera has turned to look the way it goes, the arc and the ring ahead of it', async ({
+    test('a drive aimed thirty degrees off the hole with the drag held: the camera has turned toward the way it goes, keeping the aim on the edge of its dead zone, the arc and the ring ahead of it', async ({
       page,
     }) => {
       const problems = watch(page);
@@ -682,8 +683,11 @@ test.describe('what it looks like', () => {
       await pullDown(page, 0.8, 395);
       await page.evaluate(() => window.game!.step(180));
       const turned = await page.evaluate(() => window.game!.view());
-      expect(Math.abs(turned.azimuth), 'turned by about thirty degrees').toBeGreaterThan(0.47);
-      expect(Math.abs(turned.azimuth)).toBeLessThan(0.57);
+      // the camera turns only as far as keeps the aim on the dead zone's edge, so the shot is seen from nearly behind
+      expect(Math.abs(turned.azimuth), 'turned by about thirty degrees less the dead zone').toBeGreaterThan(
+        0.47 - AIM_DEAD.half,
+      );
+      expect(Math.abs(turned.azimuth)).toBeLessThan(0.57 - AIM_DEAD.half);
       expect(turned.azimuth).toBeCloseTo(turned.heading, 6);
       await hideStats(page);
       await expect(page).toHaveScreenshot('aim-turned.png', TOLERANCE);
@@ -699,7 +703,9 @@ test.describe('what it looks like', () => {
         const g = window.game!;
         g.followShots('never');
         g.shoot(Math.PI / 2, 1, 'driver');
-        g.step(50);
+        // half a second in, the ball high and on its way and still in the inner part of the safe box, where a held camera
+        // has not moved at all; from frame 32 it is past `HAND_OVER.from` and the camera begins to be taken up
+        g.step(30);
       });
       expect((await page.evaluate(() => window.game!.view())).following, 'held, not following').toBe(false);
       await hideStats(page);
