@@ -11,14 +11,17 @@ made. The house
 rules in `~/.claude/CLAUDE.md` apply too. What is in `src/` is a round of
 a course, chosen on a start screen: holes drawn as maps, each played from
 its tee to its cup with a drag pulled back and let go, scored against par,
-and the card at the end. Seven courses are here, on artshape-physics v0.8.0, four of minigolf and three of golf.
+and the card at the end. Six courses are here, on artshape-physics v0.8.0, three of minigolf and three of golf.
 The Meadow is nine holes of grass, rail, sand, water, raised grass, posts,
 sliding barriers, a windmill and a conveyor, with a green that lets a putt
 die, a rail and obstacles that bounce, posts that throw a ball back faster
 than it came, and a cup with a rim. The Pinball Shed is nine holes of banks and bounces, where the rail is a
-cushion and kickers throw and a flipper is to be timed. The Fair is nine holes with something that moves on each,
-windmills, barriers, moving bumpers and belts. The Waterworks is nine holes of water, and of streams that carry a ball
-and never sink it. All three are drawn by hand. (The Hills, The Downs and The Moors, courses of sloping ground with little
+cushion, kickers throw, bumpers slide and a flipper is to be timed. The Waterworks is nine holes of water and timing,
+streams that carry a ball and never sink it, and barriers, a windmill and a bumper to time. All three are drawn by hand.
+(The Fair, a third course of nine holes with something that moves on each, went on 8 October 2026 as one course too
+many: its best five, Dodgems and Shooting Gallery to the Shed and Traffic, Ferris and The Big Wheel to the Waterworks,
+were shared between the other two, and nine holes went, Plinko and The Funnel, Turnstile, Whack-a-mole, Carousel and The
+Lift, Mill Pond, The Island Green and The Lock, each a repeat of another hole or a compromise. The Hills, The Downs and The Moors, courses of sloping ground with little
 or nothing on it, were scrapped on 3 October 2026 as dull and these three replaced them; four of The Hills stay as test
 holes in `test/hills.ts`, and the generator that made The Moors, `src/open.ts`, stays for the two test holes
 `smoke/bighole.ts` makes with it.)
@@ -209,9 +212,9 @@ today, and what the next features must hand it:
   `npm run fuzz` plays every seed eight times, as a player who
   chooses among the courses, on The Links alone (whose nine holes have winds of 4 to 12 miles an hour, which is the wind the
   runs cover; a gale of 12, 18 and 6 in turn on level holes is played in `test/fuzz.test.ts` and not in the queue), on the contoured Links (`--on contoured`: its nine holes at contour 1 with greens at
-  12, 22, 12.96 and 14.4 by hole), and on each of The Fells, The Isles, The Pinball Shed, The Fair and The Waterworks alone
-  (`--on fells`, `isles`, `shed`, `fair`, `waterworks`), since a monkey
-  choosing among seven is on golf too seldom to hold it to anything and on a minigolf course's own kind not much oftener; each landing
+  12, 22, 12.96 and 14.4 by hole), and on each of The Fells, The Isles, The Pinball Shed and The Waterworks alone
+  (`--on fells`, `isles`, `shed`, `waterworks`), since a monkey
+  choosing among six is on golf too seldom to hold it to anything and on a minigolf course's own kind not much oftener; each landing
   the game tells of is checked as it is told (`landingProblems`). Two runs are for replays and are not in the queue:
   `--on kickers`, `KICKER_HOLES` in `scripts/fuzzer.ts` (a kicker in the way of the cup, a pair facing each other, which
   is the ceiling's hardest case, and a ring of four), and `--on stream`, `STREAM_HOLE` in `test/stream-hole.ts`.
@@ -258,7 +261,8 @@ today, and what the next features must hand it:
 - **Determinism:** the autopilot plays, with a player's slips from its own
   chance, round after round, and the hash takes in the hole and the card.
 - **Pace:** the strokes a round of each course takes; see above (the minigolf courses: The Meadow 16.63 for par 26, The
-  Pinball Shed 20.94 for 25, The Fair 19.38 for 28 and The Waterworks 18.94 for 28, which is what `scripts/pace-baseline.json`
+  Pinball Shed 22.06 for 27 and The Waterworks 20.75 for 28, written again on 8 October 2026 when The Fair went and its best
+  holes joined them (they were 20.94 for 25 and 18.94 for 28), which is what `scripts/pace-baseline.json`
   holds, as it does for the golf courses below). The pace player never banks and fires
   blind after ten seconds without a timing window, so a bank hole's par is the human's intent, and a timed hole
   needs a window at the autopilot's margin, the ball's radius and 0.6. The
@@ -568,7 +572,7 @@ minigolf: true }`, read through `oceanFor`) is the one switch: `waterBed` and `s
   material each, for `group` to turn into a renderer group; each has a
   triangle budget in `BUDGET`. `showcase.html` draws every one
   (`/showcase.html`, with `?model=name`), for building and looking at them.
-- **The kinds that throw or move** (the Pinball Shed's, the Fair's and the Waterworks'; each is held by an invariant and a
+- **The kinds that throw or move** (the Pinball Shed's and the Waterworks'; each is held by an invariant and a
   fuzzer action, above). A **kicker** is `KICKER` in `arena.ts` (`k` on a map, radius 1 and height 1.6 as a post's,
   restitution 1.8 against a post's 1.2), handed to the physics as a bumper of its own. It throws about 1.75 times as fast
   at the soft and middling shots (1.72 to 1.78 for arrivals of 8 to 35 units a second) and the course's ceiling still
@@ -857,8 +861,8 @@ minigolf: true }`, read through `oceanFor`) is the one switch: `waterBed` and `s
   score's name when a hole is done, the card, the coins and gems, the
   shop, and the start screen, a card for each course with its holes and
   par, shown at boot and from the card's Courses button. The page plays no
-  shot while it is up; seven cards would not fit, so the panel is 820 wide and three cards across on a desk, and the cards'
-  colours cycle through six (`#courses .course:nth-of-type(6n + k)` in `index.html`, so the seventh wears the first's). `src/score.ts` names a score
+  shot while it is up; the panel is 820 wide and three cards across on a desk, two rows of three, and the cards' colours
+  cycle through six (`#courses .course:nth-of-type(6n + k)` in `index.html`), one each. `src/score.ts` names a score
   (four or more under par is a Condor!, a hole in one still first) and says what kind it
   is, which colours its callout. Both are given what to show and never read
   the game. How the words look and move is `index.html`'s stylesheet, in the
@@ -924,14 +928,14 @@ minigolf: true }`, read through `oceanFor`) is the one switch: `waterBed` and `s
   feel is in figures (relief, steepest slope, bumpiness, detail, and how much
   of the ground a ball rests on), which the tests hold each hole to.
 - The courses are content in `course.ts`, `COURSES`, each a name and its holes: The Meadow (`COURSE`), The Pinball Shed
-  (`SHED`, `src/shed.ts`), The Fair (`FAIR`, `src/fair.ts`), The Waterworks (`WATERWORKS`, `src/waterworks.ts`),
+  (`SHED`, `src/shed.ts`), The Waterworks (`WATERWORKS`, `src/waterworks.ts`),
   The Links, The Fells (`src/fells.ts`) and The Isles (`src/isles.ts`). The three minigolf courses are nine holes each, drawn by hand as The Meadow's are, with no generator, and
   made as the page loads. Each hole has a comment saying its idea and why it is drawn as it is, since what the
   autopilot would play decided the drawing: a ball's radius and three tenths of a unit clear of the water, a timing window at
-  the autopilot's margin, a cup on level grass with a tile of grass round it. The Pinball Shed (par 25) is banks and bounces:
-  the rail is a cushion, posts and kickers throw, and one hole has a flipper to time. The Fair (par 28) has something that
-  moves on every hole: windmills, barriers, moving bumpers and belts. The Waterworks (par 28) has water on every hole, and
-  on the last three a stream to ride. Each `Course` has a `summary` of its holes and par that the
+  the autopilot's margin, a cup on level grass with a tile of grass round it. The Pinball Shed (par 27) is banks and bounces:
+  the rail is a cushion, posts and kickers throw, Dodgems' bumpers slide and throw, and two holes have a flipper to time. The
+  Waterworks (par 28) has water on six holes, three of them with a stream to ride, and three timed holes, Traffic, Ferris and
+  The Big Wheel, from The Fair. The moved holes' own tests are in `test/timed-holes.test.ts`. Each `Course` has a `summary` of its holes and par that the
   start screen reads without making it, so a course made by a generator is made when first asked for and not as the
   page loads. `openHole` in `src/open.ts` makes a hole of open country from a spec (a shape, a feel, a steepness, a seed
   and a list of `Feature`s: ponds, bunkers and stands of posts) and never by hand; no course uses it now, and the two
@@ -1142,10 +1146,11 @@ each step, and a gate handed what it needs in the same change:
   is its intent. A barrier or a windmill on a slope is refused when a hole is
   built, as the physics' fuzzer found one carrying a ball round for good; a flipper is refused on a slope too.
 - Belts on a slope. The physics allows a conveyor on sloping ground and carries a ball up it, but the scene draws every
-  belt at ground level, so one on a slope is buried; The Lift is level with a step at its end, and The Flood's bowl of steps
-  stands on level ground. No belt may stand on a slope in a picture until the scene lifts them.
+  belt at ground level, so one on a slope is buried; The Flood's bowl of steps stands on level ground, and The Lift (cut on
+  8 October 2026) was level with a step at its end; `test/obstacles.test.ts` holds that the physics carries a ball up one. No belt may stand on a slope in a picture until the scene lifts them.
 - A stream that can be crossed, or a belt that lets a ball off it: see the kinds above. A ring of belts holds a ball for
-  good and a real turntable is a package change, so Carousel is a mound with belts round it, and the turntable was dropped.
+  good and a real turntable is a package change, so Carousel was a mound with belts round it (cut on 8 October 2026, since
+  whatever the power the ball ended in the same place), and the turntable was dropped.
 - A drag in a smoke test begun while the panels were still springing in. Found 8 October 2026: the phone drive's picture
   missed about one run in four on 3 October because the view switch's arrival swept within a pixel of where its drag began,
   and Chrome gives a touch that close to the button, so the browser took the drag and nothing was aimed. `drag` and
@@ -1172,7 +1177,7 @@ each step, and a gate handed what it needs in the same change:
   aim, desk and phone, is for the user to judge by playing. The overhead view draws no grass on most holes (it stands past the rings), and
   has no new rung on the ladder, since it costs a frame less than the standard view. The overhead view is fitted to the screen and not to what the panels leave of it: on a phone the far end of a long hole is under the chips and its tee under the bag, and on a desk the tee is under the bag; the pictures `overhead-links` and `phone-overhead-meadow` show it, and whether to fit it inside the safe area is for the user to say.
 - Slow roll does nothing on minigolf (its roll is a constant); the autopilot takes no item and never uses the mulligan.
-- The magnet's mouth is cut only in the level grass round the cup, so on Three Cushion and The Fair's Carousel, whose cups stand against
+- The magnet's mouth is cut only in the level grass round the cup, so on Three Cushion, whose cup stands against
   a wall 1.2 high, the hole runs into the wall's foot, where no ball can be; a bunker beside a cup would cover a part of it
   too, and no hole has one. No `look` picture holds the magnet's cup, since a picture is held to the GPU it was written on.
 

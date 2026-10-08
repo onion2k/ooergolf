@@ -1,8 +1,11 @@
 /**
- * The Waterworks: water on every hole, and the ball always one slip from it. A ball on water is lost, a stroke is
- * added and it is put back where it was struck from, so every hole here asks how hard and how straight of a player who
- * cannot afford to be wrong. Each hole has one idea and something on it to time, use or fear, as The Meadow's have.
- * Content, not code: see `course.ts` for how a map is drawn.
+ * The Waterworks: water and timing. On six holes the ball is always one slip from the water: a ball on water is lost, a
+ * stroke is added and it is put back where it was struck from, so they ask how hard and how straight of a player who
+ * cannot afford to be wrong. The other three, Traffic, Ferris and The Big Wheel, came from The Fair when it went on
+ * 8 October 2026, and ask when: barriers, a windmill's door and a bumper to time. The Lock, The Island Green and Mill Pond
+ * went then, a barrier as The Meadow's, an island green as The Flood's and a windmill over water as The Mill Race's. Each
+ * hole has one idea and something on it to time, use or fear, as The Meadow's have. Content, not code: see `course.ts`
+ * for how a map is drawn.
  *
  * What the autopilot will play decided the drawing, and the notes by each hole say where. It keeps a ball's width and
  * three tenths of a unit from the water either side of its line, so a strip a tile wide (three units) is one it will
@@ -12,6 +15,7 @@
  * shut. What moves stands on level ground, which the physics insists on, and a cup stands on level grass with a tile
  * of grass round it, so a ball can drop in from any side.
  */
+import { BUMPER } from './arena';
 import type { HoleDef } from './course';
 
 export const WATERWORKS: readonly HoleDef[] = [
@@ -65,68 +69,42 @@ export const WATERWORKS: readonly HoleDef[] = [
     ],
   },
   {
-    name: 'The Lock',
+    name: 'Traffic',
     par: 3,
-    // a channel a tile wide between two ponds, and a gate across it that slides into the grass either side and is open
-    // a little over half of every period: the cup is past it. The pockets either side of the gate are two tiles each,
-    // which is what leaves a ball room to pass at either end of its travel, as the course's test asks
+    // far enough that no one stroke reaches the cup, so the first is struck through both barriers and waits for the one moment they are both clear
     map: [
-      '#############',
-      '#~~~~...~~~~#',
-      '#~~~~.C.~~~~#',
-      '#~~~~...~~~~#',
-      '#~~~~~.~~~~~#',
-      '#~~~~~.~~~~~#',
-      '#~~~.....~~~#',
-      '#~~~~~.~~~~~#',
-      '#~~~~~.~~~~~#',
-      '#~~~~~.~~~~~#',
-      '#~~~.....~~~#',
-      '#~~~..T..~~~#',
-      '#############',
+      '###########',
+      '#.........#',
+      '#....C....#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#....T....#',
+      '#.........#',
+      '###########',
     ],
-    obstacles: [{ kind: 'barrier', at: [6, 6], length: 1, travel: 3.7, period: 4 }],
-  },
-  {
-    name: 'The Island Green',
-    par: 3,
-    // a green ringed with water, reached by a neck, in a bowl with the cup at the bottom of it: a ball that gets onto the
-    // grass rolls to the middle, one struck a little off the cup and too hard goes up the near side of the far rim,
-    // which is the island's edge, and out into the pond. The ground round the cup is one a ball rests on, and the bowl
-    // steepens beyond it
-    map: [
-      '#############',
-      '#~~~~~~~~~~~#',
-      '#~~.......~~#',
-      '#~~.......~~#',
-      '#~~...C...~~#',
-      '#~~.......~~#',
-      '#~~.......~~#',
-      '#~~.......~~#',
-      '#~~.......~~#',
-      '#~~~~~.~~~~~#',
-      '#~~~~~.~~~~~#',
-      '#...........#',
-      '#.....T.....#',
-      '#...........#',
-      '#############',
-    ],
-    terrain: [
-      '6666666666666',
-      '6666666666666',
-      '6666333336666',
-      '6666322236666',
-      '6666320236666',
-      '6666322236666',
-      '6666333336666',
-      '6666666666666',
-      '6666666666666',
-      '6666666666666',
-      '6666666666666',
-      '6666666666666',
-      '6666666666666',
-      '6666666666666',
-      '6666666666666',
+    obstacles: [
+      { kind: 'barrier', at: [4, 12], length: 1.5, travel: 4.5, period: 4.5 },
+      { kind: 'barrier', at: [5, 14], length: 1.5, travel: 4.5, period: 4.5, phase: 0.5 },
     ],
   },
   {
@@ -172,30 +150,28 @@ export const WATERWORKS: readonly HoleDef[] = [
     ],
   },
   {
-    name: 'Mill Pond',
-    par: 4,
-    // a windmill on a causeway over a pond: the causeway is a tile wide in front of the door, so a ball knocked from
-    // the blade, or the gap closing, is a ball off it
+    name: 'Ferris',
+    par: 3,
+    // the wall is raised grass, a wall to the ball, and the one door in it is the windmill's; the kicker stands square behind the door, far enough back that a soft ball dies short of it, so a ball struck hard straight through is thrown back into the blades, and the cup is tucked to one side where only a second stroke, across the room, reaches it
     map: [
-      '#########',
-      '#~~...~~#',
-      '#~~.C.~~#',
-      '#~~...~~#',
-      '#~~...~~#',
-      '####.####',
-      '#~~~.~~~#',
-      '#~~~.~~~#',
-      '#~~~.~~~#',
-      '#~~~.~~~#',
-      '#.......#',
-      '#.......#',
-      '#...T...#',
-      '#.......#',
-      '#########',
+      '###########',
+      '#.........#',
+      '#....k....#',
+      '#.........#',
+      '#.C.......#',
+      '#.........#',
+      '#.........#',
+      '#3333.3333#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#....T....#',
+      '#.........#',
+      '###########',
     ],
-    obstacles: [{ kind: 'windmill', at: [4, 5], period: 8 }],
+    obstacles: [{ kind: 'windmill', at: [5, 7], period: 6 }],
   },
-
   {
     name: 'The Weir',
     par: 3,
@@ -277,6 +253,64 @@ export const WATERWORKS: readonly HoleDef[] = [
       { kind: 'conveyor', from: [9, 9], to: [4, 9], speed: 9, look: 'water' },
       { kind: 'conveyor', from: [2, 9], to: [2, 4], speed: 9, look: 'water' },
       { kind: 'conveyor', from: [3, 9], to: [3, 4], speed: 9, look: 'water' },
+    ],
+  },
+  {
+    name: 'The Big Wheel',
+    par: 4,
+    // the finale, as The Mill Race has three things: two barriers crossing, a moving bumper, a windmill's door in a wall, and a belt that carries the ball to the cup
+    map: [
+      '###########',
+      '#.........#',
+      '#....C....#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#####.#####',
+      '#.........#',
+      '#.........#',
+      '#.........#',
+      '#....T....#',
+      '###########',
+    ],
+    obstacles: [
+      // the barriers are listed first, since a barrier's box is the pusher of its own number only while no windmill comes before it
+      { kind: 'barrier', at: [5, 26], length: 1.5, travel: 4.5, period: 4, phase: 0.25, bounce: BUMPER.restitution },
+      { kind: 'barrier', at: [5, 32], length: 1.5, travel: 4.5, period: 5 },
+      { kind: 'barrier', at: [5, 31], length: 1.5, travel: 4.5, period: 5, phase: 0.5 },
+      { kind: 'windmill', at: [5, 37], period: 8, phase: 0.125 },
+      { kind: 'conveyor', from: [5, 4], to: [5, 3], speed: 5 },
     ],
   },
   {

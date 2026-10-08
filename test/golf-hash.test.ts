@@ -22,31 +22,22 @@ const WAS: Record<string, number> = {
   'The Meadow/Windmill': 2176577670,
   'The Meadow/The Mill Race': 559976855,
   'The Pinball Shed/Corner Pocket': 3473042101,
-  'The Pinball Shed/The Funnel': 2705024979,
-  'The Pinball Shed/Plinko': 652522941,
   'The Pinball Shed/Half-pipe': 3241489972,
-  'The Pinball Shed/Three Cushion': 816518757,
   'The Pinball Shed/The Kicker': 4223459076,
+  'The Pinball Shed/Three Cushion': 816518757,
+  'The Pinball Shed/Dodgems': 2988316759,
   'The Pinball Shed/Flipper Alley': 2467036676,
   'The Pinball Shed/The Bowl Pit': 967955089,
+  'The Pinball Shed/Shooting Gallery': 3269190224,
   'The Pinball Shed/Multiball': 3179678959,
-  'The Fair/Turnstile': 761470657,
-  'The Fair/Traffic': 3338434700,
-  'The Fair/The Lift': 503578616,
-  'The Fair/Whack-a-mole': 620338661,
-  'The Fair/Dodgems': 2988316759,
-  'The Fair/Carousel': 4026004711,
-  'The Fair/Ferris': 140209976,
-  'The Fair/Shooting Gallery': 3269190224,
-  'The Fair/The Big Wheel': 1117635865,
   'The Waterworks/The Causeway': 1713942109,
   'The Waterworks/The Stepping Stones': 2328194496,
-  'The Waterworks/The Lock': 2528163538,
-  'The Waterworks/The Island Green': 1825248455,
+  'The Waterworks/Traffic': 3338434700,
   'The Waterworks/The Spillway': 2868306189,
-  'The Waterworks/Mill Pond': 1858412701,
+  'The Waterworks/Ferris': 140209976,
   'The Waterworks/The Weir': 2586536600,
   'The Waterworks/The Rapids': 2853659080,
+  'The Waterworks/The Big Wheel': 1117635865,
   'The Waterworks/The Flood': 1734075079,
   'The Links/The Opener': 1078683452,
   'The Links/Water Carry': 676883533,
@@ -91,7 +82,8 @@ describe('the holes as they were', () => {
   it('holds every hole of every course to its hash', () => {
     // each hole that was there, by name; a course added later is not held here, so adding one moves nothing above
     const got = Object.fromEntries(COURSES.flatMap((c) => c.holes.map((h) => [`${c.name}/${h.name}`, hashHole(h)])));
-    expect(Object.keys(WAS)).toHaveLength(45);
+    // 45 until The Fair went on 8 October 2026: nine holes cut, and the eighteen kept held to the very hashes they had
+    expect(Object.keys(WAS)).toHaveLength(36);
     for (const key of Object.keys(WAS)) expect(got[key], key).toBe(WAS[key]);
   });
 

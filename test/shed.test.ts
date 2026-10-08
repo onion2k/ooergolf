@@ -4,19 +4,7 @@
  * redrawn into a different, duller one and every general test would still pass.
  */
 import { describe, expect, it } from 'vitest';
-import {
-  BUMPER,
-  KIND_RADIUS,
-  BALL,
-  ROLL,
-  STEP,
-  TILE,
-  heightAt,
-  layoutOf,
-  onFloor,
-  slopeAt,
-  stepAt,
-} from '../src/arena';
+import { KIND_RADIUS, BALL, ROLL, STEP, TILE, heightAt, layoutOf, onFloor, slopeAt, stepAt } from '../src/arena';
 import { Autopilot } from '../src/autopilot';
 import { COURSES, type HoleDef } from '../src/course';
 import { checkInvariants } from '../src/invariants';
@@ -56,7 +44,7 @@ const tileOf = (h: HoleDef, letter: string): [number, number] => {
 };
 
 describe('the course', () => {
-  it('is registered after The Meadow, as minigolf, of at most nine holes whose pars add up to its summary', () => {
+  it('is registered after The Meadow, as minigolf, nine holes whose pars add up to its summary', () => {
     const at = COURSES.findIndex((c) => c.name === 'The Pinball Shed');
     expect(at).toBe(1);
     expect(COURSES[0].name).toBe('The Meadow');
@@ -65,28 +53,34 @@ describe('the course', () => {
     expect(course.holes).toBe(SHED);
     expect(SHED.length).toBe(9);
     expect(course.summary).toEqual({ holes: SHED.length, par: SHED.reduce((a, h) => a + h.par, 0) });
+    // the best of the first Shed, and Dodgems and Shooting Gallery from The Fair, whose bumpers and kickers are pinball's;
+    // The Funnel and Plinko went on 8 October 2026, posts as The Meadow's Bumpers has them, and Plinko's line luck
     expect(SHED.map((h) => h.name)).toEqual([
       'Corner Pocket',
-      'The Funnel',
-      'Plinko',
       'Half-pipe',
-      'Three Cushion',
       'The Kicker',
+      'Three Cushion',
+      'Dodgems',
       'Flipper Alley',
       'The Bowl Pit',
+      'Shooting Gallery',
       'Multiball',
     ]);
-    expect(SHED.map((h) => h.par)).toEqual([2, 2, 3, 3, 3, 2, 3, 3, 4]);
-    // the plan said par 27, but its own nine pars add up to 25: the holes' pars are what was drawn
-    expect(SHED.reduce((a, h) => a + h.par, 0)).toBe(25);
+    expect(SHED.map((h) => h.par)).toEqual([2, 3, 2, 3, 3, 3, 3, 4, 4]);
+    expect(SHED.reduce((a, h) => a + h.par, 0)).toBe(27);
   });
 
-  it('draws nothing that moves but the flipper, which only Flipper Alley and Multiball have: the rest is skill, not timing', () => {
-    for (const h of SHED)
-      for (const o of h.obstacles ?? []) {
-        expect(o.kind, h.name).toBe('flipper');
-        expect(['Flipper Alley', 'Multiball'], h.name).toContain(h.name);
-      }
+  it('moves nothing but what throws or is timed: Dodgems’ bumpers, Shooting Gallery’s barrier and the flippers', () => {
+    const moving: Record<string, string[]> = {
+      Dodgems: ['barrier'],
+      'Flipper Alley': ['flipper'],
+      'Shooting Gallery': ['barrier'],
+      Multiball: ['flipper'],
+    };
+    for (const h of SHED) {
+      const kinds = [...new Set((h.obstacles ?? []).map((o) => o.kind))];
+      expect(kinds, h.name).toEqual(moving[h.name] ?? []);
+    }
   });
 });
 
@@ -129,86 +123,6 @@ describe('Corner Pocket', () => {
         (Math.atan2(l.cup.y - l.tee.y, l.cup.x - l.tee.x) * 180) / Math.PI,
         -1,
       );
-  });
-});
-
-describe('The Funnel', () => {
-  const h = hole('The Funnel');
-  const l = layoutOf(h.map, h.terrain);
-  const posts = h.map.flatMap((row, r) => [...row].flatMap((c, k) => (c === 'o' ? [[k, r] as const] : [])));
-  const [cupCol, cupRow] = tileOf(h, 'C');
-
-  it('is two lines of posts, one the other’s mirror about the cup, closing toward it from the mouth', () => {
-    expect(posts.length).toBeGreaterThanOrEqual(8);
-    for (const [c, r] of posts)
-      expect(
-        posts.some(([c2, r2]) => r2 === r && c2 === 2 * cupCol - c),
-        `${c},${r}`,
-      ).toBe(true);
-    // each row's gap, from the post on its left to the one on its right, is no wider than the row below it
-    const gap = new Map<number, number>();
-    for (const [c, r] of posts) if (c > cupCol) gap.set(r, (c - (2 * cupCol - c)) * TILE);
-    const rows = [...gap.keys()].sort((a, b) => b - a);
-    for (let i = 1; i < rows.length; i++)
-      expect(gap.get(rows[i])!, `row ${rows[i]}`).toBeLessThanOrEqual(gap.get(rows[i - 1])!);
-    expect(gap.get(rows[0])!, 'the mouth is wide').toBeGreaterThan(gap.get(rows[rows.length - 1])! * 2);
-    // the cup is beyond the narrow end, and the narrow end lets a ball through, with room either side
-    expect(Math.max(...posts.map(([, r]) => r)), 'the posts are between the tee and the cup').toBeLessThan(l.rows - 1);
-    expect(Math.min(...posts.map(([, r]) => r))).toBeGreaterThan(cupRow);
-    expect(gap.get(rows[rows.length - 1])!).toBeGreaterThan(2 * (BUMPER.radius + KIND_RADIUS[BALL]));
-  });
-
-  it('throws a ball that is struck into either line back inward, toward the cup’s column', () => {
-    const [teeCol] = tileOf(h, 'T');
-    expect(teeCol).toBe(cupCol);
-    for (const side of [-1, 1]) {
-      const { game } = onlyHole('The Funnel');
-      // the post of its line nearest the tee, from the tee
-      const [pc, pr] = posts.filter(([c]) => Math.sign(c - cupCol) === side).sort((a, b) => b[1] - a[1])[0];
-      const px = l.originX + (pc + 0.5) * TILE,
-        py = l.originY + (l.rows - 1 - pr + 0.5) * TILE;
-      game.shoot(Math.atan2(py - l.tee.y, px - l.tee.x), 0.5);
-      let best = 0;
-      for (let f = 0; f < 60 * 4; f++) {
-        game.step(DT);
-        // inward is toward the cup's column: the ball's velocity across, against the side it is on
-        best = Math.max(best, -side * game.world.vx[game.ball]);
-      }
-      expect(best, `the ${side < 0 ? 'left' : 'right'} line`).toBeGreaterThan(3);
-    }
-  });
-
-  it('is holed in one by a shot up the middle, which threads the posts', () => {
-    expect(aces('The Funnel', [90], range(0.5, 1, 0.025)).length).toBeGreaterThan(0);
-  });
-});
-
-describe('Plinko', () => {
-  const h = hole('Plinko');
-  const posts = h.map.flatMap((row, r) => [...row].flatMap((c, k) => (c === 'o' ? [[k, r] as const] : [])));
-
-  it('is a short field of posts in staggered rows between the tee and the cup', () => {
-    const rows = [...new Set(posts.map(([, r]) => r))].sort((a, b) => a - b);
-    expect(rows.length).toBeGreaterThanOrEqual(3);
-    expect(posts.length).toBeGreaterThanOrEqual(7);
-    // each row is not the one before it: the posts of one row stand over the gaps of the next
-    for (let i = 1; i < rows.length; i++) {
-      const a = posts.filter(([, r]) => r === rows[i - 1]).map(([c]) => c);
-      const b = posts.filter(([, r]) => r === rows[i]).map(([c]) => c);
-      expect(a, `rows ${rows[i - 1]} and ${rows[i]}`).not.toEqual(b);
-    }
-    const [, cupRow] = tileOf(h, 'C'),
-      [, teeRow] = tileOf(h, 'T');
-    expect(Math.min(...rows)).toBeGreaterThan(cupRow);
-    expect(Math.max(...rows)).toBeLessThan(teeRow);
-    expect(h.map.length, 'short: a laugh and not a grind').toBeLessThanOrEqual(13);
-  });
-
-  it('rattles a ball struck straight up it: the middle of the field has a post in it, and the ball is knocked', () => {
-    const { game, told } = onlyHole('Plinko');
-    game.shoot(Math.PI / 2, 0.8);
-    for (let f = 0; f < 60 * 8 && !game.ready && game.phase === 'play'; f++) game.step(DT);
-    expect(told.filter((t) => t.startsWith('knocked')).length).toBeGreaterThanOrEqual(1);
   });
 });
 
@@ -673,7 +587,10 @@ describe('the fuzzer on the whole course', () => {
   it('plays it clean from a few seeds, striking at the kicker and at the flipper', () => {
     let kicks = 0,
       flips = 0;
-    for (const seed of [1, 2, 3]) {
+    // seeds whose runs reach a hole with a flipper and strike at it: a run starts part way round and reloads back to the
+    // start, so the flipper's two holes, sixth and ninth since 8 October 2026, are seldom reached in 6000 frames (4 seeds in
+    // 40 strike at one, and on the old order only seed 1 of these three did); none of the 40 broke a rule
+    for (const seed of [13, 16, 23]) {
       const result = fuzz(seed, 6000, SHED);
       expect(result.failure, `seed ${seed}`).toBeNull();
       kicks += result.done['strike a kicker'] ?? 0;

@@ -12,11 +12,11 @@ import { HILLS } from './hills';
 const holeNames = (course: string) => COURSES.find((c) => c.name === course)!.holes.map((h) => h.name);
 
 describe('the courses', () => {
-  it('are The Meadow, the first nine as they were, the three newer courses and The Links, The Fells and The Isles, the courses of golf, in order of difficulty', () => {
+  it('are The Meadow, the first nine as they were, the two newer courses and The Links, The Fells and The Isles, the courses of golf, in order of difficulty', () => {
+    // four of minigolf were too many: The Fair went on 8 October 2026, its best holes shared between the other two
     expect(COURSES.map((c) => c.name)).toEqual([
       'The Meadow',
       'The Pinball Shed',
-      'The Fair',
       'The Waterworks',
       'The Links',
       'The Fells',

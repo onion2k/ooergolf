@@ -1,11 +1,14 @@
 /**
- * The Pinball Shed: banks and bounces, where the rail is a cushion, posts throw, and the player's own line is the game.
- * Every hole is drawn by hand as The Meadow's are (see `course.ts` for the letters), and has one idea and something the
- * player must use or fear. The holes that need nothing the engine lacks are here; the rest come as the kinds they use are built.
+ * The Pinball Shed: banks and bounces, where the rail is a cushion, posts and kickers throw, bumpers slide, a flipper
+ * flings, and the player's own line is the game. Every hole is drawn by hand as The Meadow's are (see `course.ts` for the
+ * letters), and has one idea and something the player must use or fear. Since 8 October 2026 it is the best seven of its
+ * own nine and two of The Fair's, Dodgems and Shooting Gallery, whose bumpers and kickers are pinball's; The Funnel and
+ * Plinko went, posts as The Meadow's Bumpers has them, and Plinko's line luck.
  *
  * Without this file the course would have nowhere to be drawn: it is content, and no logic lives in it.
  */
 
+import { BUMPER } from './arena';
 import type { HoleDef } from './course';
 
 export const SHED: readonly HoleDef[] = [
@@ -22,48 +25,6 @@ export const SHED: readonly HoleDef[] = [
       '######....#',
       '#.........#',
       '#.......T.#',
-      '#.........#',
-      '###########',
-    ],
-  },
-  {
-    name: 'The Funnel',
-    par: 2,
-    // two lines of posts closing on the cup: a ball into either is thrown inward, and one aimed down the middle threads them
-    map: [
-      '###########',
-      '#.........#',
-      '#....C....#',
-      '#.........#',
-      '#...o.o...#',
-      '#...o.o...#',
-      '#..o...o..#',
-      '#..o...o..#',
-      '#.o.....o.#',
-      '#.o.....o.#',
-      '#.........#',
-      '#.........#',
-      '#....T....#',
-      '#.........#',
-      '###########',
-    ],
-  },
-  {
-    name: 'Plinko',
-    par: 3,
-    // a field of posts in staggered rows: a ball rattles down it, and the power is the only choice, since the line is luck
-    map: [
-      '###########',
-      '#.........#',
-      '#....C....#',
-      '#.........#',
-      '#..o...o..#',
-      '#.........#',
-      '#.o..o..o.#',
-      '#.........#',
-      '#..o...o..#',
-      '#.........#',
-      '#....T....#',
       '#.........#',
       '###########',
     ],
@@ -110,6 +71,25 @@ export const SHED: readonly HoleDef[] = [
     ],
   },
   {
+    name: 'The Kicker',
+    par: 2,
+    // a lane with a kicker square in it and a door in its east wall beside the kicker, the cup in the room beyond, so no straight shot sees the cup: a kicker throws a ball back harder than it met it, so a soft shot into its right cheek is thrown out through the door to the cup, and a hard one straight at it comes back
+    map: [
+      '###############',
+      '####.....######',
+      '####.....#...##',
+      '####.....#...##',
+      '####.......C.##',
+      '####..k......##',
+      '####.....#...##',
+      '####.....######',
+      '####.....######',
+      '####..T..######',
+      '####.....######',
+      '###############',
+    ],
+  },
+  {
     name: 'Three Cushion',
     par: 3,
     // the cup is walled in on three sides by raised grass and open only toward the far rail, so the way in is a bank off the rails
@@ -128,22 +108,39 @@ export const SHED: readonly HoleDef[] = [
     ],
   },
   {
-    name: 'The Kicker',
-    par: 2,
-    // a lane with a kicker square in it and a door in its east wall beside the kicker, the cup in the room beyond, so no straight shot sees the cup: a kicker throws a ball back harder than it met it, so a soft shot into its right cheek is thrown out through the door to the cup, and a hard one straight at it comes back
+    name: 'Dodgems',
+    par: 3,
+    // far enough that the first stroke stops short of the bumpers, and the second goes between them: three bumpers a tile apart, two tiles long, on a four-second beat and out of step by a half and a quarter, so there is a moment all three are off the line at once, as there is not with the thirds the first draft had (it waited out the autopilot's ten seconds and fired blind). A ball that meets one is thrown, not stopped.
     map: [
-      '###############',
-      '####.....######',
-      '####.....#...##',
-      '####.....#...##',
-      '####.......C.##',
-      '####..k......##',
-      '####.....#...##',
-      '####.....######',
-      '####.....######',
-      '####..T..######',
-      '####.....######',
-      '###############',
+      '#################',
+      '#...............#',
+      '#.......C.......#',
+      '#...............#',
+      '#...............#',
+      '#...............#',
+      '#...............#',
+      '#...............#',
+      '#...............#',
+      '#...............#',
+      '#...............#',
+      '#...............#',
+      '#...............#',
+      '#...............#',
+      '#...............#',
+      '#...............#',
+      '#...............#',
+      '#...............#',
+      '#...............#',
+      '#...............#',
+      '#...............#',
+      '#.......T.......#',
+      '#...............#',
+      '#################',
+    ],
+    obstacles: [
+      { kind: 'barrier', at: [8, 5], length: 2, travel: 9, period: 4, phase: 0, bounce: BUMPER.restitution },
+      { kind: 'barrier', at: [8, 6], length: 2, travel: 9, period: 4, phase: 0.5, bounce: BUMPER.restitution },
+      { kind: 'barrier', at: [8, 7], length: 2, travel: 9, period: 4, phase: 0.25, bounce: BUMPER.restitution },
     ],
   },
   {
@@ -194,6 +191,50 @@ export const SHED: readonly HoleDef[] = [
       '33333333333',
       '33333333333',
     ],
+  },
+  {
+    name: 'Shooting Gallery',
+    par: 4,
+    // the longest hole of the course: three kickers stand in the field like targets, off the line, and the cup is in a bay whose mouth a barrier slides across
+    map: [
+      '#############',
+      '###.......###',
+      '###...C...###',
+      '###.......###',
+      '###.......###',
+      '#...........#',
+      '#...........#',
+      '#...........#',
+      '#...........#',
+      '#...........#',
+      '#...........#',
+      '#...........#',
+      '#..k........#',
+      '#...........#',
+      '#...........#',
+      '#...........#',
+      '#........k..#',
+      '#...........#',
+      '#...........#',
+      '#...........#',
+      '#..k........#',
+      '#...........#',
+      '#...........#',
+      '#...........#',
+      '#...........#',
+      '#...........#',
+      '#...........#',
+      '#...........#',
+      '#...........#',
+      '#...........#',
+      '#...........#',
+      '#...........#',
+      '#.....T.....#',
+      '#...........#',
+      '#...........#',
+      '#############',
+    ],
+    obstacles: [{ kind: 'barrier', at: [6, 4], length: 1.5, travel: 5, period: 5 }],
   },
   {
     name: 'Multiball',

@@ -43,8 +43,11 @@ describe('the fuzzer', () => {
     // on 6 October 2026 before 'aim and take back' was added, and it must not move with it. Seed 17's moved from 3217 to 3100 when the
     // putters were replaced by items (the shop's actions draw the same, but a monkey that can no longer buy a harder putter
     // plays a different round on minigolf); seeds 26 and 3 did not move. Seed 3's (level golf) moved from 2670 to 2702 when the play items
-    // began to act, since the monkey buys and equips them and plays on with one held (with every effect off it is 2670 again)
-    expect([one.drawn, two.drawn, golf.drawn], "draws from the monkey's main stream").toEqual([3296, 3100, 2702]);
+    // began to act, since the monkey buys and equips them and plays on with one held (with every effect off it is 2670 again).
+    // Seed 26's moved from 3296 to 3142 when The Fair went on 8 October 2026, its best holes shared between the Shed and the
+    // Waterworks: a monkey choosing among six courses, and playing their holes in a new order, plays another round; 17 and 3
+    // did not move
+    expect([one.drawn, two.drawn, golf.drawn], "draws from the monkey's main stream").toEqual([3142, 3100, 2702]);
     // the framing rule was asked of the camera, on golf and on minigolf, a good many times: a check that never ran passes in silence
     expect(one.framed + two.framed, 'times the framing was checked').toBeGreaterThan(300);
     expect(golf.framed, 'times it was checked on level golf').toBeGreaterThan(30);

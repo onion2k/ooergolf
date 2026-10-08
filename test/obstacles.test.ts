@@ -1,11 +1,12 @@
 /** The moving things on a hole, where each is at any moment of game time: the barrier, the windmill's gate, and the belt. */
 import { describe, expect, it } from 'vitest';
 import { BALL, KIND_RADIUS, TILE, layoutOf } from '../src/arena';
-import { COURSE } from '../src/course';
+import { COURSE, CUP, type HoleDef } from '../src/course';
 import { Obstacles, WINDMILL, type ObstacleDef } from '../src/obstacles';
 import { Autopilot } from '../src/autopilot';
 import { checkInvariants } from '../src/invariants';
-import { DT, newGame } from './helpers';
+import { terrainRefusal } from '../src/physics';
+import { DT, newGame, settle } from './helpers';
 
 const MAP = ['#########', '#...C...#', '#.......#', '###.#####', '#.......#', '#.......#', '#...T...#', '#########'];
 const layout = layoutOf(MAP);
@@ -154,5 +155,53 @@ describe('the order the things are listed in', () => {
       if (f % 10 === 0) expect(checkInvariants(game), `frame ${f}`).toEqual([]);
     }
     expect(game.phase).toBe('over');
+  });
+});
+
+describe('a conveyor on a slope', () => {
+  // The Lift (a hole of The Fair, cut on 8 October 2026) was to be a belt up a ramp, and was drawn level; this is what
+  // settled that it was the scene, which draws a belt at the grass's height, and not the physics, that made it so
+  const map = ['#######', '#..C..#', ...Array.from({ length: 8 }, () => '#.....#'), '#..T..#', '#######'];
+  const terrain = [
+    '3333333',
+    '3333333',
+    '3333333',
+    '3333333',
+    '3333333',
+    '2222222',
+    '1111111',
+    '0000000',
+    '0000000',
+    '0000000',
+    '0000000',
+    '0000000',
+  ];
+  const ramp: HoleDef = {
+    name: 'A belt up a ramp',
+    par: 3,
+    map,
+    terrain,
+    obstacles: [{ kind: 'conveyor', from: [3, 9], to: [3, 4], speed: 5 }],
+  };
+
+  it('is not refused, by the physics or by the obstacles, which refuse only a barrier and a windmill', () => {
+    const layout = layoutOf(map, terrain);
+    expect(terrainRefusal(layout, CUP)).toBeNull();
+    expect(() => new Obstacles(ramp.obstacles!, layout)).not.toThrow();
+    const barrier: ObstacleDef = { kind: 'barrier', at: [3, 6], length: 1, travel: 2, period: 4 };
+    expect(() => new Obstacles([barrier], layout), 'where a barrier on the same ground is').toThrow(/slopes/);
+  });
+
+  it('carries a ball up it, to the top, at the belt’s own speed', () => {
+    const { game } = newGame(1, null, [ramp]);
+    game.place(0, -9);
+    const y0 = game.world.y[game.ball];
+    const z0 = game.world.z[game.ball];
+    settle(game, 60 * 2);
+    // two seconds at five a second, less the first moments' gathering
+    expect(game.world.y[game.ball] - y0).toBeGreaterThan(8);
+    expect(game.world.z[game.ball] - z0, 'and it has risen').toBeGreaterThan(0.5);
+    settle(game, 60 * 3);
+    expect(game.world.y[game.ball], 'past the belt, on the top').toBeGreaterThan(5);
   });
 });

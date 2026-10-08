@@ -113,6 +113,34 @@ describe('saves from every shape the game has written', () => {
     expect(checkInvariants(game)).toEqual([]);
   });
 
+  it('keeps the bests of the nine holes cut from the minigolf courses on 8 October 2026, each by its name', () => {
+    const cut = [
+      'Plinko',
+      'The Funnel',
+      'Turnstile',
+      'Whack-a-mole',
+      'Carousel',
+      'The Lift',
+      'Mill Pond',
+      'The Island Green',
+      'The Lock',
+    ];
+    const best = Object.fromEntries(cut.map((name, k) => [name, { strokes: 1 + (k % 3), item: '' }]));
+    const json = JSON.stringify({
+      coins: 40,
+      gems: 0,
+      owned: [],
+      item: '',
+      best: { ...best, Straight: { strokes: 1, item: '' } },
+    });
+    const save = new Progress(memoryStore(json)).save;
+    for (const name of cut) expect(save.best[name], name).toEqual(best[name]);
+    expect(save.best.Straight).toEqual({ strokes: 1, item: '' });
+    const game = new Game(new Progress(memoryStore(json)), {}, { random: seeded(7) });
+    for (let f = 0; f < 300; f++) game.step(1 / 60);
+    expect(checkInvariants(game)).toEqual([]);
+  });
+
   it('has the shape the game writes now: a new field means a new file here', () => {
     const game = new Game(new Progress(memoryStore()));
     game.persist();

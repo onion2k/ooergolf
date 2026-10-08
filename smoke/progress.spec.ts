@@ -713,7 +713,7 @@ for (const [course, first] of [
   }) => {
     const problems = watch(page);
     await start(page, { seed: 1, paused: true, screen: true });
-    await expect(page.locator('#start .course')).toHaveCount(7);
+    await expect(page.locator('#start .course')).toHaveCount(6);
     await page.locator('#start .course', { hasText: course }).click();
     await expect(page.locator('#start')).toBeHidden();
     await page.evaluate(() => window.game!.step(75));

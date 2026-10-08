@@ -9,7 +9,7 @@ import { COURSES } from '../src/course';
 import { Game } from '../src/game';
 import { breakOf, greenArrows, leansOnMinigolf, puttFrom } from '../src/green';
 import { arrowProblems, breakProblems, checkInvariants } from '../src/invariants';
-import { Obstacles, type ObstacleDef } from '../src/obstacles';
+import { type ObstacleDef } from '../src/obstacles';
 import { WATERWORKS } from '../src/waterworks';
 import { DT, newGame } from './helpers';
 import { PLAYER } from '../scripts/pace';
@@ -19,10 +19,7 @@ import { fuzz } from '../scripts/fuzzer';
 const hole = (name: string) => WATERWORKS.find((h) => h.name === name)!;
 const CAUSEWAY = hole('The Causeway'),
   STONES = hole('The Stepping Stones'),
-  LOCK = hole('The Lock'),
-  ISLAND = hole('The Island Green'),
   SPILLWAY = hole('The Spillway'),
-  MILL = hole('Mill Pond'),
   WEIR = hole('The Weir'),
   RAPIDS = hole('The Rapids'),
   FLOOD = hole('The Flood');
@@ -51,12 +48,8 @@ const wait = (g: Game, seconds: number) => {
   for (let f = 0; f < Math.round(seconds * 60); f++) g.step(DT);
 };
 
-/** The tile a barrier or a windmill of the hole stands at, as the map is drawn. */
-const standsAt = (h: (typeof WATERWORKS)[number]) =>
-  (h.obstacles![0] as Extract<ObstacleDef, { kind: 'barrier' | 'windmill' }>).at;
-
 describe('the course', () => {
-  it('is registered among the minigolf courses after The Meadow, nine holes, each with water on it and a map drawn square', () => {
+  it('is registered among the minigolf courses after The Meadow, nine holes, a map drawn square, and water on all but the three timed holes', () => {
     const names = COURSES.map((c) => c.name);
     expect(names.indexOf('The Waterworks')).toBeGreaterThan(names.indexOf('The Meadow'));
     expect(names.indexOf('The Waterworks')).toBeLessThan(names.indexOf('The Links'));
@@ -64,23 +57,27 @@ describe('the course', () => {
     expect(course.holes).toBe(WATERWORKS);
     expect(course.golf).toBeFalsy();
     expect(course.summary).toEqual({ holes: 9, par: 28 });
+    // the water's best, and The Fair's three holes of timing: The Lock, The Island Green and Mill Pond went on 8 October
+    // 2026, a barrier as The Meadow's, an island green as The Flood's and a windmill over water as The Mill Race's
     expect(WATERWORKS.map((h) => h.name)).toEqual([
       'The Causeway',
       'The Stepping Stones',
-      'The Lock',
-      'The Island Green',
+      'Traffic',
       'The Spillway',
-      'Mill Pond',
+      'Ferris',
       'The Weir',
       'The Rapids',
+      'The Big Wheel',
       'The Flood',
     ]);
+    expect(WATERWORKS.map((h) => h.par)).toEqual([2, 3, 3, 3, 3, 3, 3, 4, 4]);
+    const dry = ['Traffic', 'Ferris', 'The Big Wheel'];
     for (const h of WATERWORKS) {
       expect(new Set(h.map.map((r) => r.length)).size, `${h.name}: every row as wide as the rest`).toBe(1);
       expect(
         layoutOf(h.map, h.terrain).water.some((w) => w === 1),
         `${h.name}: water`,
-      ).toBe(true);
+      ).toBe(!dry.includes(h.name));
     }
   });
 });
@@ -144,89 +141,6 @@ describe('The Stepping Stones', () => {
   });
 });
 
-describe('The Lock', () => {
-  const l = layoutOf(LOCK.map);
-  const channelX = l.originX + (Math.floor(l.cols / 2) + 0.5) * TILE;
-
-  it('has a gate that is clear of the channel a little over half of every period, and across it the rest', () => {
-    const o = new Obstacles(LOCK.obstacles!, l);
-    const [gate] = o.pushers;
-    const period = (LOCK.obstacles![0] as { period: number }).period;
-    let clear = 0,
-      n = 0;
-    for (let t = 0; t < period; t += 0.005, n++) {
-      o.update(t, DT);
-      // the gate clears a ball in the middle of the channel when its edge is more than the ball's radius from the ball's middle
-      if (Math.abs(gate.x - channelX) - gate.hx > 1.0) clear++;
-    }
-    expect(clear / n).toBeGreaterThan(0.45);
-    expect(clear / n).toBeLessThan(0.65);
-  });
-
-  it('lets the same shot through, bounces it back or throws it in the water, by when it is struck', () => {
-    const outcomes = { through: 0, back: 0, splash: 0 };
-    const gateY = l.originY + (l.rows - 1 - standsAt(LOCK)[1] + 0.5) * TILE;
-    for (let off = 0; off < 4; off += 0.1) {
-      const g = gameOn(LOCK);
-      wait(g.game, off);
-      const power = planned(g.game).power;
-      g.game.shoot(toCup(g.game), power);
-      let top = -Infinity;
-      for (let f = 0; f < 60 * 10 && !(f > 5 && g.game.ready) && g.game.phase === 'play'; f++) {
-        g.game.step(DT);
-        top = Math.max(top, g.game.world.y[g.game.ball]);
-      }
-      if (splashes(g.told)) outcomes.splash++;
-      else if (top > gateY) outcomes.through++;
-      else outcomes.back++;
-    }
-    expect(outcomes.through, 'some shots pass the open gate').toBeGreaterThan(10);
-    expect(outcomes.back, 'some meet it shut').toBeGreaterThan(5);
-    expect(outcomes.splash, 'and the gate on its way knocks some off the strip').toBeGreaterThan(2);
-  });
-});
-
-describe('The Island Green', () => {
-  /** A shot of `power` at the cup from the tee, `slip` radians off the line, and how far from the cup the ball rests, how many times it splashed, and whether it dropped. */
-  const struck = (power: number, slip = 0) => {
-    const g = gameOn(ISLAND);
-    g.game.shoot(toCup(g.game) + slip, power);
-    settleOut(g.game);
-    const { cup } = g.game.layout;
-    return {
-      holed: g.game.phase !== 'play',
-      splashed: splashes(g.told),
-      from: Math.hypot(g.game.world.x[g.game.ball] - cup.x, g.game.world.y[g.game.ball] - cup.y),
-    };
-  };
-
-  it('leaves a ball that is struck short of the rim where it is, on the neck or the shore, and takes one that gets onto the grass to the cup', () => {
-    for (const power of [0.04, 0.12, 0.2]) {
-      const r = struck(power);
-      expect(r.holed || r.splashed > 0, `power ${power}: nothing happened to it`).toBe(false);
-      expect(r.from, `power ${power}: short of the grass`).toBeGreaterThan(9);
-    }
-    // from the first power that gets over the rim to well past it, straight at the cup: the bowl does the rest
-    for (const power of [0.28, 0.36, 0.44, 0.52]) expect(struck(power).holed, `power ${power}`).toBe(true);
-  });
-
-  it('is not a funnel to a ball struck a little off the cup: it comes to rest in the bowl, and one struck too long rolls out of the far side into the pond', () => {
-    const outcomes = { bowl: 0, lost: 0 };
-    for (let power = 0.3; power <= 1.0001; power += 0.02) {
-      const r = struck(power, 0.08);
-      if (r.splashed) outcomes.lost++;
-      else if (!r.holed && r.from < 9) outcomes.bowl++;
-    }
-    expect(outcomes.bowl, 'rests on the grass of the bowl').toBeGreaterThan(5);
-    expect(outcomes.lost, 'rolled out of the far side').toBeGreaterThan(3);
-  });
-
-  it('is struck as hard as it goes, straight at the cup, and does not drown the ball: the cup’s far lip stops it', () => {
-    const r = struck(1);
-    expect(r.splashed).toBe(0);
-  });
-});
-
 describe('The Spillway', () => {
   const l = layoutOf(SPILLWAY.map, SPILLWAY.terrain);
 
@@ -281,46 +195,6 @@ describe('The Spillway', () => {
     straight.game.shoot(toCup(straight.game), planned(straight.game).power);
     settleOut(straight.game);
     expect(straight.game.phase, 'the break takes it off the cup').toBe('play');
-  });
-});
-
-describe('Mill Pond', () => {
-  const l = layoutOf(MILL.map);
-
-  it('knocks a ball struck at the door at the wrong moment away from it, sometimes into the pond, and lets it through at the right one', () => {
-    const outcomes = { through: 0, back: 0, splash: 0 };
-    expect(
-      MILL.obstacles?.map((o) => o.kind),
-      'a windmill in the rail',
-    ).toEqual(['windmill']);
-    const doorY = l.originY + (l.rows - 1 - standsAt(MILL)[1] + 0.5) * TILE;
-    for (let off = 0; off < 8; off += 0.1) {
-      const g = gameOn(MILL);
-      wait(g.game, off);
-      g.game.shoot(toCup(g.game), planned(g.game).power);
-      let top = -Infinity;
-      for (let f = 0; f < 60 * 12 && !(f > 5 && g.game.ready) && g.game.phase === 'play'; f++) {
-        g.game.step(DT);
-        top = Math.max(top, g.game.world.y[g.game.ball]);
-      }
-      if (splashes(g.told)) {
-        outcomes.splash++;
-        expect(top, 'a ball knocked into the pond never got through the door').toBeLessThan(doorY + 1);
-      } else if (top > doorY) {
-        outcomes.through++;
-      } else outcomes.back++;
-    }
-    expect(outcomes.through).toBeGreaterThan(20);
-    expect(outcomes.back).toBeGreaterThan(10);
-    expect(outcomes.splash, 'a blade knocks a ball off the causeway').toBeGreaterThan(2);
-  });
-
-  it('has its windmill standing in the rail across the causeway, on level ground', () => {
-    expect(MILL.obstacles![0].kind).toBe('windmill');
-    const [col, row] = standsAt(MILL);
-    expect(MILL.map[row][col]).toBe('.');
-    expect(MILL.map[row].replace('.', '')).toMatch(/^#+$/);
-    expect(new Obstacles(MILL.obstacles!, l).windmills.length).toBe(1);
   });
 });
 
