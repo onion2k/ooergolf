@@ -1146,8 +1146,12 @@ each step, and a gate handed what it needs in the same change:
   stands on level ground. No belt may stand on a slope in a picture until the scene lifts them.
 - A stream that can be crossed, or a belt that lets a ball off it: see the kinds above. A ring of belts holds a ball for
   good and a real turntable is a package change, so Carousel is a mound with belts round it, and the turntable was dropped.
-- A phone drive's picture is flaky: the shot preview is null after a real drag in about one run in three of the smoke
-  test that drives it. It was there before the new courses, and is not understood.
+- A drag in a smoke test begun while the panels were still springing in. Found 8 October 2026: the phone drive's picture
+  missed about one run in four on 3 October because the view switch's arrival swept within a pixel of where its drag began,
+  and Chrome gives a touch that close to the button, so the browser took the drag and nothing was aimed. `drag` and
+  `touches` in `smoke/game.ts` now wait for the panels to land (`landed`), and `pullDown` says what was under the finger
+  when a drag aims nothing. One miss in about 420 runs since the switch moved was seen once and not caught again, so its
+  cause is not proven; the next one names itself.
 - The course a player is on, in the save: a reload opens the start screen.
 - Steps a ball meets as ledges. v0.8.0's `stepEdges` bounces a ball off a
   step's top edge and lets it climb a riser only with speed; tried on the

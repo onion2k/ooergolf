@@ -83,6 +83,15 @@ async function pullDown(page: Page, share: number, across = 0, touch = false) {
   const from = { x: size.width / 2, y: size.height * 0.15 };
   await drag(page, from, { x: from.x + across, y: from.y + share * 0.35 * short }, { hold: true, touch });
   await page.evaluate(() => window.game!.step(2));
+  // a drag held that aims nothing is said for what it is, with what was under the finger, and not left to fail later as a
+  // preview that is not there: the phone's drive once missed so one run in four, and once in four hundred after that
+  const missed = await page.evaluate(({ x, y }) => {
+    if (window.game!.aiming()) return null;
+    const e = document.elementFromPoint(x, y) as HTMLElement | null;
+    const s = window.game!.state();
+    return `under the finger ${e?.tagName}#${e?.id || e?.closest('[id]')?.id}, ready ${s.ready}, choosing ${s.choosing}, mode ${window.game!.view().mode}`;
+  }, from);
+  expect(missed, 'the drag aimed a shot').toBeNull();
 }
 
 /**

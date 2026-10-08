@@ -65,10 +65,29 @@ export async function start(
 }
 
 /**
+ * The panels landed: every animation on the page that ends has ended. A hole begun springs its panels in on the wall clock,
+ * not the game's, and a finger put down while one is on its way can land on a button sweeping past instead of the course,
+ * so the browser takes the drag and no shot is aimed. The phone's drive picture missed so about one run in four on 3 October
+ * 2026, when the view switch's arrival crossed the point its drag began at. A player puts a finger down on a screen that
+ * has come to rest, and so does a test. An animation that never ends is not waited for, or it would be waited for ever.
+ */
+export async function landed(page: Page) {
+  await page.evaluate(() =>
+    Promise.all(
+      document
+        .getAnimations()
+        .filter((a) => Number.isFinite(Number(a.effect?.getComputedTiming().endTime)))
+        .map((a) => a.finished.catch(() => null)),
+    ),
+  );
+}
+
+/**
  * A drag on the page, as a finger or a mouse makes it: pressed at `from`,
- * moved to `to` in `steps` moves, and let go unless told to hold it. Touch
- * goes through Chrome's own touch events, so the page gets the pointer events
- * a phone gives it; the page must have been opened with touch on.
+ * moved to `to` in `steps` moves, and let go unless told to hold it, once the
+ * panels have landed. Touch goes through Chrome's own touch events, so the page
+ * gets the pointer events a phone gives it; the page must have been opened with
+ * touch on.
  */
 export async function drag(
   page: Page,
@@ -77,6 +96,7 @@ export async function drag(
   options: { touch?: boolean; hold?: boolean; steps?: number } = {},
 ) {
   const { touch, hold, steps = 6 } = options;
+  await landed(page);
   const at = (k: number) => ({ x: from.x + ((to.x - from.x) * k) / steps, y: from.y + ((to.y - from.y) * k) / steps });
   if (!touch) {
     await page.mouse.move(from.x, from.y);
@@ -97,9 +117,10 @@ export async function drag(
  * Fingers on the page, through Chrome's own touch events: each step a list
  * of where every finger down is, by its id, and an empty list to lift them
  * all. A finger missing from a step has lifted. The page must have been
- * opened with touch on.
+ * opened with touch on. The first finger goes down once the panels have landed.
  */
 export async function touches(page: Page, steps: { id: number; x: number; y: number }[][]) {
+  await landed(page);
   const cdp = await page.context().newCDPSession(page);
   let down = new Set<number>();
   for (const points of steps) {

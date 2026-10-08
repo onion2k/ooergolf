@@ -442,8 +442,6 @@ Each line is a feature or more, through `/feature`, every gate green at each.
   under it, as a pond has, is the likely way).
 - Belts on a slope. The physics allows them, but the scene draws every belt at the height of the grass, so one on a slope
   is buried, and no belt may stand on one in a picture until the scene lifts them. The Lift and The Flood are level for it.
-- The phone's drive picture: after a real drag on a phone, the shot preview is null in about one run in three. It was
-  there before the new courses.
 - Matters of taste, for the user to settle and not bugs: the flipper is a plain blue slab; a stream lies level with the
   grass and reads as a painted lane; Three Cushion's pocket is the grass's own green and reads as a slab; Carousel is a mound
   with belts round it and not a carousel; and The Rapids is busy.
