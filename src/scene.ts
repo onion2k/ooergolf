@@ -34,6 +34,8 @@ import {
   type Layout,
 } from './arena';
 import { CUP } from './course';
+import { tintOf, tinted, valueOfStep } from './tint';
+import { splitByTint } from './tintmesh';
 import { GREEN, greenArrows, leansOnMinigolf, READER, type Arrow } from './green';
 import { place, placeOnSlope } from './matrix';
 import { ball, plane } from './meshes';
@@ -585,14 +587,24 @@ export class Scene {
       [ground.green, toned(PALETTE.grass, PALETTE.grassMown, golf), 'turf'],
       [ground.mown, toned(PALETTE.grassMown, PALETTE.grass, golf), 'turf'],
     ];
+    // the banks' tint (`tint.ts`): the rough and out of bounds each divided into a mesh for every step of the hole's field, painted its step's colour
+    const tint = tintOf(layout);
+    const stepped = (mesh: Mesh, c: readonly number[], oob: boolean) =>
+      tint
+        ? splitByTint(mesh, tint).map((m, k): [Mesh, readonly number[], 'turf' | 'plain'] => [
+            m,
+            tinted(c, valueOfStep(k), oob),
+            'plain',
+          ])
+        : [[mesh, c, 'plain'] as [Mesh, readonly number[], 'turf' | 'plain']];
     if (ground.golf)
       laid.push(
-        [ground.golf.rough, PALETTE.playRough, 'plain'],
+        ...stepped(ground.golf.rough, PALETTE.playRough, false),
         [ground.golf.putting, toned(PALETTE.puttingGreen, PALETTE.puttingGreenMown, true), 'turf'],
         [ground.golf.puttingMown, toned(PALETTE.puttingGreenMown, PALETTE.puttingGreen, true), 'turf'],
         [ground.golf.cut, PALETTE.firstCut, 'turf'],
         [ground.golf.tee, PALETTE.teeBox, 'turf'],
-        [ground.golf.oob, PALETTE.oobGround, 'plain'],
+        ...stepped(ground.golf.oob, PALETTE.oobGround, true),
         [ground.golf.sand, PALETTE.golfSand, 'plain'],
         [ground.golf.sandRaked, PALETTE.golfSandRaked, 'plain'],
         [ground.golf.lip, PALETTE.golfSandLip, 'plain'],

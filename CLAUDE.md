@@ -538,6 +538,16 @@ angle, roll)` is how far the putter's hardest putt rolls along an angle before t
   tiles and rails, and `zonesOf` refuses it. `src/fastmesh.ts` is the mesh builder the passes over a hole's ground and water use (typed
   arrays grown by doubling, the package's very bytes), which is what keeps a golf hole's begin to about main's time plus 25 to 60 ms
   (`test/begin-same.test.ts` holds every mesh bit for bit); `perf` holds the figure.
+- **The banks tinted** (`src/tint.ts`, `src/tintmesh.ts`; 9 October 2026, chosen from a mock, the spec's Part 6 in
+  `~/.claude/plans/pure-wiggling-shore.md`): from the play camera a bank showed only as faint shading, so a golf hole's rough
+  and out of bounds are coloured by a field from -1 (valley, a bank's foot) to 1 (crest): the height over the nearest play
+  tile over 6 yards plus the ground's curvature, `BANK_TINT` (tint 0.6, crease 0.6, the valley darker and cooler, the crest
+  toward a sunlit yellow-green). The renderer's vertices carry no colour, so the ground is divided into 21 meshes a step
+  each (a step under 5% of the ground's light, so no band is seen), and the blades follow in six tinted kinds of the grass
+  field's eight. Built with the hole: about 40 ms more to begin The Isles' longest hole, about 0.36 ms a frame at The Links 1
+  tee and none at The Isles 2 (a ground texture was smooth but cost 0.8 ms). Minigolf, the fairway, green, cut, tee and
+  sand are exactly as they were (`test/tint-colours.test.ts`). The Fells' steep faces read as broad lighter slopes, and a
+  flat golf test hole's rough a third darker, since both are height over the play.
 - **Water on golf and minigolf, and its ring of stones** (`src/waterdraw.ts`, `pondOf(layout)`, a `WeakMap` as the zones are): each
   pond is the smooth curve of its tiles (the 0.45 level set of the blurred water, lowered where a channel a tile wide would
   vanish) in a rim of foam, two shallows, mid and deep bands along it and along the tile's own side where it meets ground, **always

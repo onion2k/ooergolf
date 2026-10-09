@@ -13,6 +13,7 @@ import type { GrassField, GrassKind, GrassOptions, TrampleRect, Wind } from 'art
 import { TILE, heightAt, tileAt, type Layout } from './arena';
 import { seeded } from './random';
 import { nameSeed, windDirection } from './shaping';
+import { BANK_TINT, kindOfLevel, levelOf, tintOf, tinted, valueOf } from './tint';
 import { zonesOf, type Zone } from './zones';
 
 /** How far below the green the rough lies: the scene's own, kept here too so the turf imports no drawing. */
@@ -139,7 +140,19 @@ function golfKinds(): GrassKind[] {
     // not striped: the ground under it is mown in a checker (`mownAt` in ground.ts), which the renderer's stripes, bands
     // at one angle, cannot follow; plain blades in the middle green let the painted checker read between them
   };
-  return [{ ...KINDS[ROUGH], density: GOLF_ROUGH_DENSITY }, fairway];
+  const rough: GrassKind = { ...KINDS[ROUGH], density: GOLF_ROUGH_DENSITY };
+  // the rough again at each step of the banks' tint (`tint.ts`), in the kinds past the fairway's: the three darker and then the
+  // three lighter, the eight kinds a field may have, which `kindOfLevel` says the place of
+  const steps: GrassKind[] = [];
+  for (let level = -BANK_TINT.levels; level <= BANK_TINT.levels; level++) {
+    if (level === 0) continue;
+    steps[kindOfLevel(level) - 2] = {
+      ...rough,
+      base: tinted(rough.base, valueOf(level)).slice(0, 3) as [number, number, number],
+      tip: tinted(rough.tip, valueOf(level)).slice(0, 3) as [number, number, number],
+    };
+  }
+  return [rough, fairway, ...steps];
 }
 
 /**
@@ -251,6 +264,7 @@ function golfFieldOf(layout: Layout, name: string, bare: readonly Clearing[], ce
   // a tile at a time, which a cell divides into whole (the field's edge is on a tile's, whatever the cell)
   const per = Math.round(TILE / cell);
   const zones = zonesOf(layout);
+  const tint = tintOf(layout)!;
   for (let t = 0; t < layout.cols * layout.rows; t++) {
     // grass does not grow on rock or in water, and elsewhere by the zone the ground is drawn and played as
     if (layout.solid[t] || layout.water[t]) continue;
@@ -268,8 +282,11 @@ function golfFieldOf(layout: Layout, name: string, bare: readonly Clearing[], ce
         const kind =
           tileKind >= 0 ? tileKind : kindOfZone(zones.at(origin[0] + (cx + 0.5) * cell, origin[1] + (cy + 0.5) * cell));
         if (kind < 0) continue;
-        mask[i] = kind + 1;
-        heights[i] = heightAt(layout, origin[0] + (cx + 0.5) * cell, origin[1] + (cy + 0.5) * cell);
+        const x = origin[0] + (cx + 0.5) * cell,
+          y = origin[1] + (cy + 0.5) * cell;
+        // the rough in the step of the banks' tint the painted ground has there, so the blades and the ground under them agree
+        mask[i] = (kind === ROUGH ? kindOfLevel(levelOf(tint.at(x, y))) : kind) + 1;
+        heights[i] = heightAt(layout, x, y);
       }
   }
   clearDiscs(mask, origin, cell, cols, rows, bare);
