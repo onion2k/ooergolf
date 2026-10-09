@@ -9,6 +9,7 @@
  * and the course are one green.
  */
 import { tileAt, type Layout } from './arena';
+import { zonesOf, type Zone } from './zones';
 import { PALETTE } from './models/palette';
 import { LIE } from './surfaces';
 import { TREE } from './trees';
@@ -109,6 +110,25 @@ function kindOf(layout: Layout, t: number, streams?: ReadonlySet<number>): Rgb |
   }
 }
 
+/** What each zone of a golf hole's ground is painted: the curves the course is drawn by, so the map shows what is played. */
+export const ZONE_COLOUR: Record<Zone, Rgb> = {
+  sand: COLOUR.sand,
+  lip: COLOUR.sand,
+  oob: COLOUR.out,
+  tee: COLOUR.tee,
+  putting: COLOUR.green,
+  cut: COLOUR.cut,
+  fairway: COLOUR.fairway,
+  rough: COLOUR.rough,
+};
+
+/** The colour at a point: on a golf hole the zone's, except over rock and water, which keep their tiles'. */
+function colourAt(layout: Layout, x: number, y: number, streams?: ReadonlySet<number>): Rgb | null {
+  const t = tileAt(layout, x, y);
+  if (!layout.golf || t < 0 || layout.solid[t] || layout.water[t]) return kindOf(layout, t, streams);
+  return ZONE_COLOUR[zonesOf(layout).at(x, y)];
+}
+
 /**
  * The hole painted into `out`, which has `size.width * size.height` pixels of four bytes, red to alpha: the ground in
  * its kinds, each tree as a dot over it, and nothing (alpha nought) where the hole has no ground.
@@ -123,11 +143,7 @@ export function paintMap(
   const { width, height, scale } = size;
   for (let py = 0; py < height; py++) {
     for (let px = 0; px < width; px++) {
-      const colour = kindOf(
-        layout,
-        tileAt(layout, size.west + (px + 0.5) / scale, size.north - (py + 0.5) / scale),
-        streams,
-      );
+      const colour = colourAt(layout, size.west + (px + 0.5) / scale, size.north - (py + 0.5) / scale, streams);
       const o = (py * width + px) * 4;
       if (colour) out.set([colour[0], colour[1], colour[2], 255], o);
       else out.set([0, 0, 0, 0], o);

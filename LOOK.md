@@ -455,7 +455,7 @@ facets, today's palette or the title's, today's light or a warmer one, stripes o
   and fall on the woods past it.
 - **The lawn is mown in a checker**, squares of four tiles on golf and two on minigolf, with the turf texture at 0.3 of
   its colour and 0.22 of its height.
-- **Stones line the water** off each hole's line of play, and the ball meets them; see `CLAUDE.md`.
+- **Stones line the water**, as bodies the ball met (taken out again in the second pass, below).
 - **The world past a hole** (`backdrop.ts`): faceted hills round it, blue mountains, a lake, a thousand far trees and
   drifting clouds, under a sky gradient. Only the fly-in sees it: each hole begins with the camera low behind the tee,
   where the horizon is a third of the way down the screen, and eases to the play view over two and a half seconds.
@@ -467,6 +467,38 @@ at its worst 5.17 ms (The Meadow, a desk, the top rung), inside the 6.
 What is left open: the rough of minigolf reads a darker, bluer green than the title's, as the warm light's sky fills it; a
 shadow darkens the ground by about a fifth, where the title's by two fifths; and the world past a hole is seen only in the
 fly-in. Each is a matter of taste for the user to judge in play.
+
+## After the stages: the title's look, the second pass
+
+On 9 October 2026 the user said the lighting did not yet show the courses in the title's dramatic style: the trees should be much
+darker on their shadow side, rocks the same with clearer facets, the water "plasticy", the stones by the water browner and more
+of them, and (the part that most made the title nicer) its landscape is natural curves and round areas where the game is
+clearly tiles. Five rounds of mocks were put to the user (pictures kept in `~/.claude/plans/ooergolf-title-look-two-evidence/`),
+and the plan `~/.claude/plans/ooergolf-title-look-two.md` built what was chosen:
+
+- **Golf ground is curves, not tiles.** The fairway, green, tee, sand and out of bounds are each their tile indicator blurred,
+  and the 0.5 level set is the edge; the first cut and the fringe are bands of constant width outside it (round one's complaint was
+  that the light green round the checkered fairway was not of one width). Bunkers are blobs with a soft lip, the tee a rounded
+  rectangle. It is what is played as well as what is drawn (`CLAUDE.md`, the golf ground), the one thing that is not being the roll,
+  which stays the tile's. Minigolf keeps its tiles and rails, as it is the toy.
+- **Water is a smooth curve with a shelf** where a water tile lies outside it, a deeper, more saturated blue with small glints,
+  never drawn over a tile that is not water, since play decides water by the tile.
+- **A tight ring of small brown, tan and brown-grey stones along every water edge** ("too big, and not enough of them" was the
+  first mock's word), scenery only: the user kept the ring and dropped the stones the ball bounced off, which went.
+- **Trees, bushes and rocks are lit in two tones**, a baked light in three or four tiers, so the shade side is dark and cool
+  and a rock has clear facets, and broadleaves vary in size with a few great ones by the fairway. The light is the mock's
+  and not the renderer's sun, which was chosen with it and is lower.
+- **A lower sun and stronger form** (about 46 degrees, `form` 5), a **shorter, lighter, calmer rough** that is the title's lawn,
+  and the checker at three quarters of its contrast with a calmer turf texture.
+- **The world past a golf hole**: dense woods past out of bounds, far woods to 440 yards, hills that grow from nothing at the
+  map's edge, and the ground under all of it following them, so the woods and the posts stand on the hills and no cliff throws a
+  stair of shadow.
+
+What it costs: a golf hole begins in about 25 to 60 ms more than before (the mock's was eight times main's, which is why the
+zones' distance is worked out in a band only), and a frame at the Water Carry tee is about as it was. What is left to the user: the
+tones' light is the mock's, 62 degrees of azimuth off the sun, and a nearer or bigger lake past a hole is a call; the look metrics'
+framing and cool shade floors fail with the lighter rough and the warmer shade, and are set again, with the user's yes, in the
+plan's last part.
 
 ## Across every stage
 

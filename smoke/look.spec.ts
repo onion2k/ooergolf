@@ -18,7 +18,7 @@
  */
 import { expect, test, type Page } from '@playwright/test';
 import { layoutOf, slopeAt, TILE } from '../src/arena';
-import { COURSE, type HoleDef } from '../src/course';
+import { COURSE, COURSES, type HoleDef } from '../src/course';
 import { LINKS_SPECS, links as linksHoles } from '../src/links';
 import { FELLS_SPECS, fells as fellsHoles } from '../src/fells';
 import { ISLES_SPECS, isles as islesHoles } from '../src/isles';
@@ -234,21 +234,37 @@ test.describe('what it looks like', () => {
     expect(problems).toEqual([]);
   });
 
-  test("the stones along the Pond's banks, off its line of play", async ({ page }) => {
+  // Stands beside `r5-pond.png` of `~/.claude/plans/ooergolf-title-look-two-evidence/`. The ring is scenery in the water's own tiles,
+  // so the ball meets none of it (the stones the ball bounced off went on 9 October 2026, and their picture, `pond-stones`, with them).
+  test("The Meadow's Pond with its ring of stones: the smooth shape of its water, the shelf at its corners and the bank", async ({
+    page,
+  }) => {
     const problems = watch(page);
+    // the middle of the pond's water tiles, worked out from the map here and not asked of the page
+    const pond = COURSES.flatMap((c) => c.holes).find((h) => h.name === 'Pond')!;
+    const l = layoutOf(pond.map, pond.terrain);
+    let n = 0,
+      mx = 0,
+      my = 0;
+    for (let t = 0; t < l.cols * l.rows; t++)
+      if (l.water[t]) {
+        n++;
+        mx += l.originX + ((t % l.cols) + 0.5) * TILE;
+        my += l.originY + (Math.floor(t / l.cols) + 0.5) * TILE;
+      }
     await start(page, { seed: 11, paused: true });
-    await page.evaluate(() => {
-      const g = window.game!;
-      g.startHole(g.content().holes.findIndex((h) => h.name === 'Pond'));
-      g.step(90);
-      const { stones } = g.content();
-      const x = stones.reduce((a, s) => a + s.x, 0) / stones.length,
-        y = stones.reduce((a, s) => a + s.y, 0) / stones.length;
-      g.look(x, y - 10, 34);
-      g.step(1);
-    });
+    await page.evaluate(
+      ([x, y]) => {
+        const g = window.game!;
+        g.startHole(g.content().holes.findIndex((h) => h.name === 'Pond'));
+        g.step(90);
+        g.look(x, y - 10, 34);
+        g.step(1);
+      },
+      [mx / n, my / n],
+    );
     await hideStats(page);
-    await expect(page.locator('#view')).toHaveScreenshot('pond-stones.png', TOLERANCE);
+    await expect(page.locator('#view')).toHaveScreenshot('pond-ring.png', TOLERANCE);
     expect(problems).toEqual([]);
   });
 
@@ -467,17 +483,23 @@ test.describe('what it looks like', () => {
     // a second of the game's time on, a pond rippling is another picture and a green is the same one
     await page.evaluate(() => window.game!.step(60));
     const later = await look();
-    // pixels that moved by more than a few levels of a channel: the GPU may leave a pixel one level out between two draws
-    const moved = async (a: Buffer, b: Buffer) => {
+    // pixels that moved by more than `over` levels of a channel: the GPU may leave a pixel one level out between two draws on
+    // the grass, so the green is held to a few levels. The water is the title's calm one (9 October 2026: a pond of waves that
+    // turn the normal by 0.3 and a little light glinting on them), which moves by up to four levels of a channel and not the
+    // hundred and more the livelier water did; the same water drawn twice at one moment is the same bytes (above), so any
+    // level it moves by is the water's own
+    const moved = async (a: Buffer, b: Buffer, over: number) => {
       const { PNG } = await import('pngjs');
       const [p, q] = [PNG.sync.read(a).data, PNG.sync.read(b).data];
       let n = 0;
       for (let i = 0; i < p.length; i += 4)
-        if (Math.max(Math.abs(p[i] - q[i]), Math.abs(p[i + 1] - q[i + 1]), Math.abs(p[i + 2] - q[i + 2])) > 3) n++;
+        if (Math.max(Math.abs(p[i] - q[i]), Math.abs(p[i + 1] - q[i + 1]), Math.abs(p[i + 2] - q[i + 2])) > over) n++;
       return n;
     };
-    expect(await moved(first.water, later.water), 'the water a second on is not the water it was').toBeGreaterThan(100);
-    expect(await moved(first.green, later.green), 'the green beside it is just as it was').toBe(0);
+    expect(await moved(first.water, later.water, 0), 'the water a second on is not the water it was').toBeGreaterThan(
+      100,
+    );
+    expect(await moved(first.green, later.green, 3), 'the green beside it is just as it was').toBe(0);
     expect(problems).toEqual([]);
   });
 
@@ -1943,5 +1965,111 @@ test.describe("the shop's items", () => {
       await expect(page).toHaveScreenshot('phone-items-retake.png', TOLERANCE);
       expect(problems).toEqual([]);
     });
+  });
+});
+
+/**
+ * The second pass of the title's look (9 October 2026, `~/.claude/plans/ooergolf-title-look-two.md`): the curved ground, the
+ * water with its ring of stones, scenery in two tones, the lower sun and the woods past a golf hole. Each scene stands beside a
+ * round-five picture of `~/.claude/plans/ooergolf-title-look-two-evidence/`, which is what it is looked at against when its picture
+ * is written. Each also holds a fact the picture cannot say, through `content().zones`, so a scene that moved off its place is
+ * told before the picture is. (The pond's own is above, with its ring.)
+ */
+test.describe('the second pass of the title look', () => {
+  async function onGolf(page: Page, course: string, k: number, frames = 75) {
+    await start(page, { seed: 11, paused: true });
+    await page.evaluate(
+      ([c, k, f]) => {
+        window.game!.chooseCourse(c as string);
+        window.game!.startHole(k as number);
+        window.game!.step(f as number);
+      },
+      [course, k, frames],
+    );
+    await hideStats(page);
+  }
+
+  // beside `r5-isles2.png` (and `before-isles2.png`, what it was): the tee's rounded box, the fairway's curves with the first cut a
+  // constant band round them, the lake's rocky shelf and its ring, woods past the stakes and hills beyond them
+  test('The Green Isle from its tee: the curved fairway and green, the lake and its ring, the woods and hills past out of bounds', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await onGolf(page, 'The Isles', 1);
+    const where = await page.evaluate(() => {
+      const g = window.game!;
+      const { tee, cup, zones } = g.content();
+      return { tee: zones(tee.x, tee.y), cup: zones(cup.x, cup.y) };
+    });
+    expect(where, 'the tee and the cup stand in their own ground').toEqual({ tee: 'tee', cup: 'putting' });
+    await expect(page).toHaveScreenshot('look2-isles-tee-2.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
+  // beside `r5-low.png` and `r5-lowpond.png`: stood on the fairway short of the pond looking down the hole at it, low, so the
+  // ring's stones stand against the water and the woods stand up behind
+  test("the low view down Water Carry toward its pond: the water's curve, its shelf, the ring and the trees behind", async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await onGolf(page, 'The Links', 1);
+    const def = linksHoles()[1];
+    const l = layoutOf(def.map, def.terrain);
+    let x = 0,
+      y = 0,
+      n = 0;
+    for (let t = 0; t < l.cols * l.rows; t++)
+      if (l.water[t]) {
+        x += l.originX + ((t % l.cols) + 0.5) * TILE;
+        y += l.originY + (Math.floor(t / l.cols) + 0.5) * TILE;
+        n++;
+      }
+    const pond = { x: x / n, y: y / n };
+    const lie = await page.evaluate((p) => window.game!.content().zones(p.x, p.y - 30), pond);
+    expect(['fairway', 'cut', 'rough'], 'short of the pond is dry ground a ball is played from').toContain(lie);
+    await page.evaluate((p) => {
+      const g = window.game!;
+      g.look(p.x, p.y - 24, 70);
+      g.orbit(0, 0.5);
+      g.step(1);
+    }, pond);
+    await expect(page.locator('#view')).toHaveScreenshot('look2-water-carry-low.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
+  // beside `r5-close.png`: a broadleaf, a pine and a rock close to, each lit on one side and dark on the other, on the rough's
+  // shorter, lighter blades, in the lower sun
+  test("trees and rocks close by The Meadow's first hole: two tones on each, the dark side much darker", async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true });
+    await page.evaluate(() => {
+      const g = window.game!;
+      const { floor } = g.content();
+      g.step(60);
+      g.look(floor.minX - 9, (floor.minY + floor.maxY) / 2 - 4, 26);
+      g.orbit(0.6, 0.55);
+      g.step(1);
+    });
+    await hideStats(page);
+    await expect(page.locator('#view')).toHaveScreenshot('look2-meadow-scenery.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
+  // beside `r5-flylinks.png` and `r5-flyin.png`: the fly-in to The Links' first hole at the middle of its time, the hills coming
+  // up past the map's edge from nothing, the woods and the far woods between them and the camera
+  test("The Links' fly-in at the middle of its time: the rolling hills past the map, the woods and the far woods", async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true, flyIn: true });
+    await page.evaluate(() => window.game!.chooseCourse('The Links'));
+    // the fly-in holds, then eases: `FLY_IN.hold` and `FLY_IN.time` are 0.5 and 2.2 seconds, so 1.35 seconds is the middle
+    await page.evaluate(() => window.game!.step(81));
+    expect((await page.evaluate(() => window.game!.view())).flying, 'still flying at the middle').toBe(true);
+    await hideStats(page);
+    await expect(page.locator('#view')).toHaveScreenshot('look2-links-flyin-middle.png', TOLERANCE);
+    expect(problems).toEqual([]);
   });
 });

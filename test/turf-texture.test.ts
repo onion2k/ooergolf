@@ -9,7 +9,8 @@ import { COURSES } from '../src/course';
 import { golfHole } from '../src/golf';
 import { LINKS_SPECS } from '../src/links';
 import { PALETTE } from '../src/models/palette';
-import { Scene, TURF } from '../src/scene';
+import { Scene, TURF, TURF_GOLF } from '../src/scene';
+import { toned } from '../src/ground';
 import { TURF_SIDE, turfTexels } from '../src/turfTexture';
 
 const SIDE = TURF_SIDE;
@@ -94,9 +95,23 @@ describe('the turf on the ground', () => {
   it('is on the mown grounds of a golf hole and not on its rough or its out of bounds', () => {
     const hole = golfHole(LINKS_SPECS[1]);
     const groups = new Scene().static(layoutOf(hole.map, hole.terrain), hole.name);
-    const want = [TURF.layer, TURF.repeat, TURF.albedo, TURF.shade].map(Math.fround);
-    for (const c of [PALETTE.puttingGreen, PALETTE.puttingGreenMown, PALETTE.firstCut, PALETTE.teeBox]) {
+    // calmer than minigolf's (0.13 and 0.09), and on the mown colours as the checker's contrast leaves them on golf
+    const want = [TURF_GOLF.layer, TURF_GOLF.repeat, TURF_GOLF.albedo, TURF_GOLF.shade].map(Math.fround);
+    for (const c of [
+      toned(PALETTE.puttingGreen, PALETTE.puttingGreenMown, true),
+      toned(PALETTE.puttingGreenMown, PALETTE.puttingGreen, true),
+      PALETTE.firstCut,
+      PALETTE.teeBox,
+    ]) {
       expect(texture(groupOf(groups, c)!), String(c)).toEqual(want);
+    }
+    // the sand is a plain colour, without the turf
+    for (const c of [PALETTE.golfSand, PALETTE.golfSand.map((x) => x * 0.975), PALETTE.golfSandLip]) {
+      const same = groups.filter(
+        (x) => JSON.stringify((x as { albedo?: number[] }).albedo) === JSON.stringify(c.slice(0, 3)),
+      );
+      expect(same.length, String(c)).toBeGreaterThan(0);
+      for (const g of same) expect(g.texture, String(c)).toBeUndefined();
     }
     for (const c of [PALETTE.playRough, PALETTE.oobGround]) {
       const same = groups.filter(

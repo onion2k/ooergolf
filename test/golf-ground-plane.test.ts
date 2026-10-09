@@ -11,14 +11,22 @@ import { LINKS_SPECS } from '../src/links';
 import { PALETTE } from '../src/models/palette';
 import { ROUGH_DEPTH, Scene } from '../src/scene';
 
-/** The half width of the great flat square under a hole, and the colour it is painted. */
+/** The half width of the great plane under a hole, and the colour it is painted. */
 function floor(hole: { name: string; map: readonly string[]; terrain?: readonly string[] | Float32Array }) {
   const layout = layoutOf(hole.map, hole.terrain);
   const groups = new Scene().static(layout, hole.name);
-  const g = groups.find((x) => x.mesh.positions.length === 12 && x.matrices[14] === -ROUGH_DEPTH)!;
+  const reach = (x: { mesh: { positions: Float32Array } }) =>
+    x.mesh.positions.reduce((a, v, k) => (k % 3 === 2 ? a : Math.max(a, Math.abs(v))), 0);
+  // on minigolf one flat square at the rough's depth; on golf the plane that follows the hills, which is the widest thing in the
+  // dry colour out of bounds, out to its flat edges
+  const g = layout.golf
+    ? groups
+        .filter((x) => (x as { albedo?: number[] }).albedo?.join() === [...PALETTE.oobGround].join())
+        .sort((a, b) => reach(b) - reach(a))[0]
+    : groups.find((x) => x.mesh.positions.length === 12 && x.matrices[14] === -ROUGH_DEPTH)!;
   expect(g, `${hole.name}: a square under the hole`).toBeDefined();
   return {
-    half: Math.max(...Array.from(g.mesh.positions, Math.abs)),
+    half: reach(g),
     colour: (g as { albedo?: number[] }).albedo,
     extent: Math.max(layout.cols, layout.rows) * TILE,
   };

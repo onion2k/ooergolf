@@ -101,8 +101,9 @@ describe('the turf of a hole', () => {
 describe('the rough as turf, short and dense', () => {
   const rough = KINDS[ROUGH];
 
-  it('has blades at least a unit tall, at the tallest still lower than the green they frame', () => {
-    expect(rough.height).toBeGreaterThanOrEqual(1.0);
+  it('has blades at least half a unit tall, at the tallest still lower than the green they frame', () => {
+    // 0.55 tall since the second title pass (9 October 2026), where it was 1.2: the title's rough is a short, light lawn
+    expect(rough.height).toBeGreaterThanOrEqual(0.5);
     // a blade stands from the rough's floor, ROUGH_DEPTH below the green: it must not reach up over the course's level
     expect(rough.height * (1 + (rough.heightSpread ?? 0.3))).toBeLessThan(ROUGH_DEPTH);
   });
@@ -114,9 +115,11 @@ describe('the rough as turf, short and dense', () => {
 
   it("is thinned with distance in rings of the game's own, from where the camera stands, and not by the renderer's default", () => {
     const { near, mid, far } = levels(fieldOf(layoutOf(HOLE.map), HOLE.name), GRASS);
-    // the renderer's own rings scale with the blade's height, and at this height would keep every blade a hundred units out
+    // the renderer's own rings scale with the blade's height: at 1.2 tall they would keep every blade a hundred units out,
+    // and the game's were nearer; at 0.55 (9 October 2026) its own are nearer still, and the game's, which a blade's cost
+    // is held by, stay as they were, so they are no longer the nearer, only not the renderer's
     const dflt = levels(fieldOf(layoutOf(HOLE.map), HOLE.name));
-    expect(near, 'thinner, from nearer').toBeLessThan(dflt.near);
+    expect([near, mid, far], 'the game’s own, and not the renderer’s').not.toEqual([dflt.near, dflt.mid, dflt.far]);
     // the closest the camera stands to the ground is 30 units; the grass under it is whole
     expect(near).toBeGreaterThanOrEqual(30);
     expect(near).toBeLessThan(mid);

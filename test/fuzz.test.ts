@@ -32,12 +32,18 @@ describe('the fuzzer', () => {
     // aiming of a shot, whose preview is held to the game, and the shot then taken as it was aimed
     const one = fuzz(26, 12000),
       two = fuzz(17, 12000),
-      golf = fuzz(3, 8000, FLAT_HOLES);
+      golf = fuzz(3, 8000, FLAT_HOLES),
+      // 'fly to an island' needs a hole with land wholly in water (The Links' Island Green, The Isles), and 26, 17 and 3 reach
+      // none since the ground is read by the zones and the stones are gone (9 October 2026: their rounds go another way);
+      // seed 7 reaches one three times in 12000 frames, and is the cheapest chosen (a second), with no bearing on the draws below
+      island = fuzz(7, 12000);
     const sum = (a: Record<string, number>, b: Record<string, number>) => {
       const out = { ...a };
       for (const [k, n] of Object.entries(b)) out[k] = (out[k] ?? 0) + n;
       return out;
     };
+    // a ball come to rest on golf was held to the zones' lie each time, and a good many came to rest: a check that never ran passes in silence
+    expect(golf.checked['lie at rest'], 'balls at rest held to the zones').toBeGreaterThan(30);
     // the monkey's main stream is drawn from exactly this often: every other action keeps to a stream of its own, so a
     // stray draw anywhere (a new action reading the monkey's chance, say) moves these and not only what is done. Recorded
     // on 6 October 2026 before 'aim and take back' was added, and it must not move with it. Seed 17's moved from 3217 to 3100 when the
@@ -50,17 +56,22 @@ describe('the fuzzer', () => {
     // Waterworks: a monkey choosing among six courses, and playing their holes in a new order, plays another round; 17 and 3
     // did not move. Seeds 26 and 17 moved again, to 3140 and 3202, when stones that the ball meets were laid along the water's
     // edge off each hole's line of play (8 October 2026): the rounds are played differently where a ball comes back off one.
-    // With no stones laid they are 3142 and 3100 to the draw, so 'roll at a stone' draws nothing of the monkey's own
-    expect([one.drawn, two.drawn, golf.drawn], "draws from the monkey's main stream").toEqual([3140, 3202, 2670]);
+    // They went back to 3142 and 3100 on 9 October 2026 when those stones went, the ring along the water being scenery only
+    // (and the action that rolled at one with them, which drew from a stream of its own and so moved nothing here).
+    // Seed 3's (level golf) moved from 2670 to 2702 on 9 October 2026 when a golf ball's lie began to be read from the curves the
+    // ground is drawn by (`zones.ts`) and not the tile: shown by putting `lieAt` and `isOut` back to the tile's in a scratch
+    // edit, which gives 2670 to the draw (the fuzzer's `aimed` fix, tried alone, leaves 2702): the rounds on a hole's edges differ.
+    expect([one.drawn, two.drawn, golf.drawn], "draws from the monkey's main stream").toEqual([3142, 3100, 2702]);
     // the framing rule was asked of the camera, on golf and on minigolf, a good many times: a check that never ran passes in silence
     expect(one.framed + two.framed, 'times the framing was checked').toBeGreaterThan(300);
     expect(golf.framed, 'times it was checked on level golf').toBeGreaterThan(30);
     expect(one.failure, JSON.stringify(one.failure)).toBe(null);
     expect(two.failure, JSON.stringify(two.failure)).toBe(null);
     expect(golf.failure, JSON.stringify(golf.failure)).toBe(null);
+    expect(island.failure, JSON.stringify(island.failure)).toBe(null);
     const r = {
-      done: sum(sum(one.done, two.done), golf.done),
-      happened: sum(sum(one.happened, two.happened), golf.happened),
+      done: sum(sum(sum(one.done, two.done), golf.done), island.done),
+      happened: sum(sum(sum(one.happened, two.happened), golf.happened), island.happened),
       failure: null,
     };
     expect(r.failure, JSON.stringify(r.failure)).toBe(null);
@@ -80,7 +91,6 @@ describe('the fuzzer', () => {
       'putt by the break',
       'read the break',
       'reload',
-      'roll at a stone',
       'shoot',
       'shoot as aimed',
       'shoot well',
@@ -91,11 +101,7 @@ describe('the fuzzer', () => {
     expect(Object.keys(r.done).sort(), 'every action there is, and no other').toEqual(actions);
     for (const action of actions) expect(r.done[action], action).toBeGreaterThan(0);
     expect(r.happened.struck, 'the ball struck').toBe(
-      r.done.shoot +
-        r.done['shoot well'] +
-        r.done['shoot as aimed'] +
-        r.done['roll at a stone'] +
-        r.done['fly to an island'],
+      r.done.shoot + r.done['shoot well'] + r.done['shoot as aimed'] + r.done['fly to an island'],
     );
     expect(r.happened.stopped, 'and come to rest').toBeGreaterThan(0);
     expect(r.happened.holed, 'holed out').toBeGreaterThan(0);

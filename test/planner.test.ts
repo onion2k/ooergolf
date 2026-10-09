@@ -461,15 +461,21 @@ describe('the planner', () => {
 describe('what the first cut is worth', () => {
   it('is a ball a little worse placed than on the fairway, and better than in the rough, at the same distance by the same way', () => {
     const base = field('f');
-    const layoutAs = (ch: string) =>
+    // fairway to the sixth column and the rough beyond it, and the ball a tile past the edge: the first cut is the band
+    // round a fairway's curve, so a stripe of cut tiles in the middle of fairway is not one (it blurs away)
+    const layoutAs = (kind: 'f' | 'c' | 'r') =>
       layoutOf(
         base.map.map((line, r) =>
-          r > 0 && r < base.map.length - 1 ? line.slice(0, 5) + ch.repeat(3) + line.slice(8) : line,
+          r > 0 && r < base.map.length - 1 && kind !== 'f'
+            ? kind === 'r'
+              ? line.replace(/f/g, 'r')
+              : line.slice(0, 6) + line.slice(6).replace(/f/g, 'r')
+            : line,
         ),
       );
     // one route for all three, so that only the lie's own price is in the figure and not the dearer way over it
     const route = new Route(layoutAs('f'));
-    const lieAs = (ch: string) => {
+    const lieAs = (ch: 'f' | 'c' | 'r') => {
       const l = layoutAs(ch);
       return strokesToGo({ layout: l, route }, l.cup.x + 12, l.cup.y - 60);
     };

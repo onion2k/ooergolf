@@ -21,6 +21,7 @@ import { greenArrows, speedName } from './green';
 import type { Game } from './game';
 import { checkInvariants } from './invariants';
 import { seeded } from './random';
+import { zonesOf, type Zone } from './zones';
 
 declare global {
   interface Window {
@@ -108,10 +109,14 @@ export interface Content {
   posts: { x: number; y: number }[];
   /** Where each kicker on this hole stands: a post that throws the ball harder. */
   kickers: { x: number; y: number }[];
-  /** Where each stone at the water's edge stands, how wide it is and how high its top: a body the ball meets. */
-  stones: { x: number; y: number; r: number; top: number }[];
   /** Where each tree of a golf hole stands: its trunk, with its canopy over it. */
   trees: { x: number; y: number }[];
+  /**
+   * The zone the ground is at a point of a golf hole (`sand`, `lip`, `oob`, `tee`, `putting`, `cut`, `fairway` or `rough`), which is
+   * what the ground is drawn and played by, and null on a hole of minigolf, which keeps its tiles. Asked in the page, so a
+   * smoke test can stand a ball on a curve and not read the tile's kind.
+   */
+  zones: (x: number, y: number) => Zone | null;
   /** How many arrows stand over the hole's putting green to show which way it leans: none on a green that is level. */
   arrows: number;
 }
@@ -503,9 +508,9 @@ export function createApi(host: DebugHost): GameApi {
       sand: sandTiles(game.layout),
       posts: game.layout.bumpers.map((p) => ({ ...p })),
       kickers: game.layout.kickers.map((p) => ({ ...p })),
-      stones: game.layout.stones.map((st) => ({ ...st })),
       trees: game.layout.trees.map((t) => ({ ...t })),
       arrows: greenArrows(game.layout).length,
+      zones: (x, y) => (game.layout.golf ? zonesOf(game.layout).at(x, y) : null),
     }),
     events() {
       return host.events.splice(0);

@@ -38,6 +38,7 @@ import {
   kickerProblems,
   knockProblems,
   landingProblems,
+  lieProblems,
   lostOnStreamProblems,
   planProblems,
   bankProblems,
@@ -207,6 +208,12 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
           }
           // a stroke struck: the camera is told, which has it follow the ball for one in five and hold still for the rest
           if (name === 'struck' && playing && directing) directing.struck();
+          // a ball come to rest on a golf hole lies as the zones say, which is what the ground under it is drawn by; counted,
+          // since a check that never ran passes in silence
+          if (name === 'stopped' && playing && playing.layout.golf) {
+            told.push(...lieProblems(playing, args[0], args[1]));
+            count(checked, 'lie at rest');
+          }
           if (name === 'knocked' && playing) told.push(...knockProblems(playing, ...(args as Knock)));
           // a stream is a belt: the ball is carried on it, and never lost
           if ((name === 'splash' || name === 'outOfBounds') && playing)
@@ -531,6 +538,9 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
             if (game.shoot(angle, power)) {
               spent();
               did('shoot as aimed');
+            } else {
+              // a shot refused is no shot: left set, the next stroke's landing would be held to this one's ring
+              aimed = null;
             }
             busy = Math.floor(between(10, 90));
           }
@@ -955,26 +965,6 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
       }
     };
     /**
-     * A player rolling the ball at the water's edge, where a stone stands: aimed at a stone's middle or a little off it,
-     * soft or firm, from wherever the ball lies, so it is met by a stone, rolls through a gap into the water, or comes to
-     * rest against one or on one. Done on a chance of its own and only on a hole with stones, so every run on a hole
-     * without water plays as it did. Whatever comes of it the rules hold: never inside a stone, never at rest over the
-     * water on one (it is in the water then), and at rest on its top only where it stands.
-     */
-    const stoner = seeded(seed * 29 + 11);
-    const rollAtStone = () => {
-      const { world, ball, layout } = game;
-      if (!game.ready || !layout.stones.length) return;
-      const st = layout.stones[Math.floor(stoner() * layout.stones.length)];
-      const angle = Math.atan2(st.y - world.y[ball], st.x - world.x[ball]) + (stoner() - 0.5) * 0.5;
-      const power = 0.1 + 0.6 * stoner();
-      if (game.shoot(angle, power)) {
-        did('roll at a stone');
-        // the wait from its own stream too, so the monkey's main one is drawn from as it was on a hole with stones
-        busy = Math.floor(10 + stoner() * 30);
-      }
-    };
-    /**
      * A player striking the ball at a stream: aimed at a point of its belt from where the ball lies, at the power that rolls
      * it there on the level, between any slip a player has. Done on a chance of its own, as reading a green is, and only on
      * a hole that has a stream, so every other run plays as it did. Whatever comes of it, the game's rules hold: the ball is
@@ -1301,7 +1291,6 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
       if (aimer() < 0.01) aimAndTakeBack();
       if (bumped() < 0.03) bump();
       if (game.layout.kickers.length && striker() < 0.03) strike();
-      if (game.layout.stones.length && stoner() < 0.03) rollAtStone();
       if (game.obstacles.streamed.size && streamer() < 0.03) strikeOntoStream();
       if (laneOf(game.def) && driver() < 0.03) driveTheLane();
       if (game.layout.golf && islandsOf(game.def).length && islander() < 0.03) flyToIsland();

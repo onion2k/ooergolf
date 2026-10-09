@@ -31,7 +31,7 @@ import {
   cloud,
   conifer,
   fern,
-  stone,
+  bankStone,
   breakArrow,
   bumper,
   bunker,
@@ -137,7 +137,7 @@ function catalogue(): [string, Model][] {
     ['bush', bush(1.8)],
     ['fern', fern(2.2)],
     ['cloud', cloud()],
-    ['stone', stone()],
+    ['bank stone', bankStone(1)],
   ];
 }
 
@@ -1330,7 +1330,7 @@ describe('every model keeps to its triangle budget', () => {
       ['bush', bush(3, { seed: 9 })],
       ['fern', fern(3, { seed: 9 })],
       ['cloud', cloud({ seed: 9 })],
-      ['stone', stone({ seed: 9 })],
+      ['bank stone', bankStone(2)],
     ];
     for (const [name, m] of at) expect(triangles(m), name).toBeLessThanOrEqual(BUDGET[name]);
   });
@@ -1644,19 +1644,35 @@ describe('a water bed is one sheet over tiles of any shape, banded only where it
     expect(triangles(waterBed(L, tile))).toBeLessThanOrEqual(BUDGET['water bed']);
   });
 
-  it('is what the scene draws for a hole’s water: one bed, however many rectangles the water is', () => {
+  it('is what the scene draws for a hole’s water: one set of bands, however many rectangles the water is', () => {
     const map = ['#######', '#.....#', '#.~~~.#', '#.~...#', '#.~.C.#', '#..T..#', '#######'];
     const groups = new Scene().static(layoutFrom(map), 'bed test');
-    const [fr, fg, fb] = WATER_PALETTE.waterFoam;
-    const foams = groups.filter((g) => {
-      const a = (g as { albedo?: number[] }).albedo;
-      return a && Math.abs(a[0] - fr) < 1e-6 && Math.abs(a[1] - fg) < 1e-6 && Math.abs(a[2] - fb) < 1e-6;
-    });
-    expect(foams.length).toBe(1);
+    const withAlbedo = (c: readonly number[]) =>
+      groups.filter((g) => {
+        const a = (g as { albedo?: number[] }).albedo;
+        return a && Math.abs(a[0] - c[0]) < 1e-6 && Math.abs(a[1] - c[1]) < 1e-6 && Math.abs(a[2] - c[2]) < 1e-6;
+      });
+    // open water is the pond's smooth shape (`waterdraw.ts`), in its own foam
+    expect(withAlbedo(BAND_COLOURS[0]).length).toBe(1);
+    // and the rippling look, behind `OCEAN_ON`, is the bed of tiles it was, in the palette's foam
+    OCEAN_ON.minigolf = false;
+    try {
+      const rippling = new Scene().static(layoutFrom(map), 'bed test');
+      const [fr, fg, fb] = WATER_PALETTE.waterFoam;
+      expect(
+        rippling.filter((g) => {
+          const a = (g as { albedo?: number[] }).albedo;
+          return a && Math.abs(a[0] - fr) < 1e-6 && Math.abs(a[1] - fg) < 1e-6 && Math.abs(a[2] - fb) < 1e-6;
+        }).length,
+      ).toBe(1);
+    } finally {
+      OCEAN_ON.minigolf = true;
+    }
   });
 });
 
-import { STREAM, streamBed, stream as streamOf } from '../src/models/obstacles';
+import { OCEAN_ON, STREAM, streamBed, stream as streamOf } from '../src/models/obstacles';
+import { BAND_COLOURS } from '../src/waterdraw';
 import { Obstacles } from '../src/obstacles';
 
 describe('a stream bed is one channel over the tiles of every belt drawn as water, banded only where it meets the grass', () => {

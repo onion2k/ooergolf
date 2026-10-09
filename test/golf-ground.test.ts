@@ -5,18 +5,59 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { Mesh } from 'artshape-render/mesh/types';
-import { TILE, heightAt, layoutOf, tileAt } from '../src/arena';
+import { TILE, heightAt, layoutOf, tileAt, type Layout } from '../src/arena';
 import { COURSE } from '../src/course';
-import { GROUND, groundOf, stakesOf } from '../src/ground';
+import { groundOf, stakesOf } from '../src/ground';
 import { PALETTE } from '../src/scene';
-import { LIE } from '../src/surfaces';
+import { zonesOf } from '../src/zones';
 
 /** How many triangles a mesh has. */
 const triangles = (m: Mesh) => m.indices.length / 3;
-/** How many triangles a tile of ground is: two to each piece, and pieces a side squared. */
-const PER_TILE = 2 * GROUND.pieces * GROUND.pieces;
+/** The area of a mesh seen from above, in square yards: its triangles' projected areas, added. */
+function area(m: Mesh): number {
+  let sum = 0;
+  const p = m.positions;
+  for (let k = 0; k < m.indices.length; k += 3) {
+    const [a, b, c] = [m.indices[k] * 3, m.indices[k + 1] * 3, m.indices[k + 2] * 3];
+    sum += Math.abs((p[b] - p[a]) * (p[c + 1] - p[a + 1]) - (p[c] - p[a]) * (p[b + 1] - p[a + 1])) / 2;
+  }
+  return sum;
+}
 
-const MAP = ['#########', '#rrrrrrr#', '#rggCggr#', '#rggggfr#', '#rffffsr#', '#ffffffr#', '#rrtTtrr#', '#########'];
+/**
+ * The share of the triangles of `m` whose middle is not in `zone`: a mesh is the colour of the ground it is laid on. A
+ * fragment cut along a curve is cut by the line between its piece's corners, not the curve itself, so a sliver of one may
+ * have its middle a hair the other side: a few in a hundred at most, and none well inside.
+ */
+function allIn(l: Layout, m: Mesh, zone: string): number {
+  const zones = zonesOf(l);
+  const p = m.positions;
+  let wrong = 0;
+  for (let k = 0; k < m.indices.length; k += 3) {
+    const [a, b, c] = [m.indices[k] * 3, m.indices[k + 1] * 3, m.indices[k + 2] * 3];
+    if (zones.at((p[a] + p[b] + p[c]) / 3, (p[a + 1] + p[b + 1] + p[c + 1]) / 3) !== zone) wrong++;
+  }
+  return wrong / Math.max(1, m.indices.length / 3);
+}
+
+/**
+ * A hole with a green and a fairway, a tee and rough, each a block big enough for its curve to keep it (a strip of two tiles
+ * blurs away): twenty by twenty-two tiles.
+ */
+const MAP = (() => {
+  const grid: string[][] = Array.from({ length: 22 }, (_, r) =>
+    Array.from({ length: 20 }, (_, c) => (r === 0 || r === 21 || c === 0 || c === 19 ? '#' : 'r')),
+  );
+  const draw = (r0: number, r1: number, c0: number, c1: number, ch: string) => {
+    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) grid[r][c] = ch;
+  };
+  draw(2, 6, 6, 13, 'g');
+  grid[4][9] = 'C';
+  draw(8, 15, 7, 12, 'f');
+  draw(18, 19, 8, 11, 't');
+  grid[18][9] = 'T';
+  return grid.map((row) => row.join(''));
+})();
 /** The same hole with a first cut a tile wide round its green and down the fairway's west edge. */
 const CUT_MAP = [
   '#########',
@@ -31,54 +72,49 @@ const CUT_MAP = [
   '#########',
 ];
 
-/**
- * How many tiles of each kind the map draws, by its letters, and how many of each of the mown checker's two tones each is
- * on: squares of four tiles a side on a golf hole, worked out here from the column and the row.
- */
-function tilesOf(kinds: string) {
-  const l = layoutOf(MAP);
-  const out = [0, 0];
-  MAP.forEach((row, r) => {
-    const ty = l.rows - 1 - r;
-    [...row].forEach((c, tx) => {
-      if (kinds.includes(c)) out[(Math.floor(tx / 4) + Math.floor(ty / 4)) % 2]++;
-    });
-  });
-  return out;
-}
-
 describe('the ground of a golf hole', () => {
   const l = layoutOf(MAP);
   const g = groundOf(l);
 
-  it('has a mesh for the rough, the green in two stripes, and the tee, beside the fairway’s two stripes', () => {
+  it('has a mesh for the rough, the green in its stripes, the tee and the fairway, each laid where its zone is', () => {
     expect(g.golf).toBeDefined();
     const golf = g.golf!;
-    const roughTiles = tilesOf('r').reduce((a, b) => a + b);
-    const teeTiles = tilesOf('tT').reduce((a, b) => a + b);
-    expect(triangles(golf.rough)).toBe(roughTiles * PER_TILE);
-    expect(triangles(golf.tee)).toBe(teeTiles * PER_TILE);
-    // the cup’s own tile is its collar’s, not the green’s
-    const [greenEven, greenOdd] = tilesOf('g');
-    expect(triangles(golf.putting) + triangles(golf.puttingMown)).toBe((greenEven + greenOdd) * PER_TILE);
-    const [fairEven, fairOdd] = tilesOf('f');
-    expect(triangles(g.green) + triangles(g.mown)).toBe((fairEven + fairOdd) * PER_TILE);
+    // a hole this small has only the zones the curves keep: a fairway, a green, a tee, rough and the cut round them
+    expect(triangles(golf.rough)).toBeGreaterThan(0);
+    expect(triangles(golf.tee)).toBeGreaterThan(0);
+    expect(triangles(golf.putting) + triangles(golf.puttingMown)).toBeGreaterThan(0);
+    expect(triangles(g.green) + triangles(g.mown)).toBeGreaterThan(0);
+    for (const [mesh, zone] of [
+      [golf.rough, 'rough'],
+      [golf.tee, 'tee'],
+      [golf.putting, 'putting'],
+      [golf.puttingMown, 'putting'],
+      [g.green, 'fairway'],
+      [g.mown, 'fairway'],
+      [golf.cut, 'cut'],
+    ] as const)
+      expect(allIn(l, mesh, zone), `share of the ${zone} mesh in another zone`).toBeLessThan(0.02);
   });
 
-  it('lays each tile once: the meshes add up to the tiles that are grass, the cup’s, sand and rail aside', () => {
+  it('lays each tile once: the meshes add up to the ground, the cup’s tile, water and rock aside, with no gap and no overlap', () => {
     const golf = g.golf!;
-    const all =
-      triangles(g.green) +
-      triangles(g.mown) +
-      triangles(golf.rough) +
-      triangles(golf.putting) +
-      triangles(golf.puttingMown) +
-      triangles(golf.cut) +
-      triangles(golf.tee);
-    let grass = 0;
-    for (let t = 0; t < l.cols * l.rows; t++) if (!l.solid[t] && !l.water[t] && !l.sand[t]) grass++;
+    const all = [
+      g.green,
+      g.mown,
+      golf.rough,
+      golf.putting,
+      golf.puttingMown,
+      golf.cut,
+      golf.tee,
+      golf.oob,
+      golf.sand,
+      golf.sandRaked,
+      golf.lip,
+    ];
+    let ground = 0;
+    for (let t = 0; t < l.cols * l.rows; t++) if (!l.solid[t] && !l.water[t]) ground++;
     // less the cup’s tile
-    expect(all).toBe((grass - 1) * PER_TILE);
+    expect(all.reduce((sum, m) => sum + area(m), 0)).toBeCloseTo((ground - 1) * TILE * TILE, 3);
   });
 
   it('is coloured, each kind its own: rough darker than the fairway, the putting green lighter, the tee paler', () => {
@@ -97,12 +133,12 @@ describe('the first cut of a golf hole as it is drawn', () => {
   const l = layoutOf(CUT_MAP);
   const g = groundOf(l);
 
-  it('is a mesh of its own with a tile of ground for each tile of cut, and none on a hole with no cut', () => {
-    let cut = 0;
-    for (let t = 0; t < l.cols * l.rows; t++) if (l.lie[t] === LIE.cut && !l.solid[t]) cut++;
-    expect(cut).toBeGreaterThan(8);
-    expect(triangles(g.golf!.cut)).toBe(cut * PER_TILE);
-    expect(triangles(groundOf(layoutOf(MAP)).golf!.cut)).toBe(0);
+  it('is a mesh of its own, laid in the band the zones say, and on a hole drawn with no cut as well: the band is outside the curves, not on a tile of the map', () => {
+    expect(triangles(g.golf!.cut)).toBeGreaterThan(8);
+    // a hole of blocks big enough to keep its curves (the cut map above is too small, its pieces mostly slivers)
+    const big = layoutOf(MAP);
+    expect(triangles(groundOf(big).golf!.cut)).toBeGreaterThan(8);
+    expect(allIn(big, groundOf(big).golf!.cut, 'cut')).toBeLessThan(0.02);
   });
 
   it('is told apart from the fairway and the green by its colour, between the two: no seam to read as a stripe', () => {
@@ -122,22 +158,9 @@ describe('the first cut of a golf hole as it is drawn', () => {
     for (let i = 0; i < mesh.positions.length; i += 3) {
       const [x, y, z] = [mesh.positions[i], mesh.positions[i + 1], mesh.positions[i + 2]];
       // a corner on a tile's edge is at the height of the ground there, whichever tile it is drawn for
-      expect(z, `vertex ${i / 3}`).toBeCloseTo(heightAt(hill, x, y), 4);
+      // a corner cut out of a piece is laid by the heights of the piece's own four, bilinear: within half a thousandth of a yard here
+      expect(z, `vertex ${i / 3}`).toBeCloseTo(heightAt(hill, x, y), 3);
     }
-  });
-
-  it('has the edge of each tile where the next tile of green has its own, so the pieces share their corners', () => {
-    const terrain = Float32Array.from({ length: l.cols * l.rows }, (_, k) => 0.3 * Math.floor(k / l.cols));
-    const hill = layoutOf(CUT_MAP, terrain);
-    const gr = groundOf(hill).golf!;
-    const key = (m: Mesh, i: number) =>
-      `${m.positions[i].toFixed(3)},${m.positions[i + 1].toFixed(3)},${m.positions[i + 2].toFixed(3)}`;
-    const cutCorners = new Set<string>();
-    for (let i = 0; i < gr.cut.positions.length; i += 3) cutCorners.add(key(gr.cut, i));
-    let shared = 0;
-    for (const m of [gr.putting, gr.puttingMown])
-      for (let i = 0; i < m.positions.length; i += 3) if (cutCorners.has(key(m, i))) shared++;
-    expect(shared, 'the green and the cut meet along an edge, at the same corners').toBeGreaterThan(5);
   });
 });
 
@@ -152,18 +175,18 @@ describe('the ground out of bounds', () => {
   const l = layoutOf(map);
   const g = groundOf(l);
 
-  it('is a mesh of its own, a tile of it a tile of out of bounds, and is not laid twice', () => {
-    let oob = 0;
-    for (let t = 0; t < l.cols * l.rows; t++) if (l.oob[t]) oob++;
-    expect(oob).toBeGreaterThan(10);
-    expect(triangles(g.golf!.oob)).toBe(oob * PER_TILE);
+  it('is a mesh of its own, laid where the zone is out of bounds, and is not laid twice', () => {
+    expect(triangles(g.golf!.oob)).toBeGreaterThan(50);
+    expect(allIn(l, g.golf!.oob, 'oob')).toBeLessThan(0.02);
     // and none of the rough’s: the rough is `r`, and out of bounds is not it, though a ball is played from it as rough
-    expect(triangles(g.golf!.rough)).toBe(4 * PER_TILE);
+    expect(allIn(l, g.golf!.rough, 'rough')).toBeLessThan(0.02);
   });
 
-  it('is a colour of its own, drier and yellower than the rough it is played from', () => {
-    expect(PALETTE.oobGround[0]).toBeGreaterThan(PALETTE.playRough[0]);
-    expect(PALETTE.oobGround[1]).not.toBeCloseTo(PALETTE.playRough[1], 2);
+  it('is a colour of its own, drier and paler than the rough it is played from', () => {
+    // paler by its blue: the rough was darker and redder than the dry grass until 9 October 2026, when the rough was
+    // made the title's light green (0.17, 0.35, 0.009) and out of bounds was left as it was (0.15, 0.36, 0.03)
+    expect(PALETTE.oobGround[2]).toBeGreaterThan(PALETTE.playRough[2] * 2);
+    expect(PALETTE.oobGround[0]).not.toBeCloseTo(PALETTE.playRough[0], 2);
   });
 });
 
@@ -171,23 +194,26 @@ describe('the stakes along the line', () => {
   const map = ['#########', '#xxxxxxx#', '#xxgCgxx#', '#xffffxx#', '#xffffxx#', '#xrrTrrx#', '#xxxxxxx#', '#########'];
   const l = layoutOf(map);
 
-  it('stand on out of bounds, on the side of the line that faces in bounds, and never in play', () => {
+  it('stand on the out of bounds curve (the ground out of bounds is drawn and played by), a half tile of out of bounds and of play either side of it', () => {
     const stakes = stakesOf(l);
     expect(stakes.length).toBeGreaterThan(3);
+    const zones = zonesOf(l);
     for (const s of stakes) {
-      const t = tileAt(l, s.x, s.y);
-      expect(l.oob[t], `a stake at ${s.x.toFixed(1)},${s.y.toFixed(1)} is on out of bounds`).toBe(1);
-      // within a tile of a tile that is in play
-      let near = false;
+      // on the curve itself: a hair either way reads as out of bounds on one side and in play on the other
+      let near = false,
+        oob = false,
+        play = false;
       for (const [dx, dy] of [
-        [TILE, 0],
-        [-TILE, 0],
-        [0, TILE],
-        [0, -TILE],
+        [0.3, 0],
+        [-0.3, 0],
+        [0, 0.3],
+        [0, -0.3],
       ]) {
-        const u = tileAt(l, s.x + dx, s.y + dy);
-        if (u >= 0 && !l.oob[u] && !l.solid[u]) near = true;
+        const z = zones.at(s.x + dx, s.y + dy);
+        if (z === 'oob') oob = true;
+        else play = true;
       }
+      near = oob && play;
       expect(near, `a stake at ${s.x.toFixed(1)},${s.y.toFixed(1)} is on the line`).toBe(true);
     }
   });

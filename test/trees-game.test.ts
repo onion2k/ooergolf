@@ -6,7 +6,7 @@
  * by either.
  */
 import { describe, expect, it } from 'vitest';
-import { TILE, fromTrees, layoutOf, lieAt } from '../src/arena';
+import { TILE, fromTrees, layoutOf, tileLieAt as lieAt } from '../src/arena';
 import { checkInvariants } from '../src/invariants';
 import { Rehearsal } from '../src/planner';
 import { LIE } from '../src/surfaces';

@@ -7,7 +7,7 @@
  * finite wherever it is asked and cheap, and what it says of a green that is level or hills that are not a green's.
  */
 import { describe, expect, it } from 'vitest';
-import { HARDEST_SHOT, TILE, heightAt, layoutOf, lieAt, slopeAt, type Layout } from '../src/arena';
+import { HARDEST_SHOT, TILE, heightAt, layoutOf, lieAt, tileLieAt, slopeAt, type Layout } from '../src/arena';
 import { golfHole, type GolfSpec } from '../src/golf';
 import { GREEN, PUTT, breakOf, greenArrows, puttFrom, speedName } from '../src/green';
 import { LINKS_SPECS } from '../src/links';
@@ -209,7 +209,8 @@ describe('the break, against the game’s own putt', () => {
       for (const side of [-1.4, 0, 1.4]) {
         const x = from.x + ((to.x - from.x) * k) / n - uy * side,
           y = from.y + ((to.y - from.y) * k) / n + ux * side;
-        const lie = lieAt(l, x, y);
+        // the physics rolls a ball by its tile's surface, and the break is held to the game's own putt, so the line is read by the tile
+        const lie = tileLieAt(l, x, y);
         if (lie !== LIE.green && lie !== LIE.cut && lie !== LIE.fairway) return false;
         if (Math.hypot(...slopeAt(l, x, y)) > 0.11) return false;
         if (avoid && Math.hypot(x - avoid.x, y - avoid.y) < 3.5) return false;
@@ -235,7 +236,7 @@ describe('the break, against the game’s own putt', () => {
         for (let ta = 0; ta < 6; ta++)
           for (const away of [3, 6, 10, 14]) {
             const target = { x: l.cup.x + Math.cos(ta + away) * away, y: l.cup.y + Math.sin(ta + away) * away };
-            if (lieAt(l, target.x, target.y) !== LIE.green) continue;
+            if (tileLieAt(l, target.x, target.y) !== LIE.green) continue;
             for (const length of [5, 8, 12, 16, 20, 25])
               for (let a = 0; a < 5; a++) {
                 const bearing = (a / 5) * Math.PI * 2 + length * 0.37 + ta;
@@ -321,7 +322,7 @@ describe('the arrows over a green', () => {
     for (let t = 0; t < l.cols * l.rows; t++) if (!l.solid[t] && l.lie[t] === LIE.green && !l.sand[t]) greenTiles++;
     expect(arrows.length).toBeLessThanOrEqual(greenTiles);
     for (const a of arrows) {
-      expect(lieAt(l, a.x, a.y)).toBe(LIE.green);
+      expect(tileLieAt(l, a.x, a.y)).toBe(LIE.green);
       const [sx, sy] = slopeAt(l, a.x, a.y);
       expect(a.slopeX).toBe(sx);
       expect(a.slopeY).toBe(sy);

@@ -5,7 +5,7 @@
  * out of bounds, since one that lay there would be lost the moment it did.
  */
 import { describe, expect, it } from 'vitest';
-import { layoutOf, lieAt, tileAt } from '../src/arena';
+import { layoutOf, tileLieAt as lieAt, tileAt } from '../src/arena';
 import { COURSE } from '../src/course';
 import { checkInvariants } from '../src/invariants';
 import { LIE } from '../src/surfaces';

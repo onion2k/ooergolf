@@ -13,7 +13,8 @@
  * keep a note of it. Nothing here waits on anything there, so the same game
  * runs in the page and in Node, and what the tests try is what is played.
  */
-import { fromKickers, fromStones } from './arena';
+import { fromKickers } from './arena';
+import { zonesOf } from './zones';
 import {
   BALL,
   FASTEST,
@@ -28,6 +29,7 @@ import {
   HARDEST_SHOT,
   RAIL_HEIGHT,
   lieAt,
+  tileLieAt,
   onFloor,
   restingAbove,
   slopeAt,
@@ -351,11 +353,13 @@ export class Game {
   /**
    * How steadily the ground at (x, y) slows a rolling ball, in yards a second a second: the surface's own on a golf hole,
    * with the putting green's speed and its first cut's being the hole's `greens`, and the minigolf green's everywhere else.
-   * What a putt reaches is worked out from it.
+   * What a putt reaches is worked out from it. By the tile and not by the zone (`lieAt`): the physics rolls a ball by its
+   * tile's surface (`makeWorld`), so a prediction of where a ball rolls to, and the slope it is held on, must be the tile's
+   * or they are wrong by the other kind's roll for as far as a curve and a tile edge part.
    */
   rollAt(x: number, y: number): number {
     return this.layout.golf
-      ? groundRoll(lieAt(this.layout, x, y), this.greens, this.builtKit)
+      ? groundRoll(tileLieAt(this.layout, x, y), this.greens, this.builtKit)
       : ROLL.roll * rollScale(LIE.none, this.builtKit);
   }
 
@@ -742,11 +746,6 @@ export class Game {
       this.heldToFastest();
       this.knock(vx, vy, vz);
       if (fell.holed || fell.wet) break;
-      // come to rest on a stone over the water, it is in the water: a ball is never left lying on a tile of it
-      if (this.onStoneInWater()) {
-        Object.assign(fell, { wet: true, x: world.x[ball], y: world.y[ball] });
-        break;
-      }
     }
     if (this.phase !== 'play') return;
     if (fell.holed) return this.done('holed');
@@ -828,21 +827,13 @@ export class Game {
    * Whether the ball is on the ground over out of bounds, on a golf hole: as near the ground as a ball resting there,
    * so one in flight over the line is not, and a hop off it is not until it lands.
    */
-  /** Whether the ball is at rest over a tile of water, which only a stone's top can hold it over. */
-  private onStoneInWater(): boolean {
-    const { world, ball, layout } = this;
-    if (!layout.stones.length || world.asleep[ball] !== 1) return false;
-    const t = tileAt(layout, world.x[ball], world.y[ball]);
-    return t >= 0 && layout.water[t] === 1 && layout.solid[t] === 0;
-  }
-
   private isOut(): boolean {
     const { world, ball, layout } = this;
     if (!layout.golf || !world.alive[ball]) return false;
     const x = world.x[ball],
       y = world.y[ball];
-    const t = tileAt(layout, x, y);
-    if (t < 0 || !layout.oob[t]) return false;
+    // out of bounds is the curve the stakes stand along and the ground is drawn by, not the tile
+    if (tileAt(layout, x, y) < 0 || zonesOf(layout).at(x, y) !== 'oob') return false;
     return world.z[ball] - heightAt(layout, x, y) - restingAbove(layout, x, y, world.r[ball]) < ON_THE_GROUND;
   }
 
@@ -1179,8 +1170,8 @@ export class Game {
     }
     if (fromPosts(layout, x, y) < r + 0.1) throw new Error(`the ball cannot be put down at ${x},${y}: on a post`);
     if (fromKickers(layout, x, y) < r + 0.1) throw new Error(`the ball cannot be put down at ${x},${y}: on a kicker`);
-    if (fromStones(layout, x, y) < r + 0.1) throw new Error(`the ball cannot be put down at ${x},${y}: on a stone`);
-    if (layout.oob[tileAt(layout, x, y)]) throw new Error(`the ball cannot be put down at ${x},${y}: out of bounds`);
+    if (layout.golf && zonesOf(layout).at(x, y) === 'oob')
+      throw new Error(`the ball cannot be put down at ${x},${y}: out of bounds`);
     if (fromTrees(layout, x, y) < r + 0.1)
       throw new Error(`the ball cannot be put down at ${x},${y}: on a tree's trunk`);
     if (Math.hypot(x - layout.cup.x, y - layout.cup.y) < clearOf(this.cup.radius))

@@ -29,21 +29,21 @@ export const shown = (r: number, g: number, b: number): Colour => [linear(r), li
 const GREEN = [0.21, 0.41, 0.0072] as const,
   STRIPE = 0.11;
 /**
- * A golf hole's other grounds, already linear: the rough a player plays from, darker and a hair yellower than the
- * fairway that is the game's own green, and out of bounds, the dry pale grass beyond the stakes; the putting green, finer and lighter, in the same two stripes; and the tee's
+ * A golf hole's other grounds, already linear: the rough a player plays from, a hair darker and a hair yellower than the
+ * fairway that is the game's own green, since the second title pass (9 October 2026) nearly its lightness: the title's lawn is one light green, and a dark rough read as a hedge, and out of bounds, the dry pale grass beyond the stakes; the putting green, finer and lighter, in the same two stripes; and the tee's
  * box, paler still, mown flat.
  */
-const PLAY_ROUGH = [0.0952, 0.235, 0.0084] as const,
+const PLAY_ROUGH = [0.17, 0.35, 0.009] as const,
   OUT_OF_BOUNDS = [0.15, 0.36, 0.03] as const,
   PUTTING = [0.285, 0.51, 0.0119] as const,
   TEE_BOX = [0.361, 0.51, 0.0315] as const;
 /**
  * The first cut, already linear: the fringe round a putting green and the strip along a fairway's edges. Mown, but longer
  * than either, so it is between the fairway's grass and the green's finer one in light, and one colour and not two stripes:
- * it is a tile wide, and a stripe across a fringe would read as a seam. It is also yellower than both, for the two mown
+ * it is a tile wide, and a stripe across a fringe would read as a seam. It is also yellower than both (and a little less bright than it was, with the rough it borders lighter), for the two mown
  * stripes of each are an eighth either side of their middle, and a cut of the same hue is one of them.
  */
-const FIRST_CUT = [0.34, 0.43, 0.009] as const;
+const FIRST_CUT = [0.29, 0.45, 0.011] as const;
 /** The rail's paint, already linear: a warm timber. */
 const RAIL_PAINT = [0.52, 0.25, 0.09] as const;
 
@@ -55,7 +55,7 @@ export const PALETTE = {
    */
   grass: rgb(GREEN.map((c) => c * (1 - STRIPE))),
   grassMown: rgb(GREEN.map((c) => c * (1 + STRIPE))),
-  rough: [0.0775, 0.1823529, 0.0242941] as Colour,
+  rough: [0.1674, 0.3335294, 0.0115882] as Colour,
   playRough: rgb(PLAY_ROUGH),
   oobGround: rgb(OUT_OF_BOUNDS),
   puttingGreen: rgb(PUTTING.map((c) => c * (1 - STRIPE))),
@@ -117,6 +117,9 @@ export const PALETTE = {
   sandGrain: shown(0.91, 0.72, 0.4),
   sandLip: shown(1.0, 0.88, 0.58),
   sandLipInner: shown(0.8, 0.6, 0.34),
+  /** A golf hole's bunker, drawn by its zone and not by its tiles: paler and smoother than minigolf's, its rake nearly its own colour, and a soft pale lip. */
+  golfSand: shown(0.88, 0.75, 0.5),
+  golfSandLip: shown(0.93, 0.84, 0.62),
   belt: shown(0.2, 0.2, 0.24),
   steel: shown(0.74, 0.77, 0.82),
 
@@ -141,6 +144,8 @@ export const PALETTE = {
   stem: shown(0.26, 0.56, 0.18),
   /** A pebble: a warm stone and not a cool grey, so it keeps a colour in the shade; darker than a cream, which glared in the rough. */
   rock: shown(0.7, 0.68, 0.67),
+  /** The scenery's rocks, warmer and darker than `rock`, which the baked tones' four tiers light: the title's stones. */
+  rockWarm: shown(0.6, 0.55, 0.49),
   paint: shown(0.98, 0.97, 0.95),
   string: shown(0.94, 0.92, 0.86),
 } as const satisfies Record<string, Colour | Record<string, Colour>>;

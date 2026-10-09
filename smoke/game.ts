@@ -7,7 +7,7 @@
 import { expect, type Page } from '@playwright/test';
 import type { GameApi } from '../src/debug';
 import type { Save } from '../src/progress';
-import { BALL, KIND_RADIUS, layoutOf, tileAt } from '../src/arena';
+import { layoutOf, tileAt } from '../src/arena';
 import { COURSES } from '../src/course';
 
 declare global {
@@ -188,9 +188,8 @@ export function puttingHole(greens: number | null = 12) {
 export type PuttingHole = ReturnType<typeof puttingHole>;
 
 /**
- * An aim from the Pond's tee straight into its water through a gap in the stones along its banks: the first angle, from up
- * the hole turning left, whose line meets water with no stone within a ball's width of it, so a test that putts into the
- * pond is not stopped by a stone (8 October 2026, when the banks were lined with them off the line of play).
+ * An aim from the Pond's tee straight into its water: the first angle, from up the hole turning left, whose line meets
+ * water before a rail. (The pond's bank of stones is scenery and stops no ball; it was bodies the ball met until 9 October 2026.)
  */
 export function intoThePond(): number {
   const pond = COURSES.flatMap((c) => c.holes).find((h) => h.name === 'Pond')!;
@@ -200,20 +199,10 @@ export function intoThePond(): number {
     const dx = Math.cos(angle),
       dy = Math.sin(angle);
     for (let d = 0; d < 30; d += 0.25) {
-      const x = l.tee.x + dx * d,
-        y = l.tee.y + dy * d;
-      const t = tileAt(l, x, y);
+      const t = tileAt(l, l.tee.x + dx * d, l.tee.y + dy * d);
       if (t < 0 || l.rail[t]) break;
-      if (l.water[t]) {
-        // no stone near the line from the tee to here, a ball's radius and its own clear of it
-        const clear = l.stones.every((s) => {
-          const along = Math.max(0, Math.min(d, (s.x - l.tee.x) * dx + (s.y - l.tee.y) * dy));
-          return Math.hypot(l.tee.x + dx * along - s.x, l.tee.y + dy * along - s.y) > s.r + KIND_RADIUS[BALL] + 0.2;
-        });
-        if (clear) return angle;
-        break;
-      }
+      if (l.water[t]) return angle;
     }
   }
-  throw new Error('no way into the Pond past its stones');
+  throw new Error('no way into the Pond');
 }

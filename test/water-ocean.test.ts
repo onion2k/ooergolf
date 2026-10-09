@@ -83,7 +83,7 @@ describe('open water', () => {
 
   it('has waves of golf’s size on golf, and finer ones on minigolf, whose ponds are small and seen from close', () => {
     expect(oceanScaleFor(true)).toBe(OCEAN.scale);
-    expect(OCEAN.scale).toBe(0.3);
+    expect(OCEAN.scale).toBe(0.6);
     expect(oceanScaleFor(false)).toBe(OCEAN.minigolfScale);
     expect(OCEAN.minigolfScale).toBe(0.6);
     expect(surfaceOf(waterBed(CELLS, 3, { look: 'ocean' })).pattern?.scale, 'a bed told nothing is golf’s').toBe(

@@ -6,7 +6,7 @@
  * surfaces table says, and that a hole drawn with it is a hole the layout reads.
  */
 import { describe, expect, it } from 'vitest';
-import { layoutOf, lieAt } from '../src/arena';
+import { layoutOf, tileLieAt } from '../src/arena';
 import { golfHole, type GolfSpec } from '../src/golf';
 import { LINKS_SPECS } from '../src/links';
 import { LIE, SURFACES } from '../src/surfaces';
@@ -154,7 +154,7 @@ describe('the first cut of a golf hole made from a spec', () => {
     expect(golfHole({ ...SPEC, seed: 6 }).map).not.toEqual(golfHole(SPEC).map);
   });
 
-  it('is read as the cut where a ball lies on it, and sand lying on a tile that was to be cut stays sand', () => {
+  it('is read as the cut by its tile, and sand lying on a tile that was to be cut stays sand', () => {
     const h = golfHole(SPEC);
     const l = layoutOf(h.map, h.terrain);
     let cut = 0;
@@ -163,7 +163,8 @@ describe('the first cut of a golf hole made from a spec', () => {
       cut++;
       const x = l.originX + ((t % l.cols) + 0.5) * 3,
         y = l.originY + (Math.floor(t / l.cols) + 0.5) * 3;
-      expect(lieAt(l, x, y)).toBe(LIE.cut);
+      // the tile the map draws as cut: the cut that is drawn and played is the band round the curves (`zones.test.ts`)
+      expect(tileLieAt(l, x, y)).toBe(LIE.cut);
       expect(l.sand[t]).toBe(0);
       expect(l.oob[t]).toBe(0);
     }

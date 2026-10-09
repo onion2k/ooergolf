@@ -13,7 +13,7 @@ import type { GrassField, GrassKind, GrassOptions, TrampleRect, Wind } from 'art
 import { TILE, heightAt, tileAt, type Layout } from './arena';
 import { seeded } from './random';
 import { nameSeed, windDirection } from './shaping';
-import { LIE } from './surfaces';
+import { zonesOf, type Zone } from './zones';
 
 /** How far below the green the rough lies: the scene's own, kept here too so the turf imports no drawing. */
 const ROUGH_DEPTH = 3;
@@ -65,23 +65,25 @@ export const ROUGH = 0;
 export const FAIRWAY = 1;
 
 /**
- * The rough, as turf and not a hayfield: eighty short blades to the square unit, 1.2 tall and as much as half again
- * either way, so a ball sits down in it and is never lost to it, and a darker green than the painted course so the
- * course is framed by what lies round it. The tallest blade, 1.8, still ends well under `ROUGH_DEPTH`, so the grass is
- * a lawn the course is set in and never a hedge across it. `variation` is how strongly the renderer's three-unit
- * patchiness shows (0.45, where it was 0.25), which is what turns an even field of blades into clumps, and
- * `lean` how far a blade leans over from the upright, so the turf lies as though walked on. These are candidate B of the
- * sheet the figures were chosen from, on 4 October 2026, and a test holds them, so a retune is a decision.
+ * The rough, as turf and not a hayfield: eighty short blades to the square unit, 0.55 tall and a fifth more or less,
+ * so a ball sits down in it and is never lost to it, in a light green, nearer the fairway's than the dark one it had,
+ * as the title picture's lawn is. The tallest blade, 0.66, ends well under `ROUGH_DEPTH`, so the grass is a lawn the
+ * course is set in and never a hedge across it. `variation` is how strongly the renderer's three-unit patchiness shows,
+ * 0.12 since the second title pass (9 October 2026; 0.45 before it, and 0.25 before that), which keeps the lawn calm,
+ * and `lean` how far a blade leans over from the upright, so the turf lies as though walked on. The blades were candidate B of
+ * the sheet the figures were first chosen from, on 4 October 2026, 1.2 tall and darker; the colour is `ab` of the
+ * second pass's mock (0.17, 0.35, 0.009 as the lawn shows), and a test holds them, so a retune is a decision.
+ * `models/palette.ts` holds the ground between the blades to the same colour.
  */
 export const KINDS: readonly GrassKind[] = [
   {
     density: 80,
-    height: 1.2,
-    heightSpread: 0.5,
+    height: 0.55,
+    heightSpread: 0.2,
     width: 0.11,
-    base: [0.0425, 0.1, 0.014],
-    tip: [0.102, 0.24, 0.0315],
-    variation: 0.45,
+    base: [0.1394, 0.28, 0.011],
+    tip: [0.187, 0.371, 0.012],
+    variation: 0.12,
     roughness: 0.9,
     lean: 0.45,
     give: 1,
@@ -185,9 +187,9 @@ export const FLATTEN = { radius: 6, recovery: 6 } as const;
  */
 const TRAMPLE_TEXELS = 320_000;
 
-/** Whether a tile of a golf hole is the rough a ball is played from, which is where the grass grows: not the fairway, green, tee, sand, water or out of bounds. */
-function playedRough(layout: Layout, t: number): boolean {
-  return layout.lie[t] === LIE.rough && !layout.oob[t] && !layout.sand[t] && !layout.water[t] && !layout.solid[t];
+/** The kind of blade a zone of a golf hole grows, or none: the rough's and the fairway's, and nothing on the green, tee, cut, sand or out of bounds. */
+function kindOfZone(zone: Zone): number {
+  return zone === 'rough' ? ROUGH : zone === 'fairway' ? FAIRWAY : -1;
 }
 
 /**
@@ -226,16 +228,11 @@ export function flattenFor(
 ): { x: number; y: number; radius: number } | null {
   if (!ready || !layout.golf) return null;
   const t = tileAt(layout, x, y);
-  if (t < 0 || !playedRough(layout, t)) return null;
+  if (t < 0 || layout.water[t] || layout.solid[t] || zonesOf(layout).at(x, y) !== 'rough') return null;
   out.x = x;
   out.y = y;
   out.radius = FLATTEN.radius;
   return out;
-}
-
-/** Whether a tile of a golf hole is fairway a ball is played from, which grows its short grass: not the cut, green, tee, sand, water or out of bounds. */
-function playedFairway(layout: Layout, t: number): boolean {
-  return layout.lie[t] === LIE.fairway && !layout.oob[t] && !layout.sand[t] && !layout.water[t] && !layout.solid[t];
 }
 
 /**
@@ -253,16 +250,24 @@ function golfFieldOf(layout: Layout, name: string, bare: readonly Clearing[], ce
     heights = new Float32Array(cols * rows);
   // a tile at a time, which a cell divides into whole (the field's edge is on a tile's, whatever the cell)
   const per = Math.round(TILE / cell);
+  const zones = zonesOf(layout);
   for (let t = 0; t < layout.cols * layout.rows; t++) {
-    const kind = playedRough(layout, t) ? ROUGH : playedFairway(layout, t) ? FAIRWAY : -1;
-    if (kind < 0) continue;
+    // grass does not grow on rock or in water, and elsewhere by the zone the ground is drawn and played as
+    if (layout.solid[t] || layout.water[t]) continue;
     const tx = t % layout.cols,
       ty = Math.floor(t / layout.cols);
+    // a tile that is one zone from edge to edge is read once; one a curve crosses is read cell by cell
+    const whole = zones.tileZone(tx, ty);
+    const tileKind = whole === null ? -2 : kindOfZone(whole);
+    if (tileKind === -1) continue;
     const x0 = Math.round((layout.originX + tx * TILE - origin[0]) / cell),
       y0 = Math.round((layout.originY + ty * TILE - origin[1]) / cell);
     for (let cy = y0; cy < y0 + per; cy++)
       for (let cx = x0; cx < x0 + per; cx++) {
         const i = cy * cols + cx;
+        const kind =
+          tileKind >= 0 ? tileKind : kindOfZone(zones.at(origin[0] + (cx + 0.5) * cell, origin[1] + (cy + 0.5) * cell));
+        if (kind < 0) continue;
         mask[i] = kind + 1;
         heights[i] = heightAt(layout, origin[0] + (cx + 0.5) * cell, origin[1] + (cy + 0.5) * cell);
       }

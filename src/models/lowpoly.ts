@@ -9,9 +9,9 @@
  * dressed the same every time. Each is cheap: a broadleaf is about a hundred triangles, and the renderer draws every
  * placement three times a frame (the scene, the sun's map and the occlusion's depth), with no culling.
  */
-import type { MeshBuilder } from 'artshape-render/mesh/types';
+import { MeshBuilder } from 'artshape-render/mesh/types';
 import { seeded } from '../random';
-import { PALETTE, ROUGH } from './palette';
+import { PALETTE, ROUGH, shown } from './palette';
 import { matte, type Model, type V3 } from './part';
 import { at, built, faceOut, frustum, lump } from './shapes';
 
@@ -19,7 +19,17 @@ import { at, built, faceOut, frustum, lump } from './shapes';
  * How finely the faceted shapes are cut: the rings and segments of a lump, the sides of a cone and a trunk. Chunky, as
  * chosen: a lump of three rings and six segments is twenty-four facets.
  */
-export const FACETS = { rings: 3, segments: 6, cone: 6, golfCone: 7, trunk: 6, rockRings: 3, rockSegments: 5 } as const;
+export const FACETS = {
+  rings: 3,
+  segments: 6,
+  cone: 6,
+  golfCone: 7,
+  trunk: 6,
+  rockRings: 3,
+  rockSegments: 5,
+  /** A broadleaf's lumps, rounder than a bush's: the title's crowns are, and a crown of twenty-four facets reads as a die. */
+  crown: { rings: 4, segments: 8 },
+} as const;
 
 /** A trunk of `sides` flat faces from radius `r` at the ground, tapering to seven tenths of it at `top`: open, since it stands in its canopy. */
 function trunk(b: MeshBuilder, r: number, top: number, sides: number = FACETS.trunk) {
@@ -32,8 +42,8 @@ function trunk(b: MeshBuilder, r: number, top: number, sides: number = FACETS.tr
  */
 export function broadleaf({ height = 7, seed = 1 } = {}): Model {
   const random = seeded(seed * 9973 + 11);
-  const { rings, segments } = FACETS;
-  const R = 0.34 * height;
+  const { rings, segments } = FACETS.crown;
+  const R = 0.4 * height;
   const crownR = 0.68 * R;
   const crownZ = height - 0.6 * R;
   const turn = random() * Math.PI * 2;
@@ -238,18 +248,69 @@ export function golfTree({ trunk: post, base, radius, apex }: GolfTreeFigures, {
 }
 
 /**
- * A stone at the water's edge, a unit in radius and two tall, its middle at its origin, to be scaled to the physics'
- * own: a squared slab of seven faces whose corners lie on the circle the ball meets, so what is drawn is what is met up
- * to its top, which is bevelled in a little, as the stones lining the title's river are.
+ * The stones that ring a pond, in three colours (a brown, a tan and a brown-grey, as the title picture's river bank is):
+ * a lump of three rings and eight segments, a unit wide and six tenths of a unit tall above its middle, flattened at its
+ * foot so it sits, to be placed squashed again (`BANK_STONE`). Scenery only: nothing of the physics is shaped like it.
+ * Each is lit as if from above, its faces split by how far up they face into three parts, a lit top, a mid and a dark side,
+ * which is the two-tone of the title picture's rocks and does not depend on the way the stone is turned.
  */
-export function stone({ seed = 1 } = {}): Model {
-  const random = seeded(seed * 5113 + 7);
-  const phase = random() * Math.PI;
-  const mesh = built((b) => {
-    frustum(b, at(0, 0, 0), 7, 1, 0.96, -1, 0.82, { top: false, bottom: true, phase });
-    frustum(b, at(0, 0, 0), 7, 0.96, 0.7, 0.82, 1, { phase });
-  });
-  return { name: 'stone', parts: [{ name: 'rock', mesh, material: matte(PALETTE.rock, ROUGH.rock) }], moving: [] };
+export const BANK_STONE = {
+  colours: [shown(0.74, 0.5, 0.32), shown(0.8, 0.62, 0.42), shown(0.66, 0.5, 0.38)],
+  rise: 0.6,
+} as const;
+
+/** The tiers of a stone's light: from how far up a face's normal points, and how much of the stone's colour each shows. */
+const STONE_TIERS = [
+  { name: 'lit', from: 0.5, mul: [1.3, 1.25, 1.2] },
+  { name: 'mid', from: 0, mul: [0.85, 0.8, 0.8] },
+  { name: 'shade', from: -2, mul: [0.5, 0.45, 0.46] },
+] as const;
+
+export function bankStone(kind = 0): Model {
+  const whole = built((b) =>
+    lump(b, at(0, 0, 0, kind * 2.1), seeded(kind * 17 + 3), 3, 8, [1, 0.9, BANK_STONE.rise], {
+      give: 0.16,
+      floor: -0.28,
+    }),
+  );
+  const colour = BANK_STONE.colours[kind % BANK_STONE.colours.length];
+  // every face has three vertices of its own, so a face goes to a tier whole, and a tier's mesh is the faces that are its
+  const builders = STONE_TIERS.map(() => new MeshBuilder());
+  for (let t = 0; t < whole.indices.length; t += 3) {
+    const first = whole.indices[t];
+    const up = whole.normals[first * 3 + 2];
+    const tier = STONE_TIERS.findIndex((x) => up >= x.from);
+    const b = builders[tier];
+    const ids = [0, 1, 2].map((k) => {
+      const v = whole.indices[t + k];
+      return b.vertex(
+        whole.positions[v * 3],
+        whole.positions[v * 3 + 1],
+        whole.positions[v * 3 + 2],
+        whole.normals[v * 3],
+        whole.normals[v * 3 + 1],
+        whole.normals[v * 3 + 2],
+        whole.uvs[v * 2],
+        whole.uvs[v * 2 + 1],
+      );
+    });
+    b.triangle(ids[0], ids[1], ids[2]);
+  }
+  return {
+    name: 'bank stone',
+    parts: STONE_TIERS.flatMap((tier, i) =>
+      builders[i].triangleCount
+        ? [
+            {
+              name: tier.name,
+              mesh: builders[i].build(),
+              material: matte([colour[0] * tier.mul[0], colour[1] * tier.mul[1], colour[2] * tier.mul[2]], ROUGH.rock),
+            },
+          ]
+        : [],
+    ),
+    moving: [],
+  };
 }
 
 /**

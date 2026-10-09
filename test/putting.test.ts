@@ -7,7 +7,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { Autopilot, golfCandidates, speedAcross } from '../src/autopilot';
-import { layoutOf, lieAt } from '../src/arena';
+import { layoutOf, lieAt, tileLieAt } from '../src/arena';
 import { PUTTER, bagClub } from '../src/bag';
 import { Rehearsal } from '../src/planner';
 import type { HoleDef } from '../src/course';
@@ -91,6 +91,17 @@ const SLIPS = { aim: 0.05, power: 0.1 };
 /** The green's own, for where a ball rests. */
 const onGreen = (hole: HoleDef, q: { x: number; y: number }) =>
   lieAt(layoutOf(hole.map, hole.terrain), q.x, q.y) === LIE.green;
+
+/**
+ * A field of fairway with rough from the seventh column on, the ball's side of it: the ball at the cup and twelve yards over is
+ * the first cut, a tile past the fairway's curve. The cut is the band round the fairway's curve, and a stripe of cut tiles in
+ * the middle of fairway or green is not one (it blurs away), which is how this was drawn before the ground was curved.
+ */
+function fairwayThenRough(base: HoleDef): string[] {
+  return base.map.map((line, r) =>
+    r > 0 && r < base.map.length - 1 ? line.slice(0, 6) + line.slice(6).replace(/f/g, 'r') : line,
+  );
+}
 
 describe('putting on a green with a slope, at any speed', () => {
   it('holes out in two putts or fewer from eight to twenty-five yards, with no slips, on every slope and speed: all of them in one', () => {
@@ -242,7 +253,8 @@ describe('putting from the fringe and playing from the first cut', () => {
         const { game } = golfGame(hole);
         const { cup } = game.layout;
         game.place(cup.x + dx, cup.y);
-        expect(lieAt(game.layout, cup.x + dx, cup.y)).toBe(LIE.cut);
+        // the tile the map draws as cut, which the physics rolls on: the zone round such a stripe of cut in a green is green
+        expect(tileLieAt(game.layout, cup.x + dx, cup.y)).toBe(LIE.cut);
         expect(new Autopilot(game).plan()!.club).toBe('putter');
         const r = putt(hole, dx);
         expect(r.holed, `${down} ${across} ${dx}`).toBe(true);
@@ -263,9 +275,7 @@ describe('putting from the fringe and playing from the first cut', () => {
 
   it('plays a ball in the first cut of a fairway as it would from the fairway, a club the power a little short of it', () => {
     const base = field('f');
-    const strip = base.map.map((line, r) =>
-      r > 0 && r < base.map.length - 1 ? line.slice(0, 5) + 'ccc' + line.slice(8) : line,
-    );
+    const strip = fairwayThenRough(base);
     const cutHole: HoleDef = { ...base, map: strip, name: 'Fairway with a cut' };
     const from = (hole: HoleDef) => {
       const { game } = golfGame(hole);
@@ -275,6 +285,7 @@ describe('putting from the fringe and playing from the first cut', () => {
     };
     const fair = from(base),
       cut = from(cutHole);
+    // the first cut is the band round a fairway's curve, a tile wide, with the rough beyond it
     expect(lieAt(cut.game.layout, cut.at.x, cut.at.y)).toBe(LIE.cut);
     expect(cut.plan.club).toBeDefined();
     expect(bagClub(cut.plan.club!).loft).toBeGreaterThan(0);
@@ -290,9 +301,7 @@ describe('putting from the fringe and playing from the first cut', () => {
 
   it('gets a ball from the cut of a fairway round to the cup in a few strokes, with slips', () => {
     const base = field('f');
-    const strip = base.map.map((line, r) =>
-      r > 0 && r < base.map.length - 1 ? line.slice(0, 5) + 'ccc' + line.slice(8) : line,
-    );
+    const strip = fairwayThenRough(base);
     const hole: HoleDef = { ...base, map: strip, name: 'Fairway with a cut' };
     for (let seed = 1; seed <= 6; seed++) {
       const { game } = golfGame(hole, seeded(seed));

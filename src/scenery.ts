@@ -274,15 +274,41 @@ export function clearings(layout: Layout, name: string): { x: number; y: number;
  * The scenery beyond a golf hole: how far past the map's edge it begins (`margin`), how far out it goes (`reach`), how
  * many clumps it has for each unit of the map's perimeter (`per`), how far a clump's pieces spread (`clump`), how many
  * pieces a clump has at the most, and the ceiling on all of them, which the triangle budget is reckoned against. Woods
- * and scrub in clumps, as the title has them, and not a sprinkle: a clump is a wood (conifers and broadleaves) two times
- * in three and scrub (bushes, ferns and rocks) the third.
+ * and scrub in clumps, as the title has them, and not a sprinkle: a clump is a wood (conifers, broadleaves and a few bushes,
+ * five to five to one) four times in five (`wood`) and scrub (bushes, ferns and rocks) the fifth. The clumps are dense by the
+ * course's edge and thin out to `thin` of that at the reach, as the title's do.
  */
-export const BEYOND = { margin: 6, reach: 120, per: 1 / 18, clump: 12, size: 9, most: 900 } as const;
+export const BEYOND = {
+  margin: 6,
+  reach: 150,
+  per: 1 / 6,
+  clump: 14,
+  size: 10,
+  most: 1700,
+  thin: 0.12,
+  wood: 0.8,
+} as const;
+
+/**
+ * How the woods' broadleaves vary: from `least` to `most` of the size the model makes them, by a hash of the place
+ * (a size is a place's, never a chance's, so the same hole has the same trees), and one in `bigOne` of those within
+ * `near` yards of the map's edge `big` times bigger again, the few great trees the title picture has by its fairway.
+ */
+export const BROADLEAF = { least: 0.7, most: 1.4, near: 45, big: 1.9, bigShare: 0.2 } as const;
+
+/** How much of its model's size a broadleaf at (x, y) is, `away` yards past the map's edge. */
+function broadleafSize(x: number, y: number, away: number): number {
+  const fraction = (v: number) => Math.abs(v) % 1;
+  const size =
+    BROADLEAF.least + (BROADLEAF.most - BROADLEAF.least) * fraction(Math.sin(x * 12.9898 + y * 78.233) * 43758.5453);
+  const big = away < BROADLEAF.near && fraction(Math.sin(x * 4.1 + y * 9.7) * 1013.3) < BROADLEAF.bigShare;
+  return big ? size * BROADLEAF.big : size;
+}
 
 /** What a wood and what scrub are made of, and how often each. */
 const WOOD: [SceneryKind, number][] = [
-  ['conifer', 3],
-  ['broadleaf', 2],
+  ['conifer', 5],
+  ['broadleaf', 5],
   ['bush', 1],
 ];
 const SCRUB: [SceneryKind, number][] = [
@@ -337,10 +363,12 @@ export function beyond(layout: Layout, name: string): Piece[] {
     for (let tries = 0; tries < 30; tries++) {
       cx = x0 - reach + random() * (x1 - x0 + 2 * reach);
       cy = y0 - reach + random() * (y1 - y0 + 2 * reach);
-      if (free(cx, cy)) break;
+      // dense by the course's edge and thinning out with the distance from it, to `BEYOND.thin` of that at the reach
+      const away = Math.max(x0 - cx, cx - x1, y0 - cy, cy - y1);
+      if (free(cx, cy) && random() < Math.max(BEYOND.thin, 1 - away / reach)) break;
     }
     if (!free(cx, cy)) continue;
-    const wood = random() < 0.65;
+    const wood = random() < BEYOND.wood;
     const count = 3 + Math.floor(random() * (BEYOND.size - 2));
     for (let k = 0; k < count && pieces.length < BEYOND.most; k++) {
       const a = random() * Math.PI * 2,
@@ -351,8 +379,63 @@ export function beyond(layout: Layout, name: string): Piece[] {
       const yaw = random() * Math.PI * 2,
         scale = SCALE.least + random() * SCALE.spread,
         variant = Math.floor(random() * 3);
-      if (free(x, y)) pieces.push({ kind, x, y, yaw, scale, variant });
+      if (free(x, y)) {
+        const away = Math.max(x0 - x, x - x1, y0 - y, y - y1);
+        pieces.push({
+          kind,
+          x,
+          y,
+          yaw,
+          scale: kind === 'broadleaf' ? scale * broadleafSize(x, y, away) : scale,
+          variant,
+        });
+      }
     }
   }
   return pieces;
+}
+
+/**
+ * The far woods of a golf hole: thin clumps of the cheapest trees (`farTree`, about twenty triangles) from `from` yards
+ * past the map's edge, where the near woods end, out to the backdrop's hills at `to`, thinning with the distance, at most
+ * `most` trees; a clump spreads `clump` yards, has up to `size` more than two trees, and a tree is `scale` yards tall at
+ * the least and `spread` more. Where each stands comes from the hole's name; the scene stands them on the ground.
+ */
+export const FAR = { from: 140, to: 440, most: 2400, clump: 22, size: 9, scale: 9, spread: 8, thin: 0.6 } as const;
+
+export function farWoods(layout: Layout, name: string): Piece[] {
+  if (!layout.golf) return [];
+  const random = seeded(seedOf(`${name} far woods`));
+  const x0 = layout.originX,
+    y0 = layout.originY,
+    x1 = x0 + layout.cols * TILE,
+    y1 = y0 + layout.rows * TILE;
+  const out: Piece[] = [];
+  const clumps = Math.ceil(((x1 - x0 + y1 - y0) * 2 + 2 * Math.PI * 300) / 55);
+  for (let c = 0; c < clumps && out.length < FAR.most; c++) {
+    let cx = 0,
+      cy = 0,
+      ok = false;
+    for (let tries = 0; tries < 40 && !ok; tries++) {
+      cx = x0 - FAR.to + random() * (x1 - x0 + 2 * FAR.to);
+      cy = y0 - FAR.to + random() * (y1 - y0 + 2 * FAR.to);
+      const d = Math.max(x0 - cx, cx - x1, y0 - cy, cy - y1);
+      ok = d > FAR.from && d < FAR.to && random() < 1 - ((d - FAR.from) / (FAR.to - FAR.from)) * FAR.thin;
+    }
+    if (!ok) continue;
+    const count = 3 + Math.floor(random() * FAR.size);
+    for (let k = 0; k < count && out.length < FAR.most; k++) {
+      const a = random() * Math.PI * 2,
+        r = Math.sqrt(random()) * FAR.clump;
+      out.push({
+        kind: random() < 0.5 ? 'conifer' : 'broadleaf',
+        x: cx + Math.cos(a) * r,
+        y: cy + Math.sin(a) * r,
+        yaw: 0,
+        scale: FAR.scale + random() * FAR.spread,
+        variant: 0,
+      });
+    }
+  }
+  return out;
 }

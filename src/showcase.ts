@@ -58,7 +58,11 @@ import {
   type Windmill,
 } from './models';
 import { flipper } from './models';
+import { TONE_SUN, sceneryRule, toned } from './models/tone';
 import { ITEMS } from './items';
+
+/** A scenery model as the game draws it at a yaw of nought: its faces split into the baked tones, as `models/tone.ts` has them. */
+const lit = (model: Model): Model => toned(model, TONE_SUN, sceneryRule(model));
 
 declare global {
   interface Window {
@@ -216,13 +220,13 @@ function exhibits(seed: number): Exhibit[] {
       name: 'broadleaf',
       label: 'broadleaf',
       row: 'decoration',
-      items: [{ model: broadleaf({ height: 7, seed }), x: -18, y: 22.5 }],
+      items: [{ model: lit(broadleaf({ height: 7, seed })), x: -18, y: 22.5 }],
     },
     {
       name: 'conifer',
       label: 'conifer',
       row: 'decoration',
-      items: [{ model: conifer({ height: 10, seed }), x: -10.5, y: 23 }],
+      items: [{ model: lit(conifer({ height: 10, seed })), x: -10.5, y: 23 }],
     },
     { name: 'bunting', label: 'bunting', row: 'decoration', items: [{ model: bunting(12, { seed }), x: 4, y: 23 }] },
     { name: 'fence', label: 'fence', row: 'decoration', items: [{ model: fence(6), x: 17.5, y: 22.5 }] },
@@ -231,8 +235,8 @@ function exhibits(seed: number): Exhibit[] {
       label: 'bush and fern',
       row: 'decoration',
       items: [
-        { model: bush(1.8, { seed }), x: -17, y: 14 },
-        { model: fern(2.2, { seed }), x: -13.5, y: 14.5 },
+        { model: lit(bush(1.8, { seed })), x: -17, y: 14 },
+        { model: lit(fern(2.2, { seed })), x: -13.5, y: 14.5 },
       ],
     },
     {
@@ -250,8 +254,8 @@ function exhibits(seed: number): Exhibit[] {
       label: 'boulders',
       row: 'decoration',
       items: [
-        { model: boulder(1.5, { seed }), x: 5, y: 14.5 },
-        { model: boulder(0.8, { seed: seed + 1 }), x: 7.4, y: 13.6 },
+        { model: lit(boulder(1.5, { seed, colour: PALETTE.rockWarm })), x: 5, y: 14.5 },
+        { model: lit(boulder(0.8, { seed: seed + 1, colour: PALETTE.rockWarm })), x: 7.4, y: 13.6 },
       ],
     },
     {
@@ -264,7 +268,7 @@ function exhibits(seed: number): Exhibit[] {
       name: 'golf-tree',
       label: 'golf tree',
       row: 'decoration',
-      items: [{ model: golfTree(TREE, { seed }), x: 27, y: 19 }],
+      items: [{ model: lit(golfTree(TREE, { seed })), x: 27, y: 19 }],
     },
     {
       name: 'stakes',

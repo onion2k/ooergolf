@@ -18,7 +18,7 @@
  *
  * It is handed the game, and knows nothing of the page.
  */
-import { fromKickers, fromStones } from './arena';
+import { fromKickers } from './arena';
 import {
   BALL,
   KIND_RADIUS,
@@ -27,6 +27,7 @@ import {
   TILE,
   fromPosts,
   lieAt,
+  tileLieAt,
   slopeAt,
   stepAt,
   terrainAt,
@@ -90,7 +91,8 @@ function slowingAt(l: Layout, x: number, y: number, greens?: number, kit: Kit = 
   const t = tileAt(l, x, y);
   if (t >= 0 && l.sand[t]) return SAND.roll * rollScale(LIE.sand, kit);
   if (!l.golf) return ROLL.roll * rollScale(LIE.none, kit);
-  const lie = lieAt(l, x, y);
+  // by the tile, as the physics rolls a ball (`lieAt` is the zone, for a strike and a landing)
+  const lie = tileLieAt(l, x, y);
   return lie === LIE.green || lie === LIE.cut ? groundRoll(lie, greens, kit) : ROLL.roll * kit.roll;
 }
 
@@ -628,7 +630,7 @@ function clear(l: Layout, x0: number, y0: number, x1: number, y1: number): boole
   for (let s = 0; s <= d; s += 0.25) {
     const px = x0 + ((x1 - x0) * s) / (d || 1),
       py = y0 + ((y1 - y0) * s) / (d || 1);
-    if (fromPosts(l, px, py) < reach || fromKickers(l, px, py) < reach || fromStones(l, px, py) < reach) return false;
+    if (fromPosts(l, px, py) < reach || fromKickers(l, px, py) < reach) return false;
     for (const [k, side] of [-reach, 0, reach].entries()) {
       const sx = px + nx * side,
         sy = py + ny * side;

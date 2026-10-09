@@ -63,6 +63,15 @@ export interface Cloud {
   outer: number;
 }
 
+/**
+ * How high the ground stands at a point. A ground that has a hollow carved for the lake (`groundZOf`) says the level of the
+ * lake's water, which the lake lies at and the ground was carved under; any other, the lake is a little under the lowest
+ * ground it touches.
+ */
+export type GroundBase = ((x: number, y: number) => number) & {
+  lake?: { level: number; weight: (x: number, y: number) => number };
+};
+
 export interface Backdrop {
   hills: Mesh;
   mountains: Mesh;
@@ -93,11 +102,61 @@ function ridge(seed: number): (a: number) => number {
   return (a) => 0.5 + (0.5 * waves.reduce((s, w) => s + w.w * Math.sin(w.f * a + w.p), 0)) / total;
 }
 
+/** Where the lake lies: the way it is from the hole's middle, the middle of its fan, and the shore's points (x then y) round it. */
+export interface LakeShape {
+  /** The hole's middle and the angle the lake lies at from it. */
+  cx: number;
+  cy: number;
+  at: number;
+  /** The fan's middle, from which each triangle of the water runs to two points of the shore. */
+  middle: [number, number];
+  /** The shore, from one end of the gap to the other: `LAKE_SHORE + 1` points, each an x and a y. */
+  shore: Float64Array;
+  /** Where the ring of hills begins and ends, from the hole's middle. */
+  near: number;
+  far: number;
+}
+
+/** How many pieces the lake's shore is cut in. */
+export const LAKE_SHORE = 24;
+
+/** Where the world's rings begin (`R0`) and end (`R1`) from a hole's middle: past the hole, and on golf what stands round it. */
+const rings0 = (layout: Layout) => {
+  const half = Math.hypot(layout.cols * TILE, layout.rows * TILE) / 2;
+  const R0 = half + (layout.golf ? BEYOND.reach + BACKDROP.gap.golf : BACKDROP.gap.minigolf);
+  return [R0, R0 + BACKDROP.depth] as const;
+};
+
 /**
- * The world round a hole laid out as `layout` and called `name`, on ground `base` high (the rough round a hole, or the
- * plain past a golf hole).
+ * The lake of the world round a hole called `name`, worked out from its map and its name alone: the gap of the hills it lies in
+ * and the shore of its water. The ground is carved to it (`groundZOf`) and the backdrop draws it, so the two are one lake.
  */
-export function backdropOf(layout: Layout, name: string, base: number): Backdrop {
+export function lakeShapeOf(layout: Layout, name: string): LakeShape {
+  const cx = layout.originX + (layout.cols * TILE) / 2,
+    cy = layout.originY + (layout.rows * TILE) / 2;
+  const [R0, R1] = rings0(layout);
+  const at = seeded(seedOf(`${name} beyond the hills`))() * Math.PI * 2;
+  const L = LAKE_SHORE;
+  const lr = (j: number) => R0 + (R1 - R0) * (0.25 + 0.25 * Math.sin((j / L) * Math.PI));
+  const m = R0 + (R1 - R0) * 0.2;
+  const shore = new Float64Array((L + 1) * 2);
+  for (let j = 0; j <= L; j++) {
+    const a = at - BACKDROP.lake + (2 * BACKDROP.lake * j) / L;
+    shore[2 * j] = cx + Math.cos(a) * lr(j);
+    shore[2 * j + 1] = cy + Math.sin(a) * lr(j);
+  }
+  return { cx, cy, at, middle: [cx + Math.cos(at) * m, cy + Math.sin(at) * m], shore, near: R0, far: R1 };
+}
+
+/**
+ * The world round a hole laid out as `layout` and called `name`, on ground `ground` high: a height for the rough round a
+ * hole of minigolf, or a function for the rolling ground past a golf hole (`groundZOf`), which the hills, the mountains
+ * and the forest stand on where they stand, so none of them floats over a dip or is buried in a rise. The lake is flat,
+ * as water is, a little under the lowest ground it touches; where the ground there is higher than that the plane hides it,
+ * and where it dips the water shows, so a lake is seen in a hollow of the hills and never as a pool over a slope.
+ */
+export function backdropOf(layout: Layout, name: string, ground: number | GroundBase): Backdrop {
+  const baseAt: GroundBase = typeof ground === 'number' ? () => ground : ground;
   const seed = seedOf(`${name} beyond the hills`);
   const random = seeded(seed);
   const cx = layout.originX + (layout.cols * TILE) / 2,
@@ -115,6 +174,18 @@ export function backdropOf(layout: Layout, name: string, base: number): Backdrop
   };
   const shape = ridge(seed + 1),
     peaks = ridge(seed + 2);
+  const radius = (k: number) => R0 + (R1 - R0) * (k / rings);
+  // the lake's shore, worked out first: its water lies 2 under the lowest ground it touches
+  const L = 24;
+  const lr = (j: number) => R0 + (R1 - R0) * (0.25 + 0.25 * Math.sin((j / L) * Math.PI));
+  const middle = R0 + (R1 - R0) * 0.2;
+  let lakeBase = baseAt(cx + Math.cos(lakeAt) * middle, cy + Math.sin(lakeAt) * middle);
+  for (let j = 0; j <= L; j++) {
+    const a = lakeAt - BACKDROP.lake + (2 * BACKDROP.lake * j) / L;
+    lakeBase = Math.min(lakeBase, baseAt(cx + Math.cos(a) * lr(j), cy + Math.sin(a) * lr(j)));
+  }
+  // a ground carved for the lake says where its water is: the carving is under it, and no ground it touches is lower
+  if (baseAt.lake) lakeBase = baseAt.lake.level + 2;
   // a hill's height at angle `a` and ring `k` (from nought, the foot, to `rings`, the back): rising outward, and sunk
   // where the lake is, the nearer rings under its water
   const height = (a: number, k: number) => {
@@ -122,13 +193,23 @@ export function backdropOf(layout: Layout, name: string, base: number): Backdrop
     const lake = inLake(a);
     const h =
       (BACKDROP.hill[0] + BACKDROP.hill[1] * shape(a + t * 0.6)) * Math.sin(t * Math.PI * 0.95) * (0.3 + 0.7 * t);
-    return base + h * (1 - lake * (1 - t * 0.6)) - (t < 0.65 ? lake * 8 : 0);
+    // the ground the hill stands on, where it stands
+    const r = radius(k);
+    const x = cx + Math.cos(a) * r,
+      y = cy + Math.sin(a) * r;
+    const ground = baseAt(x, y);
+    // over a hollow cut for the lake the hills stand on its bed and have no relief of their own where the water is, rising
+    // as the shore is left; over any other ground the lake's gap is sunk where it lies, angle by angle
+    if (baseAt.lake) return ground + h * (1 - baseAt.lake.weight(x, y));
+    return ground + h * (1 - lake * (1 - t * 0.6)) - (t < 0.65 ? lake * 8 : 0);
   };
   const hills = new MeshBuilder();
   const hp = (i: number, k: number): V3 => {
     const a = (i / around) * Math.PI * 2 + (k % 2) * (Math.PI / around);
-    const r = R0 + (R1 - R0) * (k / rings);
-    return [cx + Math.cos(a) * r, cy + Math.sin(a) * r, k === 0 ? base : height(a, k)];
+    const r = radius(k);
+    const x = cx + Math.cos(a) * r,
+      y = cy + Math.sin(a) * r;
+    return [x, y, k === 0 ? baseAt(x, y) : height(a, k)];
   };
   for (let k = 0; k < rings; k++)
     for (let i = 0; i < around; i++) {
@@ -142,7 +223,9 @@ export function backdropOf(layout: Layout, name: string, base: number): Backdrop
     const a = (i / M) * Math.PI * 2 + (k === 1 ? Math.PI / M : 0);
     const r = k === 0 ? R1 * 0.95 : k === 1 ? (R1 + R2) / 2 : R2;
     const h = k === 1 ? BACKDROP.mountain[0] + BACKDROP.mountain[1] * peaks(a) : k === 0 ? 0 : 60;
-    return [cx + Math.cos(a) * r, cy + Math.sin(a) * r, base + h];
+    const x = cx + Math.cos(a) * r,
+      y = cy + Math.sin(a) * r;
+    return [x, y, baseAt(x, y) + h];
   };
   for (let i = 0; i < M; i++) {
     tri(mountains, mp(i, 0), mp(i + 1, 0), mp(i, 1));
@@ -152,18 +235,15 @@ export function backdropOf(layout: Layout, name: string, base: number): Backdrop
   }
   // the lake: a fan in the gap of the hills, a little under the ground, its far shore curving out between them
   const lake = new MeshBuilder();
-  const L = 24;
-  const lr = (j: number) => R0 + (R1 - R0) * (0.25 + 0.25 * Math.sin((j / L) * Math.PI));
-  const middle = R0 + (R1 - R0) * 0.2;
-  const lc: V3 = [cx + Math.cos(lakeAt) * middle, cy + Math.sin(lakeAt) * middle, base - 2];
+  const lc: V3 = [cx + Math.cos(lakeAt) * middle, cy + Math.sin(lakeAt) * middle, lakeBase - 2];
   for (let j = 0; j < L; j++) {
     const a0 = lakeAt - BACKDROP.lake + (2 * BACKDROP.lake * j) / L,
       a1 = lakeAt - BACKDROP.lake + (2 * BACKDROP.lake * (j + 1)) / L;
     tri(
       lake,
       lc,
-      [cx + Math.cos(a0) * lr(j), cy + Math.sin(a0) * lr(j), base - 2],
-      [cx + Math.cos(a1) * lr(j + 1), cy + Math.sin(a1) * lr(j + 1), base - 2],
+      [cx + Math.cos(a0) * lr(j), cy + Math.sin(a0) * lr(j), lakeBase - 2],
+      [cx + Math.cos(a1) * lr(j + 1), cy + Math.sin(a1) * lr(j + 1), lakeBase - 2],
     );
   }
   // the forest in clumps on the hills, none in the lake, a clump's trees spread round its middle, bigger the further off
@@ -180,7 +260,8 @@ export function backdropOf(layout: Layout, name: string, base: number): Backdrop
     const yaw = random() * Math.PI * 2,
       grow = random();
     if (inLake(a) > 0.2 && k < rings * 0.7) continue;
-    const r = R0 + (R1 - R0) * (k / rings);
+    const r = radius(k);
+    if (baseAt.lake && baseAt.lake.weight(cx + Math.cos(a) * r, cy + Math.sin(a) * r) > 0.02) continue;
     forest.push({
       kind: conifer ? 'conifer' : 'broadleaf',
       x: cx + Math.cos(a) * r,

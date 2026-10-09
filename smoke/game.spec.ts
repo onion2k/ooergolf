@@ -14,6 +14,7 @@ import { CLIP, OVERHEAD } from '../src/camera';
 import { LIE } from '../src/surfaces';
 import { LINKS_SPECS, links } from '../src/links';
 import { fells } from '../src/fells';
+import { zonesOf, type Zone } from '../src/zones';
 import { isles } from '../src/isles';
 import { FLAT } from '../test/level';
 import { noiseGround } from '../src/noise';
@@ -333,7 +334,7 @@ test.describe('the water and the sand', () => {
       g.startHole(g.content().holes.findIndex((h) => h.name === 'Pond'));
       g.step(30);
     });
-    // into the pond through a gap in the stones along its banks
+    // into the pond across its bank
     await page.evaluate((angle) => window.game!.shoot(angle, 0.45), intoThePond());
     // the ring is read every frame from the stroke to a second and a half after the ball went in, and is never there
     const went = await page.evaluate(() => {
@@ -679,8 +680,12 @@ test.describe('golf', () => {
 });
 
 test.describe('the grass of a golf hole', () => {
-  /** The middle of the first tile of Links hole `hole` that is `lie` and has nothing else (another lie, out of bounds, sand, water, a tree) within `apart` tiles of it, which is where the grass of that lie alone grows. */
-  function inside(hole: number, lie: number, apart: number) {
+  /**
+   * The middle of the first tile of Links hole `hole` that is `lie` and has nothing else (another lie, out of bounds, sand, water, a tree) within `apart` tiles of it, which is where the grass of that lie alone grows,
+   * and where the ground is drawn as `zone` over the whole of the circle the blades are counted in (1.4 across): since 9 October 2026 the ground's kinds are
+   * curves and not tiles (`zones.ts`), so a tile at a corner of the tee's box, or a tile of first cut away from the fairway, is not wholly its kind.
+   */
+  function inside(hole: number, lie: number, apart: number, zone: Zone) {
     const def = links()[hole];
     const l = layoutOf(def.map, def.terrain);
     for (let t = 0; t < l.cols * l.rows; t++) {
@@ -703,7 +708,14 @@ test.describe('the grass of a golf hole', () => {
           )
             alone = false;
         }
-      if (alone) return { x: l.originX + (tx + 0.5) * 3, y: l.originY + (ty + 0.5) * 3 };
+      if (!alone) continue;
+      const x = l.originX + (tx + 0.5) * 3,
+        y = l.originY + (ty + 0.5) * 3;
+      const zones = zonesOf(l);
+      let drawn = zones.at(x, y) === zone;
+      for (let k = 0; k < 8 && drawn; k++)
+        drawn = zones.at(x + 1.5 * Math.cos((k * Math.PI) / 4), y + 1.5 * Math.sin((k * Math.PI) / 4)) === zone;
+      if (drawn) return { x, y };
     }
     throw new Error(`no ${lie} on hole ${hole + 1}`);
   }
@@ -715,11 +727,11 @@ test.describe('the grass of a golf hole', () => {
     await start(page, { seed: 11, paused: true });
     // a tile of each, the camera 30 back so every blade within view is kept: a circle inside the tile, 1.4 across
     const where = {
-      fairway: inside(0, LIE.fairway, 1),
-      rough: inside(0, LIE.rough, 1),
-      green: inside(0, LIE.green, 0),
-      tee: inside(0, LIE.tee, 0),
-      cut: inside(0, LIE.cut, 0),
+      fairway: inside(0, LIE.fairway, 1, 'fairway'),
+      rough: inside(0, LIE.rough, 1, 'rough'),
+      green: inside(0, LIE.green, 0, 'putting'),
+      tee: inside(0, LIE.tee, 0, 'tee'),
+      cut: inside(0, LIE.cut, 0, 'cut'),
     };
     const counted = await page.evaluate(async (at) => {
       const g = window.game!;
@@ -1633,8 +1645,10 @@ test.describe('the grass', () => {
     );
     await page.evaluate(() => window.game!.step(30));
     const later = await shot();
-    // how hard it blows is the unit tests': this holds that the game's time is what moves it, and that it moves
-    expect(changed(now, later), 'the wind moved the grass').toBeGreaterThan(0.2);
+    // how hard it blows is the unit tests': this holds that the game's time is what moves it, and that it moves. A fifth of this
+    // stretch changed when the rough was 1.2 tall in clumps (0.45); on 9 October 2026 the rough became a calm lawn, 0.55 tall
+    // (0.12 of variation), and a tenth of it does (0.102 measured), fifty times what the same moment changes by (0.002 above)
+    expect(changed(now, later), 'the wind moved the grass').toBeGreaterThan(0.05);
     expect(problems).toEqual([]);
   });
 

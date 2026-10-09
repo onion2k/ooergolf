@@ -11,15 +11,116 @@
  * which cannot follow a slope, with boxes of earth under the raised ones.
  */
 import { MeshBuilder, type Mesh } from 'artshape-render/mesh/types';
-import { TILE, WATER_LEVEL, heightAt, slopeAt, stepAt, terrainAt, tileAt, type Layout } from './arena';
+import { FastMeshBuilder } from './fastmesh';
+import { TILE, WATER_LEVEL, groundInto, heightAt, slopeAt, stepAt, terrainAt, tileAt, type Layout } from './arena';
 import { fan, outside, overlaps, type Point, type Ring } from './clip';
 import { face, tri } from './meshes';
-import { LIE } from './surfaces';
+import { FIELDS, OUT, RULES, zonesOf, type Zone } from './zones';
 
 type V3 = [number, number, number];
 
 /** How many pieces each tile of grass is cut into along each side: enough that a slope's curve does not show. */
 export const GROUND = { pieces: 3 } as const;
+
+/** What a polygon being cut holds of each corner: where it is, then each field of the zones there. */
+const STRIDE = 2 + FIELDS;
+
+/**
+ * A convex polygon being cut, as numbers in a buffer made once: a polygon of three corners cut by the rules one after another and
+ * then by the rake's stripes has at most a dozen, and nothing is made for each cut.
+ */
+interface Poly {
+  d: Float64Array;
+  n: number;
+}
+const poly = (): Poly => ({ d: new Float64Array(STRIDE * 24), n: 0 });
+
+/**
+ * `src` cut where its number at offset `ch` (a field's, or 1 for the corner's y) crosses `at`, the part below it into `lo` and the
+ * part at or above it into `hi`, each convex and counter-clockwise as `src` is.
+ */
+function split(src: Poly, ch: number, at: number, lo: Poly, hi: Poly) {
+  const s = src.d,
+    n = src.n;
+  lo.n = hi.n = 0;
+  for (let i = 0; i < n; i++) {
+    const a = i * STRIDE,
+      b = ((i + 1) % n) * STRIDE;
+    const da = s[a + ch] - at,
+      db = s[b + ch] - at;
+    const mine = da < 0 ? lo : hi;
+    mine.d.set(s.subarray(a, a + STRIDE), mine.n++ * STRIDE);
+    if (da < 0 !== db < 0) {
+      const u = da / (da - db);
+      const m = lo.n * STRIDE;
+      const dm = lo.d;
+      dm[m] = s[a] + (s[b] - s[a]) * u;
+      dm[m + 1] = s[a + 1] + (s[b + 1] - s[a + 1]) * u;
+      for (let j = 2; j < STRIDE; j++) dm[m + j] = s[a + j] + (s[b + j] - s[a + j]) * u;
+      hi.d.set(dm.subarray(m, m + STRIDE), hi.n * STRIDE);
+      lo.n++;
+      hi.n++;
+    }
+  }
+}
+
+/** The polygons of a piece being cut, scratch: what is left to cut, the part below a rule, the part above it, and the same for the rake's stripes. */
+const REST = poly(),
+  REST_B = poly(),
+  BELOW = poly(),
+  ABOVE = poly(),
+  STRIPE_REST = poly(),
+  STRIPE_B = poly(),
+  STRIPE_BELOW = poly();
+
+/** How wide each raked stripe of a bunker is, in yards: across the bed by where it is in the world, so it runs on across tiles. */
+const RAKE = 0.75;
+
+/** The fields at a point, scratch for a pass over a tile. */
+const FIELD_SCRATCH = new Float32Array(FIELDS);
+
+/** The height and the facing at the corners of the pieces of a tile being laid, scratch for it: z, then the normal's three. */
+const CORNER = Float64Array.from({ length: 4 * (GROUND.pieces + 1) ** 2 });
+
+/** The terrain and its slope at a point, scratch (`groundInto`). */
+const HERE = new Float64Array(3);
+
+/** The corners of the pieces of a tile being cut, scratch: where each is, every field of the zones there, and which rules it is below. */
+const CORNERS = (GROUND.pieces + 1) ** 2;
+const CORNER_X = new Float64Array(CORNERS),
+  CORNER_Y = new Float64Array(CORNERS),
+  CORNER_V = new Float64Array(CORNERS * FIELDS),
+  CORNER_MASK = new Uint16Array(CORNERS);
+
+/** What the rules are as numbers, and the zone a set of rules a corner is below makes: the first of them, or the rough where it is below none. */
+const RULE_FIELD = Int32Array.from(RULES, (r) => r[0]),
+  RULE_BELOW = Float64Array.from(RULES, (r) => r[1]);
+const ZONE_OF_MASK: Zone[] = Array.from({ length: 1 << RULES.length }, (_, m): Zone => {
+  for (let r = 0; r < RULES.length; r++) if (m & (1 << r)) return RULES[r][2];
+  return 'rough';
+});
+
+/** Which rules corner `q` of the tile being cut is below the threshold of, a bit each. */
+function maskOfCorner(q: number): number {
+  let m = 0;
+  for (let r = 0; r < RULE_FIELD.length; r++) if (CORNER_V[q * FIELDS + RULE_FIELD[r]] < RULE_BELOW[r]) m |= 1 << r;
+  return m;
+}
+
+/**
+ * How much of its difference from the other stripe a mown tone keeps on a golf hole, and on minigolf: a lawn mown in a
+ * checker as the title picture's is, with its two tones pulled a quarter of the way together on golf, where a fairway is
+ * seen from two hundred yards back and the checker at its full strength was loud.
+ */
+export const CONTRAST = { golf: 0.75, minigolf: 1 } as const;
+
+/** The colour `c` of a mown tone with its contrast set by `CONTRAST`: pulled toward the middle of it and `other`, its alpha (roughness) as it was. */
+export function toned(c: readonly number[], other: readonly number[], golf: boolean): number[] {
+  // minigolf's tone is not touched at all, so that its picture is the bits it was and not a rounding off
+  if (!golf) return c.slice();
+  const k = CONTRAST.golf;
+  return [0, 1, 2].map((i) => (c[i] + other[i]) / 2 + (c[i] - (c[i] + other[i]) / 2) * k).concat([c[3]]);
+}
 
 /**
  * How many tiles a side each square of the mown checker is: four on a golf hole, where a tile is three yards and the
@@ -42,9 +143,21 @@ export interface Ground {
   banks: Mesh;
   /**
    * What a golf hole's ground is besides its fairway, each in a mesh of its own so that each is its own colour: the
-   * rough, the putting green in its two stripes, and the tee. None on a hole of minigolf, which is all one grass.
+   * rough, the putting green in its two stripes, the first cut, the tee, out of bounds and the sand. Each is drawn where
+   * the zone is (`zones.ts`), which is where a ball is played from it. None on a hole of minigolf, which is all one grass.
    */
-  golf?: { rough: Mesh; putting: Mesh; puttingMown: Mesh; cut: Mesh; tee: Mesh; oob: Mesh };
+  golf?: {
+    rough: Mesh;
+    putting: Mesh;
+    puttingMown: Mesh;
+    cut: Mesh;
+    tee: Mesh;
+    oob: Mesh;
+    /** The bunker, in the two tones of its rake, and its lip: all by the zone, so a bunker is a smooth blob and not a block of tiles. */
+    sand: Mesh;
+    sandRaked: Mesh;
+    lip: Mesh;
+  };
 }
 
 /** Whether a tile is sand the ball rolls on: not rock, and not water. */
@@ -70,17 +183,42 @@ export function groundOf(l: Layout, mouth?: Ring): Ground {
   const hole: Point[] | null = mouth ? mouth.map(([x, y]) => [l.cup.x + x, l.cup.y + y]) : null;
   const reach = mouth ? Math.ceil(Math.max(...mouth.map(([x, y]) => Math.hypot(x, y))) / TILE) : 0;
   const [cupX, cupY] = [cupTile % l.cols, Math.floor(cupTile / l.cols)];
-  const green = new MeshBuilder(),
-    mown = new MeshBuilder(),
-    banks = new MeshBuilder();
+  const green = new FastMeshBuilder(),
+    mown = new FastMeshBuilder(),
+    banks = new FastMeshBuilder();
   // a golf hole's other grounds, each a mesh of its own
-  const rough = new MeshBuilder(),
-    putting = new MeshBuilder(),
-    puttingMown = new MeshBuilder(),
-    cut = new MeshBuilder(),
-    tee = new MeshBuilder(),
-    oob = new MeshBuilder();
+  const rough = new FastMeshBuilder(),
+    putting = new FastMeshBuilder(),
+    puttingMown = new FastMeshBuilder(),
+    cut = new FastMeshBuilder(),
+    tee = new FastMeshBuilder(),
+    oob = new FastMeshBuilder(),
+    sand = new FastMeshBuilder(),
+    sandRaked = new FastMeshBuilder(),
+    lip = new FastMeshBuilder();
   const n = GROUND.pieces;
+  const zones = l.golf ? zonesOf(l) : null;
+  /** The mesh of a zone: the fairway and the putting green in the checker's tone of the tile, the sand in the rake's of the row. */
+  const meshOf = (zone: Zone, odd: boolean, stripe: boolean): MeshBuilder => {
+    switch (zone) {
+      case 'sand':
+        return stripe ? sandRaked : sand;
+      case 'lip':
+        return lip;
+      case 'oob':
+        return oob;
+      case 'tee':
+        return tee;
+      case 'putting':
+        return odd ? puttingMown : putting;
+      case 'cut':
+        return cut;
+      case 'fairway':
+        return odd ? mown : green;
+      case 'rough':
+        return rough;
+    }
+  };
   // the height of the ground of tile `t` at a point: its own step, whichever tile the point's edge also bounds
   const at = (t: number, x: number, y: number) => l.floor[t] + terrainAt(l, x, y);
   /** A piece of the grass of tile `t` the mouth leaves, laid as triangles: each corner on the ground at its own height, and facing as the slope there does. */
@@ -92,40 +230,130 @@ export function groundOf(l: Layout, mouth?: Ring): Ground {
     });
     for (const [p, q, r] of fan(piece)) b.triangle(ids[p], ids[q], ids[r]);
   };
+  /**
+   * A convex polygon of a golf hole's ground of one zone laid into the mesh of it, tile `t`'s. The sand is raked in stripes
+   * 0.75 across, by where they are in the world so they run on across tiles, so a polygon of it is cut along the stripes' lines.
+   */
+  // a corner shared by the pieces round it is one vertex of a mesh, kept by mesh for the tile being cut
+  const shared = new Map<MeshBuilder, { ids: Int32Array; stamp: Int32Array }>();
+  let rakeFor = -1,
+    rakeX0 = 0,
+    rakeY0 = 0,
+    rakeCut: Point[] | null = null,
+    // the piece being cut, whose corners' heights and facings a fragment of it is laid by
+    pieceI = 0,
+    pieceJ = 0;
+  /** A fragment of the piece being cut, laid with the height and facing its four corners give it, bilinear: a fragment's corners are not worked out again from the ground. */
+  const layFragment = (b: MeshBuilder, ring: Ring) => {
+    const m = (GROUND.pieces + 1) ** 2,
+      w = GROUND.pieces + 1;
+    const xa = rakeX0 + (pieceI / GROUND.pieces) * TILE,
+      ya = rakeY0 + (pieceJ / GROUND.pieces) * TILE;
+    const c0 = pieceJ * w + pieceI,
+      c1 = c0 + 1,
+      c2 = (pieceJ + 1) * w + pieceI + 1,
+      c3 = (pieceJ + 1) * w + pieceI;
+    const ids = ring.map(([x, y]) => {
+      const u = ((x - xa) * GROUND.pieces) / TILE,
+        v = ((y - ya) * GROUND.pieces) / TILE;
+      const w0 = (1 - u) * (1 - v),
+        w1 = u * (1 - v),
+        w2 = u * v,
+        w3 = (1 - u) * v;
+      let z = 0,
+        nx = 0,
+        ny = 0,
+        nz = 0;
+      z += w0 * CORNER[c0];
+      nx += w0 * CORNER[m + c0];
+      ny += w0 * CORNER[2 * m + c0];
+      nz += w0 * CORNER[3 * m + c0];
+      z += w1 * CORNER[c1];
+      nx += w1 * CORNER[m + c1];
+      ny += w1 * CORNER[2 * m + c1];
+      nz += w1 * CORNER[3 * m + c1];
+      z += w2 * CORNER[c2];
+      nx += w2 * CORNER[m + c2];
+      ny += w2 * CORNER[2 * m + c2];
+      nz += w2 * CORNER[3 * m + c2];
+      z += w3 * CORNER[c3];
+      nx += w3 * CORNER[m + c3];
+      ny += w3 * CORNER[2 * m + c3];
+      nz += w3 * CORNER[3 * m + c3];
+      const k = 1 / Math.hypot(nx, ny, nz);
+      return b.vertex(x, y, z, nx * k, ny * k, nz * k, (x - rakeX0) / TILE, (y - rakeY0) / TILE);
+    });
+    for (const [p, q, r] of fan(ring)) b.triangle(ids[p], ids[q], ids[r]);
+  };
+  const ringOf = (p: Poly): Ring => {
+    const r: [number, number][] = [];
+    for (let i = 0; i < p.n; i++) r.push([p.d[i * STRIDE], p.d[i * STRIDE + 1]]);
+    return r;
+  };
+  const put = (b: MeshBuilder, p: Poly) => {
+    if (p.n < 3) return;
+    const r = ringOf(p);
+    if (rakeCut && overlaps(r, rakeCut)) for (const part of outside(r, rakeCut)) lay(b, rakeFor, rakeX0, rakeY0, part);
+    else layFragment(b, r);
+  };
+  const raked = (zone: Zone, odd: boolean, p: Poly) => {
+    if (p.n < 3) return;
+    if (zone !== 'sand') return put(meshOf(zone, odd, false), p);
+    let low = Infinity,
+      high = -Infinity;
+    for (let i = 0; i < p.n; i++) {
+      const y = p.d[i * STRIDE + 1];
+      if (y < low) low = y;
+      if (y > high) high = y;
+    }
+    const lo = Math.floor((low - l.originY) / RAKE),
+      hi = Math.floor((high - l.originY) / RAKE);
+    let rest = STRIPE_REST,
+      spare = STRIPE_B;
+    rest.d.set(p.d.subarray(0, p.n * STRIDE));
+    rest.n = p.n;
+    for (let k = lo; k <= hi; k++) {
+      split(rest, 1, l.originY + (k + 1) * RAKE, STRIPE_BELOW, spare);
+      put(k % 2 ? sandRaked : sand, STRIPE_BELOW);
+      [rest, spare] = [spare, rest];
+      if (rest.n < 3) break;
+    }
+  };
   for (let t = 0; t < l.cols * l.rows; t++) {
-    // the grass is laid here; the sand is the bunker's own, but it has an edge by the water as the grass has, and the
-    // earth comes down from it too
+    // the ground is laid here: on a golf hole all of it but the cup's tile, which its collar covers, and on minigolf the
+    // grass and the sand, which is the bunker's own, but it has an edge by the water as the grass has, and the earth comes
+    // down from it too
+    const golfGround = zones !== null && !l.solid[t] && !l.water[t] && t !== cupTile;
     const grass = isGrass(l, t, cupTile);
-    if (!grass && !isSand(l, t)) continue;
+    if (!grass && !isSand(l, t) && !golfGround) continue;
     const tx = t % l.cols,
       ty = Math.floor(t / l.cols);
     const x0 = l.originX + tx * TILE,
       y0 = l.originY + ty * TILE;
-    if (grass) {
+    // a tile the mouth can reach into, level grass like the cup's: each piece of it is cut where the mouth is
+    const cutTo =
+      hole !== null && l.floor[t] === l.floor[cupTile] && Math.abs(tx - cupX) <= reach && Math.abs(ty - cupY) <= reach
+        ? hole
+        : null;
+    /** The convex polygon `poly` laid into `b`, with the mouth cut out of it where it reaches. */
+    rakeFor = t;
+    rakeX0 = x0;
+    rakeY0 = y0;
+    rakeCut = cutTo;
+    const whole = zones !== null && golfGround ? zones.tileZone(tx, ty) : null;
+    if (zones === null ? grass : whole !== null && whole !== 'sand') {
+      // a tile of one kind of ground from edge to edge, cut into pieces a side as it always was
       const odd = mownAt(l, tx, ty);
-      let b = odd ? mown : green;
-      if (l.golf) {
-        const lie = l.lie[t];
-        if (l.oob[t]) b = oob;
-        else if (lie === LIE.rough) b = rough;
-        else if (lie === LIE.tee) b = tee;
-        else if (lie === LIE.cut) b = cut;
-        else if (lie === LIE.green) b = odd ? puttingMown : putting;
-      }
+      const b = whole !== null ? meshOf(whole, odd, false) : odd ? mown : green;
       const base = b.vertexCount;
       for (let j = 0; j <= n; j++)
         for (let i = 0; i <= n; i++) {
           const x = x0 + (i / n) * TILE,
             y = y0 + (j / n) * TILE;
-          const [sx, sy] = slopeAt(l, x, y);
-          const k = 1 / Math.hypot(sx, sy, 1);
-          b.vertex(x, y, at(t, x, y), -sx * k, -sy * k, k, i / n, j / n);
+          groundInto(l, x, y, HERE);
+          const k = 1 / Math.hypot(HERE[1], HERE[2], 1);
+          b.vertex(x, y, l.floor[t] + HERE[0], -HERE[1] * k, -HERE[2] * k, k, i / n, j / n);
         }
-      // a tile the mouth can reach into, level grass like the cup's: each piece of it is cut where the mouth is
-      const cutTo =
-        hole !== null && l.floor[t] === l.floor[cupTile] && Math.abs(tx - cupX) <= reach && Math.abs(ty - cupY) <= reach
-          ? hole
-          : null;
       for (let j = 0; j < n; j++)
         for (let i = 0; i < n; i++) {
           if (cutTo) {
@@ -145,6 +373,114 @@ export function groundOf(l: Layout, mouth?: Ring): Ground {
           const a = base + j * (n + 1) + i;
           b.quad(a, a + 1, a + n + 2, a + n + 1);
         }
+    } else if (zones !== null && golfGround) {
+      // a tile a curve crosses, or sand: cut into the same pieces a side as a whole tile is (so its edge meets its neighbour's
+      // corner to corner), each laid as a quad of its zone where it is wholly one, and where a curve passes through it cut
+      // along the line, one rule at a time. The fields are read at the pieces' corners, as the lie is read from them
+      const odd = mownAt(l, tx, ty);
+      const m = (n + 1) * (n + 1);
+      for (let j = 0; j <= n; j++)
+        for (let i = 0; i <= n; i++) {
+          const x = x0 + (i / n) * TILE,
+            y = y0 + (j / n) * TILE;
+          const q = j * (n + 1) + i;
+          zones.sample(x, y, FIELD_SCRATCH);
+          for (let k = 0; k < FIELDS; k++) CORNER_V[q * FIELDS + k] = FIELD_SCRATCH[k];
+          CORNER_X[q] = x;
+          CORNER_Y[q] = y;
+          CORNER_MASK[q] = maskOfCorner(q);
+          groundInto(l, x, y, HERE);
+          const k = 1 / Math.hypot(HERE[1], HERE[2], 1);
+          CORNER[q] = l.floor[t] + HERE[0];
+          CORNER[m + q] = -HERE[1] * k;
+          CORNER[2 * m + q] = -HERE[2] * k;
+          CORNER[3 * m + q] = k;
+        }
+      // a corner shared by the pieces round it is one vertex of a mesh, made when a piece first needs it (and stamped with the
+      // tile it was made for, so none is cleared between tiles)
+      const vertexOf = (b: MeshBuilder, i: number, j: number): number => {
+        let kept = shared.get(b);
+        if (!kept)
+          shared.set(b, (kept = { ids: new Int32Array((n + 1) * (n + 1)), stamp: new Int32Array((n + 1) * (n + 1)) }));
+        const at0 = j * (n + 1) + i;
+        if (kept.stamp[at0] !== t + 1) {
+          kept.stamp[at0] = t + 1;
+          kept.ids[at0] = b.vertex(
+            CORNER_X[at0],
+            CORNER_Y[at0],
+            CORNER[at0],
+            CORNER[m + at0],
+            CORNER[2 * m + at0],
+            CORNER[3 * m + at0],
+            (CORNER_X[at0] - x0) / TILE,
+            (CORNER_Y[at0] - y0) / TILE,
+          );
+        }
+        return kept.ids[at0];
+      };
+      for (let j = 0; j < n; j++)
+        for (let i = 0; i < n; i++) {
+          pieceI = i;
+          pieceJ = j;
+          const q00 = j * (n + 1) + i,
+            q10 = q00 + 1,
+            q11 = q00 + n + 2,
+            q01 = q00 + n + 1;
+          // a piece of one zone at every corner can still hide a sliver of another, so it is whole only where no rule's
+          // field crosses its threshold among the corners, which is where all four corners are below the same rules
+          const mask = CORNER_MASK[q00];
+          const zone = ZONE_OF_MASK[mask];
+          if (zone !== 'sand' && mask === CORNER_MASK[q10] && mask === CORNER_MASK[q11] && mask === CORNER_MASK[q01]) {
+            const b = meshOf(zone, odd, false);
+            const [xa, xb] = [CORNER_X[q00], CORNER_X[q10]],
+              [ya, yb] = [CORNER_Y[q00], CORNER_Y[q11]];
+            const piece: Ring = [
+              [xa, ya],
+              [xb, ya],
+              [xb, yb],
+              [xa, yb],
+            ];
+            if (cutTo && overlaps(piece, cutTo)) for (const part of outside(piece, cutTo)) lay(b, t, x0, y0, part);
+            else b.quad(vertexOf(b, i, j), vertexOf(b, i + 1, j), vertexOf(b, i + 1, j + 1), vertexOf(b, i, j + 1));
+            continue;
+          }
+          for (const corners of [
+            [q00, q10, q11],
+            [q00, q11, q01],
+          ]) {
+            let rest = REST,
+              spare = REST_B;
+            rest.n = 3;
+            for (let c = 0; c < 3; c++) {
+              const o = c * STRIDE,
+                q = corners[c];
+              rest.d[o] = CORNER_X[q];
+              rest.d[o + 1] = CORNER_Y[q];
+              for (let k = 0; k < FIELDS; k++) rest.d[o + 2 + k] = CORNER_V[q * FIELDS + k];
+            }
+            for (let r = 0; r < RULES.length; r++) {
+              if (rest.n < 3) break;
+              // a rule no corner is below leaves it all, and one every corner is below takes it all: only a rule that
+              // crosses the piece cuts it
+              const ch = 2 + RULE_FIELD[r],
+                below = RULE_BELOW[r];
+              let lows = 0;
+              for (let c = 0; c < rest.n; c++) if (rest.d[c * STRIDE + ch] < below) lows++;
+              if (lows === 0) continue;
+              if (lows === rest.n) {
+                raked(RULES[r][2], odd, rest);
+                rest.n = 0;
+                break;
+              }
+              split(rest, ch, below, BELOW, ABOVE);
+              raked(RULES[r][2], odd, BELOW);
+              spare.d.set(ABOVE.d.subarray(0, ABOVE.n * STRIDE));
+              spare.n = ABOVE.n;
+              [rest, spare] = [spare, rest];
+            }
+            raked('rough', odd, rest);
+          }
+        }
     }
     // the earth down each side where what is beside it lies lower: another tile's lower step, or water, whose surface
     // lies `WATER_LEVEL` below the grass, so a pond has a wall; rock has its rail, which stands over the edge
@@ -159,6 +495,9 @@ export function groundOf(l: Layout, mouth?: Ring): Ground {
       if (nx < 0 || ny < 0 || nx >= l.cols || ny >= l.rows) continue;
       const u = ny * l.cols + nx;
       if (l.solid[u]) continue;
+      // beside ground as high as this the earth has nothing to show: both tops are read at the same point, so a floor no lower
+      // is a top no lower, and most of a hole's tiles have no earth to lay
+      if (!l.water[u] && l.floor[u] >= l.floor[t]) continue;
       // the edge, from one end to the other, wound so its face looks out toward the neighbour
       const ex = ox > 0 ? x0 + TILE : ox < 0 ? x0 : null,
         ey = oy > 0 ? y0 + TILE : oy < 0 ? y0 : null;
@@ -196,6 +535,9 @@ export function groundOf(l: Layout, mouth?: Ring): Ground {
       cut: cut.build(),
       tee: tee.build(),
       oob: oob.build(),
+      sand: sand.build(),
+      sandRaked: sandRaked.build(),
+      lip: lip.build(),
     };
   return out;
 }
@@ -496,36 +838,70 @@ export function railsOf(l: Layout, height: number, depth: number, leftOut: Reado
   return { cap: top.build(), sides: timber.build() };
 }
 
+/** How far apart the stakes of the out of bounds line stand along it, in yards: a stake to every second tile, as they always were. */
+export const STAKE_APART = 6;
+
 /**
- * Where the stakes that mark out of bounds stand, on a golf hole: on the tiles of out of bounds that lie against a tile in
- * play, at the edge they share with it, one to every second such tile along the line so a stake is six units from the
- * next, each on the ground there. None on a hole that has no out of bounds.
+ * Where the stakes that mark out of bounds stand, on a golf hole: along the curve out of bounds is drawn and played by
+ * (`zonesOf`), one every `STAKE_APART` yards of it, each on the ground there. The curve is walked chain by chain, since
+ * its segments come in the order the grid was read and not the order they join in. None on a hole that has no out of bounds.
  */
 export function stakesOf(l: Layout): { x: number; y: number; z: number }[] {
   const out: { x: number; y: number; z: number }[] = [];
   if (!l.golf) return out;
-  for (let t = 0; t < l.cols * l.rows; t++) {
-    if (!l.oob[t]) continue;
-    const tx = t % l.cols,
-      ty = Math.floor(t / l.cols);
-    if ((tx + ty) % 2) continue;
-    // the side of the tile that meets a tile in play, if it has one
-    for (const [ox, oy] of [
-      [1, 0],
-      [-1, 0],
-      [0, 1],
-      [0, -1],
-    ]) {
-      const nx = tx + ox,
-        ny = ty + oy;
-      if (nx < 0 || ny < 0 || nx >= l.cols || ny >= l.rows) continue;
-      const u = ny * l.cols + nx;
-      if (l.oob[u] || l.solid[u]) continue;
-      // on the shared edge, a hair into out of bounds
-      const x = l.originX + (tx + 0.5 + ox * 0.45) * TILE,
-        y = l.originY + (ty + 0.5 + oy * 0.45) * TILE;
-      out.push({ x, y, z: heightAt(l, x, y) });
-      break;
+  const seg = zonesOf(l).curves[OUT];
+  const n = seg.length / 4;
+  if (!n) return out;
+  // a segment's ends are found by where they are: both cells that share an end work it out from the same two corners
+  const key = (x: number, y: number) => (Math.round(x * 64) + 2 ** 20) * 2 ** 21 + (Math.round(y * 64) + 2 ** 20);
+  const ends = new Map<number, number[]>();
+  const add = (k: number, s: number) => {
+    const list = ends.get(k);
+    if (list) list.push(s);
+    else ends.set(k, [s]);
+  };
+  for (let s = 0; s < n; s++) {
+    add(key(seg[4 * s], seg[4 * s + 1]), s);
+    add(key(seg[4 * s + 2], seg[4 * s + 3]), s);
+  }
+  const seen = new Uint8Array(n);
+  // the chains that are open begin at an end that only one segment has; the loops that are left begin anywhere
+  const order: number[] = [];
+  for (let s = 0; s < n; s++) {
+    if (
+      ends.get(key(seg[4 * s], seg[4 * s + 1]))!.length === 1 ||
+      ends.get(key(seg[4 * s + 2], seg[4 * s + 3]))!.length === 1
+    )
+      order.push(s);
+  }
+  for (let s = 0; s < n; s++) order.push(s);
+  for (const first of order) {
+    if (seen[first]) continue;
+    // walk from the open end if this segment has one
+    let s = first;
+    let [px, py, qx, qy] = [seg[4 * s], seg[4 * s + 1], seg[4 * s + 2], seg[4 * s + 3]];
+    if (ends.get(key(qx, qy))!.length === 1) [px, py, qx, qy] = [qx, qy, px, py];
+    let carried = STAKE_APART;
+    for (;;) {
+      seen[s] = 1;
+      const len = Math.hypot(qx - px, qy - py);
+      // a stake each time the walk has gone a stake's distance, the first at the start of a chain
+      let along = 0;
+      while (carried + (len - along) >= STAKE_APART) {
+        along += STAKE_APART - carried;
+        carried = 0;
+        const u = len > 0 ? along / len : 0;
+        const x = px + (qx - px) * u,
+          y = py + (qy - py) * u;
+        out.push({ x, y, z: heightAt(l, x, y) });
+      }
+      carried += len - along;
+      const next = ends.get(key(qx, qy))!.find((c) => !seen[c]);
+      if (next === undefined) break;
+      s = next;
+      const [ax, ay, bx, by] = [seg[4 * s], seg[4 * s + 1], seg[4 * s + 2], seg[4 * s + 3]];
+      if (key(ax, ay) === key(qx, qy)) [px, py, qx, qy] = [ax, ay, bx, by];
+      else [px, py, qx, qy] = [bx, by, ax, ay];
     }
   }
   return out;

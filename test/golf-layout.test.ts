@@ -1,10 +1,11 @@
 /**
  * A golf hole's map: the tiles that say what the ground is (`f` fairway, `r` rough, `c` first cut, `g` green, `t` the tee's box)
  * beside sand and water, read into a layout which knows the surface under any point. Minigolf's maps are read as they
- * were: no golf tile in them, no surface named.
+ * were: no golf tile in them, no surface named. What a map says of a tile, which is `tileLieAt`: the lie a ball is played
+ * from on a golf hole is the zone's (`lie-zones.test.ts`), and a map of a few tiles is too small for a curve to keep a tile of its own.
  */
 import { describe, expect, it } from 'vitest';
-import { TILE, layoutOf, lieAt, tileAt } from '../src/arena';
+import { TILE, layoutOf, tileLieAt as lieAt, tileAt } from '../src/arena';
 import { COURSE } from '../src/course';
 import { HILLS } from './hills';
 import { LIE, SURFACES } from '../src/surfaces';

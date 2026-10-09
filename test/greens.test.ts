@@ -7,7 +7,7 @@
  * minigolf, whose green is its own and whose figure is the table's, is as it was.
  */
 import { describe, expect, it } from 'vitest';
-import { ROLL, TILE, lieAt } from '../src/arena';
+import { ROLL, TILE, tileLieAt as lieAt } from '../src/arena';
 import { COURSES, type HoleDef } from '../src/course';
 import { golfHole } from '../src/golf';
 import { LINKS_SPECS } from '../src/links';

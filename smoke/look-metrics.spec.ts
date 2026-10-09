@@ -39,9 +39,13 @@ import { figuresOf, type Figures, type Rgb, type Samples } from './metrics';
  * took the Volcano's shape from 1.004, a hill drawn as bright as the flat,
  * to 1.458; its flanks are paired row by row, since points chosen from
  * anywhere fell on the lighter stripe more often on one flank and read the
- * flat hill as 1.26.
+ * flat hill as 1.26. The title's second pass (9 October 2026, the user's choice from five rounds of mocks) took the
+ * framing to 1.42, since its rough is lighter and nearer the course's green as the title's lawn is, and the shade from
+ * cooler than the sun by 0.029 to warmer by 0.081, since its sun is lower and the shade is the sea-green the title's
+ * trees and slopes are; both floors are set again from those figures, less a twentieth, so a rough brighter still or a
+ * shade warmer still is caught.
  */
-export const FLOORS: Figures = { saturation: 0.66, framing: 2, contrast: 2.1, coolShade: 0.02, shape: 1.38 };
+export const FLOORS: Figures = { saturation: 0.66, framing: 1.35, contrast: 2.1, coolShade: -0.085, shape: 1.38 };
 
 /** How many pixels either side of a point its colour is the mean of. */
 const SPREAD = 2;

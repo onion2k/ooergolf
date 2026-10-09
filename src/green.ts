@@ -7,7 +7,7 @@
  * physics changes and the tests that play the break in the game's own rehearsals say so. Without it a break would be a
  * number the page drew and nobody could trust.
  */
-import { PHYSICS, TILE, heightAt, lieAt, slopeAt, slopeInto, tileAt, type Layout } from './arena';
+import { PHYSICS, TILE, heightAt, tileLieAt, slopeAt, slopeInto, tileAt, type Layout } from './arena';
 import { NO_KIT, type Kit } from './items';
 import { GREENS, LIE, groundRoll, rollScale } from './surfaces';
 
@@ -49,7 +49,7 @@ export function greenArrows(layout: Layout): Arrow[] {
     const x = layout.originX + ((t % layout.cols) + 0.5) * TILE,
       y = layout.originY + (Math.floor(t / layout.cols) + 0.5) * TILE;
     if (layout.solid[t]) continue;
-    if (layout.golf ? lieAt(layout, x, y) !== LIE.green : layout.water[t] || t === cupTile) continue;
+    if (layout.golf ? tileLieAt(layout, x, y) !== LIE.green : layout.water[t] || t === cupTile) continue;
     const [slopeX, slopeY] = slopeAt(layout, x, y);
     if (Math.hypot(slopeX, slopeY) > HAIR) arrows.push({ x, y, slopeX, slopeY });
   }
@@ -205,13 +205,13 @@ export function puttFrom(
 
   let work = 0;
   const slope: [number, number] = [0, 0];
-  const arriving = Math.sqrt(2 * groundRoll(lieAt(layout, cup.x, cup.y), greens, kit) * PUTT.dead);
+  const arriving = Math.sqrt(2 * groundRoll(tileLieAt(layout, cup.x, cup.y), greens, kit) * PUTT.dead);
   /** How the ball's velocity changes as it goes: slowed by the ground it rolls over and pulled down the slope, per second. */
   const accel = (px: number, py: number, ux: number, uy: number, out: [number, number]) => {
     work++;
     slopeInto(layout, px, py, slope);
     const speed = Math.hypot(ux, uy) || 1;
-    const roll = groundRoll(lieAt(layout, px, py), greens, kit);
+    const roll = groundRoll(tileLieAt(layout, px, py), greens, kit);
     const pull = PHYSICS.gravity / (1 + slope[0] * slope[0] + slope[1] * slope[1]);
     out[0] = -(roll * ux) / speed - pull * slope[0];
     out[1] = -(roll * uy) / speed - pull * slope[1];

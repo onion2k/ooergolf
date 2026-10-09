@@ -14,7 +14,6 @@ import {
   BOUNCE,
   BUMPER,
   KICKER,
-  STONE,
   KIND_RADIUS,
   ROLL,
   SAND,
@@ -171,16 +170,6 @@ export function makeWorld(
       radius: KICKER.radius,
       top: heightAt(layout, k.x, k.y) + KICKER.height,
       restitution: KICKER.restitution * bounce,
-    })),
-  );
-  // and each stone at the water's edge, a post with a dull knock, its top a floor a ball can land and rest on
-  world.bumpers.push(
-    ...layout.stones.map((st) => ({
-      x: st.x,
-      y: st.y,
-      radius: st.r,
-      top: st.top,
-      restitution: STONE.restitution * bounce,
     })),
   );
   return world;

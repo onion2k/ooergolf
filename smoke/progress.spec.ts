@@ -607,7 +607,7 @@ test('a ball putted into the water costs a stroke, is splashed, and comes back t
   const pond = (await page.evaluate(() => window.game!.content())).holes.findIndex((h) => h.name === 'Pond');
   await page.evaluate((i) => window.game!.startHole(i), pond);
   const tee = await page.evaluate(() => window.game!.content().tee);
-  // up the hole from the tee, into the pond across it through a gap in the stones along its banks
+  // up the hole from the tee, into the pond across it
   await page.evaluate((angle) => window.game!.shoot(angle, 0.45), intoThePond());
   let splashed = false;
   for (let f = 0; f < 300 && !splashed; f += 10) {
@@ -663,51 +663,6 @@ test('each hole is flown in to, low behind the tee with the horizon in view, eas
   await page.evaluate(() => window.game!.step(30));
   expect((await page.evaluate(() => window.game!.view())).flying, 'cut short by the drag').toBe(false);
   await page.mouse.up();
-  expect(problems).toEqual([]);
-});
-
-test('a ball rolled at a stone on the bank of the Pond comes back off it, no stroke lost, where the game lists the stones', async ({
-  page,
-}) => {
-  const problems = watch(page);
-  await start(page, { seed: 1, paused: true });
-  const pond = (await page.evaluate(() => window.game!.content())).holes.findIndex((h) => h.name === 'Pond');
-  await page.evaluate((i) => window.game!.startHole(i), pond);
-  const { stones } = await page.evaluate(() => window.game!.content());
-  expect(stones.length, 'stones on the Pond').toBeGreaterThan(0);
-  // the stone the ball is put down three units short of, on the bank, and rolled at
-  const aimed = await page.evaluate((list) => {
-    const g = window.game!;
-    for (const s of list)
-      for (const [dx, dy] of [
-        [0, -1],
-        [0, 1],
-        [-1, 0],
-        [1, 0],
-      ]) {
-        const out = s.r + 1 + 3;
-        try {
-          g.lay(s.x + dx * out, s.y + dy * out);
-        } catch {
-          continue;
-        }
-        g.shoot(Math.atan2(-dy, -dx), 0.25);
-        return { x: s.x, y: s.y };
-      }
-    return null;
-  }, stones);
-  expect(aimed, 'a place on the bank to roll from').not.toBeNull();
-  // how near the ball comes to the stone's middle, and how far from it it comes to rest: back off it, not through it
-  let nearest = Infinity;
-  for (let f = 0; f < 400; f += 5) {
-    await play(page, 5, 'rolling at the stone');
-    const b = await page.evaluate(() => window.game!.ball());
-    nearest = Math.min(nearest, Math.hypot(b.x - aimed!.x, b.y - aimed!.y));
-    if (b.ready) break;
-  }
-  const rest = await page.evaluate(() => window.game!.ball());
-  expect(Math.hypot(rest.x - aimed!.x, rest.y - aimed!.y), 'came back off the stone').toBeGreaterThan(nearest + 0.5);
-  expect(await page.evaluate(() => window.game!.state().strokes), 'no stroke lost to the water').toBe(1);
   expect(problems).toEqual([]);
 });
 

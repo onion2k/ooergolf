@@ -6,6 +6,13 @@
  * card, every hundred frames, and not the save, whose shape is the one thing the feature changed. The Isles' seed 11
  * was taken again against e8f846b, whose stones by the water play that round differently (db8bcb04 before them); every
  * other round is the same on both, and this code run against e8f846b alone gives all twelve.
+ *
+ * The six golf hashes moved on 9 October 2026 (the title's second look), and the six of minigolf did not. Cause, shown:
+ * with `lieAt` and `isOut` put back to the tile's kind (a scratch edit, reverted), five of the six golf hashes return to
+ * the ones above to the digit, so the move is the lie read from the curves the ground is drawn by (`zones.ts`), a ball
+ * struck, landed and counted out of bounds by the zone and not the tile. The sixth, The Isles' seed 11, returns to
+ * db8bcb04, the hash from before the bouncing stones: the stones are gone (the ring is scenery only), so it is the
+ * round it played before e8f846b, on the zones' lie. The Isles' seed 11 above is therefore taken against this change.
  */
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
@@ -73,12 +80,12 @@ export const BEFORE: Record<string, string> = {
   'The Pinball Shed/11': 'fa53edaa',
   'The Waterworks/3': '51299ab1',
   'The Waterworks/11': 'a42d8d4a',
-  'The Links/3': '19cb25ee',
-  'The Links/11': '9f54762f',
-  'The Fells/3': '16cbc938',
-  'The Fells/11': '82b907ec',
-  'The Isles/3': '224f0994',
-  'The Isles/11': 'd57366ed',
+  'The Links/3': 'baddf395',
+  'The Links/11': 'c558b694',
+  'The Fells/3': 'd8592b0f',
+  'The Fells/11': 'a437179c',
+  'The Isles/3': '78ec0685',
+  'The Isles/11': 'bfd03031',
 };
 
 describe('a game with no kit is the game as it was', () => {

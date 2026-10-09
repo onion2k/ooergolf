@@ -52,14 +52,15 @@ export const SKY = {
 
 /**
  * The sun's shadow: how far past what stands round a hole its box reaches (`margin`), how high (`top`, over a golf
- * tree's tip and the tallest of the woods past it), the side of the square of ground its map covers on a hole of golf
+ * tree's tip and the tallest of the woods past it, 38 since the second title pass sized the woods' broadleaves up to
+ * 40 tall: a top outside the box casts no shadow, 24 before), the side of the square of ground its map covers on a hole of golf
  * (`reach`, about what a driver's aim view sees from the camera on) and how much of the square's edge its shadows fade out
  * over (`fade`), and how soft their edge is, in texels of its map (`softness`). A golf hole is long, so its map is fitted
  * to the view and its shadows are as sharp at the far end as at the tee and fall on the woods past it; a minigolf hole
  * is small, and its map is the whole box, as it always was. Chosen so every thing casts and every surface catches,
  * water too, at one softness (8 October 2026).
  */
-export const SHADOW = { margin: 4, top: 24, reach: 420, fade: 0.15, softness: 1.5 } as const;
+export const SHADOW = { margin: 4, top: 38, reach: 420, fade: 0.15, softness: 1.5 } as const;
 
 /**
  * The clean toy of `LOOK.md`: edges drawn at four samples a pixel, the toon
@@ -72,7 +73,8 @@ export const SHADOW = { margin: 4, top: 24, reach: 420, fade: 0.15, softness: 1.
  * ball can roll on takes more of this high sun than the top band's edge, and
  * a hill was drawn exactly as bright as the flat: at 2.5 the Volcano's flank
  * facing the sun reads 1.46 times as bright as the one turned from it, where
- * it read 1.00, and the steepest slopes reach the band beneath. The toy
+ * it read 1.00, and the steepest slopes reach the band beneath. It is 5 since the second title pass lowered the sun,
+ * which made a hill's flanks more alike by the light's own fall-off, and the title's hills have dark flanks. The toy
  * finish (a highlight on what is smooth, the sky in a clear coat, one smooth
  * ramp of light, shade in a crease toward the shade colour) is not asked for
  * here: the renderer gives it to every toon look.
@@ -86,7 +88,7 @@ export const TOY = {
   rimWidth: 0.18,
   skyLight: [0.5, 0.66, 0.9] as [number, number, number],
   groundLight: [0.42, 0.42, 0.18] as [number, number, number],
-  form: 2.5,
+  form: 5,
   // every shadow at one softness, the title picture's soft edge, and open water darkened in one as the ground beside it is
   shadowSoftness: SHADOW.softness,
   waterShadow: true,

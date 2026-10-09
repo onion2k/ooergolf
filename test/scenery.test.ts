@@ -12,6 +12,7 @@ import {
   SCENERY,
   SCALE,
   beyond,
+  BROADLEAF,
   bigness,
   clearings,
   dress,
@@ -355,6 +356,72 @@ describe('the scenery beyond a golf hole', () => {
     expect(beyond(l, 'The Opener')).toEqual(beyond(l, 'The Opener'));
     expect(beyond(l, 'another')).not.toEqual(beyond(l, 'The Opener'));
     for (const hole of COURSE) expect(beyond(layoutOf(hole.map), hole.name)).toEqual([]);
+  });
+
+  it('sizes its broadleaves 0.7 to 1.4 of the model by a hash of the place, one in five within 45 yards of the map 1.9 times more, and leaves every other kind as it was', () => {
+    let near = 0,
+      great = 0,
+      far = 0;
+    const normal = SCALE.least + SCALE.spread;
+    for (const hole of holes) {
+      const l = layoutOf(hole.map, hole.terrain);
+      const x0 = l.originX,
+        y0 = l.originY,
+        x1 = l.originX + l.cols * TILE,
+        y1 = l.originY + l.rows * TILE;
+      for (const p of beyond(l, hole.name)) {
+        if (p.kind !== 'broadleaf') {
+          expect(p.scale, `${hole.name}: a ${p.kind}`).toBeGreaterThanOrEqual(SCALE.least);
+          expect(p.scale, `${hole.name}: a ${p.kind}`).toBeLessThanOrEqual(normal);
+          continue;
+        }
+        const away = Math.max(x0 - p.x, p.x - x1, y0 - p.y, p.y - y1);
+        expect(p.scale).toBeGreaterThanOrEqual(SCALE.least * BROADLEAF.least - 1e-9);
+        if (away >= BROADLEAF.near) {
+          far++;
+          // past the near ring there are no great trees, only the hash's 0.7 to 1.4 of the scatter's own 0.8 to 1.25
+          expect(p.scale, `${hole.name}: a far broadleaf`).toBeLessThanOrEqual(normal * BROADLEAF.most + 1e-9);
+        } else {
+          near++;
+          expect(p.scale).toBeLessThanOrEqual(normal * BROADLEAF.most * BROADLEAF.big + 1e-9);
+          if (p.scale > normal * BROADLEAF.most) great++;
+        }
+      }
+    }
+    // a check that found nothing to check passes in silence: some were near, some far, and some of the near were great
+    expect(near).toBeGreaterThan(50);
+    expect(far).toBeGreaterThan(50);
+    expect(great).toBeGreaterThan(0);
+    // a great one is by the hash one in five of the near ones, and only the ones the 1.9 lifts past the biggest a plain one is
+    expect(great / near).toBeGreaterThan(0.05);
+    expect(great / near).toBeLessThan(BROADLEAF.bigShare + 0.05);
+  });
+
+  it('is mostly wood, in pine to broadleaf to bush as five to five to one, and denser by the course’s edge than out at the reach', () => {
+    const count: Record<string, number> = {};
+    let near = 0,
+      far = 0;
+    for (const hole of holes) {
+      const l = layoutOf(hole.map, hole.terrain);
+      const x0 = l.originX,
+        y0 = l.originY,
+        x1 = l.originX + l.cols * TILE,
+        y1 = l.originY + l.rows * TILE;
+      const round = 2 * (x1 - x0 + y1 - y0);
+      for (const p of beyond(l, hole.name)) {
+        count[p.kind] = (count[p.kind] ?? 0) + 1;
+        const away = Math.max(x0 - p.x, p.x - x1, y0 - p.y, p.y - y1);
+        // by the yard of ground: a band further out is longer round
+        if (away > 0 && away < BEYOND.reach / 2)
+          near += 1 / ((round + (Math.PI * BEYOND.reach) / 2) * (BEYOND.reach / 2));
+        else if (away >= BEYOND.reach / 2) far += 1 / ((round + Math.PI * BEYOND.reach * 1.5) * (BEYOND.reach / 2));
+      }
+    }
+    // of the woods’ own pieces (a scrub clump has bushes too) the pines and broadleaves are alike, and each many times the bushes
+    expect(count.conifer / count.broadleaf).toBeGreaterThan(0.8);
+    expect(count.conifer / count.broadleaf).toBeLessThan(1.25);
+    expect(count.conifer + count.broadleaf).toBeGreaterThan(0.6 * Object.values(count).reduce((a, b) => a + b, 0));
+    expect(near).toBeGreaterThan(far * 1.2);
   });
 
   it('is woods and scrub in clumps: every kind, and most pieces near another, never more than its ceiling', () => {

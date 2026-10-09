@@ -338,19 +338,20 @@ export const RIPPLE = { scale: 0.5, speed: 1.5 } as const;
  * `body` the deep colour seen through the surface (a brighter, bluer one than three.js's green-black, so a pond reads as
  * water from the tee), and `tint` the sky the waves mirror. `minigolfScale` is the finer waves of a minigolf hole, whose
  * ponds are a few tiles across and seen from twenty or thirty units back: at golf's size a pond there showed about a wave
- * and read as flat, with hardly a glint (the sheet of 8 October 2026).
+ * and read as flat, with hardly a glint (the sheet of 8 October 2026). Made deeper and bluer, with a smaller, fainter glint
+ * and a tint of sky less near white, and golf's waves twice as fine, after the title picture again (9 October 2026).
  */
 export const OCEAN = {
-  scale: 0.3,
+  scale: 0.6,
   minigolfScale: 0.6,
   speed: 0.55,
-  tilt: 0.8,
-  body: shown(0.05, 0.4, 0.9),
-  tint: shown(0.7, 0.9, 1),
+  tilt: 0.3,
+  body: shown(0.02, 0.38, 0.86),
+  tint: shown(0.4, 0.8, 0.97),
 } as const;
 
 /** The open water's pattern, for every bed that wears it: the waves at `scale`, and the sky they mirror. */
-const oceanPattern = (scale: number): Part['pattern'] => ({
+export const oceanPattern = (scale: number): Part['pattern'] => ({
   kind: PATTERN.ocean,
   scale,
   seed: 0,

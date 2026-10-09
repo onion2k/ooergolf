@@ -9,7 +9,9 @@ import { runInNewContext } from 'node:vm';
 import { setFlagsFromString } from 'node:v8';
 import { describe, expect, it } from 'vitest';
 import { GOLF_COURSES, WATCH, grew, sizes, trouble } from '../scripts/leaks';
-import { BALL } from '../src/arena';
+import { BALL, groundInto, keptWeights, layoutOf } from '../src/arena';
+import { pondOf } from '../src/waterdraw';
+import { zonesOf } from '../src/zones';
 import { ITEMS } from '../src/items';
 import { COURSES } from '../src/course';
 import { golfHole, laneOf } from '../src/golf';
@@ -126,5 +128,52 @@ describe('what must stay bounded', () => {
       gc();
     }
     expect(ref!.deref(), 'collected').toBeUndefined();
+  });
+
+  it("lets a hole go when only its zones and its pond are held: their tables are weak, as the lane's is", async () => {
+    // the zones' grids (a few hundred kilobytes a golf hole) and the pond's bands and ring are made for a layout and kept beside it
+    // in a WeakMap each, so a hole a course lets go of takes them with it; a strong table would hold every hole ever begun
+    setFlagsFromString('--expose-gc');
+    const gc = runInNewContext('gc') as () => void;
+    let ref: WeakRef<object>;
+    (() => {
+      const hole = golfHole({
+        name: 'Leak Pond',
+        par: 4,
+        length: 300,
+        bend: 20,
+        corner: 0.5,
+        width: 12,
+        seed: 5,
+        feel: 'hills',
+        steepness: 0.5,
+        bunkers: { fairway: 1, green: 1 },
+        ponds: [{ at: 0.5, side: -1, size: [4, 5] }],
+        trees: 10,
+        wind: 0,
+        contour: 0.3,
+        greens: 13,
+      });
+      const layout = layoutOf(hole.map, hole.terrain);
+      expect(zonesOf(layout).nx, 'it has zones').toBeGreaterThan(0);
+      expect(pondOf(layout).spots.length, 'it has a pond with a ring').toBeGreaterThan(0);
+      ref = new WeakRef(layout);
+    })();
+    for (let i = 0; i < 10 && ref!.deref(); i++) {
+      await new Promise((r) => setTimeout(r, 0));
+      gc();
+    }
+    expect(ref!.deref(), 'collected').toBeUndefined();
+  });
+
+  it('keeps the ground weights it reuses to a few hundred, however many places it is asked about', () => {
+    // `weightsOf` in arena.ts is a table of the cubes a corner of the ground's mesh asks again and again; a caller whose places
+    // never repeat (a sweep over a hole at a step no tile divides) must not grow it, since it is not tied to any hole
+    const layout = layoutOf(['#####', '#.T.#', '#.C.#', '#####']);
+    const out = [0, 0, 0];
+    for (let i = 0; i < 2000; i++)
+      groundInto(layout, layout.originX + 2 + i * 0.00137, layout.originY + 3 + i * 0.00291, out);
+    expect(keptWeights()).toBeLessThanOrEqual(257);
+    expect(keptWeights()).toBeGreaterThan(0);
   });
 });

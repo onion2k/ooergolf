@@ -7,6 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import { TILE, layoutOf, type Layout } from '../src/arena';
 import { BACKDROP, backdropOf, cloudAt } from '../src/backdrop';
+import { groundZOf } from '../src/hills';
 import { COURSES } from '../src/course';
 import { BEYOND } from '../src/scenery';
 import { BUDGET } from '../src/models';
@@ -85,6 +86,35 @@ describe('the world past a hole', () => {
         b.clouds.length * BUDGET.cloud;
       expect(total, name).toBeLessThanOrEqual(BUDGET.backdrop);
     }
+  });
+});
+
+describe('the world past a golf hole, on its hills', () => {
+  const [name, l] = holes[1];
+  const ground = groundZOf(l, name);
+  const b = backdropOf(l, name, ground);
+
+  it('stands on the ground where it is: no hill, mountain or tree under it, none floating more than the hills’ own height over it', () => {
+    let rises = 0;
+    for (const mesh of [b.hills, b.mountains])
+      for (const [x, y, z] of points(mesh.positions)) {
+        expect(z, 'under the ground').toBeGreaterThanOrEqual(ground(x, y) - 8 - 1e-6);
+        expect(z, 'over the ground').toBeLessThanOrEqual(ground(x, y) + 260 + hillMost() + 1e-6);
+        if (ground(x, y) > 5) rises++;
+      }
+    expect(rises, 'a check that met no rise in the ground passes in silence').toBeGreaterThan(0);
+    for (const t of b.forest) expect(t.z, 'a tree under the ground').toBeGreaterThanOrEqual(ground(t.x, t.y) - 9);
+  });
+
+  it("keeps its lake level, at the water's own level of the hollow the ground was carved to, and is the same as on a constant base where the ground is one", () => {
+    const level = new Set(points(b.lake.positions).map(([, , z]) => z.toFixed(4)));
+    expect(level.size).toBe(1);
+    expect(Number(Array.from(level)[0])).toBeCloseTo(ground.lake!.level, 3);
+    // the shore's points (the fan's middle is in the water) meet the ground, which never stands under the water there
+    const shore = points(b.lake.positions).filter(([x, y]) => ground.lake!.weight(x, y) < 1);
+    expect(shore.length, 'a check that met no shore passes in silence').toBeGreaterThan(0);
+    for (const [x, y] of shore) expect(ground(x, y)).toBeGreaterThanOrEqual(ground.lake!.level - 0.05);
+    expect(backdropOf(l, name, () => BASE)).toEqual(backdropOf(l, name, BASE));
   });
 });
 

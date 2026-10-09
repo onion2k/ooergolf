@@ -7,6 +7,7 @@
  */
 import { LIE, type Lie } from './surfaces';
 import { TREE } from './trees';
+import { zonesOf, type Zone } from './zones';
 
 export const TILE = 3;
 /**
@@ -178,11 +179,6 @@ export interface Layout extends Ground {
   bumpers: { x: number; y: number }[];
   /** Where each kicker stands: in the middle of its tile, on grass. A post that throws harder; see `KICKER`. */
   kickers: { x: number; y: number }[];
-  /**
-   * The stones along the water's edge (`stonesOf`): where each stands, in the water, how wide it is, and how high its
-   * top is, which is a floor to what lands on it. None on a hole without water.
-   */
-  stones: Stone[];
   /** How high the floor stands on each tile: nought for level grass, a step a digit, and far below for water. */
   floor: Float32Array;
   /** How high the ground slopes on each tile, at its middle, on top of its step: all nought on a hole that is flat. */
@@ -324,14 +320,12 @@ export function layoutOf(map: readonly string[], terrain?: readonly string[] | F
     trees,
     bumpers,
     kickers,
-    stones: [],
     floor,
     terrain: heights,
     tee: { x: teeX, y: teeY },
     cup: { x: cupX, y: cupY },
     bounds,
   };
-  out.stones = stonesOf(out);
   return out;
 }
 
@@ -405,10 +399,25 @@ export function restingAbove(l: Layout, x: number, y: number, radius: number): n
  * derivatives. The physics' own, from its terrain session: it smooths the
  * heights, does not pass through them, and keeps height and slope smooth.
  */
-function weights(t: number, derivative: boolean): [number, number, number, number] {
-  if (derivative) return [-((1 - t) ** 2) / 2, (3 * t * t - 4 * t) / 2, (-3 * t * t + 2 * t + 1) / 2, (t * t) / 2];
-  return [(1 - t) ** 3 / 6, (3 * t ** 3 - 6 * t * t + 4) / 6, (-3 * t ** 3 + 3 * t * t + 3 * t + 1) / 6, t ** 3 / 6];
+function weights(t: number, derivative: boolean, out: Float64Array) {
+  if (derivative) {
+    out[0] = -((1 - t) ** 2) / 2;
+    out[1] = (3 * t * t - 4 * t) / 2;
+    out[2] = (-3 * t * t + 2 * t + 1) / 2;
+    out[3] = (t * t) / 2;
+  } else {
+    out[0] = (1 - t) ** 3 / 6;
+    out[1] = (3 * t ** 3 - 6 * t * t + 4) / 6;
+    out[2] = (-3 * t ** 3 + 3 * t * t + 3 * t + 1) / 6;
+    out[3] = t ** 3 / 6;
+  }
 }
+
+/** The weights and the tiles' indices `smoothed` is worked from, scratch: nothing is made for a read of the ground. */
+const WX = new Float64Array(4),
+  WY = new Float64Array(4),
+  COLS = new Int32Array(4),
+  ROWS = new Int32Array(4);
 
 /**
  * The terrain at a point, with the tiles' middles for control points and
@@ -420,17 +429,74 @@ function smoothed(l: Layout, x: number, y: number, dx: boolean, dy: boolean): nu
     v = (y - l.originY) / TILE - 0.5;
   const kx = Math.floor(u),
     ky = Math.floor(v);
-  const wx = weights(u - kx, dx),
-    wy = weights(v - ky, dy);
+  weights(u - kx, dx, WX);
+  weights(v - ky, dy, WY);
   let h = 0;
   for (let b = 0; b < 4; b++) {
     const row = Math.min(l.rows - 1, Math.max(0, ky - 1 + b));
     for (let a = 0; a < 4; a++) {
       const col = Math.min(l.cols - 1, Math.max(0, kx - 1 + a));
-      h += wx[a] * wy[b] * l.terrain[row * l.cols + col];
+      h += WX[a] * WY[b] * l.terrain[row * l.cols + col];
     }
   }
   return h;
+}
+
+/**
+ * The weights and their derivatives at `t` (the first four and the last four of eight numbers), kept for the `t`s a pass over
+ * a hole's corners asks again and again: a corner of the ground's mesh falls at one of a few places in a tile, and the cubes
+ * are what a corner costs. Emptied when it holds a few hundred, so a caller with a new `t` each time keeps nothing.
+ */
+const KEPT = new Map<number, Float64Array>();
+/** How many `t`s the weights are kept for just now, which a test holds under the number it empties at. */
+export const keptWeights = () => KEPT.size;
+function weightsOf(t: number): Float64Array {
+  let w = KEPT.get(t);
+  if (w === undefined) {
+    if (KEPT.size > 256) KEPT.clear();
+    w = new Float64Array(8);
+    weights(t, false, WX);
+    weights(t, true, WY);
+    for (let a = 0; a < 4; a++) {
+      w[a] = WX[a];
+      w[4 + a] = WY[a];
+    }
+    KEPT.set(t, w);
+  }
+  return w;
+}
+
+/**
+ * The terrain at a point and its slope across X and along Y, written into `out` (three numbers): exactly what `terrainAt` and
+ * `slopeAt` say, each sum in the order it is worked alone, but with the weights and the tiles found once and not three times.
+ * What the ground's mesh asks of every corner it lays, which was the cost of beginning a hole of golf.
+ */
+export function groundInto(l: Layout, x: number, y: number, out: { [i: number]: number }): void {
+  const u = (x - l.originX) / TILE - 0.5,
+    v = (y - l.originY) / TILE - 0.5;
+  const kx = Math.floor(u),
+    ky = Math.floor(v);
+  const wu = weightsOf(u - kx),
+    wv = weightsOf(v - ky);
+  for (let a = 0; a < 4; a++) {
+    COLS[a] = Math.min(l.cols - 1, Math.max(0, kx - 1 + a));
+    ROWS[a] = Math.min(l.rows - 1, Math.max(0, ky - 1 + a)) * l.cols;
+  }
+  let h = 0,
+    hx = 0,
+    hy = 0;
+  for (let b = 0; b < 4; b++) {
+    const row = ROWS[b];
+    for (let a = 0; a < 4; a++) {
+      const t = l.terrain[row + COLS[a]];
+      h += wu[a] * wv[b] * t;
+      hx += wu[4 + a] * wv[b] * t;
+      hy += wu[a] * wv[4 + b] * t;
+    }
+  }
+  out[0] = h;
+  out[1] = hx / TILE;
+  out[2] = hy / TILE;
 }
 
 /**
@@ -467,11 +533,42 @@ export function onSand(l: Layout, x: number, y: number): boolean {
   return t >= 0 && l.sand[t] === 1;
 }
 
+/** The lie each zone of a golf hole's ground is: a bunker's lip is sand, and out of bounds is rough (`Game.isOut` tells it lost). */
+const LIE_OF_ZONE: Record<Zone, Lie> = {
+  sand: LIE.sand,
+  lip: LIE.sand,
+  oob: LIE.rough,
+  tee: LIE.tee,
+  putting: LIE.green,
+  cut: LIE.cut,
+  fairway: LIE.fairway,
+  rough: LIE.rough,
+};
+
+/** The lie a zone plays as: the one place it is said, which `lieAt` and the rule that holds the two together both read. */
+export function lieOfZone(zone: Zone): Lie {
+  return LIE_OF_ZONE[zone];
+}
+
 /**
- * What the ground is at a point, by `LIE`: sand wherever there is sand, else the tile's own kind on a golf hole, and
- * none anywhere else, off the grid too. The one place a surface is read, so the physics, a landing and a strike agree.
+ * What the ground is at a point, by `LIE`: on a golf hole the zone the point is in, which is the curves the ground is
+ * drawn by (`zones.ts`), so what is drawn is what is played; on a hole of minigolf sand wherever there is sand, else
+ * none. The one place a surface is read, so a strike and a landing agree. Water and rock keep their tile's answer,
+ * since the zones are the kinds of ground and a ball on either is lost or cannot be there.
+ *
+ * The physics does not read this: `makeWorld` gives it the tile's surface, so a ball rolls on the tile's kind and is
+ * struck and lands by the zone's. Near an edge a ball may roll at the other kind's rate for up to a tile and a half.
+ * It is small and said, and the invariant that holds a ball at rest to a slope its lie holds reads the tile (`tileLieAt`).
  */
 export function lieAt(l: Layout, x: number, y: number): Lie {
+  const t = tileAt(l, x, y);
+  if (t < 0) return LIE.none;
+  if (l.golf && !l.solid[t] && !l.water[t]) return lieOfZone(zonesOf(l).at(x, y));
+  return l.sand[t] ? LIE.sand : (l.lie[t] as Lie);
+}
+
+/** The lie of the tile a point is on, which is what the physics rolls a ball by: sand, else the tile's own kind. */
+export function tileLieAt(l: Layout, x: number, y: number): Lie {
   const t = tileAt(l, x, y);
   if (t < 0) return LIE.none;
   return l.sand[t] ? LIE.sand : (l.lie[t] as Lie);
@@ -510,136 +607,6 @@ export const KICKER = { radius: 1, height: 1.6, restitution: 1.8 } as const;
 export function fromKickers(l: Layout, x: number, y: number): number {
   let near = Infinity;
   for (const k of l.kickers) near = Math.min(near, Math.hypot(x - k.x, y - k.y) - KICKER.radius);
-  return near;
-}
-
-/**
- * A stone at the water's edge, as the title picture lines its river: a body the physics has, as a post is, standing in
- * the water where it meets ground a ball can be on. `radius` is a minigolf stone's (a golf hole's are `golf` times it,
- * since its ball is struck further and the stones are seen from further back), each from 0.85 to 1.15 of it by where it
- * is. `proud` is how far its top stands above the ground beside it: over a resting ball's middle, so a ball rolled at
- * one is met by its side and thrown back, where at less the physics lets it ride up the stone's round edge and over it
- * into the water; and a ball that lands on one can rest on its top. `inset` is how far into the water its middle stands
- * from the edge, as a share of its radius: less than one, so it overlaps the bank and leaves no slot between them for a
- * ball to fall into and be squeezed in. `share` is the sides of the edge that have one, two in five, so a pond has stones
- * along it and gaps a ball can roll through, and is never fenced in; and `restitution` how much of its speed a ball keeps
- * off one straight on, a stone's dull knock and not a post's throw.
- */
-export const STONE = { radius: 0.9, golf: 1.6, proud: 1.1, inset: 0.7, share: 0.4, restitution: 0.5 } as const;
-
-/** A stone at the water's edge: its middle, its radius, and the height of its top. */
-export interface Stone {
-  x: number;
-  y: number;
-  r: number;
-  top: number;
-}
-
-/** A number from a tile and a side, the same every time, so where the stones stand comes from the map alone. */
-function stoneHash(c: number, r: number, side: number): number {
-  let h = Math.imul(c + 1, 73856093) ^ Math.imul(r + 1, 19349663) ^ Math.imul(side + 1, 83492791);
-  h = Math.imul(h ^ (h >>> 13), 0x5bd1e995);
-  return (h ^ (h >>> 15)) >>> 0;
-}
-
-/**
- * The stones along a hole's water: one in the water beside a share of the sides where a tile of water meets ground a
- * ball can be on (not water, not rail, not rock), chosen and sized by `stoneHash` and never by the game's chance, its top
- * `STONE.proud` above that ground. A stream is a belt and not water to the map, and has none.
- */
-export function stonesOf(l: Layout): Stone[] {
-  const out: Stone[] = [];
-  const land = (c: number, r: number) => {
-    if (c < 0 || r < 0 || c >= l.cols || r >= l.rows) return false;
-    const t = r * l.cols + c;
-    return !l.water[t] && !l.rail[t] && l.solid[t] === 0;
-  };
-  const play = lineOfPlay(l);
-  const sides: [number, number][] = [
-    [1, 0],
-    [-1, 0],
-    [0, 1],
-    [0, -1],
-  ];
-  for (let t = 0; t < l.cols * l.rows; t++) {
-    if (!l.water[t]) continue;
-    const c = t % l.cols,
-      r = Math.floor(t / l.cols);
-    sides.forEach(([dc, dr], side) => {
-      if (!land(c + dc, r + dr) || play[(r + dr) * l.cols + c + dc]) return;
-      const h = stoneHash(c, r, side);
-      if ((h % 1000) / 1000 >= STONE.share) return;
-      const radius = STONE.radius * (l.golf ? STONE.golf : 1) * (0.85 + (((h >>> 10) % 1000) / 1000) * 0.3);
-      const along = (((h >>> 20) % 1000) / 1000 - 0.5) * 0.5 * TILE;
-      const cx = l.originX + (c + 0.5) * TILE,
-        cy = l.originY + (r + 0.5) * TILE;
-      const edge = TILE / 2 - radius * STONE.inset;
-      const x = cx + dc * edge + (dr !== 0 ? along : 0),
-        y = cy + dr * edge + (dc !== 0 ? along : 0);
-      // the ground beside it, at the middle of that tile
-      const ground = heightAt(l, l.originX + (c + dc + 0.5) * TILE, l.originY + (r + dr + 0.5) * TILE);
-      out.push({ x, y, r: radius, top: ground + STONE.proud });
-    });
-  }
-  return out;
-}
-
-/**
- * The ground a stone may not stand beside, one byte a tile: within a tile of the hole's line of play, so the stones
- * line the banks a player does not play along and a hole is played as it was drawn (the user's choice of 8 October
- * 2026, after stones on every bank stopped The Causeway's straight putt and took the autopilot two strokes over par on
- * Pond). On minigolf the line is the shortest way over ground a ball can be on from the tee to the cup; on golf it is
- * the fairway, the green, its first cut and the tee, so a lake's stones stand by its rough.
- */
-function lineOfPlay(l: Layout): Uint8Array {
-  const n = l.cols * l.rows;
-  const line = new Uint8Array(n);
-  if (l.golf) {
-    for (let t = 0; t < n; t++) {
-      const lie = l.lie[t];
-      if (!l.oob[t] && (lie === LIE.fairway || lie === LIE.green || lie === LIE.cut || lie === LIE.tee)) line[t] = 1;
-    }
-  } else {
-    // a search outward from the tee over the ground a ball can be on, and the way back from the cup along it
-    const at = (x: number, y: number) =>
-      Math.floor((y - l.originY) / TILE) * l.cols + Math.floor((x - l.originX) / TILE);
-    const from = at(l.tee.x, l.tee.y),
-      to = at(l.cup.x, l.cup.y);
-    const back = new Int32Array(n).fill(-2);
-    back[from] = -1;
-    const queue = new Int32Array(n);
-    let head = 0,
-      tail = 0;
-    queue[tail++] = from;
-    while (head < tail) {
-      const t = queue[head++];
-      if (t === to) break;
-      const c = t % l.cols;
-      for (const u of [c > 0 ? t - 1 : -1, c < l.cols - 1 ? t + 1 : -1, t - l.cols, t + l.cols])
-        if (u >= 0 && u < n && back[u] === -2 && !l.water[u] && !l.rail[u] && l.solid[u] === 0) {
-          back[u] = t;
-          queue[tail++] = u;
-        }
-    }
-    for (let t = to; t >= 0 && back[t] !== -2; t = back[t]) line[t] = 1;
-  }
-  // and a tile round it
-  const near = new Uint8Array(n);
-  for (let t = 0; t < n; t++) {
-    if (!line[t]) continue;
-    const c = t % l.cols,
-      r = Math.floor(t / l.cols);
-    for (let dr = -1; dr <= 1; dr++)
-      for (let dc = -1; dc <= 1; dc++)
-        if (c + dc >= 0 && c + dc < l.cols && r + dr >= 0 && r + dr < l.rows) near[(r + dr) * l.cols + c + dc] = 1;
-  }
-  return near;
-}
-
-/** How far a point is from the side of the nearest stone, or Infinity on a hole with none. */
-export function fromStones(l: Layout, x: number, y: number): number {
-  let near = Infinity;
-  for (const s of l.stones) near = Math.min(near, Math.hypot(x - s.x, y - s.y) - s.r);
   return near;
 }
 

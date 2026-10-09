@@ -47,7 +47,19 @@ export {
   windmill,
 } from './models/obstacles';
 export { bunting, fence, flowers, stake } from './models/decor';
-export { FACETS, boulder, broadleaf, bush, cloud, conifer, farTree, fern, golfTree, stone } from './models/lowpoly';
+export {
+  FACETS,
+  boulder,
+  broadleaf,
+  bush,
+  cloud,
+  conifer,
+  farTree,
+  fern,
+  golfTree,
+  bankStone,
+  BANK_STONE,
+} from './models/lowpoly';
 export { kicker } from './models/kicker';
 export { flipper } from './models/obstacles';
 export { OCEAN, OCEAN_ON, RIPPLE, STREAM, stream, oceanFor, oceanScaleFor } from './models/obstacles';
@@ -96,15 +108,18 @@ export const BUDGET = {
   golfHole: 60000,
   kicker: 420,
   flipper: 120,
-  /** The low-poly scenery, chunky as chosen: a broadleaf is four lumps of twenty-four facets on a trunk of six. */
-  broadleaf: 120,
+  /** The low-poly scenery, chunky as chosen: a broadleaf is four lumps of forty-eight facets on a trunk of six, rounder than the twenty-four they had (a budget of 120), as the title's crowns are. */
+  broadleaf: 210,
   conifer: 60,
   boulder: 40,
   bush: 80,
   fern: 40,
   cloud: 100,
-  stone: 50,
+  'bank stone': 40,
   /** The world past a hole: its hills, mountains and lake, a far tree for each of its trees, and its clouds. */
   backdrop: 24000,
   farTree: 16,
+  /** The woods past a golf hole, the most triangles a hole draws of them: the near woods (`beyond`), and the far woods (`farWoods`, of far trees). */
+  'near woods': 200000,
+  'far woods': 50000,
 } as const;
