@@ -47,6 +47,25 @@ describe('the fly-in on the rig', () => {
     }
   });
 
+  it('is never tilted past its own tilt by an aim view that is sent while it flies (a club changed in the first frame)', () => {
+    // found 9 October 2026 by the fuzzer on The Links, seed 30: the fly-in eased from its tilt less the play view's tilt as it
+    // was at the start, and the aim view then moved the play view's tilt, so the fly-in began that much past its own
+    const rig = new CameraRig();
+    rig.aimAt({ distance: 80, tilt: 0.7 }, true);
+    rig.flyIn(0, 0, 0, 10, AHEAD);
+    rig.aimAt({ distance: 120, tilt: 0.9 });
+    for (let f = 0; f < 90; f++) {
+      const t = 10 + f * DT;
+      rig.settle(DT);
+      expect(rig.view(t).tilt, `at frame ${f}`).toBeLessThanOrEqual(FLY_IN.tilt + 1e-9);
+      expect(flyInProblems(rig, t, 10), `at frame ${f}`).toEqual([]);
+    }
+    // and it is where it was sent when it is over
+    const end = 10 + FLY_IN.hold + FLY_IN.time;
+    for (let f = 0; f < 600; f++) rig.settle(DT);
+    expect(rig.view(end).tilt).toBeCloseTo(0.9, 6);
+  });
+
   it('ends exactly at the view a hole begun with no fly-in has, and is over by its hold and its time', () => {
     const a = new CameraRig(),
       b = new CameraRig();

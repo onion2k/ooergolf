@@ -201,6 +201,13 @@ export class CameraRig {
   /** What is left of the turn and the tilt it was at when the hole began, eased away over the same glide. */
   private easeTurn = 0;
   private easeTilt = 0;
+  /**
+   * Where a fly-in's tilt begins, in radians (its own, `FLY_IN.tilt`, or where a cut left it). It is eased from there to the
+   * play view's tilt *as that is now*, and not by an offset worked out once at the start: the aim view moves the play view's
+   * tilt while the fly-in flies (a club changed in the first frame sends it), and the offset left the fly-in that far past
+   * its own tilt. Read only while `flown`.
+   */
+  private easeFrom: number = FLY_IN.tilt;
   private glidFrom = -Infinity;
   /** How long the glide waits before it eases, and how long it eases for: `GLIDE` and none, but for a fly-in. */
   private glideHold = 0;
@@ -276,6 +283,7 @@ export class CameraRig {
     // eased from the fly-in's tilt to whatever the play view's is, which a golf hole's aim view has set by now
     this.easeTurn = 0;
     this.easeTilt = FLY_IN.tilt - this.tilt;
+    this.easeFrom = FLY_IN.tilt;
   }
 
   /**
@@ -290,6 +298,8 @@ export class CameraRig {
     for (let a = 0; a < 3; a++) this.behind[a] *= k;
     this.easeTurn *= k;
     this.easeTilt *= k;
+    // from the tilt it has this moment, so nothing jumps
+    this.easeFrom = this.tilt + (this.easeFrom - this.tilt) * k;
     this.glidFrom = t;
     this.glideHold = 0;
     this.glideTime = FLY_IN.cut;
@@ -587,7 +597,7 @@ export class CameraRig {
   view(t: number, out = { azimuth: 0, tilt: 0 }): { azimuth: number; tilt: number } {
     const k = this.left(t);
     out.azimuth = this.azimuth + this.easeTurn * k;
-    out.tilt = this.tilt + this.easeTilt * k;
+    out.tilt = this.flown ? this.tilt + (this.easeFrom - this.tilt) * k : this.tilt + this.easeTilt * k;
     return out;
   }
 
