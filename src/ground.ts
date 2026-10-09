@@ -135,6 +135,49 @@ export function mownAt(l: { golf: boolean }, tx: number, ty: number): boolean {
   return (Math.floor(tx / n) + Math.floor(ty / n)) % 2 === 1;
 }
 
+/**
+ * How wide a stripe of a golf fairway is, in tiles: the fairway is mown in broad stripes along the line of play, as the
+ * title picture's is (chosen from a mock on 9 October 2026), which curve with the hole's way where it bends. Nine yards,
+ * three a side of the way's own line, so a fairway of ten to fifteen tiles shows three to five of them.
+ */
+export const STRIPE = { width: 3 } as const;
+
+/**
+ * Whether the fairway at the point (`x`, `y`) of the hole is in its lighter, mown tone: the other half of the one place the
+ * mow is said. On a golf hole that has a way (`Layout.way`, the line of play from the tee to the cup) the tone is the
+ * stripe the point is in, by how far it is across the way and not by its tile, so a stripe that runs on a diagonal is not
+ * a stair of tiles; and on any other hole it is the checker's tone of the tile the point is in. Only the fairway is read
+ * by it: the putting green and the rest keep the checker.
+ */
+export function stripedAt(
+  l: { golf: boolean; way?: Layout['way']; originX: number; originY: number },
+  x: number,
+  y: number,
+): boolean {
+  const way = l.way;
+  if (!l.golf || !way) return mownAt(l, Math.floor((x - l.originX) / TILE), Math.floor((y - l.originY) / TILE));
+  let best = Infinity,
+    side = 0;
+  for (let k = 0; k + 1 < way.length; k++) {
+    const [ax, ay] = way[k],
+      [bx, by] = way[k + 1];
+    const lx = bx - ax,
+      ly = by - ay;
+    const u = Math.max(0, Math.min(1, ((x - ax) * lx + (y - ay) * ly) / (lx * lx + ly * ly)));
+    const ex = x - (ax + lx * u),
+      ey = y - (ay + ly * u);
+    // the square of the distance is compared, and its root taken once at the end: this is asked of every piece of every fairway
+    // tile, and a hypot a call was most of what the stripes cost a hole to begin
+    const d = ex * ex + ey * ey;
+    // which side of the way, by the cross product: positive to its left
+    if (d < best) {
+      best = d;
+      side = Math.sign(lx * (y - ay) - ly * (x - ax));
+    }
+  }
+  return (Math.floor((side * Math.sqrt(best)) / (STRIPE.width * TILE)) & 1) === 1;
+}
+
 export interface Ground {
   /** The grass in its lighter stripe, and in its darker: on a golf hole, the fairway's. */
   green: Mesh;
@@ -198,6 +241,9 @@ export function groundOf(l: Layout, mouth?: Ring): Ground {
     lip = new FastMeshBuilder();
   const n = GROUND.pieces;
   const zones = l.golf ? zonesOf(l) : null;
+  // the middle of the piece being cut, which the fairway's stripe is read at
+  let pieceX = 0,
+    pieceY = 0;
   /** The mesh of a zone: the fairway and the putting green in the checker's tone of the tile, the sand in the rake's of the row. */
   const meshOf = (zone: Zone, odd: boolean, stripe: boolean): MeshBuilder => {
     switch (zone) {
@@ -214,7 +260,8 @@ export function groundOf(l: Layout, mouth?: Ring): Ground {
       case 'cut':
         return cut;
       case 'fairway':
-        return odd ? mown : green;
+        // a fairway with a way is mown in stripes, by the piece being cut; without one, in the checker's tone of the tile
+        return (l.way ? stripedAt(l, pieceX, pieceY) : odd) ? mown : green;
       case 'rough':
         return rough;
     }
@@ -344,6 +391,41 @@ export function groundOf(l: Layout, mouth?: Ring): Ground {
     if (zones === null ? grass : whole !== null && whole !== 'sand') {
       // a tile of one kind of ground from edge to edge, cut into pieces a side as it always was
       const odd = mownAt(l, tx, ty);
+      if (whole === 'fairway' && l.way) {
+        // a fairway in stripes: each piece in the tone of the stripe its middle is in, and so with corners of its own
+        for (let j = 0; j < n; j++)
+          for (let i = 0; i < n; i++) {
+            pieceX = x0 + ((i + 0.5) / n) * TILE;
+            pieceY = y0 + ((j + 0.5) / n) * TILE;
+            const b = meshOf('fairway', odd, false);
+            const [xa, xb] = [x0 + (i / n) * TILE, x0 + ((i + 1) / n) * TILE],
+              [ya, yb] = [y0 + (j / n) * TILE, y0 + ((j + 1) / n) * TILE];
+            if (cutTo) {
+              const piece: Ring = [
+                [xa, ya],
+                [xb, ya],
+                [xb, yb],
+                [xa, yb],
+              ];
+              if (overlaps(piece, cutTo)) {
+                for (const part of outside(piece, cutTo)) lay(b, t, x0, y0, part);
+                continue;
+              }
+            }
+            const corner = (x: number, y: number, u: number, v: number) => {
+              groundInto(l, x, y, HERE);
+              const k = 1 / Math.hypot(HERE[1], HERE[2], 1);
+              return b.vertex(x, y, l.floor[t] + HERE[0], -HERE[1] * k, -HERE[2] * k, k, u, v);
+            };
+            b.quad(
+              corner(xa, ya, i / n, j / n),
+              corner(xb, ya, (i + 1) / n, j / n),
+              corner(xb, yb, (i + 1) / n, (j + 1) / n),
+              corner(xa, yb, i / n, (j + 1) / n),
+            );
+          }
+        continue;
+      }
       const b = whole !== null ? meshOf(whole, odd, false) : odd ? mown : green;
       const base = b.vertexCount;
       for (let j = 0; j <= n; j++)
@@ -422,6 +504,8 @@ export function groundOf(l: Layout, mouth?: Ring): Ground {
         for (let i = 0; i < n; i++) {
           pieceI = i;
           pieceJ = j;
+          pieceX = x0 + ((i + 0.5) / n) * TILE;
+          pieceY = y0 + ((j + 0.5) / n) * TILE;
           const q00 = j * (n + 1) + i,
             q10 = q00 + 1,
             q11 = q00 + n + 2,

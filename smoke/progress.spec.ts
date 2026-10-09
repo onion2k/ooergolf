@@ -17,6 +17,8 @@ import { PNG } from 'pngjs';
 import { TILE, layoutOf } from '../src/arena';
 import { facing } from '../src/camera';
 import { breakOf } from '../src/green';
+import { links } from '../src/links';
+import { onBank } from '../src/slopes';
 import { puttText } from '../src/readout';
 import { DRAG } from '../src/shot';
 import { scoreName } from '../src/score';
@@ -869,13 +871,16 @@ test('a ball struck out of bounds on The Links is lost: told, a word over the co
   });
   const tee = await page.evaluate(() => window.game!.ball());
   // the driver, as it is at a tee; struck by a drag pulled to the right across the screen, so the ball goes off to the left,
-  // at full power, across the rough and over the stakes
+  // at seven tenths of the power, over the bank and the stakes. At full power it no longer comes down out of bounds on this
+  // hole: the ground rises to the bank's height by the stakes (the land rolls), so a drive flown sideways meets the bank and
+  // rests on it, and only a shot that clears it and drops in the band beyond is lost (`rolling: false` on the spec gives the
+  // full-power drive back, to the digit)
   const at = await page.evaluate(() => {
     const b = window.game!.ball();
     return window.game!.project(b.x, b.y, b.z);
   });
   const short = await page.evaluate(() => Math.min(innerWidth, innerHeight));
-  await drag(page, at, { x: at.x + 0.36 * short, y: at.y }, { steps: 10 });
+  await drag(page, at, { x: at.x + 0.7 * 0.35 * short, y: at.y }, { steps: 10 });
   expect(await page.evaluate(() => window.game!.state().strokes), 'the stroke is taken').toBe(1);
   let told: string | undefined;
   for (let f = 0; f < 20 * 60 && !told; f += 5) {
@@ -896,6 +901,47 @@ test('a ball struck out of bounds on The Links is lost: told, a word over the co
   await play(page, 90, 'the camera coming back');
   await putt(page, 0, 40);
   await expect(page.locator('#toast')).toBeHidden();
+  expect(problems).toEqual([]);
+});
+
+test('a ball lying on a bank of The Links, in the rough above the fairway, is struck by the test API and comes to rest, and the next stroke can be taken', async ({
+  page,
+}) => {
+  const problems = watch(page);
+  // the highest tile of rough on The Opener that the fuzzer counts as a bank, so the ball lies well up a slope and not on its toe
+  const hole = links()[0];
+  const layout = layoutOf(hole.map, hole.terrain);
+  let best = { x: 0, y: 0, z: -1 };
+  for (let t = 0; t < layout.cols * layout.rows; t++) {
+    const x = layout.originX + ((t % layout.cols) + 0.5) * TILE,
+      y = layout.originY + (Math.floor(t / layout.cols) + 0.5) * TILE;
+    if (layout.terrain[t] > best.z && onBank(layout, x, y)) best = { x, y, z: layout.terrain[t] };
+  }
+  expect(best.z, 'a bank to stand on').toBeGreaterThan(3);
+  await start(page, { seed: 1, paused: true });
+  await page.evaluate(() => {
+    window.game!.chooseCourse('The Links');
+    window.game!.startHole(0);
+    window.game!.step(75);
+  });
+  await page.evaluate((b) => window.game!.lay(b.x, b.y), best);
+  await play(page, 5, 'a ball put on a bank');
+  const lies = await page.evaluate(() => window.game!.ball());
+  expect(Math.hypot(lies.x - best.x, lies.y - best.y), 'the ball lies where it was put').toBeLessThan(0.5);
+  expect(await page.evaluate(() => window.game!.state())).toMatchObject({ golf: true, ready: true, strokes: 0 });
+  // struck toward the cup with a wedge, by the test API's own shoot, at half power: a stroke is taken
+  const aim = await page.evaluate(() => {
+    const b = window.game!.ball();
+    const c = window.game!.content().cup;
+    return Math.atan2(c.y - b.y, c.x - b.x);
+  });
+  expect(await page.evaluate((a) => window.game!.shoot(a, 0.5, 'pitching-wedge'), aim), 'the stroke is taken').toBe(
+    true,
+  );
+  await untilReady(page, 'from a bank');
+  const after = await page.evaluate(() => window.game!.state());
+  expect(after).toMatchObject({ ready: true, phase: 'play' });
+  expect(after.strokes, 'one stroke, or two with a penalty').toBeGreaterThanOrEqual(1);
   expect(problems).toEqual([]);
 });
 
@@ -1232,6 +1278,7 @@ test.describe('aiming a golf shot', () => {
       const shot = await page.evaluate(() => window.game!.motions().shot);
       const aim = await page.evaluate(() => window.game!.aiming());
       expect(shot && aim).toBeTruthy();
+      const from = await page.evaluate(() => window.game!.ball());
       await page.mouse.up();
       let landed: string | undefined;
       for (let f = 0; f < 8 * 60 && !landed; f += 5) {
@@ -1246,8 +1293,12 @@ test.describe('aiming a golf shot', () => {
       const v = -(lx - s.x) * Math.sin(aim!.angle) + (ly - s.y) * Math.cos(aim!.angle);
       // inside what a swing can do: within its scatter across, and between the worst mishit and the ring along
       const where = `seed ${seed}: landed ${u.toFixed(1)} along and ${v.toFixed(1)} across of a spread ${s.along.toFixed(1)} by ${s.across.toFixed(1)}`;
-      expect(Math.abs(u), where).toBeLessThan(s.along + 1.5);
-      expect(Math.abs(v), where).toBeLessThan(s.across + 1.5);
+      // the spread's along is the carry's own arithmetic (it goes as the speed squared), true on level ground; on the rolling land
+      // a slower ball comes down on ground that rises or falls under it, which moves where it lands by a few per cent of the carry
+      // (21.0 against 19.2 + 1.5 on seed 21). The fuzzer holds the same rule with the slack of 2 and three per cent of the carry
+      const slack = 1.5 + 0.03 * Math.hypot(shot!.ring!.x - from.x, shot!.ring!.y - from.y);
+      expect(Math.abs(u), where).toBeLessThan(s.along + slack);
+      expect(Math.abs(v), where).toBeLessThan(s.across + slack);
       // and never past the ring, which is the true swing's landing, by more than the ball's own width
       expect(Math.hypot(lx - shot!.ring!.x, ly - shot!.ring!.y)).toBeLessThan(2 * s.across + s.along + 3);
     }

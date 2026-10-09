@@ -264,7 +264,9 @@ describe('a golf hole with a contour', () => {
 
   it('joins the hills by a plate whose steepest step is no steeper than the hills’ own, on every hole of The Links, and whatever the contour leaves the hills away from it as they were', () => {
     for (const spec of LINKS_SPECS) {
-      const l = layoutFor(golfHole(spec));
+      // the hills as they were, without the banks the rolling land raises beside the fairway (which have their own limit,
+      // held in `banks.test.ts`)
+      const l = layoutFor(golfHole({ ...spec, rolling: false }));
       // the hills' steepest step is exactly the steepness times half a tile (the generator scales them to it), and no more
       let most = 0;
       for (let t = 0; t < l.cols * l.rows; t++) {
@@ -273,7 +275,7 @@ describe('a golf hole with a contour', () => {
       }
       expect(most, spec.name).toBeLessThanOrEqual(spec.steepness * (TILE / 2) + 1e-6);
       // a hole is not made gentler for how much its green is contoured: the hills past the plate are the same at any contour
-      const other = layoutFor(golfHole({ ...spec, contour: spec.contour === 1 ? 0.5 : 1 }));
+      const other = layoutFor(golfHole({ ...spec, rolling: false, contour: spec.contour === 1 ? 0.5 : 1 }));
       const [cx, cy] = cupTile(l);
       let same = 0;
       for (let t = 0; t < l.cols * l.rows; t++)

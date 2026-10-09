@@ -1,10 +1,10 @@
 {
   "bootMs": 306,
   "frameMs": 3.13,
-  "bundleKb": 187.1,
+  "bundleKb": 188.1,
   "imageKb": 116.1,
   "beginMs": 49,
   "bigFrameMs": 3.43,
-  "linksBeginMs": 124,
+  "linksBeginMs": 133,
   "linksFrameMs": 4.14
 }

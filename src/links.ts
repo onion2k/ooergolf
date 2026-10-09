@@ -18,8 +18,11 @@
 import type { HoleDef } from './course';
 import { golfHole, type GolfSpec } from './golf';
 
-/** The holes' figures beside their pars: the same for every hole, so a hole's own is what differs. */
-const HILLS = { feel: 'hills', steepness: 0.75 } as const;
+/**
+ * The holes' figures beside their pars: the same for every hole, so a hole's own is what differs. The land rolls
+ * (`GolfSpec.rolling`): a long swell under the hills, and banks beside the fairway.
+ */
+const HILLS = { feel: 'hills', steepness: 0.75, rolling: true } as const;
 
 export const LINKS_SPECS: readonly GolfSpec[] = [
   {

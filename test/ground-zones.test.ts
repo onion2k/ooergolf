@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Mesh } from 'artshape-render/mesh/types';
 import { TILE, layoutOf, lieAt, tileAt, type Layout } from '../src/arena';
-import { CHECKER, CONTRAST, groundOf, mownAt, toned } from '../src/ground';
+import { CHECKER, CONTRAST, STRIPE, groundOf, mownAt, stripedAt, toned } from '../src/ground';
 import { links } from '../src/links';
 import { fells } from '../src/fells';
 import { isles } from '../src/isles';
@@ -204,5 +204,104 @@ describe('the checker and the turf on golf', () => {
     expect(TURF.shade).toBe(0.22);
     expect(TURF_GOLF.albedo).toBe(0.13);
     expect(TURF_GOLF.shade).toBe(0.09);
+  });
+});
+
+describe('the fairway’s stripes along the line of play', () => {
+  const made = (name: string) => {
+    const def = links().find((h) => h.name === name)!;
+    return { def, layout: layoutOf(def.map, def.terrain, def.way) };
+  };
+  const width = STRIPE.width * TILE;
+
+  /** The point `s` yards along the leg of the way from `a` to `b`, and `o` yards to its left. */
+  const onLeg = (a: readonly number[], b: readonly number[], s: number, o: number): [number, number] => {
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const [dx, dy] = [(b[0] - a[0]) / len, (b[1] - a[1]) / len];
+    return [a[0] + dx * s - dy * o, a[1] + dy * s + dx * o];
+  };
+
+  it('keeps each band the same along a leg of the way, and changes it once in a stripe’s width across, on a straight hole and a bent one', () => {
+    let counted = 0;
+    for (const [name, leg] of [
+      ['The Opener', 0],
+      ['The Big Dogleg', 0],
+      ['The Big Dogleg', 1],
+    ] as const) {
+      const { def, layout } = made(name);
+      const way = def.way!;
+      expect(way.length, name).toBeGreaterThanOrEqual(3);
+      const [a, b] = [way[leg], way[leg + 1]];
+      const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      // along: at each offset across, the band is the same from a short way in from the leg's start to a short way from its end
+      // (within the fairway's width and clear of the corner, where the other leg of the way is not the nearer)
+      for (let o = -17.85; o <= 18; o += 0.7) {
+        const first = stripedAt(layout, ...onLeg(a, b, 25, o));
+        for (let s = 25; s <= len - 25; s += 6) {
+          expect(stripedAt(layout, ...onLeg(a, b, s, o)), `${name} leg ${leg}: offset ${o} at ${s}`).toBe(first);
+          counted++;
+        }
+      }
+      // across: the bands change once in a stripe's width, and each is a stripe wide
+      const at = len / 2;
+      let last = stripedAt(layout, ...onLeg(a, b, at, -30)),
+        since = -30;
+      const runs: number[] = [];
+      for (let o = -30; o <= 30; o += 0.05) {
+        const now = stripedAt(layout, ...onLeg(a, b, at, o));
+        if (now !== last) {
+          runs.push(o - since);
+          since = o;
+          last = now;
+        }
+      }
+      expect(runs.length, `${name}: bands across sixty yards`).toBeGreaterThanOrEqual(5);
+      for (const run of runs.slice(1)) expect(run, `${name}: a stripe's width`).toBeCloseTo(width, 0);
+    }
+    expect(counted).toBeGreaterThan(1000);
+  });
+
+  it('is drawn where the function says, a piece at a time, on the fairway alone: the green and the cut keep the checker', () => {
+    const { layout } = made('The Opener');
+    const ground = groundOf(layout);
+    const piece = TILE / 3;
+    let counted = 0;
+    const check = (mesh: Mesh, want: (x: number, y: number) => boolean, what: string) => {
+      const p = mesh.positions;
+      for (let k = 0; k < mesh.indices.length; k += 3) {
+        const [a, b, c] = [mesh.indices[k] * 3, mesh.indices[k + 1] * 3, mesh.indices[k + 2] * 3];
+        const x = (p[a] + p[b] + p[c]) / 3,
+          y = (p[a + 1] + p[b + 1] + p[c + 1]) / 3;
+        // the middle of the piece of the tile the triangle is in
+        const px = layout.originX + (Math.floor((x - layout.originX) / piece) + 0.5) * piece,
+          py = layout.originY + (Math.floor((y - layout.originY) / piece) + 0.5) * piece;
+        if (want(px, py) !== true)
+          throw new Error(`${what}: a triangle at ${x.toFixed(2)}, ${y.toFixed(2)} is in the wrong tone`);
+        counted++;
+      }
+    };
+    check(ground.mown, (x, y) => stripedAt(layout, x, y), 'mown fairway');
+    check(ground.green, (x, y) => !stripedAt(layout, x, y), 'plain fairway');
+    const checker = (x: number, y: number) =>
+      mownAt(layout, Math.floor((x - layout.originX) / TILE), Math.floor((y - layout.originY) / TILE));
+    check(ground.golf!.puttingMown, checker, 'mown green');
+    check(ground.golf!.putting, (x, y) => !checker(x, y), 'plain green');
+    expect(counted).toBeGreaterThan(5000);
+  });
+
+  it('is the checker a hole with no way is mown in, and minigolf’s checker is as it was', () => {
+    const def = links()[0];
+    const bare = layoutOf(def.map, def.terrain);
+    expect(bare.way).toBeUndefined();
+    for (const [tx, ty] of [
+      [0, 0],
+      [5, 9],
+      [30, 12],
+    ])
+      expect(stripedAt(bare, bare.originX + (tx + 0.5) * TILE, bare.originY + (ty + 0.5) * TILE)).toBe(
+        mownAt(bare, tx, ty),
+      );
+    expect(mownAt({ golf: false }, 2, 0)).not.toBe(mownAt({ golf: false }, 0, 0));
+    expect(mownAt({ golf: false }, 2, 2)).toBe(mownAt({ golf: false }, 0, 0));
   });
 });

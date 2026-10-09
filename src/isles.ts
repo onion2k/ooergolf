@@ -30,9 +30,9 @@
 import type { HoleDef } from './course';
 import { golfHole, type GolfSpec } from './golf';
 
-/** The holes' ground: The Links' own hills, and the long swells for the longest holes. A hole's lift of them is its own. */
-const HILLS = { feel: 'hills', steepness: 0.75 } as const;
-const LONG_HILLS = { feel: 'long hills', steepness: 0.75 } as const;
+/** The holes' ground: The Links' own hills, and the long swells for the longest holes, rolling as The Links' do (`GolfSpec.rolling`). A hole's lift of them is its own. */
+const HILLS = { feel: 'hills', steepness: 0.75, rolling: true } as const;
+const LONG_HILLS = { feel: 'long hills', steepness: 0.75, rolling: true } as const;
 
 export const ISLES_SPECS: readonly GolfSpec[] = [
   {

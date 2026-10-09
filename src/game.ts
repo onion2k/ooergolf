@@ -512,7 +512,7 @@ export class Game {
   /** Hole `index` begun: a world of its own, the ball on its tee, and no strokes. */
   begin(index: number) {
     this.hole = index;
-    this.layout = layoutOf(this.def.map, this.def.terrain);
+    this.layout = layoutOf(this.def.map, this.def.terrain, this.def.way);
     this.obstacles = new Obstacles(this.def.obstacles ?? [], this.layout);
     this.cones = this.layout.trees.map((t) => treeCone(t.x, t.y, heightAt(this.layout, t.x, t.y)));
     // what changes the world itself is read once, here, and the world is made with it: the cup's width and the rail's

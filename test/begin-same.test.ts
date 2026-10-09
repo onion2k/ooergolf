@@ -58,17 +58,17 @@ function hashes(layout: Layout) {
   return { zones: hz, ground: hg, pond: hp, plane: hl };
 }
 
-/** Written from the code as it stood before the speed-up (the worktree of 9 October 2026, Parts 1 to 7 uncommitted). */
+/** Written from the code as it stood before the speed-up (the worktree of 9 October 2026, Parts 1 to 7 uncommitted); The Links and The Isles written again the same day for the rolling land (the long swell, the banks and the stripes' line of play: with `rolling: false` on their specs the old table returns to the digit, and The Fells did not move). */
 const WAS: Record<string, { zones: number; ground: number; pond: number; plane: number }> = {
-  'The Links/The Opener': { zones: -1275038992, ground: 427706124, pond: 2166136261, plane: 1554546831 },
-  'The Links/Water Carry': { zones: 2115519521, ground: -1103844622, pond: -1125683341, plane: 421761148 },
-  'The Links/Long Bend': { zones: -1823028550, ground: 21712226, pond: -1450419212, plane: 358350617 },
-  'The Links/Tight Left': { zones: 1094507272, ground: -698526665, pond: 2166136261, plane: -1248518376 },
-  'The Links/Island Green': { zones: -1860700679, ground: 302049427, pond: -316588374, plane: -387704165 },
-  'The Links/Rushing Brook': { zones: -1935572655, ground: -24253762, pond: 1028190134, plane: -539190375 },
-  'The Links/The Big Dogleg': { zones: 1040033818, ground: 427287979, pond: 1330490973, plane: 420336189 },
-  'The Links/The Straight Mile': { zones: 919935320, ground: -989822402, pond: 2166136261, plane: -1957928105 },
-  'The Links/Home Stretch': { zones: -1620813585, ground: 1987145995, pond: 73193414, plane: -22628760 },
+  'The Links/The Opener': { zones: -1275038992, ground: 2081108835, pond: 2166136261, plane: 1554546831 },
+  'The Links/Water Carry': { zones: 2115519521, ground: 1263377783, pond: 748924230, plane: 421761148 },
+  'The Links/Long Bend': { zones: -1823028550, ground: 1426316832, pond: 442144055, plane: 358350617 },
+  'The Links/Tight Left': { zones: 1094507272, ground: -472535547, pond: 2166136261, plane: -1248518376 },
+  'The Links/Island Green': { zones: -1860700679, ground: -1071395282, pond: 1857421023, plane: -387704165 },
+  'The Links/Rushing Brook': { zones: -1935572655, ground: 319123341, pond: 263028321, plane: -539190375 },
+  'The Links/The Big Dogleg': { zones: 1040033818, ground: 1793541713, pond: 1600460057, plane: 420336189 },
+  'The Links/The Straight Mile': { zones: 919935320, ground: -490644745, pond: 2166136261, plane: -1957928105 },
+  'The Links/Home Stretch': { zones: -1620813585, ground: 1466161062, pond: -1127794020, plane: -22628760 },
   'The Fells/Fell Foot': { zones: 1745626410, ground: -662892834, pond: 2166136261, plane: -35605023 },
   'The Fells/The Pinewood': { zones: -464646215, ground: -2019113310, pond: 2166136261, plane: 2098726268 },
   'The Fells/Tarn': { zones: -92415937, ground: -1469043490, pond: 1856265057, plane: 1564581720 },
@@ -78,15 +78,15 @@ const WAS: Record<string, { zones: number; ground: number; pond: number; plane: 
   'The Fells/The Shortcut': { zones: 2143796104, ground: 1728565972, pond: 2166136261, plane: 512881580 },
   'The Fells/Waterfall': { zones: -1575254133, ground: -1122113222, pond: -1847671060, plane: 674232028 },
   'The Fells/The Fell Race': { zones: 714417175, ground: 171195044, pond: 2166136261, plane: 1021980914 },
-  'The Isles/Landfall': { zones: 1157449798, ground: 1373770520, pond: 818095293, plane: -1886767588 },
-  'The Isles/The Green Isle': { zones: -2089770936, ground: -384340642, pond: -2060619181, plane: -539689133 },
-  'The Isles/Long Water': { zones: 443750067, ground: 1781145272, pond: 298919446, plane: -960148970 },
-  'The Isles/The Archipelago': { zones: -1227622475, ground: -1059338090, pond: -1795270203, plane: 945041124 },
-  'The Isles/Causeway': { zones: -1606408912, ground: 812879190, pond: 268524638, plane: -2023713878 },
-  'The Isles/The Long Swim': { zones: -1685188984, ground: 1079088176, pond: -1209494423, plane: -1381362368 },
-  'The Isles/Two Lakes': { zones: 579101098, ground: -1456041620, pond: -1108788198, plane: -2095606795 },
-  'The Isles/The Peninsula': { zones: 2067909156, ground: 1247074711, pond: -883415048, plane: -1727244620 },
-  'The Isles/Home Waters': { zones: -108314611, ground: -311200113, pond: -240535666, plane: -274874910 },
+  'The Isles/Landfall': { zones: 1157449798, ground: 661855327, pond: 1444130475, plane: -1886767588 },
+  'The Isles/The Green Isle': { zones: -2089770936, ground: -1970462592, pond: -1635567752, plane: -539689133 },
+  'The Isles/Long Water': { zones: 443750067, ground: -1402015757, pond: 255269492, plane: -960148970 },
+  'The Isles/The Archipelago': { zones: -1227622475, ground: -1764358799, pond: -1369804907, plane: 945041124 },
+  'The Isles/Causeway': { zones: -1606408912, ground: -784491559, pond: -1297808402, plane: -2023713878 },
+  'The Isles/The Long Swim': { zones: -1685188984, ground: -1413313846, pond: -903263224, plane: -1381362368 },
+  'The Isles/Two Lakes': { zones: 579101098, ground: -378917038, pond: -1432988693, plane: -2095606795 },
+  'The Isles/The Peninsula': { zones: 2067909156, ground: 975056269, pond: 2035453438, plane: -1727244620 },
+  'The Isles/Home Waters': { zones: -108314611, ground: -1697296870, pond: -128799534, plane: -274874910 },
 };
 
 describe('a golf hole begun fast is the hole that was begun slowly', () => {

@@ -10,7 +10,11 @@ import { golfHole } from '../src/golf';
 import { LINKS_SPECS } from '../src/links';
 import { hashHole } from './helpers';
 
-/** Written from the code at d3e50ec, before any of the second golf course's options existed. */
+/**
+ * Written from the code at d3e50ec, before any of the second golf course's options existed. The nine Links hashes were written
+ * again on 9 October 2026 for the rolling land (`GolfSpec.rolling`: the long swell and the banks): with `rolling: false` on their
+ * specs in a scratch edit (reverted) the nine below return to the digit; the Fells and minigolf did not move.
+ */
 const WAS: Record<string, number> = {
   'The Meadow/Straight': 802064974,
   'The Meadow/Dog-leg': 3943613642,
@@ -39,18 +43,22 @@ const WAS: Record<string, number> = {
   'The Waterworks/The Rapids': 2853659080,
   'The Waterworks/The Big Wheel': 1117635865,
   'The Waterworks/The Flood': 1734075079,
-  'The Links/The Opener': 1078683452,
-  'The Links/Water Carry': 676883533,
-  'The Links/Long Bend': 3576940142,
-  'The Links/Tight Left': 4293291655,
-  'The Links/Island Green': 2591990442,
-  'The Links/Rushing Brook': 137527356,
-  'The Links/The Big Dogleg': 1507392371,
-  'The Links/The Straight Mile': 2776316639,
-  'The Links/Home Stretch': 236793054,
+  'The Links/The Opener': 622063737,
+  'The Links/Water Carry': 1078790674,
+  'The Links/Long Bend': 4289865728,
+  'The Links/Tight Left': 697392176,
+  'The Links/Island Green': 1298470164,
+  'The Links/Rushing Brook': 1880790593,
+  'The Links/The Big Dogleg': 2335445769,
+  'The Links/The Straight Mile': 2608145989,
+  'The Links/Home Stretch': 2379117685,
 };
 
-/** The Fells and The Isles, as they were when they were built (5 October 2026): the same hash, so a generator change that redraws them is seen. */
+/**
+ * The Fells and The Isles, as they were when they were built (5 October 2026): the same hash, so a generator change that redraws them is seen.
+ * The Isles' nine were written again on 9 October 2026 for the rolling land: with `rolling: false` on their specs (a scratch edit,
+ * reverted) the old nine return to the digit, and The Fells, which do not roll, did not move.
+ */
 const BUILT: Record<string, number> = {
   'The Fells/Fell Foot': 1440210233,
   'The Fells/The Pinewood': 4183814432,
@@ -61,15 +69,15 @@ const BUILT: Record<string, number> = {
   'The Fells/The Shortcut': 875279416,
   'The Fells/Waterfall': 3583191086,
   'The Fells/The Fell Race': 938263015,
-  'The Isles/Landfall': 737574761,
-  'The Isles/The Green Isle': 3259333563,
-  'The Isles/Long Water': 4185261796,
-  'The Isles/The Archipelago': 1240752909,
-  'The Isles/Causeway': 1373283062,
-  'The Isles/The Long Swim': 1456314309,
-  'The Isles/Two Lakes': 4243180024,
-  'The Isles/The Peninsula': 169994907,
-  'The Isles/Home Waters': 397515127,
+  'The Isles/Landfall': 1363545840,
+  'The Isles/The Green Isle': 3219912010,
+  'The Isles/Long Water': 2851502809,
+  'The Isles/The Archipelago': 2821943906,
+  'The Isles/Causeway': 248148661,
+  'The Isles/The Long Swim': 4164764567,
+  'The Isles/Two Lakes': 158770685,
+  'The Isles/The Peninsula': 3776180384,
+  'The Isles/Home Waters': 1169433937,
 };
 
 describe('the holes as they were', () => {

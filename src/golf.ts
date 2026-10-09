@@ -22,7 +22,16 @@
 import { TILE, layoutOf } from './arena';
 import type { HoleDef } from './course';
 import { GREEN as GREEN_RULES } from './green';
-import { FEELS, gradientNoise, greenContour, noiseGround, smoothstep, type Feel, type Flat } from './noise';
+import {
+  FEELS,
+  gradientNoise,
+  greenContour,
+  lowerToLimit,
+  noiseGround,
+  smoothstep,
+  type Feel,
+  type Flat,
+} from './noise';
 
 import { seeded, type Random } from './random';
 import { WIND } from './shaping';
@@ -113,7 +122,25 @@ export interface GolfSpec {
    * trunk stands within half the width and the canopy's base from the lane's line. See `laneOf`.
    */
   gap?: { to: number; width?: number };
+  /**
+   * Whether the land rolls: a long swell under the hills (`noiseGround`'s `long`) and the rough raised in banks beside the
+   * fairway and round the green (`banked`), so the fairway lies in a gentle valley, as the title picture's does. Placed
+   * after everything, from the ground the hazards were placed from, so a hole keeps its water, sand, trees, out of bounds,
+   * tee and cup tile for tile, and its fairway, tee and green still hold a ball. Off unless asked: a hole without it is the
+   * hole it was, byte for byte.
+   */
+  rolling?: boolean;
 }
+
+/**
+ * The banks the rough rises in: how high they stand, in yards, and how far from the ground a ball is played from they take
+ * to get there (a smoothstep, so they have no crease at either end); how many tiles round water none rise; the steepest a
+ * bank may slope, and the steepest the ground with its banks may, in yards a tile. The user chose six on 9 October 2026,
+ * from a mock; eighteen is as long as six yards take to read as a bank and not as a hill, and a bank over a longer run
+ * (twenty-five) read flat. The limits are under the physics' 1.5 a tile, so what the physics takes of the ground it takes
+ * of the banks, and a bank is no steeper than 0.43 to the camera, which looks down at about 0.65.
+ */
+export const BANKS = { height: 6, width: 18, dry: 8, steepest: 1.3, ceiling: 1.45 };
 
 /** How high `heighten` may go, and the shelf: its radius in tiles and how far in yards from the tee and the cup it may lie. */
 export const HEIGHTEN = { most: 2.5 };
@@ -457,9 +484,73 @@ function mown(grid: readonly (readonly string[])[]): string[][] {
   return out;
 }
 
+/** Distance in tiles (a two-pass chamfer, a few per cent over the straight line) from the tiles where `from` is set. */
+function distanceTo(from: Uint8Array, cols: number, rows: number): Float32Array {
+  const d = new Float32Array(cols * rows).fill(1e6);
+  for (let t = 0; t < d.length; t++) if (from[t]) d[t] = 0;
+  const DIAGONAL = Math.SQRT2;
+  const relax = (t: number, u: number, w: number) => {
+    if (d[u] + w < d[t]) d[t] = d[u] + w;
+  };
+  for (let r = 0; r < rows; r++)
+    for (let c = 0; c < cols; c++) {
+      const t = r * cols + c;
+      if (c > 0) relax(t, t - 1, 1);
+      if (r > 0) {
+        relax(t, t - cols, 1);
+        if (c > 0) relax(t, t - cols - 1, DIAGONAL);
+        if (c < cols - 1) relax(t, t - cols + 1, DIAGONAL);
+      }
+    }
+  for (let r = rows - 1; r >= 0; r--)
+    for (let c = cols - 1; c >= 0; c--) {
+      const t = r * cols + c;
+      if (c < cols - 1) relax(t, t + 1, 1);
+      if (r < rows - 1) {
+        relax(t, t + cols, 1);
+        if (c < cols - 1) relax(t, t + cols + 1, DIAGONAL);
+        if (c > 0) relax(t, t + cols - 1, DIAGONAL);
+      }
+    }
+  return d;
+}
+
+/**
+ * The ground with banks: the rough, and what lies beyond it, raised with the distance from the nearest tile a ball is played
+ * from (fairway, green, first cut, tee) by a smoothstep to `BANKS.height`, and not at all on water, within `BANKS.dry` tiles
+ * of it, or on sand and the ground a ball is played from. The bank is eased to those at `BANKS.steepest` a tile and the whole
+ * is held under `BANKS.ceiling`; the play ground is never lowered by it (a tile's neighbours are never lower than the
+ * ground under them, and the ground's own steps are under the ceiling), so every tile that held a ball still does, and a ball
+ * put in the rough beside the fairway is carried toward it more often than away. Worked from the finished map and no chance.
+ */
+function banked(ground: Float32Array, kinds: string[][], cols: number, rows: number): Float32Array {
+  const play = new Uint8Array(cols * rows),
+    wet = new Uint8Array(cols * rows),
+    keep = new Uint8Array(cols * rows);
+  for (let r = 0; r < rows; r++)
+    for (let c = 0; c < cols; c++) {
+      const k = kinds[r][c],
+        t = r * cols + c;
+      if ('fgctTC'.includes(k)) play[t] = keep[t] = 1;
+      if (k === '~') wet[t] = 1;
+      if (k === 's') keep[t] = 1;
+    }
+  const fromPlay = distanceTo(play, cols, rows),
+    fromWet = distanceTo(wet, cols, rows);
+  const b = new Float64Array(cols * rows);
+  for (let t = 0; t < b.length; t++)
+    b[t] =
+      keep[t] || wet[t] || fromWet[t] <= BANKS.dry ? 0 : BANKS.height * smoothstep(0, BANKS.width, fromPlay[t] * TILE);
+  lowerToLimit(b, cols, rows, BANKS.steepest, []);
+  const total = Float64Array.from(ground, (v, t) => v + b[t]);
+  lowerToLimit(total, cols, rows, BANKS.ceiling, []);
+  return Float32Array.from(total);
+}
+
 export function golfHole(spec: GolfSpec): HoleDef {
   refuse(spec);
   const { name, par, seed, feel, steepness, width, bunkers, ponds, trees, wind, greens, contour = 0 } = spec;
+  const rolling = spec.rolling === true;
   const lakes = spec.lakes ?? [];
   const greenLake = lakes.some((lake) => lake.at === 'green');
   // the most water a flight has to cross: the least any of the lakes asks
@@ -1021,7 +1112,8 @@ export function golfHole(spec: GolfSpec): HoleDef {
   // the ground is made against the hole as it was drawn, and the first cut laid on it after, so that the cut changes
   // what a ball rolls on and not the hills it rolls over
   const drawn = rowsOf(grid);
-  const map = rowsOf(mown(grid));
+  const kinds = mown(grid);
+  const map = rowsOf(kinds);
   const flat = layoutOf(drawn);
   // the green's swells and swales, if it is to have any: made once, for the tiles of green the hole is drawn with
   const greenTiles: number[] = [];
@@ -1105,7 +1197,14 @@ export function golfHole(spec: GolfSpec): HoleDef {
   // ball: a hole that cannot be played is never returned. It is tried against the hole as it was drawn, before the cut,
   // so that the cut changes what a ball rolls on and not how steep a hole may be
   for (let k = 0, steep = steepness; k < GENTLER.tries; k++, steep *= GENTLER.by) {
-    const ground = noiseGround(flat, { seed, feel, steepness: steep, flats, ...(heighten > 1 ? { heighten } : {}) });
+    const ground = noiseGround(flat, {
+      seed,
+      feel,
+      steepness: steep,
+      flats,
+      ...(heighten > 1 ? { heighten } : {}),
+      ...(rolling ? { long: true } : {}),
+    });
     const terrain = field ? contoured(ground, field) : ground;
     // the ground that runs must drain, judged on the hole as it is mown, since the first cut is ground a ball is played from;
     // and it must still be a ground the physics takes: a plate blended into steep hills can be a step past half a tile
@@ -1114,13 +1213,19 @@ export function golfHole(spec: GolfSpec): HoleDef {
       (!only ||
         (steepestStep(terrain, 0, 0, cols - 1, rows - 1) <= TILE / 2 && drainFault(layoutOf(map, terrain), greens) < 0))
     ) {
+      // the line of play in the layout's world units: the way's points are in tiles from the tee, whose tile is `minX`, `minY`
+      // from the south-west corner, and a tile's middle is half a tile past its corner
+      const ways = points.map(
+        ([x, y]) => [(x - minX + 0.5 - cols / 2) * TILE, (y - minY + 0.5 - rows / 2) * TILE] as [number, number],
+      );
       const hole: HoleDef = {
         name,
         par,
         map,
-        terrain,
+        terrain: rolling ? banked(terrain, kinds, cols, rows) : terrain,
         ...(wind ? { wind } : {}),
         ...(greens !== undefined ? { greens } : {}),
+        way: ways,
       };
       if (made) LANES.set(hole, made);
       return hole;

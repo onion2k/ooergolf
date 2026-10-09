@@ -13,6 +13,10 @@
  * struck, landed and counted out of bounds by the zone and not the tile. The sixth, The Isles' seed 11, returns to
  * db8bcb04, the hash from before the bouncing stones: the stones are gone (the ring is scenery only), so it is the
  * round it played before e8f846b, on the zones' lie. The Isles' seed 11 above is therefore taken against this change.
+ *
+ * The Links' and The Isles' four moved again on 9 October 2026 for the rolling land (the long swell, the banks): with
+ * `rolling: false` on both courses' specs (a scratch edit, reverted) they return to the hashes they had before (baddf395, c558b694 for The Links;
+ * 78ec0685, bfd03031 for The Isles), and the other eight did not move.
  */
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
@@ -80,12 +84,12 @@ export const BEFORE: Record<string, string> = {
   'The Pinball Shed/11': 'fa53edaa',
   'The Waterworks/3': '51299ab1',
   'The Waterworks/11': 'a42d8d4a',
-  'The Links/3': 'baddf395',
-  'The Links/11': 'c558b694',
+  'The Links/3': 'b8f7912e',
+  'The Links/11': 'e6a778a3',
   'The Fells/3': 'd8592b0f',
   'The Fells/11': 'a437179c',
-  'The Isles/3': '78ec0685',
-  'The Isles/11': 'bfd03031',
+  'The Isles/3': '37206db4',
+  'The Isles/11': '5f5434b7',
 };
 
 describe('a game with no kit is the game as it was', () => {

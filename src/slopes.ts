@@ -5,7 +5,7 @@
  * on the very edge of rolling). The generator asks it of a hole it is making, and a test or a course's gate asks how much
  * of a hole's fairway is ground a ball runs down; without one place for it the two would drift apart.
  */
-import { PHYSICS, TILE, slopeAt, terrainAt, type Layout } from './arena';
+import { PHYSICS, TILE, slopeAt, terrainAt, tileAt, type Layout } from './arena';
 import { LIE, rollOf } from './surfaces';
 
 /** Whether tile `t` of the layout, of a lie that is not solid or out of bounds, is ground its lie holds a ball on, on greens that run at `greens` (the normal speed if left out). */
@@ -102,4 +102,32 @@ export function drainFault(l: Layout, greens?: number): number {
     if (end === 2) return start;
   }
   return -1;
+}
+
+/**
+ * Whether a point is on a bank: rough, and at least `BANK.raised` yards above the lowest ground a ball is played from (tee,
+ * fairway, first cut, green) within `BANK.reach` tiles. Banks are what raise rough that high beside a fairway on The Links and
+ * The Isles, but a hill would too, so this counts the balls that come to rest where a ball could roll down toward the
+ * fairway, which is what the fuzzer is held to, and is not a test of the generator (`test/banks.test.ts` is that).
+ */
+export const BANK = { raised: 1.5, reach: 8 };
+export function onBank(layout: Layout, x: number, y: number): boolean {
+  const t = tileAt(layout, x, y);
+  if (t < 0 || !layout.golf || layout.lie[t] !== LIE.rough || layout.oob[t] || layout.water[t] || layout.solid[t])
+    return false;
+  const c = t % layout.cols,
+    r = Math.floor(t / layout.cols);
+  let lowest = Infinity;
+  for (let dr = -BANK.reach; dr <= BANK.reach; dr++)
+    for (let dc = -BANK.reach; dc <= BANK.reach; dc++) {
+      const cc = c + dc,
+        rr = r + dr;
+      if (cc < 0 || rr < 0 || cc >= layout.cols || rr >= layout.rows) continue;
+      const u = rr * layout.cols + cc;
+      const k = layout.lie[u];
+      if (layout.sand[u] || layout.water[u] || (k !== LIE.fairway && k !== LIE.green && k !== LIE.cut && k !== LIE.tee))
+        continue;
+      lowest = Math.min(lowest, layout.terrain[u]);
+    }
+  return layout.terrain[t] - lowest >= BANK.raised;
 }

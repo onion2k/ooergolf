@@ -61,6 +61,12 @@ export interface HoleDef {
    * begins (`makeWorld`), and read by `Game.rollAt` and `breakOf`.
    */
   greens?: number;
+  /**
+   * A golf hole's line of play from the tee by the corner to the cup, in the layout's world units, which the fairway's
+   * stripes run along and curve with (`ground.ts`'s `stripedAt`). Made by `golfHole`; left out of a hole's hash, as it
+   * says only how the ground is mown. A hole without it is mown in the checker.
+   */
+  way?: readonly (readonly [number, number])[];
 }
 
 /**

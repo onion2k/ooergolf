@@ -270,8 +270,8 @@ today, and what the next features must hand it:
   blind after ten seconds without a timing window, so a bank hole's par is the human's intent, and a timed hole
   needs a window at the autopilot's margin, the ball's radius and 0.6. The
   autopilot does not read a slope's break on minigolf, so on a hole that slopes it is a player
-  who aims straight and is carried by the ground; on a golf green it does, by rehearsal. The Links is a player one under par on every hole: 30.5 for 36 (the contoured greens did not move it: 30.19 over 48 seeds against 30.27
-  before them; the livelier ball and the respecified holes moved The Links to 30.33 over 48; the zones' lie and the stones' going left it at 30.25 over 48, and the sixteen at 30.5 from 29.88, which is the wobble of sixteen),
+  who aims straight and is carried by the ground; on a golf green it does, by rehearsal. The Links is a player one under par on every hole: 30.44 for 36 (30.75 over 48 seeds since the land rolled; the contoured greens did not move it: 30.19 over 48 seeds against 30.27
+  before them; the livelier ball and the respecified holes moved The Links to 30.33 over 48; the zones' lie and the stones' going left it at 30.25 over 48, and the sixteen at 30.5 from 29.88, which is the wobble of sixteen; the rolling land moved it from 30.25 to 30.75 over 48),
   each hole a stroke or so better than its par, since the
   autopilot plays like a good golfer and par is each hole's intent. The planner did not move the figure of a course of
   level holes (6.88 to 6.94, when The Range was three holes): a player's slips, a tenth of the power and a few degrees, and the swing's own scatter,
@@ -281,7 +281,14 @@ today, and what the next features must hand it:
   are held to the order of how hard they are (`HARDER` in `scripts/pace.ts`: each course at least a tenth of a stroke a
   hole over par above the one before it, a rule `pace:check` fails and a test holds), and a hole is picked up in no more than
   one round of sixteen. The Fells 36.75 for par 37 (0.03 a hole under, short of the target of a tenth to four tenths under) and The Isles
-  47.63 for par 45 (0.29 a hole over, the target from a tenth under to four tenths over), against The Links' 0.61 under;
+  51.19 for par 45 (0.68 a hole over: past its old target of a tenth under to four tenths over, since the long swell's steeper ground, and kept so at the user's word on 9 October 2026, "Accept it harder"), against The Links' 0.62 under;
+  The Links and The Isles written again 9 October 2026 for the rolling land (the long swell and the banks: Links 30.5 to 30.44 over 16
+  seeds, 30.25 to 30.75 over 48; Isles 47.63 to 51.19 over 16, 46.79 to 50.52 over 48, a real swing of 3.7 a round, and every set of
+  sixteen the same way). Shown by putting `rolling: false` on both courses' specs in a scratch edit (reverted): 30.25 and 46.79 over 48
+  return, and the Fells (36.58 over 48 either way) and the minigolf courses do not move. The pace player never reads a bank, and a ball
+  in the rough on one is carried down toward the fairway or held up the slope with a club that goes less far; over 48 seeds no hole's median is
+  more than one past its par (The Green Isle 5/4, The Peninsula 5/4, The Long Swim 7/6), but over the gate's 16 The Green Isle's is 6/4,
+  two past, and its par is its intent; the order holds (0.62 under, 0.03 under, 0.68 over). Earlier:
   written 9 October 2026 when the ground's lie came to be read from the zones and the bouncing stones went (the Fells 35.44
   to 36.75 and the Isles 47.75 to 47.63; over 48 seeds the Fells rose from 35.00 to 36.58 and the Isles fell from 48.15 to 46.79,
   every set of sixteen the same way, and the three minigolf courses did not move by a digit). Put back to the tile's lie in a
@@ -737,8 +744,11 @@ minigolf: true }`, read through `oceanFor`) is the one switch: `waterBed` and `s
   `conifer`, `bush`, a bush of variant one drawn as a fern, `flowers`, `rock`), and the scenery hash test maps them back to
   the names it was written with, so every piece's place is held. Round a golf hole `beyond(layout, name)` in `scenery.ts`
   puts the near woods on the ground no ball can reach (see the world past a golf hole, above). The lawn is mown in a checker (`mownAt` and
-  `CHECKER` in `ground.ts`, the one place it is said: squares of four tiles on golf, two on minigolf), and a fairway's
-  blades are unstriped over it. The sun's shadow box (`boxOf`) holds what stands round a hole and is `SHADOW.top` high;
+  `CHECKER` in `ground.ts`, the one place it is said: squares of four tiles on golf, two on minigolf), and a golf hole's
+  fairway, alone, in broad stripes along its line of play instead (`stripedAt`, `STRIPE.width` 3 tiles, by how far a point is
+  across `HoleDef.way`, the line from the tee by the corner to the cup that `golfHole` makes in world units and `layoutOf`
+  carries as `Layout.way`, so a stripe curves with a dogleg and is no stair of tiles; the green, the cut and a hole without a
+  `way` keep the checker; a hole's hash leaves `way` out), and a fairway's blades are unstriped over it. The sun's shadow box (`boxOf`) holds what stands round a hole and is `SHADOW.top` high;
   on golf its map is fitted to the view (`sunFitOf`, `SHADOW` in `look.ts`), softened, and falls on water too.
   **The backdrop** (`src/backdrop.ts`, `backdropOf` and `cloudAt`): faceted hills from `BACKDROP.gap` past the hole and its scenery,
   mountains, a lake in a gap of them (the hole's water too, so it follows `OCEAN_ON`), a thousand far trees and clouds that
@@ -843,8 +853,23 @@ minigolf: true }`, read through `oceanFor`) is the one switch: `waterBed` and `s
 - `src/golf.ts` makes a golf hole from a `GolfSpec` and a seed (`golfHole`): a fairway along a way of play bent once
   (`bend`), rough, out of bounds and rock round it, a green, a tee's box, bunkers at the green and along the fairway,
   ponds set in hollows, trees in clusters in the rough, all placed clear of the tee and the cup, and the ground hills
-  with the tee, the green and every bed levelled, made gentler until the tee, fairway and green rest a ball. It refuses
-  a spec that cannot be made, by name. `src/links.ts` is The Links: nine specs, made when first asked for, each seed
+  with the tee, the green and every bed levelled, made gentler until the tee, fairway and green rest a ball. **The land
+  rolls on The Links and The Isles** (`GolfSpec.rolling`, set on their `HILLS`; off by default, and then a hole is the hole it
+  was, byte for byte, which `test/golf-hash.test.ts` and `test/banks.test.ts` hold; The Fells and minigolf do not ask for it): a
+  long swell under the hills (`noiseGround`'s `long`, `LONG_SWELL` in `noise.ts`: an octave 100 tiles, about 300 yd, across at
+  weight 0.8, with the lake and pond blends left out of the scale that is found from the steepest step, since a lake's wall
+  flattened every hill; the walls are cut to the limit after), and **banks** (`banked`, `BANKS` in `golf.ts`): after every
+  hazard is placed, the rough and the ground past it rise by a smoothstep of the distance from the nearest tile a ball is
+  played from (fairway, green, cut, tee) to 6 yd over about 18 yd (`BANKS.height`, `width`; not within `BANKS.dry` tiles of
+  water, nor on sand), eased at 1.3 a tile and the whole held under 1.45, so the fairway lies in a gentle valley as the title
+  picture's does and a ball in the rough is carried back toward it. Placed from the ground as it was (`plain`, the hollows), so a
+  hole keeps its water, sand, trees, out of bounds, tee and cup tile for tile, and its seed and par. Chosen by the user on 9
+  October 2026 from a mock (banks 6, the swell at 0.8, stripes). Relief over the playable tiles (`test/banks.test.ts` holds at
+  least 8 yd): The Links 9.4 to 14.4 yd (was 4 to 9) and The Isles 13.6 to 25 (was 2.5 to 6); the share of rough that drains
+  toward out of bounds falls on every hole (The Opener 29.6% to 8.0%); a hole begins about 8 ms slower. The fuzzer counts balls
+  come to rest on a bank (`checked['rest on a bank']`, `onBank` in `src/slopes.ts`: rough 1.5 yd or more above the lowest played
+  ground within eight tiles; 80 over `test/fuzz-links.test.ts`'s four seeds) and `smoke/progress.spec.ts` strikes one from
+  the highest bank of The Opener. It refuses a spec that cannot be made, by name. `src/links.ts` is The Links: nine specs, made when first asked for, each seed
   chosen by playing forty with the pace gate's player and looking. A hole of 560 yards is 24,000 tiles of map and
   8,500 of ground: about 110 ms to begin in the page (the zones and the water's curve are most of what it costs more than before), 3.9 ms a frame at its worst view, held by `perf`.
   What the two hard courses added are options of a `GolfSpec`, each with a default that leaves a hole as it was
@@ -881,8 +906,8 @@ minigolf: true }`, read through `oceanFor`) is the one switch: `waterBed` and `s
   `noise.ts` is a plane through the cup, tilted along a direction from the hole's seed (`tiltAngle`; 0.8 of the
   slope) with two sizes of swells on it (0.2), scaled so the steepest slope on the green's tiles is exactly the contour
   times `GREEN.steepest`; `golfHole` lays it on a level plate round the cup (`PLATE`), which eases back into the hills over
-  as few tiles as keep every step no steeper than the hills' own, so the hills away from the green are what they were
-  (a test holds every Links hole to it) and a green that would go below nought is lifted. A uniform tilt is what makes a
+  as few tiles as keep every step no steeper than the hills' own, so the hills away from the green are the hills the hole has
+  (a test holds every Links hole's terrain beyond 34 tiles of the cup to a hash, written again for the rolling land) and a green that would go below nought is lifted. A uniform tilt is what makes a
   break: swells alone are zero-mean, their pull on a ball changes sign along a putt and cancels (median break 0.07
   yards on The Links, with the cup 1.45 yards in radius). The Links' contours run from 0.3 (the opener) to 1 (the last) and
   its greens from 11.4 to 16.7 (`speedName`: fast at 12.5 and under, slow over 17); The Straight Mile asks for its hills as they were (`steepness: 0.6975`, the 0.75 the
@@ -994,7 +1019,8 @@ minigolf: true }`, read through `oceanFor`) is the one switch: `waterBed` and `s
   feels, whose swells are eighteen to twenty-four units, are a ripple a ball's
   width high on a hole of a hundred and fifty units at any steepness, and hills
   stand four to five times as high at the same one, and are smooth: The Links'
-  hills are cut from them. `test/ground-metrics.ts` says what a
+  hills are cut from them. With `long` an octave of `LONG_SWELL` (a hundred tiles across) is added under whichever feel,
+  and a level disc of `floor` (a lake's and a pond's) is out of the scale; a ground without it is as it always was. `test/ground-metrics.ts` says what a
   feel is in figures (relief, steepest slope, bumpiness, detail, and how much
   of the ground a ball rests on), which the tests hold each hole to.
 - The courses are content in `course.ts`, `COURSES`, each a name and its holes: The Meadow (`COURSE`), The Pinball Shed

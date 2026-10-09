@@ -51,6 +51,7 @@ import { breakOf, greenArrows, leansOnMinigolf, readerArrows } from '../src/gree
 import { golfHole, laneOf } from '../src/golf';
 import { centre, figures } from '../test/lake-figures';
 import { LINKS_SPECS } from '../src/links';
+import { onBank } from '../src/slopes';
 import { flipperYaw } from '../src/obstacles';
 import { Previewer } from '../src/preview';
 import { BAG, PUTTER, type BagClub } from '../src/bag';
@@ -213,6 +214,7 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
           if (name === 'stopped' && playing && playing.layout.golf) {
             told.push(...lieProblems(playing, args[0], args[1]));
             count(checked, 'lie at rest');
+            if (onBank(playing.layout, args[0], args[1])) count(checked, 'rest on a bank');
           }
           if (name === 'knocked' && playing) told.push(...knockProblems(playing, ...(args as Knock)));
           // a stream is a belt: the ball is carried on it, and never lost

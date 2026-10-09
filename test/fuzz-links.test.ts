@@ -18,7 +18,8 @@ describe('the fuzzer', () => {
       finished = 0,
       lostOut = 0,
       knocked = 0,
-      clubs = 0;
+      clubs = 0,
+      onBanks = 0;
     const visited = new Set<string>();
     for (const seed of [4, 9, 21, 30]) {
       const r = fuzz(seed, 16000, LINKS);
@@ -28,6 +29,7 @@ describe('the fuzzer', () => {
       lostOut += r.happened.outOfBounds || 0;
       knocked += r.happened.knocked || 0;
       clubs += r.done['choose a club'] || 0;
+      onBanks += r.checked['rest on a bank'] || 0;
       for (const name of Object.keys(r.visited)) visited.add(name);
     }
     const names = LINKS.map((h) => h.name);
@@ -36,6 +38,8 @@ describe('the fuzzer', () => {
     expect(lostOut, 'balls lost out of bounds, each told').toBeGreaterThan(20);
     expect(knocked, 'and knocked about, by trees among the rest').toBeGreaterThan(50);
     expect(clubs, 'clubs chosen from the bag').toBeGreaterThan(10);
+    // a ball come to rest on a bank of the rolling land was counted, and 80 were over these four seeds: a count that is never made passes in silence
+    expect(onBanks, 'balls come to rest on a bank, each held to the rules').toBeGreaterThan(20);
     expect(holed + finished, 'and holed out, or round').toBeGreaterThan(0);
   });
 

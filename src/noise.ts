@@ -110,7 +110,23 @@ export interface GroundSpec {
    * steeper than the limit is cut into a cliff's worth of the steepest ground the physics takes, never a step more.
    */
   heighten?: number;
+  /**
+   * Whether a longer octave of noise is laid under the hills (`LONG_SWELL`): a swell a hundred tiles across, which the
+   * hole's own feel is too small to have, so a hole of hills rolls over its whole length and not only in the bumps a
+   * ball is played over. The blends of the level discs that lie at the floor (a lake's bank, a pond's) are then left out
+   * of the scale, which is found from the steepest step of the hills alone, since a lake's wall is the steepest step in a
+   * hole and scaled to it flattened every hill; the walls are cut to the limit after (`lowerToLimit`), as `heighten`'s
+   * are. Without it, the ground is as it always was, byte for byte.
+   */
+  long?: boolean;
 }
+
+/**
+ * The long octave: how many tiles across its swell is (about three hundred yards) and how much it counts beside the
+ * feel's own swell, which counts one. Chosen on 9 October 2026 from a mock at one and at eight tenths: at one The Isles
+ * stood 8 to 21 yards high, a mean of 13, and the user took the eight tenths.
+ */
+export const LONG_SWELL = { size: 100, weight: 0.8 } as const;
 
 /** How far past its radius a level disc is quite level, and how far past that the ground comes back to the noise, in tiles. */
 export const FLATS = { inner: 0.5, outer: 2.5 } as const;
@@ -138,7 +154,7 @@ export function smoothstep(a: number, b: number, x: number): number {
  */
 export function noiseGround(
   layout: Layout,
-  { seed, feel, steepness, flats = [], heighten = 1 }: GroundSpec,
+  { seed, feel, steepness, flats = [], heighten = 1, long = false }: GroundSpec,
 ): Float32Array {
   if (!(steepness > 0 && steepness < 1))
     throw new RangeError(`a ground's steepness is between nought and one, not ${steepness}`);
@@ -158,12 +174,14 @@ export function noiseGround(
   const big = gradientNoise(seed),
     small = gradientNoise(seed + 7919);
   const h = new Float64Array(cols * rows);
+  const longer = long ? gradientNoise(seed + 104729) : undefined;
   let lowestNoise = Infinity;
   for (let ty = 0; ty < rows; ty++)
     for (let tx = 0; tx < cols; tx++) {
       h[ty * cols + tx] =
         swell.weight * big(tx / swell.size, ty / swell.size) +
         (detail ? detail.weight * small(tx / detail.size, ty / detail.size) : 0);
+      if (longer) h[ty * cols + tx] += LONG_SWELL.weight * longer(tx / LONG_SWELL.size, ty / LONG_SWELL.size);
       lowestNoise = Math.min(lowestNoise, h[ty * cols + tx]);
     }
   // the tee and the cup, each on a plateau at the height the noise had at its middle, that the noise comes back to over a
@@ -205,14 +223,32 @@ export function noiseGround(
   // scaled so the steepest step between neighbours is the share asked for of the physics' limit, half a tile
   let steepest = 0,
     lowest = Infinity;
+  // with the long octave, the tiles of the floor discs' blends, whose steps are not what the scale is found from
+  const wet = new Uint8Array(long ? cols * rows : 0);
+  if (long)
+    for (const { x, y, r, blend, floor } of flats) {
+      if (!floor) continue;
+      const reach = blend === undefined ? r + FLATS.outer : r + FLATS.inner + blend;
+      for (let ty = Math.max(0, Math.floor(y - reach)); ty <= Math.min(rows - 1, Math.ceil(y + reach)); ty++)
+        for (let tx = Math.max(0, Math.floor(x - reach)); tx <= Math.min(cols - 1, Math.ceil(x + reach)); tx++)
+          if (Math.hypot(tx - x, ty - y) <= reach) wet[ty * cols + tx] = 1;
+    }
   for (let ty = 0; ty < rows; ty++)
     for (let tx = 0; tx < cols; tx++) {
       // the lowest by a loop, since a hole of a hundred thousand tiles is more than a call can be given
-      lowest = Math.min(lowest, h[ty * cols + tx]);
-      if (tx + 1 < cols) steepest = Math.max(steepest, Math.abs(h[ty * cols + tx + 1] - h[ty * cols + tx]));
-      if (ty + 1 < rows) steepest = Math.max(steepest, Math.abs(h[(ty + 1) * cols + tx] - h[ty * cols + tx]));
+      const t = ty * cols + tx;
+      lowest = Math.min(lowest, h[t]);
+      if (tx + 1 < cols && !(long && wet[t] && wet[t + 1])) steepest = Math.max(steepest, Math.abs(h[t + 1] - h[t]));
+      if (ty + 1 < rows && !(long && wet[t] && wet[t + cols]))
+        steepest = Math.max(steepest, Math.abs(h[t + cols] - h[t]));
     }
   const k = steepest > 0 ? (steepness * (TILE / 2)) / steepest : 0;
+  if (heighten === 1 && long) {
+    // the walls of the lakes are steeper than the hills were scaled to, and are cut to the limit now, as `heighten`'s are
+    for (let t = 0; t < h.length; t++) h[t] = Math.max(0, (h[t] - lowest) * k);
+    lowerToLimit(h, cols, rows, (steepness * TILE) / 2, levelGroups(layout, plateaus, flats));
+    return Float32Array.from(h);
+  }
   if (heighten === 1) {
     // the lowest exactly nought, though the arithmetic may leave it a rounding off
     return Float32Array.from(h, (v) => Math.max(0, (v - lowest) * k));

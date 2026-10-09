@@ -187,6 +187,8 @@ export interface Layout extends Ground {
   cup: { x: number; y: number };
   /** The box round the grass, in world units. */
   bounds: { minX: number; minY: number; maxX: number; maxY: number };
+  /** A golf hole's line of play in world units, from the tee by the corner to the cup, which its fairway's stripes run along: none without it, and then the fairway is mown in the checker. */
+  way?: readonly (readonly [number, number])[];
 }
 
 /**
@@ -200,10 +202,14 @@ export interface Layout extends Ground {
  * shape of the map with a digit a tile, or real heights, one a tile, row by
  * row from the south as a layout has them, which is how ground made from
  * noise comes (see `noise.ts`). Whether the physics will take it is the
- * physics' to say: see `terrainRefusal`. The grid is centred on the origin. A map with anything else in it, not exactly one tee and one cup, or
+ * physics' to say: see `terrainRefusal`. The grid is centred on the origin. A golf hole may also be given its `way`, the line of play in world units, which its fairway is striped along. A map with anything else in it, not exactly one tee and one cup, or
  * grass on its edge, where a ball would leave the world, is refused.
  */
-export function layoutOf(map: readonly string[], terrain?: readonly string[] | Float32Array): Layout {
+export function layoutOf(
+  map: readonly string[],
+  terrain?: readonly string[] | Float32Array,
+  way?: readonly (readonly [number, number])[],
+): Layout {
   const rows = map.length;
   const cols = Math.max(...map.map((r) => r.length));
   const originX = -(cols * TILE) / 2,
@@ -325,6 +331,7 @@ export function layoutOf(map: readonly string[], terrain?: readonly string[] | F
     tee: { x: teeX, y: teeY },
     cup: { x: cupX, y: cupY },
     bounds,
+    ...(way ? { way } : {}),
   };
   return out;
 }

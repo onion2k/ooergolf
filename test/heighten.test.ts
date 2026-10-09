@@ -58,17 +58,19 @@ function figures(layout: Layout, h: Float32Array) {
   return { steepest, top };
 }
 
-// Written from d3e50ec's `golfHole` and `noiseGround`, before `heighten` was added.
+// Written from d3e50ec's `golfHole` and `noiseGround`, before `heighten` was added. OLD_HOLES were written again on 9 October 2026
+// for the rolling land (the long swell and the banks, which the hole's terrain has and a ground made directly does not): with
+// `rolling: false` on The Links' specs (a scratch edit, reverted) the nine old hashes return to the digit.
 const OLD_HOLES: Record<string, string> = {
-  'The Opener': '6dac2f31',
-  'Water Carry': '9f832d43',
-  'Long Bend': 'f88fc011',
-  'Tight Left': '165121e6',
-  'Island Green': '1ca94ee0',
-  'Rushing Brook': 'd6b24f2',
-  'The Big Dogleg': '1fddc52d',
-  'The Straight Mile': '234123e8',
-  'Home Stretch': 'fa30c670',
+  'The Opener': 'abb6a430',
+  'Water Carry': 'd7de94a8',
+  'Long Bend': '9384fff3',
+  'Tight Left': '6007868d',
+  'Island Green': 'e48418a',
+  'Rushing Brook': '438a91c3',
+  'The Big Dogleg': '57203ee3',
+  'The Straight Mile': 'df73e666',
+  'Home Stretch': 'de362ad7',
 };
 const OLD_DIRECT: Record<string, string> = {
   'The Opener': 'af014d17',

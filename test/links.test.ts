@@ -172,7 +172,9 @@ describe('The Links', () => {
       let high = 0;
       for (const v of l.terrain) high = Math.max(high, v);
       expect(high, `${h.name}: relief`).toBeGreaterThan(4);
-      expect(high, `${h.name}: not a mountain`).toBeLessThan(16);
+      // the land rolls (banks six yards high on hills): the highest ground, out of bounds beyond the rough, stands at most
+      // twenty yards above the lowest, which `banks.test.ts` holds the relief of the playable ground to as well
+      expect(high, `${h.name}: not a mountain`).toBeLessThan(20);
     }
   });
 
@@ -206,16 +208,18 @@ describe('The Links', () => {
     // contour: a contour is the green's, and what was chosen by playing forty seeds and looking is the hills round it. Seven holes
     // were respecified and their seeds chosen again that day (stage 9 of the courses plan: the corners, the ponds across the
     // line and two lengths), so theirs are the hills of the new spec; The Big Dogleg's and Home Stretch's are exactly as they were
+    // Written again on 9 October 2026 for the rolling land (the long swell and the banks reach past thirty-four tiles of the cup):
+    // with `rolling: false` on The Links' specs (a scratch edit, reverted) the nine hashes of 1 October return to the digit.
     const WAS: Record<string, number> = {
-      'The Opener': 2923654288,
-      'Water Carry': 910302477,
-      'Long Bend': 3955879483,
-      'Tight Left': 1543323856,
-      'Island Green': 2381509869,
-      'Rushing Brook': 101997881,
-      'The Big Dogleg': 3741846546,
-      'The Straight Mile': 401805934,
-      'Home Stretch': 334171249,
+      'The Opener': 3006717903,
+      'Water Carry': 4193590940,
+      'Long Bend': 322379668,
+      'Tight Left': 1749427881,
+      'Island Green': 1729190522,
+      'Rushing Brook': 592970011,
+      'The Big Dogleg': 3783719098,
+      'The Straight Mile': 3760790947,
+      'Home Stretch': 739101156,
     };
     for (const h of holes) {
       const l = layoutOf(h.map, h.terrain);
