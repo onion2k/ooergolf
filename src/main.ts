@@ -1544,6 +1544,7 @@ async function main() {
       turning: rig.turning,
       heading: rig.headed,
       flag: director.nearFlag(),
+      line: director.nearLine(),
       following: director.following,
       rung: governor.rung,
       held: governor.held,

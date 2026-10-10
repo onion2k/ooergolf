@@ -8,7 +8,8 @@
  * It also keeps the ball and the furthest a shot can reach on the screen (`aimview.ts`'s safe box): on a golf hole by the aim
  * view of the club, and on a hole of minigolf by one of the putter's reach along the aim, which is the home view exactly when
  * that fits there. It follows the ball for one stroke in five and holds still for the rest, taking the ball up only when it
- * would leave that box.
+ * would leave that box. A ball come to rest has the camera turned by itself to look along the hole's line of play (`nearLine`),
+ * which is the flag where there is no bend to look round, and the flag button to the flag itself (`nearFlag`).
  *
  * It holds a fixed set of numbers and a string, never a list, and it never draws the game's chance.
  */
@@ -16,6 +17,7 @@ import { BALL, KIND_RADIUS, heightAt, lieAt, rollsFor } from './arena';
 import { aimView, fitsHome, floorFor, reachOf, reachOnMinigolf, safeBox, screenOf } from './aimview';
 import { CameraRig, FLY_IN, LEAD, TILT, VIEW, catchUp, facing, standOf, tallOf, wrap } from './camera';
 import type { Game } from './game';
+import { PLAY_AHEAD, lookAlong } from './lineofplay';
 import { hashed } from './random';
 import type { Shot } from './shot';
 
@@ -55,7 +57,7 @@ export type FollowShots = 'drawn' | 'always' | 'never';
  */
 export const HAND_OVER = { from: 0.6, accel: 400 } as const;
 
-/** How near the ball, in yards along the ground, the camera's target is when it has got to a ball come to rest, and turns to the flag. */
+/** How near the ball, in yards along the ground, the camera's target is when it has got to a ball come to rest, and turns to the line of play. */
 export const ARRIVED = 0.5;
 
 /** How many times the camera's pace is doubled, at most, to keep a ball on its way inside the safe box: more than the lag of the fastest ball needs. */
@@ -93,13 +95,15 @@ export class Director {
   private looked = false;
   /** Whether a test has put the camera somewhere and left it: on minigolf the aim view that frames the reach is not sent while it has. */
   private left = false;
-  /** Whether the ball was ready at the last frame, so the moment it comes to rest is seen and the camera turned to the flag. */
+  /** Whether the ball was ready at the last frame, so the moment it comes to rest is seen and the camera turned to look along the line of play. */
   private wasReady = true;
   /**
-   * Whether a ball has come to rest and the camera is to turn to the flag once it has got to it (`ARRIVED`): the move to the
-   * ball and the turn one after the other, since both at once swung the view round a place that was itself still moving.
+   * Whether a ball has come to rest and the camera is to turn to the line of play once it has got to it (`ARRIVED`): the move to
+   * the ball and the turn one after the other, since both at once swung the view round a place that was itself still moving.
    */
-  private toFlag = false;
+  private toLine = false;
+  /** The place on the line of play the camera looks at, written by `nearLine` and never made. */
+  private readonly look = { x: 0, y: 0 };
 
   /**
    * `flyIn`: each hole begun with the fly-in (`FLY_IN`), as the page and the fuzzer have it; left out, a hole is glided to
@@ -152,7 +156,7 @@ export class Director {
     const game = this.game;
     if (!game) return;
     this.handing = false;
-    this.toFlag = false;
+    this.toLine = false;
     this.rig.cutShort(game.t);
     this.chasing =
       this.mode === 'always'
@@ -192,7 +196,7 @@ export class Director {
     this.worked.x = Number.NaN;
     this.chasing = false;
     this.handing = false;
-    this.toFlag = false;
+    this.toLine = false;
     this.wasReady = game.ready;
     // the aim view at once for a fly-in, which eases from its own low view to it
     if (layout.golf) this.aimFor(flyIn || !glide);
@@ -306,9 +310,9 @@ export class Director {
     const game = this.game;
     if (!game) return;
     const { rig } = this;
-    // a ball that has just come to rest has the camera turned to look at the flag, as the button does, once it has got there
-    if (game.ready && !this.wasReady) this.toFlag = true;
-    if (!game.ready) this.toFlag = false;
+    // a ball that has just come to rest has the camera turned to look along the line of play, once it has got there
+    if (game.ready && !this.wasReady) this.toLine = true;
+    if (!game.ready) this.toLine = false;
     this.wasReady = game.ready;
     this.arrived(game);
     if (game.layout.golf) {
@@ -368,14 +372,14 @@ export class Director {
     this.arrived(game);
   }
 
-  /** The turn to the flag a ball come to rest is waiting on, made once the camera's target is within `ARRIVED` of the ball. */
+  /** The turn to the line of play a ball come to rest is waiting on, made once the camera's target is within `ARRIVED` of the ball. */
   private arrived(game: Game) {
-    if (!this.toFlag) return;
+    if (!this.toLine) return;
     const { world, ball } = game;
     const { target } = this.rig;
     if (Math.hypot(target[0] - world.x[ball], target[1] - world.y[ball]) > ARRIVED) return;
-    this.toFlag = false;
-    this.faceFlag(false);
+    this.toLine = false;
+    this.faceLine();
   }
 
   /**
@@ -452,7 +456,7 @@ export class Director {
   aiming(aim: Shot | null) {
     const game = this.game;
     // a drag held is the player's say in where the camera looks: the turn to the flag a ball come to rest was waiting on is not made
-    if (aim) this.toFlag = false;
+    if (aim) this.toLine = false;
     // a player who drags means to play: a fly-in under way is cut short
     if (game && aim) this.rig.cutShort(game.t);
     if (!game || !aim || !game.ready || this.rig.overhead || aim.power < AIM_TURN.least) return;
@@ -473,6 +477,25 @@ export class Director {
   }
 
   /**
+   * The way the camera looks when it turns by itself to a ball come to rest, as an azimuth, or null where there is no way (the ball
+   * at the cup): along the hole's line of play, `PLAY_AHEAD` yards on from the nearest point of it to the ball and at the flag once
+   * that is within it (`lookAlong`), which is where the next shot is played and not, on a dogleg, across the trees to the flag
+   * round the corner. A hole with no line of play, which is every hole of minigolf, has the flag's own heading, as it always did.
+   * The same for the same lie, and it spends none of the game's chance.
+   */
+  nearLine(): number | null {
+    const game = this.game;
+    if (!game) return null;
+    const { world, ball, layout } = game;
+    const at = { x: world.x[ball], y: world.y[ball] };
+    if (lookAlong(layout.way, at.x, at.y, PLAY_AHEAD, this.look, layout.cup)) {
+      const to = facing(at, this.look);
+      if (to !== null) return to;
+    }
+    return this.nearFlag();
+  }
+
+  /**
    * The camera turned to look at the cup from the ball (`nearFlag`), the short way and eased; whether it was. Refused while a
    * drag is `held`, since the aim is the ground under the finger through the camera and a camera turning under it would turn the
    * shot, from overhead, where there is no way to face the cup, and with the ball at the cup, where there is none either.
@@ -480,9 +503,24 @@ export class Director {
   faceFlag(held: boolean): boolean {
     const game = this.game;
     if (!game || held || this.rig.overhead) return false;
-    this.toFlag = false;
+    this.toLine = false;
     this.rig.cutShort(game.t);
     const to = this.nearFlag();
+    if (to === null) return false;
+    this.rig.turnTo(to);
+    return true;
+  }
+
+  /**
+   * The camera turned, as `faceFlag` does, to look along the line of play (`nearLine`): what a ball come to rest has done to it
+   * by itself. Refused from overhead and with the ball at the cup, as the flag button is; it is not the player's press and so is
+   * never asked while a drag is held (a drag held takes the turn back, in `aiming`).
+   */
+  private faceLine(): boolean {
+    const game = this.game;
+    if (!game || this.rig.overhead) return false;
+    this.rig.cutShort(game.t);
+    const to = this.nearLine();
     if (to === null) return false;
     this.rig.turnTo(to);
     return true;

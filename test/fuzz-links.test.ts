@@ -19,7 +19,9 @@ describe('the fuzzer', () => {
       lostOut = 0,
       knocked = 0,
       clubs = 0,
-      onBanks = 0;
+      onBanks = 0,
+      lines = 0,
+      offFlag = 0;
     const visited = new Set<string>();
     for (const seed of [4, 9, 21, 30]) {
       const r = fuzz(seed, 16000, LINKS);
@@ -30,6 +32,8 @@ describe('the fuzzer', () => {
       knocked += r.happened.knocked || 0;
       clubs += r.done['choose a club'] || 0;
       onBanks += r.checked['rest on a bank'] || 0;
+      lines += r.checked['line of play'] || 0;
+      offFlag += r.checked['line off the flag'] || 0;
       for (const name of Object.keys(r.visited)) visited.add(name);
     }
     const names = LINKS.map((h) => h.name);
@@ -40,6 +44,10 @@ describe('the fuzzer', () => {
     expect(clubs, 'clubs chosen from the bag').toBeGreaterThan(10);
     // a ball come to rest on a bank of the rolling land was counted, and 80 were over these four seeds: a count that is never made passes in silence
     expect(onBanks, 'balls come to rest on a bank, each held to the rules').toBeGreaterThan(20);
+    // a ball come to rest has the camera turn along the line of play, held to its rule each time, and on these holes a good many times
+    // to a heading that is not the flag's, which is a dogleg's: a check that never ran, or never met a bend, passes in silence
+    expect(lines, 'balls come to rest, the camera turned to look along the line of play').toBeGreaterThan(30);
+    expect(offFlag, 'and turned off the flag, on a dogleg').toBeGreaterThan(5);
     expect(holed + finished, 'and holed out, or round').toBeGreaterThan(0);
   });
 

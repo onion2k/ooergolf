@@ -270,6 +270,8 @@ export interface GameApi {
     heading: number;
     /** Where the flag button would turn the camera to from where the ball lies now (near the cup, never at it); null with the ball at the cup. */
     flag: number | null;
+    /** Where the camera turns to by itself when a ball comes to rest, from where the ball lies now: along the hole's line of play, which is the flag's own where the hole has no bend to look round; null with the ball at the cup. */
+    line: number | null;
     /** Whether the camera is following the ball for the stroke being played: one stroke in five by the view seed, or from the moment a ball held still would leave the screen. */
     following: boolean;
     tilt: number;

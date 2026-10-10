@@ -2310,6 +2310,38 @@ test.describe('the flag button', () => {
     expect(problems).toEqual([]);
   });
 
+  test('on a dogleg a ball come to rest has the camera turn by itself along the line of play, and not to the flag round the corner; the flag button still turns to the flag', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await longBend(page);
+    // the ball put down 100 yards up the first leg of The Links' Long Bend, and chipped a few yards: it comes to rest there and the camera turns by itself
+    const [a, b] = links()[2].way!;
+    const leg = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const to = [a[0] + ((b[0] - a[0]) / leg) * 100, a[1] + ((b[1] - a[1]) / leg) * 100];
+    await page.evaluate(([x, y]) => {
+      const g = window.game!;
+      g.lay(x, y);
+      g.step(120);
+    }, to);
+    expect(await page.evaluate(() => window.game!.shoot(Math.PI / 2, 0.05, 'sand-wedge'))).toBe(true);
+    await page.evaluate(() => {
+      const g = window.game!;
+      for (let f = 0; f < 40 && !g.state().ready; f++) g.step(30);
+      g.step(240);
+    });
+    const v = await view(page);
+    expect(v.turning, 'done turning').toBe(false);
+    expect(v.line, 'a line of play to look along').not.toBeNull();
+    expect(gap(v.azimuth, v.line!), 'turned to it by itself').toBeLessThan(1e-3);
+    expect(gap(v.azimuth, v.flag!), 'and not to the flag, which is round the bend').toBeGreaterThan(0.1);
+    // the flag button turns to the flag, from the same ball
+    await page.locator('#viewFlag').click();
+    await page.evaluate(() => window.game!.step(120));
+    expect(gap((await view(page)).azimuth, v.flag!), 'the button faces the flag').toBeLessThan(1e-3);
+    expect(problems).toEqual([]);
+  });
+
   for (const [label, viewport, touch] of [
     ['a desk', { width: 1280, height: 800 }, false],
     ['a phone', { width: 400, height: 860 }, true],

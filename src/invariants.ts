@@ -28,7 +28,7 @@
  * played from, never sand, water, out of bounds, rock or the rail; a ball at rest on a golf hole is on a slope its
  * lie holds a ball on; the break a putt is shown is a number across no further than the cup is; and the arrows laid over
  * a green are numbers, each on a tile of putting green, and no more than its tiles. And the camera: the sky is the fly-in's
- * alone (`flyInProblems`).
+ * alone (`flyInProblems`), and a ball come to rest has it turn along the line of play, never away from the cup (`lineProblems`).
  *
  * Checked by the fuzzer after everything it does, by the test API on asking,
  * and by the unit tests. Each broken rule is a line saying what and where.
@@ -85,6 +85,38 @@ const WIND_FLIGHT = 8;
 
 /** How long, in seconds, the camera may take to turn to face a place: a half turn is a second and a quarter, and this is a good way over. */
 export const TURN_TIME = 2;
+
+/**
+ * Where the camera turns by itself to a ball come to rest (`line`, from `Director.nearLine`) against where the flag button turns
+ * it (`flag`, `Director.nearFlag`): each a number within a turn, and neither only for a ball at the cup, where there is no way to
+ * face. The line of play looks along the hole toward where the cup is and never away from it, so it is within a quarter turn of
+ * the flag, and a hole with no line of play (every hole of minigolf, and a hole a test makes) has the flag's own heading exactly.
+ */
+export function lineProblems(game: Game, line: number | null, flag: number | null): string[] {
+  const out: string[] = [];
+  if ((line === null) !== (flag === null)) {
+    out.push(
+      `the camera turns by itself to ${line} and the flag button to ${flag}: a way to face for one and not the other`,
+    );
+    return out;
+  }
+  if (line === null || flag === null) return out;
+  for (const [what, a] of [
+    ['the line of play', line],
+    ['the flag', flag],
+  ] as const)
+    if (!Number.isFinite(a) || Math.abs(a) > Math.PI + 1e-9)
+      out.push(`${what} is faced at ${a}, which is not a heading within a turn`);
+  if (out.length) return out;
+  const off = Math.abs(((line - flag + 3 * Math.PI) % (2 * Math.PI)) - Math.PI);
+  if (!game.layout.way && line !== flag)
+    out.push(`a hole with no line of play has the camera turn to ${line} by itself and ${flag} at the flag button`);
+  if (off > Math.PI / 2)
+    out.push(
+      `the camera turns to look ${((off * 180) / Math.PI).toFixed(0)} degrees from the flag, which is away from the cup`,
+    );
+  return out;
+}
 
 /**
  * The rules a camera must always keep, however a player has turned, tilted and zoomed it: its turn and its tilt are

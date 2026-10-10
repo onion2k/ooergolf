@@ -38,6 +38,7 @@ import {
   checkInvariants,
   framingProblems,
   flyInProblems,
+  lineProblems,
   kickerProblems,
   knockProblems,
   landingProblems,
@@ -223,6 +224,15 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
             told.push(...lieProblems(playing, args[0], args[1]));
             count(checked, 'lie at rest');
             if (onBank(playing.layout, args[0], args[1])) count(checked, 'rest on a bank');
+          }
+          // a ball come to rest has the camera turn to look along the hole's line of play: held to its rule, and counted, with how often
+          // it was a heading other than the flag's (a dogleg), since a check that never ran passes in silence
+          if (name === 'stopped' && playing && directing) {
+            const line = directing.nearLine(),
+              flag = directing.nearFlag();
+            told.push(...lineProblems(playing, line, flag));
+            count(checked, 'line of play');
+            if (line !== null && flag !== null && Math.abs(line - flag) > 0.05) count(checked, 'line off the flag');
           }
           if (name === 'knocked' && playing) told.push(...knockProblems(playing, ...(args as Knock)));
           // a stream is a belt: the ball is carried on it, and never lost
