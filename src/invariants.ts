@@ -27,7 +27,8 @@
  * (`GREEN`, and a tenth over for the smoothing the physics rolls a ball on); the first cut is only on ground a ball is
  * played from, never sand, water, out of bounds, rock or the rail; a ball at rest on a golf hole is on a slope its
  * lie holds a ball on; the break a putt is shown is a number across no further than the cup is; and the arrows laid over
- * a green are numbers, each on a tile of putting green, and no more than its tiles.
+ * a green are numbers, each on a tile of putting green, and no more than its tiles. And the camera: the sky is the fly-in's
+ * alone (`flyInProblems`).
  *
  * Checked by the fuzzer after everything it does, by the test API on asking,
  * and by the unit tests. Each broken rule is a line saying what and where.
@@ -134,6 +135,8 @@ export function flyInProblems(rig: CameraRig, t: number, began: number): string[
     out.push(`the view is tilted to ${tilt}, past the fly-in's ${FLY_IN.tilt} or the least ${TILT.least}`);
   if (rig.flying(t) && t - began > FLY_IN.hold + FLY_IN.time + FLY_IN.cut + 1e-6)
     out.push(`the fly-in is still under way ${(t - began).toFixed(2)} seconds after the hole began`);
+  // the sky is the fly-in's alone: a view a shot is aimed from that saw it would have a cloud drawn between it and the shot
+  if (rig.seesSky(t) && !rig.flying(t)) out.push(`the view sees the sky, tilted to ${tilt}, with no fly-in under way`);
   return out;
 }
 

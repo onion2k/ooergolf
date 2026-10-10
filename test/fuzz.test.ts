@@ -72,6 +72,8 @@ describe('the fuzzer', () => {
     const titled = sum(sum(sum(one.checked, two.checked), golf.checked), island.checked);
     expect(titled.title, 'frames of the title held to its rules').toBeGreaterThan(30);
     expect(titled['course chosen mid-drop'], 'courses chosen while the letters dropped').toBeGreaterThan(0);
+    // the sky is seen by a fly-in and by no other view, and the rule was asked of frames that saw it: a check that never ran passes in silence
+    expect(titled['sky seen'], 'frames that saw the sky, held to its rule').toBeGreaterThan(30);
     expect(one.failure, JSON.stringify(one.failure)).toBe(null);
     expect(two.failure, JSON.stringify(two.failure)).toBe(null);
     expect(golf.failure, JSON.stringify(golf.failure)).toBe(null);

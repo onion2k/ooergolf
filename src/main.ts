@@ -1193,6 +1193,9 @@ async function main() {
     // the nearest dot's size, as it was placed: nought for none
     drawn.pulse = dots ? scene.aim[0] - 1 : 0;
     if (dots) renderer.tint(1, scene.aimLooks);
+    // the clouds are drawn to a view that sees the sky, the fly-in's and the title's, and put away from every other: they drift over
+    // the hole at the height a shot is aimed from, and one drawn there covered the shot
+    scene.setSky(titled !== null || rig.seesSky(played.t));
     scene.writeMoving(played.t).forEach((m, k) => {
       renderer.move(2 + k, m.matrices, m.count);
       // what is coloured by game time, as the rings on the water fade, has its colours written again each frame
@@ -1596,6 +1599,7 @@ async function main() {
       confetti: drawn.confetti,
       strips: scene.flagStrips(),
       retake: hud.retakeDrawn(),
+      sky: scene.skyDrawn(),
     }),
     course: () => courseName,
     choosing: () => choosing,

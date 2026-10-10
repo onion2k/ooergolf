@@ -395,6 +395,8 @@ export interface Motions {
   strips: number;
   /** The Retake button as drawn: whether it is up on the course, and whether it can be pressed. */
   retake: { shown: boolean; enabled: boolean };
+  /** How many clouds of the sky past the hole the last frame drew with a size: all of them to the fly-in and the title, which see the sky, and none to any other view. */
+  sky: number;
 }
 
 /** The grass a frame drew, and the wind it bent in. */

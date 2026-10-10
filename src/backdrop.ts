@@ -1,8 +1,10 @@
 /**
  * The world past a hole, as the title picture has it: a ring of faceted green hills round the hole, blue mountains
  * behind them, a lake in a gap of the hills, forest on the hills and clouds over them that drift with the hole's wind.
- * Seen only from the fly-in (`FLY_IN` in `camera.ts`), since the view a shot is played from looks no higher than
- * thirteen degrees under the horizon. Without it a low view sees the ground run flat to a sky of one colour.
+ * Seen only from the fly-in (`FLY_IN` in `camera.ts`) and the title, since the view a shot is played from looks no higher than
+ * thirteen degrees under the horizon. Without it a low view sees the ground run flat to a sky of one colour. The clouds are
+ * the one thing of it that is not out of the way of play: they drift straight over the hole, at a height the aim view stands at,
+ * so the scene draws them only to a view that sees the sky (`seesSky` in `camera.ts`) and puts them away from every other.
  *
  * It is worked out from the hole's map and its name, never the game's chance, so a hole looks the same every time and
  * nothing of play is moved by it; the scene draws it, and moves only the clouds, by game time. It stands clear of the hole

@@ -1333,6 +1333,8 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
         const bad = flyInProblems(rig, game.t, holeBegan);
         if (bad.length) return fail(bad);
         if (rig.flying(game.t)) count(checked, 'flying');
+        // the sky is held to the same rule, which it is only as strong as the frames it was seen in (`flyInProblems` fails the rest)
+        if (rig.seesSky(game.t)) count(checked, 'sky seen');
       }
       // a kicker throws the hardest of anything on a course, so what it does to the ball is checked in every frame
       if (game.layout.kickers.length) {

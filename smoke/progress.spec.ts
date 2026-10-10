@@ -652,11 +652,21 @@ test('each hole is flown in to, low behind the tee with the horizon in view, eas
   expect(view.flying, 'flying in to the first hole').toBe(true);
   expect(view.tilt).toBeGreaterThan(1.2);
   expect(view.farPlane).toBeGreaterThan(3000);
+  // the sky is drawn to the fly-in, whose screen has the horizon on it
+  await page.evaluate(() => window.game!.step(1));
+  expect((await page.evaluate(() => window.game!.motions())).sky, 'the clouds drawn to the fly-in').toBeGreaterThan(10);
   // eased to the play view in a few seconds of the game's time
   await page.evaluate(() => window.game!.step(200));
   view = await page.evaluate(() => window.game!.view());
   expect(view.flying, 'over').toBe(false);
   expect(view.tilt).toBeLessThan(1.01);
+  // and to no view a shot is aimed from, nor to the one from overhead: a cloud drifts over the hole at the height they stand at
+  expect((await page.evaluate(() => window.game!.motions())).sky, 'no cloud drawn to the play view').toBe(0);
+  await page.evaluate(() => window.game!.overhead(true));
+  await page.evaluate(() => window.game!.step(60));
+  expect((await page.evaluate(() => window.game!.motions())).sky, 'none from overhead').toBe(0);
+  await page.evaluate(() => window.game!.overhead(false));
+  await page.evaluate(() => window.game!.step(60));
   // the next hole flown in to again, and a real drag from the ball cuts it short
   await page.evaluate(() => window.game!.startHole(1));
   await page.evaluate(() => window.game!.step(2));
