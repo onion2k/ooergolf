@@ -12,13 +12,15 @@ import { PALETTE } from '../src/models/palette';
 import { Scene } from '../src/scene';
 import { groundOf } from '../src/ground';
 import { BANK_TINT, tinted as tintedColour, valueOfStep } from '../src/tint';
+import { steadyBytes } from './steady';
 
 /** FNV-1a over bytes. */
 function fnv(bytes: Uint8Array, x = 2166136261): number {
   for (let i = 0; i < bytes.length; i++) x = Math.imul(x ^ bytes[i], 16777619) >>> 0;
   return x;
 }
-const bytesOf = (a: ArrayBufferView) => new Uint8Array(a.buffer, a.byteOffset, a.byteLength);
+/** An array's bytes, its floats steadied so a last bit a machine's maths differs in is not counted. */
+const bytesOf = steadyBytes;
 
 /** A group's mesh as bytes: where it is, which way it faces and how it is cut. */
 const meshHash = (g: GameGroup) =>
@@ -54,13 +56,13 @@ function drawn(course: string, hole: number) {
   return { groups: new Scene().static(layout, h.name), layout };
 }
 
-/** The hashes of what a golf hole's static groups hold, written from a3c39d3. */
+/** The hashes of what a golf hole's static groups hold, written from a3c39d3; the meshes' written again on 10 October 2026 from d918912 unchanged, when they came to be taken over steadied bytes (`steady.ts`), since the raw bytes, written on a Mac, differed on Linux in a last bit of the minigolf ponds' stones. */
 const AT_MAIN = {
-  'The Meadow/0': { meshes: 3649623241, looks: 2200126830 },
-  'The Pinball Shed/0': { meshes: 3476091213, looks: 3808239087 },
-  'The Waterworks/0': { meshes: 2616307843, looks: 3638244723 },
-  'The Links/0': { meshes: 1792692763, looks: 452526405, tintedMeshes: 3767831888 },
-  'The Isles/1': { meshes: 2749435461, looks: 215032629, tintedMeshes: 4158845077 },
+  'The Meadow/0': { meshes: 2351288662, looks: 2200126830 },
+  'The Pinball Shed/0': { meshes: 3193777536, looks: 3808239087 },
+  'The Waterworks/0': { meshes: 1616752155, looks: 3638244723 },
+  'The Links/0': { meshes: 3904169832, looks: 452526405, tintedMeshes: 4107679639 },
+  'The Isles/1': { meshes: 3274599426, looks: 215032629, tintedMeshes: 1776637673 },
 } as Record<string, { meshes: number; looks: number; tintedMeshes?: number }>;
 
 describe('what the banks tint leaves as it was', () => {
