@@ -6,7 +6,7 @@
  * model would first be seen when a hole was built round it.
  *
  * `?model=name` parks the camera on one exhibit or one row (`?model=balls` adds a lineup of today's ball and the shop's
- * fifteen, side by side), `?seed=N` dresses
+ * fifteen, side by side, and `?model=title` the title's lettering, standing up and seen from the front), `?seed=N` dresses
  * the decoration differently, and `?paused=1` stops the blades and the belt
  * until a test steps them. `window.showcase` is its test API.
  */
@@ -54,12 +54,15 @@ import {
   windmill,
   type Conveyor,
   type Model,
+  type Part,
   type V3,
   type Windmill,
 } from './models';
 import { flipper } from './models';
 import { TONE_SUN, sceneryRule, toned } from './models/tone';
 import { ITEMS } from './items';
+import { titleModel } from './models/lettering';
+import titleTrace from './titletrace.json';
 
 /** A scenery model as the game draws it at a yaw of nought: its faces split into the baked tones, as `models/tone.ts` has them. */
 const lit = (model: Model): Model => toned(model, TONE_SUN, sceneryRule(model));
@@ -96,6 +99,10 @@ const RAIL_HEIGHT = 1.6;
 /** How the camera looks down, from level: the game's three-quarters for the whole set, lower to see one thing. */
 const POLAR = { all: 0.78, row: 0.9, one: 1.02 };
 const FOV = 40;
+/** The title is seen from nearly level, as it is on its own screen, and not from above as the rest are. */
+const TITLE_POLAR = 1.5;
+/** How big the title is stood, as a multiple of its own units (a picture pixel is a hundredth), and how high its middle is off the grass. */
+const TITLE = { scale: 2.4, lift: 12 };
 
 type Row = 'course' | 'obstacles' | 'decoration';
 interface Item {
@@ -298,6 +305,33 @@ function ballExhibits(): Exhibit[] {
   }));
 }
 
+/**
+ * The title's lettering as `?model=title` shows it: the model's own frame has x across, y up and z toward the viewer, as a
+ * screen has it, so it is stood up in the showcase's (z up, the viewer to the south) by turning it a quarter about x, and made `TITLE.scale`
+ * times as big (in its own mesh and not as the item's scale, which the exhibit's box does not read).
+ * Only when asked for, so the showcase's other views and the pictures held of them are as they were.
+ */
+function titleExhibit(): Exhibit {
+  const model = titleModel(titleTrace);
+  const stand = (part: Part): Part => {
+    const turn = (a: Float32Array, k: number) => {
+      const out = new Float32Array(a.length);
+      for (let i = 0; i < a.length; i += 3) [out[i], out[i + 1], out[i + 2]] = [a[i] * k, -a[i + 2] * k, a[i + 1] * k];
+      return out;
+    };
+    return {
+      ...part,
+      mesh: { ...part.mesh, positions: turn(part.mesh.positions, TITLE.scale), normals: turn(part.mesh.normals, 1) },
+    };
+  };
+  return {
+    name: 'title',
+    label: 'title',
+    row: 'decoration',
+    items: [{ model: { ...model, parts: model.parts.map(stand) }, x: 0, y: 0, z: TITLE.lift }],
+  };
+}
+
 /** The box round an exhibit's items, placed, with room for the blades and the belt's chevrons to move in. */
 function exhibitBox(e: Exhibit): { min: V3; max: V3 } {
   const min: V3 = [Infinity, Infinity, Infinity],
@@ -339,6 +373,7 @@ async function main() {
 
   const shown = exhibits(seed);
   if (query.get('model') === 'balls') shown.push(...ballExhibits());
+  if (query.get('model') === 'title') shown.push(titleExhibit());
   /** Where the grass is left out: under the water and the bunker, which lie at or below it, and the cups' collars. */
   const cut: [number, number, number, number][] = [];
   for (const e of shown)
@@ -428,6 +463,8 @@ async function main() {
   renderer.setStatic(still);
   renderer.setDynamic(moving);
   renderer.setLights(new LightPool(16));
+  // the title is lit by its colours, and a bloom thrown from the faces, which are brighter than the sun's white, would lighten the outline beside them
+  if (query.get('model') === 'title') renderer.post.bloom = 0;
   renderer.setSunShadow({
     min: [PATCH.minX - TILE, PATCH.minY - TILE, -1],
     max: [PATCH.maxX + TILE, PATCH.maxY + TILE, 14],
@@ -464,7 +501,7 @@ async function main() {
   });
   for (const row of ['course', 'obstacles', 'decoration'] as Row[])
     views.set(row, { ...union(boxes.filter((b) => b.e.row === row).map((b) => b.box)), polar: POLAR.row });
-  for (const { e, box: b } of boxes) views.set(e.name, { ...b, polar: POLAR.one });
+  for (const { e, box: b } of boxes) views.set(e.name, { ...b, polar: e.name === 'title' ? TITLE_POLAR : POLAR.one });
   // the lineup of balls, when it is asked for, as one view
   const lined = boxes.filter((b) => b.e.name.startsWith('ball-'));
   if (lined.length) views.set('balls', { ...union(lined.map((b) => b.box)), polar: POLAR.one });
@@ -474,7 +511,7 @@ async function main() {
     el.className = 'label';
     el.textContent = e.label;
     labels.append(el);
-    return { el, box: b };
+    return { el, box: b, name: e.name };
   });
 
   let width = 1,
@@ -494,7 +531,7 @@ async function main() {
   function frame() {
     const v = views.get(view)!;
     const c: V3 = [0, 1, 2].map((a) => (v.min[a] + v.max[a]) / 2) as V3;
-    c[2] = v.min[2] + (v.max[2] - v.min[2]) * 0.3;
+    c[2] = v.min[2] + (v.max[2] - v.min[2]) * (view === 'title' ? 0.5 : 0.3);
     cam.aspect = width / height;
     cam.target = c;
     // from the south on a wide screen; on a tall one from the west, so the rows run up the screen as a phone's hole does
@@ -517,11 +554,12 @@ async function main() {
       else near = mid;
     }
     fits(far);
-    for (const { el, box: b } of tags) {
+    for (const { el, box: b, name } of tags) {
       // under the edge nearest the camera, on the grass, where nothing of another exhibit stands in front of it
       const [cx, cy] = [(b.min[0] + b.max[0]) / 2, (b.min[1] + b.max[1]) / 2];
       const p = project(ax ? [b.min[0] - 0.6, cy, 0] : [cx, b.min[1] - 0.6, 0]);
-      const on = p && Math.abs(p[0]) < 1 && Math.abs(p[1]) < 1;
+      // the title is seen on its own: the labels of what stands on the grass behind it would sit over its letters
+      const on = p && Math.abs(p[0]) < 1 && Math.abs(p[1]) < 1 && (view !== 'title' || name === 'title');
       el.hidden = !on;
       if (p && on) {
         el.style.left = `${((p[0] + 1) / 2) * canvas.clientWidth}px`;

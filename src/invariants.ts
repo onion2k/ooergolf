@@ -34,6 +34,7 @@
  */
 import type { Camera } from 'artshape-render/gpu/camera';
 import type { SafeBox } from './aimview';
+import { DROP, type Pose, type PoseOf, type TitleScene } from './titlescene';
 import { KICKER, fromKickers } from './arena';
 import {
   BUMPER,
@@ -184,6 +185,49 @@ export function framingProblems(
   };
   check('ball', ball);
   if (reach) check('reach', reach);
+  return out;
+}
+
+/**
+ * What must hold of the title scene at any moment of its clock, which the fuzzer asks of every frame of a drop it lets run
+ * before it chooses a course: the clock is a time that never passes the end; every piece's pose is numbers; a piece is not
+ * shown before its step's turn and never below its place or higher than the drop starts; what squashes is squashed within
+ * what the outline it stands in allows and what is rigid is not (an outline drops with its owner, lift for lift); and once the
+ * clock is at the end every piece is at rest, exactly, and the scene says it has landed, and not before.
+ */
+export function titleProblems(scene: TitleScene, pieces: readonly PoseOf[]): string[] {
+  const out: string[] = [];
+  const at = `at ${scene.t.toFixed(3)} s`;
+  if (!Number.isFinite(scene.t) || scene.t > scene.end)
+    out.push(`the title's clock is ${scene.t}, past its end ${scene.end}`);
+  if (scene.landed !== scene.t >= scene.end)
+    out.push(`the title says it has landed ${scene.landed} ${at}, its end being ${scene.end}`);
+  const owners = new Map<string, Pose>();
+  const poses = pieces.map((piece) => {
+    const pose = scene.pose(piece, { shown: true, lift: 0, sx: 1, sy: 1 });
+    if (piece.kind !== 'outline') owners.set(piece.owner, pose);
+    return pose;
+  });
+  pieces.forEach((piece, i) => {
+    const pose = poses[i];
+    const name = `${piece.kind} ${piece.owner}`;
+    if (![pose.lift, pose.sx, pose.sy].every(Number.isFinite)) out.push(`the ${name} is posed with a non-number ${at}`);
+    if (pose.lift < 0 || pose.lift > DROP.height + 1e-9)
+      out.push(`the ${name} is ${pose.lift} up ${at}, past the drop`);
+    if (pose.sx < 0.8 || pose.sx > 1.2 || pose.sy < 0.5 || pose.sy > 1.5)
+      out.push(`the ${name} is squashed to ${pose.sx.toFixed(2)} by ${pose.sy.toFixed(2)} ${at}`);
+    if (!scene.reduced && pose.shown !== scene.t >= DROP.apart * piece.step)
+      out.push(`the ${name} is ${pose.shown ? 'shown' : 'not shown'} ${at}, its step being ${piece.step}`);
+    if (piece.kind === 'outline') {
+      const owner = owners.get(piece.owner);
+      if (!owner) out.push(`the outline of ${piece.owner} has no piece to drop with`);
+      else if (owner.shown !== pose.shown || owner.lift !== pose.lift)
+        out.push(`the outline of ${piece.owner} is not dropping with it ${at}`);
+      if (pose.sx !== 1 || pose.sy !== 1) out.push(`the outline of ${piece.owner} is squashed ${at}`);
+    }
+    if (scene.landed && (!pose.shown || pose.lift !== 0 || pose.sx !== 1 || pose.sy !== 1))
+      out.push(`the ${name} is not at rest once the title has landed ${at}`);
+  });
   return out;
 }
 

@@ -1,157 +1,209 @@
 /**
- * The title screen: the picture shown on the boot panel while the game boots, faded in once it is drawable and out once
- * the game is ready but not before it has been seen in full, covering the screen on a desk and on a phone, with none of the old
- * status words, and a boot that fails still saying why. Every other smoke test leaves the title out (`?title=0`), so
- * this is the one that loads the page as a player does. Timing is read from when the page changed its own classes, not
- * waited on, so a slow machine fails nothing here by being slow.
+ * The title screen: the page opens on plain sky, fades away to a hole of The Links drawn by the game with "Of Course!" in
+ * 3D letters dropping in over it one by one from the left, and brings the course cards up under them once they have landed.
+ * The word is held inside the screen and clear of the cards on the eight sizes the picture it replaces was held on, a course
+ * chosen mid-drop begins that course and lets the whole scene go, and the card's Courses button brings the title back with
+ * its letters standing. Every other smoke test leaves the title out (`?title=0`), so this is the one that loads the page as a
+ * player does. Time is the test's own: the page is paused and stepped, and the title's clock goes by the frames stepped, so
+ * a slow machine fails nothing here by being slow.
  */
 import { expect, test, type Page } from '@playwright/test';
-import { TITLE } from '../src/title';
+import { DROP } from '../src/titlescene';
+import { landed, ready, start, watch } from './game';
+import { toCard } from './panels';
 
 const DESKTOP = { viewport: { width: 1280, height: 800 } };
 const PHONE = { viewport: { width: 400, height: 860 }, hasTouch: true, isMobile: true };
 
-/** Records when the panel was shown and when it was let go, and every word it ever said, in the page's own time. */
-async function record(page: Page) {
-  await page.addInitScript(() => {
-    const log = { shown: -1, gone: -1, said: new Set<string>() };
-    (window as unknown as { titleLog: typeof log }).titleLog = log;
-    const watch = () => {
-      const boot = document.getElementById('boot');
-      if (!boot) return false;
-      const look = () => {
-        if (boot.classList.contains('shown') && log.shown < 0) log.shown = performance.now();
-        if (boot.classList.contains('gone') && log.gone < 0) log.gone = performance.now();
-        const words = boot.textContent.trim();
-        if (words) log.said.add(words);
-      };
-      new MutationObserver(look).observe(boot, {
-        attributes: true,
-        childList: true,
-        subtree: true,
-        characterData: true,
-      });
-      look();
-      return true;
-    };
-    if (!watch())
-      new MutationObserver((_, o) => watch() && o.disconnect()).observe(document, { childList: true, subtree: true });
-  });
+/** The frames of 1/60 s that take the title's clock from its start to `t` seconds. */
+const framesTo = (t: number) => Math.ceil((t + DROP.lead) * 60);
+
+/** The title as the test's page reads it. */
+const title = (page: Page) => page.evaluate(() => window.game!.title());
+
+/** The page opened as a player opens it, paused, with the title's clock at its start. */
+async function open(page: Page, seed = 1) {
+  await start(page, { title: true, paused: true, seed, screen: true });
 }
 
-/** Holds the panel up and whole for a picture of it: the game behind it is ready in a moment and would fade it out under the camera. */
-const HOLD = '#boot.gone { opacity: 1 !important; visibility: visible !important; transition: none !important; }';
+/** Frames stepped, the title's clock with them. */
+const step = (page: Page, frames: number) => page.evaluate((n) => window.game!.step(n), frames);
 
-/** Whether what is on top at the middle of the screen is the title's panel, and not a panel of the game's. */
-const onTop = (page: Page) =>
-  page.evaluate(() => document.elementFromPoint(innerWidth / 2, innerHeight / 2)?.closest('#boot') !== null);
+/** The panel's fade finished, so a picture is of the scene and not of the scene through a panel on its way out. */
+const faded = (page: Page) => expect(page.locator('#boot')).toBeHidden();
 
-/** Where the logo is in the picture, as shares of its width and height, with a little round it: held here so a new picture says its own. */
-const LOGO = { x0: 0.22, x1: 0.81, y0: 0.09, y1: 0.41 };
+/** The frame's cost in words is the one thing in the scene that changes from run to run. */
+const SCENE_ONLY = '#stats { visibility: hidden !important; }';
 
-/** Where the picture's own pixels fall on the screen as it is laid out now, worked out from the style the page gave it. */
-const placed = (page: Page) =>
-  page.evaluate(() => {
-    const img = document.getElementById('bootTitle') as HTMLImageElement;
-    const css = getComputedStyle(img);
-    const [w, h] = [innerWidth, innerHeight];
-    const [nw, nh] = [img.naturalWidth, img.naturalHeight];
-    const scale = css.objectFit === 'cover' ? Math.max(w / nw, h / nh) : Math.min(w / nw, h / nh);
-    const [dw, dh] = [nw * scale, nh * scale];
-    const [px, py] = css.objectPosition.split(' ').map((v) => parseFloat(v) / 100);
-    const [ox, oy] = [(w - dw) * px, (h - dh) * py];
-    return { fit: css.objectFit, w, h, dw, dh, ox, oy };
-  });
+/** The box that holds every piece that is shown, in the page's own pixels. */
+async function wordBox(page: Page) {
+  const t = await title(page);
+  let [x0, y0, x1, y1] = [Infinity, Infinity, -Infinity, -Infinity];
+  for (const p of t.pieces)
+    if (p.box) {
+      x0 = Math.min(x0, p.box[0]);
+      y0 = Math.min(y0, p.box[1]);
+      x1 = Math.max(x1, p.box[2]);
+      y1 = Math.max(y1, p.box[3]);
+    }
+  return { x0, y0, x1, y1 };
+}
 
-const log = (page: Page) =>
-  page.evaluate(() => {
-    const l = (window as unknown as { titleLog: { shown: number; gone: number; said: Set<string> } }).titleLog;
-    return { shown: l.shown, gone: l.gone, said: [...l.said] };
-  });
-
-test.describe('on a desk', () => {
+test.describe('the boot panel', () => {
   test.use(DESKTOP);
 
-  test('fades the picture in, holds it until it has been seen, fades it out on to the start screen', async ({
-    page,
-  }) => {
-    await record(page);
+  test('is plain sky: no picture is fetched, and it says nothing at any moment of a good boot', async ({ page }) => {
+    const pictures: string[] = [];
+    page.on('request', (r) => {
+      if (r.resourceType() === 'image') pictures.push(r.url());
+    });
+    await page.addInitScript(() => {
+      const said = new Set<string>();
+      (window as unknown as { said: Set<string> }).said = said;
+      new MutationObserver(() => {
+        const words = document.getElementById('boot')?.textContent.trim();
+        if (words) said.add(words);
+      }).observe(document, { childList: true, subtree: true, characterData: true });
+    });
     await page.goto('/?paused=1&seed=1');
-    await expect(page.locator('#boot')).toHaveClass(/shown/, { timeout: 30_000 });
-
-    // the fade-in, read at its start, middle and end by setting the animation's own time
-    const opacityAt = (ms: number) =>
-      page.evaluate((t) => {
-        const a = document.getAnimations().find((x) => (x as CSSAnimation).animationName === 'bootTitleIn')!;
-        a.pause();
-        a.currentTime = t;
-        return Number(getComputedStyle(document.getElementById('bootTitle')!).opacity);
-      }, ms);
-    expect(await opacityAt(0), 'clear at the start').toBe(0);
-    const middle = await opacityAt(TITLE.fadeIn / 2);
-    expect(middle, 'half way in, neither clear nor whole').toBeGreaterThan(0.2);
-    expect(middle).toBeLessThan(0.95);
-    expect(await opacityAt(TITLE.fadeIn), 'whole at the end').toBe(1);
-
-    await expect(page.locator('#boot')).toHaveClass(/gone/, { timeout: 60_000 });
-    const l = await log(page);
-    expect(l.shown, 'the picture was shown').toBeGreaterThan(0);
-    expect(l.gone - l.shown, 'not let go before the fade-in was over').toBeGreaterThanOrEqual(TITLE.fadeIn - 10);
-    expect(l.said, 'no word on the panel, the status texts included, at any moment of a good boot').toEqual([]);
-
-    await expect(page.locator('#boot')).toBeHidden();
-    const state = await page.evaluate(() => window.game!.state());
-    expect(state.choosing, 'the start screen is up under it').toBe(true);
-    await expect(page.locator('#courses')).toBeVisible();
-  });
-
-  test('covers the whole screen, and draws the picture that was made', async ({ page }) => {
-    await page.goto('/?paused=1&seed=1');
-    await expect(page.locator('#boot')).toHaveClass(/shown/, { timeout: 30_000 });
-    const box = await page.evaluate(() => {
-      document.getAnimations().forEach((a) => ((a.currentTime = 600), a.pause()));
-      const img = document.getElementById('bootTitle') as HTMLImageElement;
-      const r = img.getBoundingClientRect();
+    await ready(page);
+    expect(pictures, 'no picture is fetched by the page').toEqual([]);
+    const boot = await page.evaluate(() => {
+      const el = document.getElementById('boot')!;
       return {
-        fit: getComputedStyle(img).objectFit,
-        natural: [img.naturalWidth, img.naturalHeight],
-        box: [r.left, r.top, r.right, r.bottom],
-        view: [innerWidth, innerHeight],
+        pictures: el.querySelectorAll('img').length,
+        background: getComputedStyle(el).backgroundImage,
+        said: [...(window as unknown as { said: Set<string> }).said],
       };
     });
-    expect(box.fit).toBe('cover');
-    expect(box.natural, 'the square picture').toEqual([1254, 1254]);
-    expect(box.box, 'the picture is as big as the screen, edge to edge').toEqual([0, 0, box.view[0], box.view[1]]);
-    await page.addStyleTag({ content: HOLD });
-    await expect.poll(() => page.evaluate(() => window.game?.state().choosing ?? false)).toBe(true);
-    expect(await onTop(page), 'the title is over the start screen that is up behind it').toBe(true);
-    await expect(page.locator('#boot')).toHaveScreenshot('title-desk.png', { maxDiffPixelRatio: 0.02 });
+    expect(boot.pictures, 'no picture on the panel').toBe(0);
+    expect(boot.background, 'the title scene’s own sky, a gradient in the stylesheet').toContain('linear-gradient');
+    expect(boot.said, 'no word on the panel').toEqual([]);
+    await faded(page);
   });
-});
 
-test.describe('on a phone', () => {
-  test.use(PHONE);
-
-  test('fits the whole width of a tall narrow screen, with a bar above and below, and the logo whole', async ({
+  test('fades away to the title scene, which is drawn behind it, with the start screen up and held back', async ({
     page,
   }) => {
-    await page.goto('/?paused=1&seed=1');
-    await expect(page.locator('#boot')).toHaveClass(/shown/, { timeout: 30_000 });
-    await page.evaluate(() => document.getAnimations().forEach((a) => ((a.currentTime = 600), a.pause())));
-    const at = await placed(page);
-    expect(at.fit).toBe('contain');
-    expect(at.dw, 'the picture is the width of the screen').toBeCloseTo(at.w, 3);
-    expect(at.oy, 'a bar above').toBeGreaterThan(50);
-    expect(at.oy, 'and the same below').toBeCloseTo(at.h - at.dh - at.oy, 3);
-    await page.addStyleTag({ content: HOLD });
-    await expect.poll(() => page.evaluate(() => window.game?.state().choosing ?? false)).toBe(true);
-    expect(await onTop(page), 'the title is over the start screen that is up behind it').toBe(true);
-    await expect(page.locator('#boot')).toHaveScreenshot('title-phone.png', { maxDiffPixelRatio: 0.02 });
+    const problems = watch(page);
+    await open(page);
+    const t = await title(page);
+    expect(t.up).toBe(true);
+    expect(t.landed).toBe(false);
+    expect(t.cards, 'the cards wait for the letters').toBe(false);
+    expect(await page.evaluate(() => window.game!.state().choosing), 'the start screen is up').toBe(true);
+    await expect(page.locator('#start')).toBeHidden();
+    await expect(page.locator('#strokes'), 'nothing of the hole is over the scene').toBeHidden();
+    await faded(page);
+    expect(problems).toEqual([]);
+  });
+
+  test('says nothing on the console from the first frame to the last letter landed, warnings included', async ({
+    page,
+  }) => {
+    // the GPU's warnings (a draw of nothing is one) come as console warnings, which `watch` leaves out; it says each once
+    const said: string[] = [];
+    page.on('console', (m) => {
+      if (m.type() === 'warning' || m.type() === 'error') said.push(`${m.type()}: ${m.text()}`);
+    });
+    await open(page);
+    for (let k = 0; k < 5; k++) {
+      await step(page, framesTo(1.7) / 5 + 1);
+      await page.waitForTimeout(100);
+    }
+    expect((await title(page)).landed, 'the whole drop was drawn').toBe(true);
+    expect(said, 'the title’s console is clean').toEqual([]);
+  });
+
+  test('a boot that fails says why, and the panel stays up', async ({ page }) => {
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, 'gpu', { value: undefined, configurable: true });
+    });
+    await page.goto('/?seed=1');
+    const message = page.locator('#bootMsg');
+    await expect(message).toBeVisible({ timeout: 30_000 });
+    expect((await message.textContent())!.length, 'the reason is in words').toBeGreaterThan(5);
+    await expect(page.locator('#boot')).not.toHaveClass(/gone/);
   });
 });
 
-test.describe('on any screen', () => {
-  // a desk, a wide one, a phone on its side, a tablet each way and a tall phone: the logo is whole on every one of them
+test.describe('the letters', () => {
+  test.use(DESKTOP);
+
+  test('drop in one by one from the left, land by 1.7 s, and the cards come up when they have', async ({ page }) => {
+    const problems = watch(page);
+    await open(page);
+    // before the first letter
+    await step(page, 6);
+    let t = await title(page);
+    expect(t.t).toBeLessThan(0);
+    expect(
+      t.pieces.filter((p) => p.shown),
+      'none yet',
+    ).toEqual([]);
+    // a third of a second in: the steps whose turn has come are there, and the rest are not
+    await step(page, framesTo(0.34) - 6);
+    t = await title(page);
+    for (const p of t.pieces) expect(p.shown, `${p.name} at ${t.t.toFixed(2)}`).toBe(DROP.apart * p.step <= t.t + 1e-9);
+    const there = t.pieces.filter((p) => p.shown && p.kind === 'face').map((p) => p.step);
+    expect(Math.max(...there), 'from the left').toBeLessThan(5);
+    expect(
+      t.pieces.some((p) => p.shown && p.lift > 0),
+      'one is in the air',
+    ).toBe(true);
+    expect(t.cards).toBe(false);
+    // the whole of it
+    await step(page, framesTo(1.7) - framesTo(0.34));
+    t = await title(page);
+    expect(t.landed, `landed by ${t.t.toFixed(2)} s`).toBe(true);
+    for (const p of t.pieces) {
+      expect(p.shown, p.name).toBe(true);
+      expect([p.lift, p.sx, p.sy], p.name).toEqual([0, 1, 1]);
+    }
+    expect(t.cards).toBe(true);
+    await expect(page.locator('#start')).toBeVisible();
+    await faded(page);
+    expect(await page.evaluate(() => window.game!.invariants())).toEqual([]);
+    expect(problems).toEqual([]);
+  });
+
+  test('the clock goes by the frames stepped and nothing else: a paused page is still', async ({ page }) => {
+    await open(page);
+    await step(page, 30);
+    const before = await title(page);
+    await page.waitForTimeout(400);
+    const after = await title(page);
+    expect(after.t).toBe(before.t);
+    expect(after.pieces).toEqual(before.pieces);
+  });
+
+  test('the same frames give the same pose, boxes and all, on a second page', async ({ page, browser }) => {
+    await open(page);
+    await step(page, 48);
+    const a = await title(page);
+    const other = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+    await open(other);
+    await step(other, 48);
+    const b = await title(other);
+    await other.close();
+    expect(b).toEqual(a);
+  });
+
+  test('stand at once for a player who asked for less motion, with the cards up and no fade', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await open(page);
+    const t = await title(page);
+    expect(t.landed).toBe(true);
+    expect(t.cards).toBe(true);
+    for (const p of t.pieces) expect([p.shown, p.lift, p.sx, p.sy], p.name).toEqual([true, 0, 1, 1]);
+    await expect(page.locator('#start')).toBeVisible();
+    const fade = await page.evaluate(() => document.getElementById('boot')!.style.getPropertyValue('--title-out'));
+    expect(fade, 'no fade').toBe('0ms');
+  });
+});
+
+test.describe('the word on every screen', () => {
+  // a desk, a wide one, a phone on its side, a tablet each way and a tall phone: the word is whole and clear of the cards on all
   for (const [name, width, height] of [
     ['a desk', 1280, 800],
     ['an ultrawide', 2560, 1080],
@@ -162,77 +214,155 @@ test.describe('on any screen', () => {
     ['a tall phone', 360, 800],
     ['a very tall phone', 360, 900],
   ] as const) {
-    test(`the logo is whole on ${name}, ${width} by ${height}`, async ({ page }) => {
+    test(`is whole on the screen and above the cards on ${name}, ${width} by ${height}`, async ({ page }) => {
       await page.setViewportSize({ width, height });
-      await page.goto('/?paused=1&seed=1');
-      await expect(page.locator('#boot')).toHaveClass(/shown/, { timeout: 30_000 });
-      const at = await placed(page);
-      const left = at.ox + LOGO.x0 * at.dw;
-      const right = at.ox + LOGO.x1 * at.dw;
-      const top = at.oy + LOGO.y0 * at.dh;
-      const bottom = at.oy + LOGO.y1 * at.dh;
-      expect(left, 'its left edge').toBeGreaterThanOrEqual(0);
-      expect(right, 'its right edge').toBeLessThanOrEqual(at.w);
-      expect(top, 'its top').toBeGreaterThanOrEqual(0);
-      expect(bottom, 'its foot').toBeLessThanOrEqual(at.h);
+      await open(page);
+      await step(page, framesTo(1.7));
+      const word = await wordBox(page);
+      expect(word.x0, 'its left edge').toBeGreaterThanOrEqual(0);
+      expect(word.x1, 'its right edge').toBeLessThanOrEqual(width);
+      expect(word.y0, 'its top').toBeGreaterThanOrEqual(0);
+      await expect(page.locator('#start')).toBeVisible();
+      await faded(page);
+      const cards = await page.locator('#start').boundingBox();
+      expect(word.y1, 'its foot is above the cards').toBeLessThanOrEqual(cards!.y);
+      expect(word.x1 - word.x0, 'and it is a good size').toBeGreaterThan(0.3 * Math.min(width, height * 1.2));
     });
   }
 });
 
-test.describe('where it cannot be shown as it is', () => {
+test.describe('choosing a course', () => {
   test.use(DESKTOP);
 
-  test('a player who asked for less motion gets no fade at all', async ({ page }) => {
-    await page.emulateMedia({ reducedMotion: 'reduce' });
-    await record(page);
-    await page.goto('/?paused=1&seed=1');
-    await expect(page.locator('#boot')).toHaveClass(/gone/, { timeout: 60_000 });
-    const times = await page.evaluate(() => {
-      const boot = document.getElementById('boot')!;
-      return [boot.style.getPropertyValue('--title-in'), boot.style.getPropertyValue('--title-out')];
-    });
-    expect(times, 'no fade in and no fade out').toEqual(['0ms', '0ms']);
-    await expect(page.locator('#boot')).toBeHidden();
+  test('mid-drop begins the course and lets the whole scene go', async ({ page }) => {
+    const problems = watch(page);
+    await open(page);
+    await step(page, framesTo(0.5));
+    expect((await title(page)).landed).toBe(false);
+    await page.evaluate(() => window.game!.chooseCourse('The Meadow'));
+    const after = await title(page);
+    expect(after.up, 'the title is let go').toBe(false);
+    expect(after.pieces, 'and none of its letters is kept').toEqual([]);
+    const state = await page.evaluate(() => window.game!.state());
+    expect(state.choosing).toBe(false);
+    expect(state.course).toBe('The Meadow');
+    expect([state.hole, state.strokes, state.phase]).toEqual([0, 0, 'play']);
+    expect(await page.evaluate(() => document.documentElement.hasAttribute('data-title'))).toBe(false);
+    await expect(page.locator('#start')).toBeHidden();
+    await expect(page.locator('#strokes')).toBeVisible();
+    // and the course is played over a screen that has no letters on it: the clock does not run on
+    await step(page, 120);
+    expect((await title(page)).up).toBe(false);
+    expect(await page.evaluate(() => window.game!.invariants())).toEqual([]);
+    expect(problems).toEqual([]);
   });
 
-  test('a picture that is slow to come is not waited for, and not shown after the game is up', async ({ page }) => {
-    let release = () => {};
-    const held = new Promise<void>((r) => (release = r));
-    await page.route('**/title.webp', async (route) => {
-      await held;
-      await route.continue();
-    });
-    // the load event waits on the picture, which is held: the page is asked for and let be
-    await page.goto('/?paused=1&seed=1', { waitUntil: 'commit' });
-    await expect(page.locator('#boot')).toHaveClass(/gone/, { timeout: 60_000 });
-    expect(await page.evaluate(() => window.game!.ready), 'the game is up with the picture still on its way').toBe(
-      true,
-    );
-    release();
-    // let it arrive and decode: it is never shown over a game that is up
-    await page.evaluate(() => (document.getElementById('bootTitle') as HTMLImageElement).decode().catch(() => {}));
-    await expect(page.locator('#boot')).not.toHaveClass(/shown/);
+  test('on a golf course, after the letters have landed, begins its first hole', async ({ page }) => {
+    await open(page);
+    await step(page, framesTo(1.7));
+    await page.evaluate(() => window.game!.chooseCourse('The Links'));
+    const state = await page.evaluate(() => window.game!.state());
+    expect([state.course, state.hole, state.choosing, state.golf]).toEqual(['The Links', 0, false, true]);
+    expect((await title(page)).up).toBe(false);
   });
 
-  test('a picture that cannot be had leaves the panel plain, and the game starts all the same', async ({ page }) => {
-    const errors: string[] = [];
-    page.on('pageerror', (e) => errors.push(e.message));
-    await page.route('**/title.webp', (r) => r.abort());
-    await page.goto('/?paused=1&seed=1');
-    await expect(page.locator('#boot')).toHaveClass(/gone/, { timeout: 60_000 });
-    await expect(page.locator('#bootTitle')).toBeHidden();
+  test('the card’s Courses button brings the title back behind the start screen, its letters standing', async ({
+    page,
+  }) => {
+    await open(page);
+    await page.evaluate(() => window.game!.chooseCourse('The Meadow'));
+    const over = await toCard(page);
+    expect(over.phase).toBe('over');
+    await page.locator('#cardCourses').click();
+    const t = await title(page);
+    expect(t.up, 'the title is up again').toBe(true);
+    expect(t.landed, 'standing').toBe(true);
+    for (const p of t.pieces) expect([p.shown, p.lift, p.sx, p.sy], p.name).toEqual([true, 0, 1, 1]);
+    expect(t.cards).toBe(true);
+    await expect(page.locator('#start')).toBeVisible();
     expect(await page.evaluate(() => window.game!.state().choosing)).toBe(true);
-    expect(errors).toEqual([]);
+    // and a course can be chosen again from it
+    await page.evaluate(() => window.game!.chooseCourse('The Pinball Shed'));
+    expect((await title(page)).up).toBe(false);
+    expect(await page.evaluate(() => window.game!.state().course)).toBe('The Pinball Shed');
   });
 
-  test('a boot that fails says why, under the picture, and the panel stays up', async ({ page }) => {
-    await page.addInitScript(() => {
-      Object.defineProperty(navigator, 'gpu', { value: undefined, configurable: true });
+  test('choosing and going back, round after round, keeps nothing of the title: no scene is held once a course is chosen', async ({
+    page,
+  }) => {
+    test.setTimeout(180_000);
+    await open(page);
+    const cdp = await page.context().newCDPSession(page);
+    // the title scenes the page still holds, after a collection and a moment for the collector to say so
+    const alive = async () => {
+      await cdp.send('HeapProfiler.collectGarbage');
+      await page.waitForTimeout(100);
+      await cdp.send('HeapProfiler.collectGarbage');
+      await page.waitForTimeout(100);
+      return (await title(page)).alive;
+    };
+    const round = async () => {
+      await page.evaluate(() => window.game!.chooseCourse('The Meadow'));
+      await toCard(page);
+      await page.locator('#cardCourses').click();
+      expect((await title(page)).up).toBe(true);
+    };
+    for (let n = 0; n < 4; n++) await round();
+    // one standing, behind the start screen, and none of the four before it
+    expect(await alive(), 'title scenes held after four rounds, the one on the screen among them').toBe(1);
+    await page.evaluate(() => window.game!.chooseCourse('The Meadow'));
+    expect(await alive(), 'and none once a course is chosen').toBe(0);
+    await round();
+    expect((await title(page)).pieces.length, 'one title standing, and no more').toBeGreaterThan(0);
+  });
+
+  test('a page that leaves the title out has none: the start screen is over The Meadow, as it was', async ({
+    page,
+  }) => {
+    await start(page, { paused: true, seed: 1, screen: true });
+    const t = await title(page);
+    expect(t.up).toBe(false);
+    expect(t.pieces).toEqual([]);
+    expect(await page.evaluate(() => window.game!.state().choosing)).toBe(true);
+    await expect(page.locator('#start')).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.hasAttribute('data-title'))).toBe(false);
+  });
+});
+
+test.describe('the pictures', () => {
+  test.describe('on a desk', () => {
+    test.use(DESKTOP);
+
+    test('the title standing, with the cards under it', async ({ page }) => {
+      await open(page);
+      await page.addStyleTag({ content: SCENE_ONLY });
+      await step(page, framesTo(1.7));
+      await faded(page);
+      await expect(page.locator('#start')).toBeVisible();
+      await landed(page);
+      await expect(page).toHaveScreenshot('title-desk.png', { maxDiffPixelRatio: 0.02 });
     });
-    await page.goto('/?seed=1');
-    const message = page.locator('#bootMsg');
-    await expect(message).toBeVisible({ timeout: 30_000 });
-    expect((await message.textContent())!.length, 'the reason is in words').toBeGreaterThan(5);
-    await expect(page.locator('#boot')).not.toHaveClass(/gone/);
+
+    test('the letters in the air, a third of the way through the drop', async ({ page }) => {
+      await open(page);
+      await page.addStyleTag({ content: SCENE_ONLY });
+      await step(page, framesTo(0.55));
+      await faded(page);
+      await expect(page).toHaveScreenshot('title-drop.png', { maxDiffPixelRatio: 0.02 });
+    });
+  });
+
+  test.describe('on a phone', () => {
+    test.use(PHONE);
+
+    test('the title standing, with the cards under it', async ({ page }) => {
+      await open(page);
+      await page.addStyleTag({ content: SCENE_ONLY });
+      await step(page, framesTo(1.7));
+      await faded(page);
+      await expect(page.locator('#start')).toBeVisible();
+      await landed(page);
+      await expect(page).toHaveScreenshot('title-phone.png', { maxDiffPixelRatio: 0.02 });
+    });
   });
 });

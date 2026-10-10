@@ -24,9 +24,9 @@ const TOLERANCE = { maxDiffPixelRatio: 0.002, threshold: 0.02 };
 /** What a frame may cost at all, as the game's perf budget has it. */
 const FRAME_BUDGET_MS = 8;
 
-/** The showcase in the page, paused, its decoration from `seed`, and ready. */
-async function showcase(page: Page, seed = 1) {
-  await page.goto(`/showcase.html?paused=1&seed=${seed}`);
+/** The showcase in the page, paused, its decoration from `seed`, and ready; `model` adds an exhibit that is shown only when asked for (`title`, `balls`). */
+async function showcase(page: Page, seed = 1, model?: string) {
+  await page.goto(`/showcase.html?paused=1&seed=${seed}${model ? `&model=${model}` : ''}`);
   try {
     await expect.poll(() => page.evaluate(() => window.showcase?.ready ?? false), { timeout: 60_000 }).toBe(true);
   } catch {
@@ -131,6 +131,18 @@ test.describe('the flipper', () => {
     await showcase(page);
     await look(page, 'flipper');
     await expect(page).toHaveScreenshot('flipper.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+});
+
+test.describe('the title', () => {
+  test('the traced lettering, standing in its outline with the ball, the flag and the sparkles, seen from the front', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await showcase(page, 1, 'title');
+    await look(page, 'title');
+    await expect(page).toHaveScreenshot('title-lettering.png', TOLERANCE);
     expect(problems).toEqual([]);
   });
 });

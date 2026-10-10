@@ -42,6 +42,29 @@ import { daylight } from './look';
 import { Progress } from './progress';
 import { seeded } from './random';
 import { titlePage } from './titlepage';
+import {
+  TitleScene,
+  boxOf as titleBoxOf,
+  cardsMax,
+  cardsTop,
+  fitTitle,
+  newFrame,
+  piecesBounds,
+  placeCamera,
+  poseMatrix,
+  titleFrame,
+  wordOf,
+  type Frame,
+  type Pose,
+  type TitleFit,
+  type Word,
+} from './titlescene';
+import { titleLetters, type TitlePiece } from './models/lettering';
+import titleTrace from './titletrace.json';
+import { golfHole } from './golf';
+import { LINKS_SPECS } from './links';
+import { group } from './models/part';
+import type { GameGroup } from 'artshape-render/game/renderer';
 import { roll } from './roll';
 import { fieldOf, flattenFor, grassOptionsOf, windOf } from './turf';
 import { AIM_REACH, Scene, boxOf, sunFitOf } from './scene';
@@ -53,7 +76,7 @@ import { SPARKLE, flash, glint, kickFlash } from './glints';
 import { Squash, squashInto, squashOf } from './squash';
 import { waggle } from './sway';
 import { EFFECT_STRIDE } from 'artshape-render/game/renderer';
-import { Governor, RUNGS } from './quality';
+import { Governor, RUNGS, economyFor } from './quality';
 import { PALETTE } from './models/palette';
 import { retakeShown } from './retake';
 import { SPRITE_FLOATS, TRAIL, Trail, trailDrawn, trailInto } from './trail';
@@ -73,15 +96,80 @@ const WHEEL = 0.05;
 const canvas = document.getElementById('view') as HTMLCanvasElement;
 const boot = document.getElementById('boot')!;
 const bootMsg = document.getElementById('bootMsg')!;
-// the title screen is on the panel while the game boots; a test's page asks for none with `?title=0`
-const title = titlePage(
-  boot,
-  document.getElementById('bootTitle') as HTMLImageElement,
-  new URLSearchParams(location.search).get('title') === '0',
-  matchMedia('(prefers-reduced-motion: reduce)').matches,
-  () => performance.now(),
-);
+// the boot panel is plain sky while the game boots and fades away to the title scene; a test's page asks for none with `?title=0`
+const titleOff = new URLSearchParams(location.search).get('title') === '0';
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const title = titlePage(boot, titleOff, reducedMotion);
 const stats = document.getElementById('stats')!;
+
+/**
+ * The title scene as it is drawn: the lettering's pieces and the groups the renderer draws them with (a matrix a piece, shared
+ * by its parts), the title's own clock, and the fit for the screen it is on. Made when the title hole is begun and let go of
+ * when a course is chosen, so nothing of it is kept for a game's life.
+ */
+interface TitleDraw {
+  scene: TitleScene;
+  pieces: readonly TitlePiece[];
+  word: Word;
+  fit: TitleFit;
+  groups: GameGroup[];
+  /** The piece each group is a part of, and each piece's matrix. */
+  owners: number[];
+  mats: Float32Array[];
+  frame: Frame;
+  pose: Pose;
+  /** Where its first group is among the renderer's moving groups. */
+  base: number;
+  /** Where the corners are on the screen, for the test API to read: written into, never made in a frame. */
+  box: number[];
+}
+
+/**
+ * How many title scenes the page has made and not yet seen collected, which the test API reports: a title is made when the
+ * title hole is begun and must be let go of when a course is chosen, and a test that chooses and goes back reads that none
+ * is left, which no other thing the page does shows (its meshes are off the JS heap).
+ */
+let titlesAlive = 0;
+const titlesGone = new FinalizationRegistry<number>(() => {
+  titlesAlive--;
+});
+
+/** The title hole: The Links' Water Carry, made alone, since the whole course is a good part of a second to make. */
+const titleHole = () => golfHole(LINKS_SPECS[1]);
+
+/** The lettering built and handed to the renderer as groups, to stand where `fit` puts it. */
+function titleDraw(standing: boolean, reduced: boolean, aspect: number): TitleDraw {
+  const letters = titleLetters(titleTrace);
+  const mats = letters.pieces.map(() => new Float32Array(16));
+  const groups: GameGroup[] = [];
+  const owners: number[] = [];
+  letters.pieces.forEach((piece, i) =>
+    // a band of a face that no triangle falls in is no group: the GPU warns of a draw of nothing, every frame
+    piece.parts
+      .filter((part) => part.mesh.indices.length > 0)
+      .forEach((part) => {
+        groups.push(group(part, mats[i], 1));
+        owners.push(i);
+      }),
+  );
+  const word = wordOf(letters.pieces);
+  const made: TitleDraw = {
+    scene: new TitleScene(letters.pieces, reduced, standing),
+    pieces: letters.pieces,
+    word,
+    fit: fitTitle(aspect, cardsTop(innerWidth, innerHeight), word),
+    groups,
+    owners,
+    mats,
+    frame: newFrame(),
+    pose: { shown: true, lift: 0, sx: 1, sy: 1 },
+    base: 0,
+    box: [0, 0, 0, 0],
+  };
+  titlesAlive++;
+  titlesGone.register(made, 0);
+  return made;
+}
 
 main().catch((err: unknown) => {
   showError(reasonOf(err));
@@ -138,6 +226,22 @@ async function main() {
   /** The course being played, and whether the start screen is up to choose one: it is, as the page opens. */
   let courseName = COURSES[0].name;
   let choosing = true;
+  /**
+   * The title scene while it is up: the title hole is the game's hole and its lettering is drawn over it. Null once a course
+   * is chosen, which lets go of every group of it, and on a page that leaves the title out. `wantTitle` says the next hole begun
+   * is the title's (the first, and the one the card's Courses button brings back), and `standNext` that its letters stand already.
+   */
+  let titled: TitleDraw | null = null;
+  let wantTitle = !titleOff;
+  let standNext = false;
+  /** The title scene as it stands, read through a function since it is made and let go inside the events the game tells. */
+  const titleNow = (): TitleDraw | null => titled;
+  /** The title scene's end: the letters let go, the page's own economy and its words back, and the next hole begun a course's. */
+  const endTitle = () => {
+    wantTitle = false;
+    titled = null;
+    document.documentElement.removeAttribute('data-title');
+  };
   // what the start screen says of each course, which is known without making a course that is made when it is chosen
   const summaries = COURSES.map((c) => ({ name: c.name, ...c.summary, golf: c.golf }));
   const hud = new Hud(
@@ -151,12 +255,15 @@ async function main() {
         if (!game || !course) return;
         // the course whose first hole is already set up behind the screen, untouched, is played as it stands; any
         // other, or one begun, starts a round afresh
+        // (a title hole is never one: its course is its own)
         const fresh =
           game.course === course.holes &&
           game.phase === 'play' &&
           game.hole === 0 &&
           game.strokes === 0 &&
           !game.card.length;
+        // the title is let go before the hole is begun, so that the new hole is built with none of it
+        endTitle();
         if (!fresh) game.playCourse(course.holes);
         courseName = name;
         choosing = false;
@@ -166,7 +273,14 @@ async function main() {
       courses() {
         choosing = true;
         setOverhead(false);
-        hud.showStart(summaries);
+        // the title scene again behind the cards, its letters already standing
+        if (!titleOff) {
+          wantTitle = true;
+          standNext = true;
+          game?.playCourse([titleHole()]);
+        }
+        const standing = titleNow();
+        hud.showStart(summaries, standing !== null && !standing.scene.landed);
       },
       // the overhead button: the view from above on or off, and so what a drag on the course is
       overhead(on) {
@@ -351,6 +465,12 @@ async function main() {
           chalk: game.kit.chalk,
           ball: itemById(game.slots.ball)?.look,
         });
+        // the title's lettering, in groups after the hole's own, when this is the hole the title is drawn over
+        const lettered = wantTitle ? titleDraw(standNext, reducedMotion, aspect) : null;
+        if (lettered) {
+          lettered.base = moving.length;
+          moving.push(...lettered.groups);
+        }
         // the hole's rough, round the painted green: a hole too big for a field of grass is refused here, by its size
         const field = fieldOf(layout, name, clearings(layout, name));
         const grass = grassOptionsOf(layout);
@@ -367,6 +487,9 @@ async function main() {
         windNow.x = blowing.x;
         windNow.y = blowing.y;
         windNow.speed = layout.golf ? blowing.speed : 0;
+        titled = lettered;
+        standNext = false;
+        if (lettered) document.documentElement.setAttribute('data-title', '');
         renderer.setStatic(fixed);
         renderer.setDynamic(moving);
         grown = renderer.setGrass(field, grass);
@@ -520,7 +643,11 @@ async function main() {
   });
   // ?seed=N makes chance the same from before the game is built, for a test that wants the same course every run
   const seed = query.get('seed');
-  const played = new Game(progress, events, seed !== null ? { random: seeded(+seed) } : {});
+  const played = new Game(progress, events, {
+    ...(seed !== null ? { random: seeded(+seed) } : {}),
+    // the title is drawn over a hole of its own, which nothing is played on
+    ...(wantTitle ? { course: [titleHole()] } : {}),
+  });
   game = played;
   director.use(played);
   // the camera's own tosses (which side of the flag it looks to): the same seed as the game's when a test gives one, so a
@@ -538,7 +665,17 @@ async function main() {
   // ?rung=N puts the picture on a rung of the quality ladder and holds it there; without it, the governor chooses
   const asked = query.get('rung');
   const governor = new Governor(asked !== null ? Math.max(0, Math.min(RUNGS.length - 1, +asked || 0)) : undefined);
-  renderer.economy = governor.economy;
+  /** Which economy the renderer is on, so it is set again when the title goes and not every frame. */
+  let economyOf: 'title' | 'play' | null = null;
+  /**
+   * The picture's economy: the governor's rung, and while the title is up no lower than the second, whose grass is thinned,
+   * since the title is seen from far and high and its frame must be well inside the budget with the lettering on it.
+   */
+  function applyEconomy() {
+    economyOf = titled ? 'title' : 'play';
+    renderer.economy = titled ? economyFor(RUNGS[Math.max(1, governor.rung)]) : governor.economy;
+  }
+  applyEconomy();
 
   renderer.setLights(new LightPool(LIGHT_CAPACITY));
   const cam = renderer.camera;
@@ -554,6 +691,9 @@ async function main() {
     canvas.width = width;
     canvas.height = height;
     cam.aspect = aspect = width / height;
+    // the cards stand under the word at most this tall, which the stylesheet reads and the word is fitted clear of
+    document.documentElement.style.setProperty('--cards-max', `${cardsMax(innerWidth, innerHeight)}px`);
+    if (titled) titled.fit = fitTitle(aspect, cardsTop(innerWidth, innerHeight), titled.word);
     // the words over the course are laid out for a screen of a size and shrunk to a smaller one
     document.documentElement.style.setProperty('--ui', String(uiScale(innerWidth, innerHeight)));
     // a screen of another shape stands the camera at another distance: the view is worked out again
@@ -833,6 +973,11 @@ async function main() {
     // squashed by its last knock, until it springs back
     const n = squash.along;
     squashInto(scene.ball, 0, squash.amount(played.t), n[0], n[1], n[2], KIND_RADIUS[BALL]);
+    // the title shows no ball on the tee: a matrix of no size, since a group drawn none at all is a warning from the GPU every frame
+    if (titled) {
+      scene.ball.fill(0);
+      scene.ball[15] = 1;
+    }
     // a ball gone into the cup is not drawn
     renderer.move(0, scene.ball, world.alive[ball] ? 1 : 0);
     drawn.squash = world.alive[ball] ? squashOf(scene.ball, 0, n[0], n[1], n[2]) : 0;
@@ -902,6 +1047,25 @@ async function main() {
     shine();
     glowTrail();
     flyFireworks();
+    if (titled) writeTitle(titled);
+  }
+
+  /**
+   * Where the camera stands for the title: behind the tee and looking up the hole, as the fit says for this screen. The page
+   * has put the rig's view there already; this takes it over, since the title is a picture of a hole and not a view of play.
+   */
+  function titleCamera(t: TitleDraw) {
+    const { layout, world, ball } = played;
+    placeCamera(cam, layout.tee, layout.cup, world.z[ball], t.fit);
+  }
+  /** The title's pieces posed by its own clock and placed in the word's plane for this frame's camera, none of them drawn that is not there yet. */
+  function writeTitle(t: TitleDraw) {
+    titleFrame(cam, t.fit, t.word, t.frame);
+    t.pieces.forEach((piece, i) => {
+      t.scene.pose(piece, t.pose);
+      poseMatrix(t.mats[i], t.frame, piece.pivot, t.pose);
+    });
+    t.groups.forEach((_, j) => renderer.move(t.base + j, t.mats[t.owners[j]], 1));
   }
 
   /** The fireworks that are due by game time, thrown over the cup: none when none is under way. */
@@ -996,6 +1160,12 @@ async function main() {
   }
   /** The glows of the frame: the gold's, and after them, in what room is left, the sparkles of sun on the water. */
   function shine() {
+    // the title is no hole to play: the gold's twinkle and the cup's flash are not there, so no white spot shows in it
+    if (titled) {
+      drawn.glints = drawn.sparkles = drawn.kicks = 0;
+      renderer.setEffects(glintQuad, 0);
+      return;
+    }
     let used = (drawn.glints = gold());
     const sparks = scene.sparkleInto(played.t, sparkQuads);
     let lit = 0;
@@ -1037,8 +1207,10 @@ async function main() {
   await renderer.ready;
   await grown;
   title.leave();
-  // the start screen over the first hole of the first course, until a course is chosen
-  hud.showStart(summaries);
+  // the start screen over the title scene, or over the first hole of the first course on a page that has none, until a course
+  // is chosen: held back until the letters have landed
+  const standing = titleNow();
+  hud.showStart(summaries, standing !== null && !standing.scene.landed);
   stats.hidden = false;
 
   // ---- each frame ----
@@ -1048,6 +1220,11 @@ async function main() {
   function simulate(dt: number) {
     if (stopped()) return;
     frames++;
+    // the title's own clock, which the cards come up at the end of
+    if (titled) {
+      titled.scene.advance(dt);
+      if (titled.scene.landed) hud.releaseStart();
+    }
     played.step(dt);
     // the step may have begun a hole that could not be drawn: the rest of the frame is of a hole no one sees
     if (stopped()) return;
@@ -1094,7 +1271,8 @@ async function main() {
     if (stopped()) return performance.now();
     // the far plane is further while the view from above is up, so the whole of a big hole is inside it, and as far as the
     // horizon while a hole is flown in to, so the world past it is drawn
-    cam.far = rig.farPlaneAt(played.t);
+    cam.far = titled ? CLIP.far : rig.farPlaneAt(played.t);
+    if (economyOf !== (titled ? 'title' : 'play')) applyEconomy();
     // the Retake button is up while pressing it would do something: the page tells the hud, which does not read the game
     hud.setRetake(
       retakeShown({
@@ -1106,6 +1284,7 @@ async function main() {
       }),
     );
     rig.place(cam, played.t);
+    if (titled) titleCamera(titled);
     cam.update();
     upload();
     const t = performance.now();
@@ -1133,7 +1312,7 @@ async function main() {
   }
   /** A frame `gap` after the last that took `work` to draw, given to the governor; the picture stepped down if it says so. */
   function judge(gap: number, work: number): number {
-    if (governor.frame(gap, work)) renderer.economy = governor.economy;
+    if (governor.frame(gap, work)) applyEconomy();
     return governor.rung;
   }
 
@@ -1259,6 +1438,48 @@ async function main() {
     }),
     course: () => courseName,
     choosing: () => choosing,
+    title() {
+      const t = titled;
+      if (!t) return { up: false, t: 0, landed: false, cards: false, fit: null, alive: titlesAlive, pieces: [] };
+      // the camera and the word's plane as they stand now, so a box is of the frame that would be drawn
+      titleCamera(t);
+      cam.update();
+      titleFrame(cam, t.fit, t.word, t.frame);
+      const r = canvas.getBoundingClientRect();
+      return {
+        up: true,
+        alive: titlesAlive,
+        t: t.scene.t,
+        landed: t.scene.landed,
+        cards: !document.getElementById('start')!.hidden,
+        fit: { share: t.fit.share, centre: [...t.fit.centre] as [number, number] },
+        pieces: t.pieces.map((piece) => {
+          const pose = t.scene.pose(piece, { shown: true, lift: 0, sx: 1, sy: 1 });
+          let box: [number, number, number, number] | null = null;
+          if (pose.shown) {
+            titleBoxOf(t.box, cam.viewProjection, t.frame, piece.pivot, piecesBounds(piece), pose);
+            // from -1 to 1 with y up to the page's own pixels
+            box = [
+              r.left + ((t.box[0] + 1) / 2) * r.width,
+              r.top + ((1 - t.box[3]) / 2) * r.height,
+              r.left + ((t.box[2] + 1) / 2) * r.width,
+              r.top + ((1 - t.box[1]) / 2) * r.height,
+            ];
+          }
+          return {
+            name: piece.name,
+            kind: piece.kind,
+            owner: piece.owner,
+            step: piece.step,
+            shown: pose.shown,
+            lift: pose.lift,
+            sx: pose.sx,
+            sy: pose.sy,
+            box,
+          };
+        }),
+      };
+    },
     chooseCourse: (name) => {
       const card = Array.from(document.querySelectorAll<HTMLButtonElement>('#start .course')).find((b) =>
         b.textContent.startsWith(name),

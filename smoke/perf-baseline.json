@@ -1,8 +1,8 @@
 {
   "bootMs": 306,
   "frameMs": 3.13,
-  "bundleKb": 188.1,
-  "imageKb": 116.1,
+  "bundleKb": 217.3,
+  "imageKb": 0,
   "beginMs": 49,
   "bigFrameMs": 3.43,
   "linksBeginMs": 175,

@@ -26,7 +26,7 @@ export default tseslint.config(
       '@typescript-eslint/prefer-nullish-coalescing': 'off',
     },
   },
-  { files: ['**/*.js'], ...tseslint.configs.disableTypeChecked },
+  { files: ['**/*.js', '**/*.mjs'], ...tseslint.configs.disableTypeChecked },
   {
     files: ['scripts/**', 'test/**', '*.config.ts', '*.config.js'],
     languageOptions: { globals: { ...globals.node } },

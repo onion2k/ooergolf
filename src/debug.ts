@@ -121,6 +121,33 @@ export interface Content {
   arrows: number;
 }
 
+/**
+ * The title scene as the last frame drew it: whether it is up, the title's own clock, whether the letters have landed and
+ * the course cards are in sight, and each piece's pose and the box it covers on the page (left, top, right and bottom in
+ * CSS pixels), which a hidden piece has none of. Nothing of the game: the title plays nothing.
+ */
+export interface TitleReport {
+  up: boolean;
+  t: number;
+  landed: boolean;
+  cards: boolean;
+  /** How many title scenes the page has made that have not yet been collected: one while it is up, and none once a course is chosen and the collector has run. */
+  alive: number;
+  /** The word's share of the screen's width and where its middle is, as the fit chose. */
+  fit: { share: number; centre: [number, number] } | null;
+  pieces: {
+    name: string;
+    kind: string;
+    owner: string;
+    step: number;
+    shown: boolean;
+    lift: number;
+    sx: number;
+    sy: number;
+    box: [number, number, number, number] | null;
+  }[];
+}
+
 export interface GameApi {
   readonly version: 1;
   /** Booted, and the frame loop running. */
@@ -183,6 +210,8 @@ export interface GameApi {
   playCourse(holes: HoleDef[]): void;
   /** A course chosen by its name, as a click on its card on the start screen chooses it. */
   chooseCourse(name: string): void;
+  /** The title scene as the last frame drew it: see `TitleReport`. It is not up on a page that left the title out (`?title=0`) or once a course is chosen. */
+  title(): TitleReport;
   /** A new round, as the card's button asks for. */
   newRound(): void;
   /** An item bought, as the shop's button does; whether it was. */
@@ -416,6 +445,7 @@ export interface DebugHost {
   course(): string;
   choosing(): boolean;
   chooseCourse(name: string): void;
+  title(): TitleReport;
   events: string[];
 }
 
@@ -542,6 +572,7 @@ export function createApi(host: DebugHost): GameApi {
     startHole: (index) => game.startAt(index),
     playCourse: (holes) => game.playCourse(holes),
     chooseCourse: (name) => host.chooseCourse(name),
+    title: () => host.title(),
     newRound: () => game.newRound(),
     buy: (id) => game.buy(id),
     equip: (id) => game.equip(id),

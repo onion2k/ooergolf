@@ -61,6 +61,15 @@ export {
   BANK_STONE,
 } from './models/lowpoly';
 export { kicker } from './models/kicker';
+export {
+  PIXEL,
+  shade,
+  titleLetters,
+  titleModel,
+  type Title,
+  type TitlePiece,
+  type TraceData,
+} from './models/lettering';
 export { flipper } from './models/obstacles';
 export { OCEAN, OCEAN_ON, RIPPLE, STREAM, stream, oceanFor, oceanScaleFor } from './models/obstacles';
 
@@ -122,4 +131,6 @@ export const BUDGET = {
   /** The woods past a golf hole, the most triangles a hole draws of them: the near woods (`beyond`), and the far woods (`farWoods`, of far trees). */
   'near woods': 200000,
   'far woods': 50000,
+  /** The title's lettering, outline, ball, flag and sparkles, all of them standing: drawn only on the title, and built from the traced picture. */
+  title: 30000,
 } as const;

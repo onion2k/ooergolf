@@ -994,23 +994,44 @@ minigolf: true }`, read through `oceanFor`) is the one switch: `waterBed` and `s
   fit across a phone's width, 35.9 at 360, which is why `CLUB_LEAST` in `smoke/panels.ts` is not a thumb), the shape
   button carries an arrow in the stylesheet (a mask, so `textContent` is still the words: up for straight, curving left
   for a draw and right for a fade), and the purse shows coins and gems on golf as on minigolf.
-- **The title screen** is the boot panel's (`#boot` in `index.html`, over every other panel, the start screen's `z-index: 2`
-  included, since that is up behind it while it fades out): `src/title.webp` (116 kB, made from the square `src/title_sq.png`, 1254 by 1254, by
-  `cwebp -q 80`, which is kept as the source) fades in over 0.6 s once it has decoded and out over 0.6 s once the game is ready,
-  never before the fade-in is over. `src/title.ts` is the timing (`TITLE`, `fades`, `leaveDelay`, page time and none of the game's),
-  `src/titlepage.ts` is the page's side of it, handed the panel, the picture, the clock and the player's word on motion; the fade
-  times are the panel's `--title-in` and `--title-out`, so the stylesheet holds no figure. Its width is always the screen's, so the logo is never cut at its sides: a screen
-  wider than tall is `cover`ed (`object-position: 50% 0%`, the title at the top, the foot of the picture lost) and a tall one `contain`s it, whole,
-  with a bar above (`#2c9cf5`) and below (`#568439`), the colours of the picture's own top and bottom edges, as the element's background so they
-  fade with it; `smoke/title.spec.ts` holds the logo's box (`LOGO`, shares of the picture, which a new picture must restate) on screen on eight
-  sizes from a phone on its side to an ultrawide. A picture that is late or missing is not waited for and is not shown over a game that is up; a boot that fails says
-  why under it (`#bootMsg` is empty otherwise: there are no status words; `showError` calls the title's `hold()` so an exit still on its
-  way cannot hide the panel it has come back to say something on); under reduced motion there is no fade. The hold is
-  after `bootMs` is read, and the `perf` boot figure is read with it left out, so it holds the game's boot and not the title's
-  (the title is measured at about 12 ms of a boot of 290 on a loaded machine). **`?title=0` leaves the title out**, which
-  `start()` in `smoke/game.ts` does for every test but one that asks `{ title: true }`; `smoke/title.spec.ts` is that one, and
-  holds its two pictures (`title-desk`, `title-phone`). `imageKb` in `perf` holds the pictures a page fetches, which the scripts'
-  figure never counted. The showcase page keeps its own status words.
+- **The title screen is drawn by the game** (10 October 2026; plan `~/.claude/plans/ooergolf-3d-title.md`, whose notes say what was
+  tried and chosen; `LOOK.md` says why). There is no picture: the boot panel (`#boot` in `index.html`, over every other panel) is
+  plain sky, the title's own blue gradient in the stylesheet, from the first paint, and once the game is ready it fades away
+  (`TITLE.fadeOut` 600 ms, the panel's `--title-out`; `src/title.ts` is that timing and `src/titlepage.ts` the page's side of it,
+  handed the panel, `?title=0` and the player's word on motion) to **a hole of The Links, Water Carry, with "Of Course!" in 3D
+  letters dropping in over it**. The start screen is up behind the panel, held back (`Hud.showStart(..., hold)`) until the last
+  letter has landed, and then the cards come up under the word. The lettering is **traced from the old picture**:
+  `scripts/trace-title.mjs` (run by hand when the picture changes, `node scripts/trace-title.mjs`, from `src/title_sq.png`, which
+  stays as the art the look is held to and is never fetched) reads the cream faces, tan undersides, dark green outline, ball, flag,
+  pole and sparkles off it by colour and walks their contours (marching squares, Douglas-Peucker, one Chaikin pass) into
+  `src/titletrace.json` (54 kB, 17 kB gzipped, committed). `src/models/lettering.ts` builds the title from that data with earcut
+  (`titleLetters`: the pieces, each about its own pivot; `titleModel` is the whole for the showcase's `?model=title`): each letter
+  a face of 12 smooth bands in the picture's colours (through a per-channel gain, since the renderer has no unlit material) with
+  a bevel on a tan underside, the outline cut into a rigid piece for each letter and grown under its neighbours so no gap opens
+  when pieces move apart, a dimpled ball in the O's counter, a two-red flag and pole, and the sparkles; 26,483 triangles of
+  `BUDGET.title`'s 30,000, drawn only on the title. A part with no triangles is no group (the GPU warns of a draw of nothing each
+  frame), which a golf hole's empty rail needed too (`scene.ts`), held by `test/cup-drawn.test.ts` and by `smoke/title.spec.ts`,
+  which holds the title's console clean. `src/titlescene.ts` is the arithmetic with no page: `fitTitle(aspect, cardsTop, word)`
+  fits the word in one place above the cards for the screen's shape (a desk, or a phone with the cards at `CARDS.tall`), the
+  camera (`VIEW`: 12 yards behind the tee, looking up the hole, the word 4 units from it), `letterPose(piece, t, reduced, out)`
+  (letters one by one from the left `DROP.apart` 0.09 s apart, a fall of 0.3 s and a squash that springs back, the outlines rigid,
+  a pure function of the title's own clock so a picture is the same every run) and `TitleScene`, the clock, which begins
+  `DROP.lead` before the first letter and stops where the last has landed, about 1.6 s. **The flow** is in `main.ts`: the title
+  hole is the game's hole until a course is chosen (`wantTitle`), its lettering in groups after the hole's own, posed each frame
+  in the camera's plane (`writeTitle`) and the renderer's economy held no lower than the second rung while it is up (its grass is
+  thinned; the frame is about 2.1 ms); choosing a course lets the whole scene go before the course's first hole is built
+  (`endTitle`, held by `titlesAlive`, a `FinalizationRegistry` count, which the leaks test reads), and the card's Courses
+  button brings it back with the letters standing. Under reduced motion the letters are standing and the panel does not fade.
+  A boot that fails puts the panel up over everything with its words (`showError` calls `hold()`). **`?title=0` leaves the title
+  out** (the start screen over The Meadow, as before), which `start()` in `smoke/game.ts` does for every test but one that asks
+  `{ title: true }`; `smoke/title.spec.ts` is that one, holds the word inside the screen and clear of the cards on eight sizes, a
+  course chosen mid-drop, the console clean and its pictures (`title-desk`, `title-phone`, `title-drop`, `title-lettering`).
+  **The test API's `title()`** says whether it is up, its clock, whether the letters have landed and the cards are in sight, how
+  many title scenes are not yet collected, the fit, and each piece's pose and the box it covers on the page. The fuzzer drops the
+  lettering as the page does and chooses a course while it drops (`titleProblems`, `checked.title`). Figures (10 October 2026):
+  pictures a page fetches 0 kB (was 116 kB); the download 217 kB gzipped (188 kB before: the trace data, earcut and the lettering in); a title frame 2.06 ms against 2.5 for the same hole's tee on main; the boot the player sees 448 ms
+  against 285, and the `perf` boot figure, which stops at the frame loop, unchanged. Not done: the title is not held to a
+  look metric; the traced shapes are only as good as the picture (retrace it with the tool).
 - `src/noise.ts` makes ground from noise: `gradientNoise(seed)` is Perlin's,
   and `noiseGround(layout, { seed, feel, steepness })` a hole's heights from
   it, the same for a seed every time, never below nought, with optional

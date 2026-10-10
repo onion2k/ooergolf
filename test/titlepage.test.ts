@@ -1,73 +1,46 @@
 /** The title screen on its panel: when the panel is let go, and that a page stopped on it stays stopped. Fakes for the DOM, so no page. */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { TITLE } from '../src/title';
+import { describe, expect, it } from 'vitest';
 import { titlePage } from '../src/titlepage';
 
-/** A panel and a picture as far as the title reads them, and the picture's decode in the test's hands. */
+/** A panel as far as the title reads it: its classes and the properties written to its style. */
 function fakes() {
   const classes = new Set<string>();
+  const style = new Map<string, string>();
   const boot = {
     classList: { add: (c: string) => classes.add(c), remove: (c: string) => classes.delete(c) },
-    style: { setProperty: () => {} },
+    style: { setProperty: (k: string, v: string) => style.set(k, v) },
   } as unknown as HTMLElement;
-  let settle = (_ok: boolean) => {};
-  const img = {
-    hidden: false,
-    decode: () => new Promise<void>((res, rej) => (settle = (ok) => (ok ? res() : rej(new Error('no picture'))))),
-  } as unknown as HTMLImageElement;
-  return { boot, img, classes, decoded: (ok = true) => settle(ok) };
+  return { boot, classes, style };
 }
 
 describe('the title page', () => {
-  beforeEach(() => vi.useFakeTimers());
-  afterEach(() => vi.useRealTimers());
-
-  it('lets the panel go only once the fade-in is over, when the game is ready before that', async () => {
+  it('lets the panel go when the game is ready, over the fade the stylesheet is told', () => {
     const f = fakes();
-    let t = 1000;
-    const page = titlePage(f.boot, f.img, false, false, () => t);
-    f.decoded();
-    await vi.advanceTimersByTimeAsync(0);
-    expect(f.classes.has('shown')).toBe(true);
-    t = 1200;
-    page.leave();
-    expect(f.classes.has('gone'), 'not yet').toBe(false);
-    await vi.advanceTimersByTimeAsync(TITLE.fadeIn - 200 - 1);
-    expect(f.classes.has('gone'), 'still not, a millisecond short').toBe(false);
-    await vi.advanceTimersByTimeAsync(1);
-    expect(f.classes.has('gone')).toBe(true);
-  });
-
-  it('does not wait for a picture that has not decoded, and never shows it after', async () => {
-    const f = fakes();
-    const page = titlePage(f.boot, f.img, false, false, () => 0);
-    page.leave();
-    expect(f.classes.has('gone')).toBe(true);
-    f.decoded();
-    await vi.advanceTimersByTimeAsync(0);
-    expect(f.classes.has('shown')).toBe(false);
-  });
-
-  it('leaves the panel plain, and goes at once, when the picture cannot be had', async () => {
-    const f = fakes();
-    const page = titlePage(f.boot, f.img, false, false, () => 0);
-    f.decoded(false);
-    await vi.advanceTimersByTimeAsync(0);
-    expect(f.img.hidden).toBe(true);
+    const page = titlePage(f.boot, false, false);
+    expect(f.style.get('--title-out')).toBe('600ms');
+    expect(f.classes.has('gone'), 'not before the game is ready').toBe(false);
     page.leave();
     expect(f.classes.has('gone')).toBe(true);
   });
 
-  it('never lets the panel go once the page has stopped on it, even with its exit already on its way', async () => {
+  it('has no fade under reduced motion, nor for a page that skips the title', () => {
+    expect(
+      (() => {
+        const f = fakes();
+        titlePage(f.boot, false, true);
+        return f.style.get('--title-out');
+      })(),
+    ).toBe('0ms');
+    const g = fakes();
+    titlePage(g.boot, true, false);
+    expect(g.style.get('--title-out')).toBe('0ms');
+  });
+
+  it('never lets the panel go once the page has stopped on it, even if its exit is asked for after', () => {
     const f = fakes();
-    let t = 0;
-    const page = titlePage(f.boot, f.img, false, false, () => t);
-    f.decoded();
-    await vi.advanceTimersByTimeAsync(0);
-    t = 100;
-    page.leave();
+    const page = titlePage(f.boot, false, false);
     page.hold();
-    await vi.advanceTimersByTimeAsync(TITLE.fadeIn * 2);
+    page.leave();
     expect(f.classes.has('gone')).toBe(false);
   });
 });

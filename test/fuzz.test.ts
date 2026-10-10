@@ -67,6 +67,11 @@ describe('the fuzzer', () => {
     // the framing rule was asked of the camera, on golf and on minigolf, a good many times: a check that never ran passes in silence
     expect(one.framed + two.framed, 'times the framing was checked').toBeGreaterThan(300);
     expect(golf.framed, 'times it was checked on level golf').toBeGreaterThan(30);
+    // the title scene's rules were asked of the letters' drop before each course was chosen, and a course was chosen with the letters
+    // still in the air: a check that never ran passes in silence
+    const titled = sum(sum(sum(one.checked, two.checked), golf.checked), island.checked);
+    expect(titled.title, 'frames of the title held to its rules').toBeGreaterThan(30);
+    expect(titled['course chosen mid-drop'], 'courses chosen while the letters dropped').toBeGreaterThan(0);
     expect(one.failure, JSON.stringify(one.failure)).toBe(null);
     expect(two.failure, JSON.stringify(two.failure)).toBe(null);
     expect(golf.failure, JSON.stringify(golf.failure)).toBe(null);

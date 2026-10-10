@@ -19,6 +19,9 @@
  * --seed N` does, and prints what was done before it went wrong.
  */
 import { Camera } from 'artshape-render/gpu/camera';
+import { titleLetters, type TitlePiece } from '../src/models/lettering';
+import titleTrace from '../src/titletrace.json';
+import { TitleScene } from '../src/titlescene';
 import { aimView, reachOf, safeBox } from '../src/aimview';
 import { AIM_DEAD, AIM_TURN, Director } from '../src/director';
 import { heightAt, powerFor, strikeSpeed } from '../src/arena';
@@ -44,6 +47,7 @@ import {
   bankProblems,
   previewProblems,
   rollProblems,
+  titleProblems,
   viewProblems,
   TURN_TIME,
 } from '../src/invariants';
@@ -151,6 +155,10 @@ export interface FuzzResult {
   /** How many times the framing rule was asked of the camera, which a test holds above nothing: a check that never ran passes in silence. */
   framed: number;
 }
+
+/** The title's lettering, built the first time a run reaches a start screen and no oftener: the monkey drops it as the page does. */
+let lettering: readonly TitlePiece[] | null = null;
+const letters = (): readonly TitlePiece[] => (lettering ??= titleLetters(titleTrace).pieces);
 
 /**
  * Play `frames` frames of the game at random from `seed`. Left to itself it starts on the first course and comes to
@@ -307,6 +315,8 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
     const between = (a: number, b: number) => a + random() * (b - a);
     /** The chance of reading a green, apart from the monkey's own. */
     const looking = seeded(seed * 13 + 5);
+    /** How long the title's letters have been dropping when a course is chosen, apart from the monkey's own chance. */
+    const letting = seeded(seed * 67 + 13);
     const glance = (a: number, b: number) => a + looking() * (b - a);
     /** A shape and a spin chosen for the next shot, on a golf hole, as a player's buttons do; the game keeps them within -1 to 1. */
     const choose = () => {
@@ -609,6 +619,18 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
           const atStart = game.hole === 0 && game.strokes === 0 && game.card.length === 0;
           if (game.phase !== 'over' && !atStart) return;
           const chosen = COURSES[Math.floor(random() * COURSES.length)].holes;
+          // the title scene was up behind the screen, its letters dropping for as long as the monkey looked at it, and the
+          // course is chosen at any moment of that, on a chance of its own so that no other run changes; from the card's
+          // Courses button its letters are standing
+          const pieces = letters();
+          const scene = new TitleScene(pieces, letting() < 0.1, !atStart);
+          const watched = Math.floor(letting() * 150);
+          for (let n = 0; n <= watched; n++) {
+            told.push(...titleProblems(scene, pieces));
+            count(checked, 'title');
+            scene.advance(1 / 60);
+          }
+          if (!scene.landed) count(checked, 'course chosen mid-drop');
           game.playCourse(course ?? chosen);
           did('choose a course');
         },

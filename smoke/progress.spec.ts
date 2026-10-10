@@ -255,8 +255,13 @@ test('the shop is opened, each aisle pressed by a real pointer, one thing bought
   expect(problems).toEqual([]);
 });
 
-/** The boot screen's colour, `--boot` in `index.html`: what a screen the page has stopped on is all of, but for its words. */
-const BOOT = [0xbf, 0xe3, 0xff];
+/**
+ * The boot screen's sky, from the title's own blue at the top (`#2c9cf5`) to `--boot` in `index.html` at the foot, a straight
+ * gradient down the screen: what a screen the page has stopped on is all of, but for its words.
+ */
+const SKY = { top: [0x2c, 0x9c, 0xf5], foot: [0xbf, 0xe3, 0xff] };
+/** The sky's colour `down` of the way from the top of the screen (0) to the foot (1). */
+const skyAt = (down: number) => SKY.top.map((c, k) => c + (SKY.foot[k] - c) * down);
 
 for (const [label, viewport, touch] of [
   ['a desk', { width: 1280, height: 800 }, false],
@@ -319,10 +324,11 @@ for (const [label, viewport, touch] of [
           looked++;
           const at = (Math.round(y * scale) * shot.width + Math.round(x * scale)) * 4;
           const rgb = [shot.data[at], shot.data[at + 1], shot.data[at + 2]];
-          if (rgb.some((c, k) => Math.abs(c - BOOT[k]) > 2)) off.push(`(${x}, ${y}) is rgb(${rgb.join(', ')})`);
+          const sky = skyAt(y / viewport.height);
+          if (rgb.some((c, k) => Math.abs(c - sky[k]) > 3)) off.push(`(${x}, ${y}) is rgb(${rgb.join(', ')})`);
         }
-      // a check that looked at nothing would pass in silence: the grid is 13 by 17, and only the words' own box is left out
-      expect(looked, 'most of the screen was looked at').toBeGreaterThan(190);
+      // a check that looked at nothing would pass in silence: the grid is 13 by 17, and only the words' own box, a pill now, is left out
+      expect(looked, 'most of the screen was looked at').toBeGreaterThan(170);
       expect(off, 'every part of the screen but its words is the boot screen: no hole, panel or shop left up').toEqual(
         [],
       );
@@ -2346,4 +2352,29 @@ test.describe('the flag button', () => {
       });
     });
   }
+});
+
+/**
+ * The first thing a player does: a course chosen from the start screen over the title scene, with a real pointer on the
+ * card, once the letters have landed and the cards have sprung in. The title is let go, the course's first hole begins, and
+ * a stroke can be taken with a drag as on any hole.
+ */
+test('a course is chosen from over the title with a real pointer, and played', async ({ page }) => {
+  const problems = watch(page);
+  await start(page, { title: true, paused: true, seed: 1, screen: true });
+  await play(page, 120, 'the letters dropping');
+  expect(await page.evaluate(() => window.game!.title().landed)).toBe(true);
+  await expect(page.locator('#start')).toBeVisible();
+  await landed(page);
+  await page.locator('#courses .course', { hasText: 'The Pinball Shed' }).click();
+  const chosen = await page.evaluate(() => window.game!.state());
+  expect([chosen.course, chosen.hole, chosen.choosing]).toEqual(['The Pinball Shed', 0, false]);
+  expect((await page.evaluate(() => window.game!.title())).up, 'the title is let go').toBe(false);
+  await expect(page.locator('#start')).toBeHidden();
+  await expect(page.locator('#strokes')).toBeVisible();
+  await play(page, 60, 'the first hole');
+  await putt(page, 0, 80);
+  await untilReady(page, 'after the first stroke');
+  expect((await page.evaluate(() => window.game!.state())).strokes, 'a stroke taken by a drag').toBe(1);
+  expect(problems).toEqual([]);
 });

@@ -438,7 +438,7 @@ before it can ripple. The turntable was dropped.
 
 ## After the stages: the title's look
 
-On 8 October 2026 the user asked for the game to look more like its title picture (`src/title_sq.png`): low-poly trees,
+On 8 October 2026 the user asked for the game to look more like its title picture (`src/title_sq.png`, which the lettering of the title is traced from, below): low-poly trees,
 conifers, rocks and bushes, better light, stones along the water, hills, a lake and clouds seen from a low view, a texture
 on the lawn, and shadows the same everywhere. A sheet of candidates was put to the user beside the picture (chunky or fine
 facets, today's palette or the title's, today's light or a warmer one, stripes or a checker), and the picks were built:
@@ -499,6 +499,35 @@ zones' distance is worked out in a band only), and a frame at the Water Carry te
 tones' light is the mock's, 62 degrees of azimuth off the sun, and a nearer or bigger lake past a hole is a call; the look metrics'
 framing and cool shade floors fail with the lighter rough and the warmer shade, and are set again, with the user's yes, in the
 plan's last part.
+
+## After the stages: the title is drawn by the game
+
+On 10 October 2026, with the game drawn to look like the title picture, the user asked for the picture to go and the engine
+to draw the title instead: smaller, fitting any screen exactly, and "Of Course!" in 3D letters that animate in. The title is
+no longer a file. The page opens on plain sky, the title's own blue, and fades to a hole of The Links (Water Carry, chosen
+for its water with a ring of stones, its green and bunkers, and its woods and hills, which are the picture's own parts) seen
+from a low camera behind the tee, with the letters dropping in over it one by one from the left, each landing with a squash
+that springs back, all down by about 1.6 s; the course cards come up under them. What was tried and chosen, with the
+pictures (kept in `~/.claude/plans/ooergolf-3d-title-evidence/`):
+
+- **The letters are traced from the picture's own** (`scripts/trace-title.mjs` into `src/titletrace.json`, built by
+  `models/lettering.ts`). Letters built from strokes were tried over sixteen rounds and judged not good enough ("the first
+  thing the player will see, so it needs to be perfect"), a font's outlines were not tried, and the user chose "Trace it".
+  The faces are cream in twelve smooth bands of the picture's colours, with a rounded bevel, over a warmer tan underside and
+  a dark green outline whose edge is a little lighter; the ball in the O is dimpled with soft pits, shaded darker at its
+  lower left; the flag is two reds either side of its fold. The scene's light would make the picture's cream dim and grey, so
+  each material is the picture's colour through a gain found by eye against the scene (the renderer has no unlit material).
+- **The drop**: one by one, 0.09 s apart, a fall of 0.3 s, a squash of 0.30 and a spring back; each letter drops with its own
+  piece of the outline, which is rigid, so a face stays inside its outline mid-squash and no seam opens between pieces. Under
+  reduced motion the letters are standing and nothing fades.
+- **The frame**: the word is fitted to the screen's shape above the cards (one place: a desk, a phone, and the eight sizes
+  `smoke/title.spec.ts` holds), shrunk on a desk and on a half-height panel on a phone; the course's glints are hidden under it.
+- **What it costs**: 26,483 triangles drawn only on the title; a title frame 2.06 ms against 2.5 for the same hole's tee view
+  on main; 17 kB of trace data gzipped with earcut and the lettering, 29 kB more to download and 116 kB less in pictures (the
+  page now fetches none); the boot the player sees 448 ms against 285 (the hole is begun at boot), the gate's boot unchanged.
+
+What is left open: the traced shapes are as good as the picture is, and the colours of the outline and the faces were set by eye
+against the picture, a matter of taste for the user to judge in play.
 
 ## Across every stage
 

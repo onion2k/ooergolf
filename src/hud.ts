@@ -170,6 +170,8 @@ export class Hud {
   /** What the shop was last told of the save, so a tab pressed can show its rows without waiting for the game to tell again. */
   private saved: Purse | null = null;
   private readonly start = document.getElementById('start')!;
+  /** Whether the start screen is up but held back, out of sight, until the title's letters have landed: everything else is away as if it showed. */
+  private held = false;
   private readonly courseList = document.getElementById('courses')!;
   private readonly help = document.getElementById('help')!;
   private readonly modes = document.getElementById('viewMode')!;
@@ -386,7 +388,7 @@ export class Hud {
     );
     this.active = null;
     this.setClub(active);
-    this.bag.hidden = !this.start.hidden;
+    this.bag.hidden = this.startUp;
   }
 
   /**
@@ -402,7 +404,7 @@ export class Hud {
     this.spinButton.hidden = !spin;
     this.shaping.hidden = !shown;
     this.bagInfo.textContent = shown ? 'Putter' : '';
-    this.bag.hidden = !shown || !this.start.hidden;
+    this.bag.hidden = !shown || this.startUp;
   }
 
   /** The club in hand: its pill stands up, and what it is and how far it carries is said above them. */
@@ -495,7 +497,7 @@ export class Hud {
     this.mapBase = new ImageData(picture.pixels as Uint8ClampedArray<ArrayBuffer>, picture.width, picture.height);
     this.mapDrawn.fill(NaN);
     this.mapContext.putImageData(this.mapBase, 0, 0);
-    this.mapPanel.hidden = !this.start.hidden;
+    this.mapPanel.hidden = this.startUp;
   }
 
   private get mapContext(): CanvasRenderingContext2D {
@@ -609,7 +611,7 @@ export class Hud {
    * between them first. A kind with no course has no heading. Everything else over
    * the course is put away while it is up; a click on a card goes back through `choose`.
    */
-  showStart(courses: readonly { name: string; holes: number; par: number; golf?: boolean }[]) {
+  showStart(courses: readonly { name: string; holes: number; par: number; golf?: boolean }[], wait = false) {
     const cardOf = (c: { name: string; holes: number; par: number }) => {
       const card = document.createElement('button');
       card.className = 'course';
@@ -652,12 +654,27 @@ export class Hud {
       this.toast,
     ])
       el.hidden = true;
-    this.start.hidden = false;
+    // held back, it is still the screen that is up, which every other panel is put away for, and shows when it is let go
+    this.held = wait;
+    this.start.hidden = wait;
     this.setDrawer(false);
+  }
+
+  /** Whether the start screen is up, in sight or held back for the title's letters. */
+  private get startUp(): boolean {
+    return this.held || !this.start.hidden;
+  }
+
+  /** A start screen held back is shown, and springs in as a panel does. */
+  releaseStart() {
+    if (!this.held) return;
+    this.held = false;
+    this.start.hidden = false;
   }
 
   /** The start screen put away, and the course's words shown. */
   hideStart() {
+    this.held = false;
     this.start.hidden = true;
     this.show();
   }

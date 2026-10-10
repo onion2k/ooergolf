@@ -1241,7 +1241,8 @@
     z-index: 4;
     display: grid;
     place-items: center;
-    background: var(--boot);
+    /* plain sky, the title scene's own blue to its paler horizon, so that the scene it fades away to is the same sky and nothing flashes or is fetched */
+    background: linear-gradient(#2c9cf5, var(--boot));
     transition: opacity var(--title-out, 0.4s);
   }
   #boot.gone {
@@ -1253,60 +1254,35 @@
       opacity var(--title-out, 0.4s),
       visibility 0s linear var(--title-out, 0.4s);
   }
-  /*
-   * The picture's width is always the screen's, so the logo is never cut at its sides: a wide screen is covered, and
-   * shows the top of the picture where the title is, and a tall one shows the whole of it with a bar above and below,
-   * in the colours of its own top and bottom edges. The bars are the element's own background, so they fade with it.
-   */
-  #bootTitle {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    object-position: 50% 0%;
-    background: linear-gradient(#2c9cf5 50%, #568439 50%);
-    opacity: 0;
-  }
-  @media (max-aspect-ratio: 1/1) {
-    #bootTitle {
-      object-fit: contain;
-      object-position: 50% 50%;
-    }
-  }
-  #bootTitle[hidden] {
-    display: none;
-  }
-  #boot.shown #bootTitle {
-    animation: bootTitleIn var(--title-in, 0.6s) ease-out forwards;
-  }
-  @keyframes bootTitleIn {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
-  }
-  /* only a boot that has failed has anything to say */
+  /* only a boot that has failed has anything to say, on a plate of the panel's pale colour so the words read over the sky */
   #boot p {
     /* a line to each thing the page says when it cannot go on: which hole, why, and what to do; kept off the screen's edges */
     white-space: pre-line;
     max-width: calc(100% - 32px);
-    text-align: center;
-    font-weight: 700;
-    color: var(--ink);
-  }
-  /* under the title where it is up, on a plate of the panel's colour so the words read over the picture; alone, where it is not, as the panel always said them */
-  #bootTitle:not([hidden]) ~ p {
-    position: absolute;
-    bottom: 24px;
     margin: 0;
     padding: 8px 14px;
     border-radius: 12px;
     background: var(--boot);
+    text-align: center;
+    font-weight: 700;
+    color: var(--ink);
   }
   #boot p:empty {
+    display: none;
+  }
+  /*
+   * The start screen over the title scene (the page sets data-title on the root while it is up): the cards stand on the
+   * foot of the screen and are no taller than the share the page says (--cards-max, in pixels, from the same figure that
+   * keeps the word clear of them), the heading left to the word above them, and the panel scrolls where a short screen
+   * has no more room. Their lengths are divided by --ui, which zoom has already multiplied.
+   */
+  html[data-title] #start {
+    top: auto;
+    bottom: calc(14px / var(--ui, 1));
+    translate: -50% 0;
+    max-height: calc(var(--cards-max, 56vh) / var(--ui, 1));
+  }
+  html[data-title] #start h1 {
     display: none;
   }
 
@@ -1747,7 +1723,6 @@
 </div>
 <div class="panel" id="help" hidden>drag back and let go to putt</div>
 <div id="boot">
-  <img id="bootTitle" src="/src/title.webp" alt="Of Course!" decoding="async" />
   <p id="bootMsg"></p>
 </div>
 <script type="module" src="/src/main.ts"></script>

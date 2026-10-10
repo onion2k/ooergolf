@@ -15,6 +15,10 @@ import { zonesOf } from '../src/zones';
 import { ITEMS } from '../src/items';
 import { COURSES } from '../src/course';
 import { golfHole, laneOf } from '../src/golf';
+import { LINKS_SPECS } from '../src/links';
+import { titleLetters } from '../src/models/lettering';
+import titleTrace from '../src/titletrace.json';
+import { TitleScene } from '../src/titlescene';
 import { Previewer } from '../src/preview';
 import { Progress, memoryStore } from '../src/progress';
 import { TRAIL, Trail } from '../src/trail';
@@ -165,6 +169,34 @@ describe('what must stay bounded', () => {
     }
     expect(ref!.deref(), 'collected').toBeUndefined();
   });
+
+  it('lets the title scene go when a course is chosen: its hole, its lettering and its clock are collectable, however often the title comes back', async () => {
+    // the title is a hole of The Links begun for it, and its lettering and clock beside it; a course chosen drops the lot, and
+    // the card's Courses button makes them again, so a player who chooses and goes back kept nothing of the title before
+    setFlagsFromString('--expose-gc');
+    const gc = runInNewContext('gc') as () => void;
+    const { game } = newGame(1);
+    const refs: WeakRef<object>[] = [];
+    for (let round = 0; round < 3; round++) {
+      (() => {
+        const hole = golfHole(LINKS_SPECS[1]);
+        const letters = titleLetters(titleTrace);
+        const scene = new TitleScene(letters.pieces, false);
+        game.playCourse([hole]);
+        expect(game.def.name, 'the title hole is begun').toBe('Water Carry');
+        zonesOf(game.layout);
+        pondOf(game.layout);
+        refs.push(new WeakRef(hole), new WeakRef(game.layout), new WeakRef(letters), new WeakRef(scene));
+        // a course chosen: the game goes on to its own, and the page lets the title go
+        game.playCourse(COURSES[0].holes);
+      })();
+    }
+    for (let i = 0; i < 10 && refs.some((r) => r.deref()); i++) {
+      await new Promise((r) => setTimeout(r, 0));
+      gc();
+    }
+    expect(refs.filter((r) => r.deref()).length, `of ${refs.length} things the title made, none is still held`).toBe(0);
+  }, 30_000);
 
   it('keeps the ground weights it reuses to a few hundred, however many places it is asked about', () => {
     // `weightsOf` in arena.ts is a table of the cubes a corner of the ground's mesh asks again and again; a caller whose places

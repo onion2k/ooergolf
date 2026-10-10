@@ -57,7 +57,8 @@ import {
   type Model,
   type Part,
 } from '../src/models';
-import { flipper } from '../src/models';
+import { flipper, titleModel } from '../src/models';
+import titleTrace from '../src/titletrace.json';
 import { BALL, KIND_RADIUS, WATER_LEVEL } from '../src/arena';
 import { TREE, insideCanopy, treeCone } from '../src/trees';
 import { SCALE } from '../src/scenery';
@@ -1331,6 +1332,7 @@ describe('every model keeps to its triangle budget', () => {
       ['fern', fern(3, { seed: 9 })],
       ['cloud', cloud({ seed: 9 })],
       ['bank stone', bankStone(2)],
+      ['title', titleModel(titleTrace)],
     ];
     for (const [name, m] of at) expect(triangles(m), name).toBeLessThanOrEqual(BUDGET[name]);
   });
