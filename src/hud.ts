@@ -15,7 +15,7 @@
  */
 import { AISLES, type Aisle, type Item, type KitSlots } from './items';
 import type { Mode } from './gesture';
-import { windText } from './readout';
+import { helpText, windText, type Held } from './readout';
 import { swatchOf } from './swatch';
 import { SCORE_KINDS, againstPar, scoreKind, scoreName } from './score';
 
@@ -121,13 +121,6 @@ export interface Purse {
   kit: KitSlots;
 }
 
-/** What the help says a drag does, in each mode: a golf hole's is a swing, and a minigolf hole's a putt. */
-const HELP = {
-  aim: 'drag back and let go to putt',
-  swing: 'drag back and let go to swing',
-  overhead: 'drag to look round the hole',
-} as const;
-
 export interface HoleInfo {
   index: number;
   count: number;
@@ -219,6 +212,8 @@ export class Hud {
   /** The clubs the picker has, none on a hole of minigolf; and what a drag does, which the help says. */
   private bagList: readonly BagInfo[] = [];
   private mode: Mode = 'aim';
+  /** How the drag now held was begun, or none: what the help says how to take back. */
+  private gripped: Held = null;
   /** The shape and the spin the buttons show, and the turn the wind's arrow was last written at, so each is written only when it changes. */
   private shapeShown = 0;
   private spinShown = 0;
@@ -356,7 +351,32 @@ export class Hud {
     this.mode = on ? 'overhead' : 'aim';
     this.overheadButton.setAttribute('aria-pressed', String(on));
     this.flagButton.disabled = on;
-    this.help.textContent = on ? HELP.overhead : this.bagList.length ? HELP.swing : HELP.aim;
+    this.writeHelp();
+  }
+
+  /**
+   * A drag held, and how it was begun, or none: the help says how to take it back while one is (`helpText`), and `data-aiming`
+   * on it is what the stylesheet lifts it by, so that it is seen on a phone, which has no help the rest of the time. Written only when
+   * it changes, so the page may say it every frame; overhead says nothing of it, since a drag from there is a pan.
+   */
+  setAiming(gripped: Held) {
+    if (gripped === this.gripped) return;
+    this.gripped = gripped;
+    this.writeHelp();
+  }
+
+  /** The help as it is now: what a drag does, or, while one is held, how to take it back. */
+  private writeHelp() {
+    const overhead = this.mode === 'overhead';
+    this.help.textContent = helpText({ overhead, swing: this.bagList.length > 0, held: this.gripped });
+    if (this.gripped && !overhead) this.help.dataset.aiming = this.gripped;
+    else delete this.help.dataset.aiming;
+  }
+
+  /** The help as drawn: its words and whether it is the one that says how to take a drag back, which the test API reads. */
+  helpDrawn(): { text: string; aiming: Held } {
+    const a = this.help.dataset.aiming;
+    return { text: this.help.textContent, aiming: a === 'touch' || a === 'pointer' ? a : null };
   }
 
   /**

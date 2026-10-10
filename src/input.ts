@@ -52,6 +52,16 @@ export class Input {
     return this.gesture.mode;
   }
 
+  /** Whether no pointer is down: the next one to land is the first of a drag. */
+  get idle(): boolean {
+    return this.gesture.idle;
+  }
+
+  /** Whether an aim drag is under way, pulled back yet or not: what the page tells a player how to take back (see `Gesture.holding`). */
+  get holding(): boolean {
+    return this.gesture.holding;
+  }
+
   setMode(mode: Mode) {
     this.gesture.setMode(mode);
   }

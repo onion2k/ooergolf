@@ -907,7 +907,10 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
         Math.max(0, Math.min(SCREEN.h, press[1] + Math.sin(turn) * length)),
       ] as const;
       input.down(1, ...press);
+      // a drag pressed is held, pulled back yet or not, which is what the page says how to take back while it is
+      if (!input.holding) told.push('a drag that was pressed was not said to be held');
       input.move(1, ...now);
+      if (!input.holding) told.push('a drag that was pulled back was not said to be held');
       const held = input.aim as Shot | null;
       const aim = held ? { angle: held.angle, power: held.power } : null;
       const strong = aim !== null && aim.power >= AIM_TURN.least;
@@ -941,10 +944,13 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
         input.up(1, ...press);
       } else if (how === 1) {
         input.down(2, at(0, SCREEN.w), at(0, SCREEN.h));
+        // a second finger takes the drag back as it lands, and what the page said of taking it back goes with it
+        if (input.holding) told.push('a second finger landed and the drag was still said to be held');
         input.up(2, ...press);
         input.up(1, ...press);
       } else input.cancel(1);
       if ((input.aim as Shot | null) !== null) told.push('a drag taken back left an aim');
+      if (input.holding) told.push('a drag taken back was still said to be held');
       const left = rig.azimuth;
       for (let k = 0; k < 60; k++) {
         director.aiming(input.aim);

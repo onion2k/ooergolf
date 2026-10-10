@@ -1080,3 +1080,111 @@ for (const [label, width, height] of PHONES) {
     });
   });
 }
+
+// ---- the help while a drag is held: how to take it back, which a player was not told ----
+
+for (const [label, width, height, touch] of [
+  ['a desk', 1280, 800, false],
+  ['a phone', 400, 860, true],
+  ['a narrow phone', 360, 780, true],
+  ['a phone on its side', 844, 390, true],
+] as const) {
+  test.describe(`on ${label}`, () => {
+    test.use({ viewport: { width, height }, hasTouch: touch, isMobile: touch });
+
+    test('a drag held says how to take it back: a second finger for a finger and letting go where it was pressed for a mouse, read well and clear of every panel, and neither is a stroke', async ({
+      page,
+    }) => {
+      const problems = watch(page);
+      await start(page, { seed: 11, paused: true, screen: true });
+      const said = () => page.evaluate(() => window.game!.motions().help);
+      const refreshed = async () => {
+        await page.evaluate(() => window.game!.step(1));
+        return said();
+      };
+      for (const course of ['The Links', 'The Meadow']) {
+        await page.evaluate((c) => {
+          window.game!.chooseCourse(c);
+          window.game!.step(90);
+        }, course);
+        const golf = course === 'The Links';
+        const idle = await refreshed();
+        expect(idle.aiming, `${course}: nothing held`).toBe(null);
+        expect(idle.text, `${course}: what a drag does`).toBe(
+          golf ? 'drag back and let go to swing' : 'drag back and let go to putt',
+        );
+        // a phone has no help at all while nothing is held
+        if (touch && height > 500 && width <= 600) await expect(page.locator('#help')).toBeHidden();
+
+        // pressed on an empty place on the course, and pulled back a little, and held
+        const from = { x: width / 2, y: height * 0.4 };
+        const to = { x: from.x, y: from.y + 0.15 * Math.min(width, height) };
+        await drag(page, from, to, { hold: true, touch });
+        // held for no time, it says nothing of taking it back: a shot struck at once is not nagged
+        const quick = await refreshed();
+        expect(quick.aiming, `${course}: not told at once`).toBe(null);
+        expect(quick.text).toBe(idle.text);
+        // held for a moment (0.6 of a second of the game's time), it is
+        await page.evaluate(() => window.game!.step(45));
+        const held = await refreshed();
+        expect(held.aiming, `${course}: a ${touch ? 'finger' : 'mouse'} held`).toBe(touch ? 'touch' : 'pointer');
+        expect(held.text, `${course}: how to take it back`).toBe(
+          touch ? 'tap a second finger to cancel' : 'let go where you pressed to cancel',
+        );
+        await expect(page.locator('#help'), `${course}: it is up, a phone's too`).toBeVisible();
+        // read well, whole on the screen, and apart from every other panel (the frame's cost, which a desk shows, is not one a player reads)
+        await page.locator('#stats').evaluate((el: HTMLElement) => (el.hidden = true));
+        const c = await chrome(page);
+        const r = await read(page);
+        c.air = AIR * r.ui;
+        expect(Object.keys(c.rects), `${course}: the help is among the panels up`).toContain('help');
+        expect(crowding(c), `${course}: crowding`).toEqual([]);
+        expect(r.outside, `${course}: past the screen`).toEqual([]);
+        const text = r.texts.find((t) => t.text === held.text);
+        expect(text, `${course}: the words are read`).toBeDefined();
+        expect(text!.ratio, `${course}: ${held.text}`).toBeGreaterThanOrEqual(CONTRAST);
+
+        // taken back: a second finger lands, or the mouse is let go where it was pressed
+        if (touch) {
+          const cdp = await page.context().newCDPSession(page);
+          const both = [
+            { x: to.x, y: to.y, id: 0 },
+            { x: to.x + 60, y: to.y - 60, id: 1 },
+          ];
+          await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: both });
+          const dropped = await refreshed();
+          expect(dropped.aiming, `${course}: the second finger took it back`).toBe(null);
+          expect(dropped.text).toBe(idle.text);
+          await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+        } else {
+          await page.mouse.move(from.x, from.y);
+          await page.mouse.up();
+        }
+        const after = await refreshed();
+        expect(after.aiming, `${course}: nothing held once it is over`).toBe(null);
+        expect(after.text).toBe(idle.text);
+        expect((await page.evaluate(() => window.game!.state())).strokes, `${course}: no stroke was taken`).toBe(0);
+      }
+      expect(problems).toEqual([]);
+    });
+  });
+}
+
+test('from overhead a drag is a pan and the help says so, whichever way it is held, and a held drag is dropped when overhead is switched on', async ({
+  page,
+}) => {
+  const problems = watch(page);
+  await start(page, { seed: 11, paused: true });
+  await page.evaluate(() => window.game!.step(30));
+  await drag(page, { x: 640, y: 300 }, { x: 640, y: 360 }, { hold: true });
+  expect((await page.evaluate(() => (window.game!.step(60), window.game!.motions().help))).aiming).toBe('pointer');
+  await page.evaluate(() => window.game!.overhead(true));
+  const over = await page.evaluate(() => (window.game!.step(1), window.game!.motions().help));
+  expect(over).toEqual({ text: 'drag to look round the hole', aiming: null });
+  await page.mouse.up();
+  await drag(page, { x: 640, y: 300 }, { x: 640, y: 360 }, { hold: true });
+  const panning = await page.evaluate(() => (window.game!.step(60), window.game!.motions().help));
+  expect(panning, 'a pan holds no shot to take back').toEqual({ text: 'drag to look round the hole', aiming: null });
+  await page.mouse.up();
+  expect(problems).toEqual([]);
+});

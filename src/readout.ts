@@ -115,3 +115,34 @@ export function greensText(greens: number | undefined): string | null {
   const name = speedName(greens);
   return `${name === 'medium' ? 'Medium' : name === 'fast' ? 'Fast' : 'Slow'} greens`;
 }
+
+/**
+ * How a drag that is held was begun: by a finger, which takes it back with a second one, or by a mouse or a pen, which has no
+ * second pointer and takes it back by letting go where it pressed (a drag shorter than `DRAG.dead` of the screen is no shot).
+ */
+export type Held = 'touch' | 'pointer' | null;
+
+/**
+ * How long a drag has been held, in seconds of game time, before the help tells how to take it back: a player who has held it for
+ * a moment is deciding, and is the one who wonders how to cancel, and a shot struck at once is not nagged. Longer than a flick of a
+ * shot and well under the time it takes to line one up.
+ */
+export const HELD_HINT = { after: 0.6 } as const;
+
+/** How a drag held since game time `since` was begun, as far as the help tells of it at game time `now`: none until it has been held `HELD_HINT.after`. */
+export function heldHint(how: Exclude<Held, null>, since: number, now: number): Held {
+  return now - since >= HELD_HINT.after ? how : null;
+}
+
+/**
+ * What the help beside the course says. While no drag is held it says what one does, which is look round the hole from overhead,
+ * swing on a golf hole and putt on minigolf; while one is held in the normal view it says how to take it back, which a player was
+ * not told and did not find (10 October 2026: "it's not clear that a two finger tap cancels the current aim"). From overhead a drag is
+ * a pan and holds no shot, so there is nothing to take back and it says what it always did.
+ */
+export function helpText(state: { overhead: boolean; swing: boolean; held: Held }): string {
+  if (state.overhead) return 'drag to look round the hole';
+  if (state.held === 'touch') return 'tap a second finger to cancel';
+  if (state.held === 'pointer') return 'let go where you pressed to cancel';
+  return state.swing ? 'drag back and let go to swing' : 'drag back and let go to putt';
+}

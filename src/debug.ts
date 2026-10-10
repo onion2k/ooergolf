@@ -397,6 +397,8 @@ export interface Motions {
   strips: number;
   /** The Retake button as drawn: whether it is up on the course, and whether it can be pressed. */
   retake: { shown: boolean; enabled: boolean };
+  /** The help beside the course as drawn: its words, and whether it is the one that says how to take a drag back, which a finger's drag has said by `touch` and a mouse's by `pointer`. */
+  help: { text: string; aiming: 'touch' | 'pointer' | null };
   /** How many clouds of the sky past the hole the last frame drew with a size: all of them to the fly-in and the title, which see the sky, and none to any other view. */
   sky: number;
 }

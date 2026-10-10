@@ -4,6 +4,9 @@ import { heightAt, layoutOf } from '../src/arena';
 import { GREENS } from '../src/surfaces';
 import {
   greensText,
+  HELD_HINT,
+  heldHint,
+  helpText,
   landingText,
   pinReadout,
   pinText,
@@ -173,5 +176,55 @@ describe('the readout of a putt’s break', () => {
     expect(greensText(12.5)).toBe('Fast greens');
     expect(greensText(17)).toBe('Medium greens');
     expect(greensText(19.5)).toBe('Slow greens');
+  });
+});
+
+describe('the help beside the course, which says what a drag does and, while one is held, how to take it back', () => {
+  it('says what a drag does when none is held: swing on a hole of golf, putt on minigolf, look round from overhead', () => {
+    expect(helpText({ overhead: false, swing: false, held: null })).toBe('drag back and let go to putt');
+    expect(helpText({ overhead: false, swing: true, held: null })).toBe('drag back and let go to swing');
+    expect(helpText({ overhead: true, swing: true, held: null })).toBe('drag to look round the hole');
+    expect(helpText({ overhead: true, swing: false, held: null })).toBe('drag to look round the hole');
+  });
+
+  it('says how to take a drag back while it is held: a second finger, which is a touch’s way, and letting go where it began, a mouse’s', () => {
+    for (const swing of [true, false]) {
+      expect(helpText({ overhead: false, swing, held: 'touch' })).toBe('tap a second finger to cancel');
+      expect(helpText({ overhead: false, swing, held: 'pointer' })).toBe('let go where you pressed to cancel');
+    }
+  });
+
+  it('says nothing of taking back from overhead, where a drag is a pan and holds no shot', () => {
+    for (const held of ['touch', 'pointer'] as const)
+      expect(helpText({ overhead: true, swing: true, held })).toBe('drag to look round the hole');
+  });
+
+  it('is different for each of the five things it says, and each is words and no more than a line a phone could hold', () => {
+    const all = new Set<string>();
+    for (const overhead of [false, true])
+      for (const swing of [false, true])
+        for (const held of [null, 'touch', 'pointer'] as const) {
+          const words = helpText({ overhead, swing, held });
+          expect(words.length, words).toBeGreaterThan(10);
+          expect(words.length, words).toBeLessThan(42);
+          all.add(words);
+        }
+    expect(all.size).toBe(5);
+  });
+});
+
+describe('when the help tells how to take a drag back', () => {
+  it('waits for the drag to be held a moment, so that a shot struck at once is not nagged, and tells it from then on', () => {
+    for (const how of ['touch', 'pointer'] as const) {
+      expect(heldHint(how, 8, 8), 'at the press').toBe(null);
+      expect(heldHint(how, 8, 8.59), 'just short of it').toBe(null);
+      expect(heldHint(how, 0, HELD_HINT.after), 'at it').toBe(how);
+      expect(heldHint(how, 8, 25), 'long after').toBe(how);
+    }
+  });
+
+  it('is a moment that is longer than a flick and well under the time a shot takes to line up', () => {
+    expect(HELD_HINT.after).toBeGreaterThan(0.3);
+    expect(HELD_HINT.after).toBeLessThan(1);
   });
 });
