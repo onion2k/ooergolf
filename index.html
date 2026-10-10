@@ -1254,6 +1254,53 @@
       opacity var(--title-out, 0.4s),
       visibility 0s linear var(--title-out, 0.4s);
   }
+  /*
+   * The progress bar on the sky, for a boot that is slow: it comes into view half a second after the page began (the delay below
+   * is `BOOT_BAR.after` in src/bootsteps.ts, held equal by a test), so a title that is up sooner never shows it, and it goes with
+   * the panel. A chunky pill in the game's clean toy: a pale track with a thin dark green edge and a cream fill that the page
+   * writes how far the boot has got into (--p, from nought to one). Low on the sky, clear of where the letters drop.
+   */
+  #bootBar {
+    position: absolute;
+    left: 50%;
+    bottom: 16%;
+    width: min(62vw, 320px);
+    height: 22px;
+    box-sizing: border-box;
+    transform: translateX(-50%);
+    border: 3px solid var(--leaf-ink);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.4);
+    overflow: hidden;
+    opacity: 0;
+    animation: bootbar-in 200ms 500ms forwards;
+  }
+  #bootBar[hidden],
+  #boot.gone #bootBar {
+    display: none;
+  }
+  #bootBar i {
+    display: block;
+    height: 100%;
+    width: calc(var(--p, 0) * 100%);
+    min-width: 12px;
+    border-radius: 999px;
+    background: #fff3c9;
+    transition: width 0.25s ease-out;
+  }
+  @keyframes bootbar-in {
+    to {
+      opacity: 1;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #bootBar {
+      animation-duration: 0s;
+    }
+    #bootBar i {
+      transition: none;
+    }
+  }
   /* only a boot that has failed has anything to say, on a plate of the panel's pale colour so the words read over the sky */
   #boot p {
     /* a line to each thing the page says when it cannot go on: which hole, why, and what to do; kept off the screen's edges */
@@ -1723,6 +1770,9 @@
 </div>
 <div class="panel" id="help" hidden>drag back and let go to putt</div>
 <div id="boot">
+  <div id="bootBar" role="progressbar" aria-label="Loading" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+    <i></i>
+  </div>
   <p id="bootMsg"></p>
 </div>
 <script type="module" src="/src/main.ts"></script>

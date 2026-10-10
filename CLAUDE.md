@@ -996,10 +996,16 @@ minigolf: true }`, read through `oceanFor`) is the one switch: `waterBed` and `s
   for a draw and right for a fade), and the purse shows coins and gems on golf as on minigolf.
 - **The title screen is drawn by the game** (10 October 2026; plan `~/.claude/plans/ooergolf-3d-title.md`, whose notes say what was
   tried and chosen; `LOOK.md` says why). There is no picture: the boot panel (`#boot` in `index.html`, over every other panel) is
-  plain sky, the title's own blue gradient in the stylesheet, from the first paint, and once the game is ready it fades away
-  (`TITLE.fadeOut` 600 ms, the panel's `--title-out`; `src/title.ts` is that timing and `src/titlepage.ts` the page's side of it,
-  handed the panel, `?title=0` and the player's word on motion) to **a hole of The Links, Water Carry, with "Of Course!" in 3D
-  letters dropping in over it**. The start screen is up behind the panel, held back (`Hud.showStart(..., hold)`) until the last
+  plain sky, the title's own blue gradient in the stylesheet, from the first paint, and fades away (`TITLE.fadeOut` 300 ms, the
+  panel's `--title-out`; `src/title.ts` is that timing and `src/titlepage.ts` the page's side of it, handed the panel, `?title=0`
+  and the player's word on motion) to **"Of Course!" in 3D letters dropping in over the sky, and then a hole of The Links, Water
+  Carry, behind them**. The boot is ordered for the soonest title (`ooergolf-faster-title.md`, 10 October 2026): the pipelines'
+  compile is started first and awaited only where a frame needs it, the letters are built while it runs and drawn over the sky as
+  soon as it is done (the drop's clock and the fade begin there), and the course is built after and cuts in behind them (the
+  renderer has no alpha a group to fade it by). Measured on a production build: letters at 258 ms and the course at 426 (were both
+  509), and at 4x CPU 567 and 1002 (were 1106). A progress bar (`#bootBar`, `src/bootsteps.ts`: the boot's steps weighted by their
+  measured cost, a share that only grows) shows on the sky only if the title is not up 500 ms after page start (`BOOT_BAR.after`,
+  held equal to the stylesheet's delay by a test), so a fast machine never sees it. The start screen is up behind the panel, held back (`Hud.showStart(..., hold)`) until the last
   letter has landed, and then the cards come up under the word. The lettering is **traced from the old picture**:
   `scripts/trace-title.mjs` (run by hand when the picture changes, `node scripts/trace-title.mjs`, from `src/title_sq.png`, which
   stays as the art the look is held to and is never fetched) reads the cream faces, tan undersides, dark green outline, ball, flag,

@@ -1,11 +1,11 @@
-/** How the title screen's panel leaves: a fade out of a little over half a second, none for a player who asked for less motion. */
+/** How the title screen's panel leaves: a fade out of a third of a second, none for a player who asked for less motion. */
 import { describe, expect, it } from 'vitest';
 import { TITLE, fades } from '../src/title';
 
 describe('the title screen', () => {
-  it('fades out over a little over half a second', () => {
-    expect(TITLE.fadeOut).toBe(600);
-    expect(fades(false)).toEqual({ fadeOut: 600 });
+  it('fades out over a third of a second', () => {
+    expect(TITLE.fadeOut).toBe(300);
+    expect(fades(false)).toEqual({ fadeOut: 300 });
   });
 
   it('has no fade for a player who asked for less motion', () => {

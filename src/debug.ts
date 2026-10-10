@@ -131,6 +131,9 @@ export interface TitleReport {
   t: number;
   landed: boolean;
   cards: boolean;
+  /** When the title's letters were first drawn, alone over the sky, and when the course first was, in the page's time (milliseconds, as `performance.now` has it): null until they were. The letters come first. */
+  lettersAt: number | null;
+  courseAt: number | null;
   /** How many title scenes the page has made that have not yet been collected: one while it is up, and none once a course is chosen and the collector has run. */
   alive: number;
   /** The word's share of the screen's width and where its middle is, as the fit chose. */

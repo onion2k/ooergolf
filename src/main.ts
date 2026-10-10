@@ -42,6 +42,7 @@ import { daylight } from './look';
 import { Progress } from './progress';
 import { seeded } from './random';
 import { titlePage } from './titlepage';
+import { BootProgress, type BootStep } from './bootsteps';
 import {
   TitleScene,
   boxOf as titleBoxOf,
@@ -99,7 +100,32 @@ const bootMsg = document.getElementById('bootMsg')!;
 // the boot panel is plain sky while the game boots and fades away to the title scene; a test's page asks for none with `?title=0`
 const titleOff = new URLSearchParams(location.search).get('title') === '0';
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-const title = titlePage(boot, titleOff, reducedMotion);
+const title = titlePage(boot, titleOff, reducedMotion, document.getElementById('bootBar'));
+/** How far the boot has got, by its named steps, which the progress bar on the sky shows if the title is late. */
+const booting = new BootProgress();
+let bootOpen = true;
+const booted = (step: BootStep) => {
+  if (!bootOpen) return;
+  performance.mark(`boot-${step}`);
+  title.progress(booting.finish(step));
+};
+// the scripts are in: this module is running
+booted('scripts');
+/**
+ * When the title's letters were first drawn and when the course first was, in the page's time (milliseconds from the page's
+ * start, as `performance.now` has it), for the test API and the boot timeline; also set as user-timing marks of the same names.
+ * The letters come first: the sky and the lettering alone as soon as the pipelines are compiled, the course when it is built.
+ */
+const marks = { letters: null as number | null, course: null as number | null };
+const mark = (name: 'letters' | 'course') => {
+  if (marks[name] !== null) return;
+  marks[name] = performance.now();
+  performance.mark(`title-${name}`);
+};
+/** A turn of the event loop, so the compile's promises and the frames waiting are run between the steps of a long build. */
+const idle = () => new Promise<void>((done) => setTimeout(done, 0));
+/** Where a boot step has got to, for the one generator that makes a hole: see `starting`. */
+type Checkpoint = 'letters' | 'scene' | 'built';
 const stats = document.getElementById('stats')!;
 
 /**
@@ -190,22 +216,51 @@ function showError(words: string) {
   boot.classList.remove('gone');
 }
 
+/** The canvas's size in device pixels, at most one and a half to the point: what the renderer draws at. */
+function canvasSize(): { width: number; height: number } {
+  const dpr = Math.min(devicePixelRatio || 1, 1.5);
+  return {
+    width: Math.max(1, Math.floor(canvas.clientWidth * dpr)),
+    height: Math.max(1, Math.floor(canvas.clientHeight * dpr)),
+  };
+}
+
 async function main() {
   // ---- the renderer ----
 
   const ctx = await createContext(canvas);
   const renderer = new GameRenderer(ctx, LIGHT_CAPACITY, EFFECT_CAPACITY, PARTICLE_CAPACITY, MM_PER_UNIT);
-  // the daylight look, the same one the models' showcase is drawn in
-  await daylight(renderer, ctx);
+  // the daylight look, the same one the models' showcase is drawn in. Its pipelines compile on the GPU's side while the page
+  // makes the hole, the letters and the scene, so it is started now and waited for where a frame needs it (`looked`); its
+  // failure is the boot's, and is said there
+  const looked = daylight(renderer, ctx);
+  looked.catch(() => undefined);
+  let pipelined = false;
+  void looked.then(
+    () => {
+      pipelined = true;
+      booted('compile');
+    },
+    () => undefined,
+  );
   // the particles' gravity, in world units a second squared: a real 9.8 m/s² here pulls confetti back into the cup
   // before it is out of it, so a lighter one, as Miner has, and the bursts' own gravity scales it
   renderer.gravity = 30;
   renderer.camera.near = 2;
   renderer.camera.far = CLIP.far;
+  renderer.setLights(new LightPool(LIGHT_CAPACITY));
+  // a page that leaves the title out is booted as it always was, the look in before anything is made
+  if (titleOff) await looked;
 
   // ---- the game, and what it says has happened ----
 
   const query = new URLSearchParams(location.search);
+  // ?rung=N puts the picture on a rung of the quality ladder and holds it there; without it, the governor chooses
+  const asked = query.get('rung');
+  const governor = new Governor(asked !== null ? Math.max(0, Math.min(RUNGS.length - 1, +asked || 0)) : undefined);
+  /** Which economy the renderer is on, so it is set again when the title goes and not every frame. */
+  let economyOf: 'title' | 'play' | null = null;
+  const startsPaused = query.has('paused');
   const progress = new Progress();
   /** What has happened, a line each, for the test API. */
   const eventLog: string[] = [];
@@ -234,6 +289,8 @@ async function main() {
   let titled: TitleDraw | null = null;
   let wantTitle = !titleOff;
   let standNext = false;
+  /** The boot's lettering while it is drawn alone over the sky, before the course is in: let go once the hole is handed over. */
+  let early: TitleDraw | null = null;
   /** The title scene as it stands, read through a function since it is made and let go inside the events the game tells. */
   const titleNow = (): TitleDraw | null => titled;
   /** The title scene's end: the letters let go, the page's own economy and its words back, and the next hole begun a course's. */
@@ -441,6 +498,120 @@ async function main() {
   const paintHoleMap = () => showHoleMap(mapOfHole());
   /** What a new hole puts back: a drag a shot again, and the switch showing it. Set once the input exists, which is after the first hole. */
   let backToAim: (() => void) | null = null;
+  /**
+   * A hole begun, a step at a time: it stops at each checkpoint it has reached so that the boot can let the event loop run (the
+   * pipelines' compile, a frame of the letters) before the next long step, and does the rest in one go for any other hole.
+   * The title's lettering is made first, since it is the first thing to be seen; the hole is handed to the renderer only after
+   * the last checkpoint, 'built', which the boot waits for the pipelines at.
+   */
+  function* starting(index: number, par: number): Generator<Checkpoint, void, void> {
+    if (!game) return;
+    const held = game;
+    const { layout } = game;
+    const { name } = game.course[index];
+    try {
+      // ---- built ----
+      // the title's lettering, in groups after the hole's own, when this is the hole the title is drawn over
+      const lettered = wantTitle ? titleDraw(standNext, reducedMotion, aspect) : null;
+      // the boot's own letters are drawn alone before the hole is handed over; a title brought back by the card is not
+      if (bootOpen) early = lettered;
+      booted('letters');
+      yield 'letters';
+      // the hole's own wind, which the grass bends in and the flag and the trees follow
+      const wind = windOf(name);
+      const fixed = scene.static(layout, name, game.obstacles, game.cup.radius);
+      // the kit's accessories that show more are drawn on the holes begun with them (the pennant is still the flag in rainbow stripes until it is drawn fresh), which is where their previews are made too
+      const moving = scene.dynamic(game.obstacles, layout, name, wind, {
+        ghost: game.kit.rest,
+        reader: game.kit.chalk,
+        pennant: game.kit.pennant,
+        chalk: game.kit.chalk,
+        ball: itemById(game.slots.ball)?.look,
+      });
+      booted('scene');
+      yield 'scene';
+      if (lettered) {
+        lettered.base = moving.length;
+        moving.push(...lettered.groups);
+      }
+      // the hole's rough, round the painted green: a hole too big for a field of grass is refused here, by its size
+      const field = fieldOf(layout, name, clearings(layout, name));
+      const grass = grassOptionsOf(layout);
+      // the preview of this hole's shots is worked out in a rehearsal of it, made once here and let go with the hole
+      const slopes = leansOnMinigolf(layout);
+      // a hole of minigolf is rehearsed when its ground leans, and when the rangefinder is worn, whose ring is where the roll rests
+      const rehearsal = layout.golf || slopes || game.kit.rest ? new Previewer(game) : null;
+      const map = mapOfHole();
+      yield 'built';
+
+      // ---- shown ----
+      kickedAt = layout.kickers.map(() => -Infinity);
+      // the hole's wind, for the line under the pin and for how far the camera must stand back for a tailwind
+      const blowing = game.wind;
+      windNow.x = blowing.x;
+      windNow.y = blowing.y;
+      windNow.speed = layout.golf ? blowing.speed : 0;
+      titled = lettered;
+      standNext = false;
+      if (lettered) document.documentElement.setAttribute('data-title', '');
+      renderer.setStatic(fixed);
+      renderer.setDynamic(moving);
+      grown = renderer.setGrass(field, grass);
+      // nothing is pressed on a new hole: the grass stands as it was grown
+      renderer.clearPresses();
+      renderer.wind = wind;
+      renderer.setSunShadow(boxOf(layout), sunFitOf(layout));
+      // the camera glides to the tee from wherever it was looking, but for the first hole, with nowhere it was; and the
+      // ball on the tee is round
+      // (a golf hole lets the camera stand back as far as a drive needs, and begins looking at the tee shot from there;
+      // a hole of minigolf has its limits and its home view as it always had)
+      director.started();
+      leans = slopes;
+      rolls = slopes || (!layout.golf && game.kit.rest);
+      previewer = rehearsal;
+      // the fireworks of the hole before are over with it
+      fireworks.step = FIREWORK_STEPS;
+      previewed.club = '';
+      previewShown = false;
+      shownPreview = null;
+      scene.setShot(null);
+      hud.setLanding(null);
+      showHoleMap(map);
+      // the pin is read off the ball from the first frame of a golf hole, and is not there on a hole of minigolf
+      pinned.x = NaN;
+      if (!layout.golf) hud.setPin(null);
+      // the wind is told on a golf hole, as a number or as calm, and is not there on a hole of minigolf
+      hud.setWind(layout.golf ? windNow.speed : null);
+      // the greens' speed is told on a hole that has set one (The Links), and the putt's break when the ball rests on its green
+      hud.setGreens(layout.golf ? greensText(game.def.greens) : null);
+      hud.setPutt(null);
+      putted.x = NaN;
+      read.x = NaN;
+      scene.setArrows(false);
+      hud.setShaping(game.shape, game.spin);
+      // a hole is begun aiming, and the view eases home to the tee's over the glide
+      backToAim?.();
+      squash.clear();
+      trail.clear();
+      hud.started({ index, count: game.course.length, name, par });
+      // the bag on a golf hole, with the driver in hand, and none on a hole of minigolf
+      hud.setBag(
+        layout.golf
+          ? BAG.map((c) => ({
+              id: c.id,
+              name: c.name,
+              label: c.label,
+              carry: carryOf(held.club(c), 1),
+              loft: c.loft,
+            }))
+          : null,
+        game.inHand.id,
+      );
+    } catch (err) {
+      stop(index, name, err);
+    }
+  }
+
   /** What the player sees of each event, beside the note of it. */
   const shown: GameEvents = {
     // a hole begun: drawn afresh, the sun's shadow fitted to it, and the camera on its tee. Everything that can be refused is
@@ -448,104 +619,9 @@ async function main() {
     // leaves them as the last hole had them and not half of one hole and half of another. And the page stops there, on the
     // boot screen, which says which hole and why: the game has begun a hole that no one can see, and is not played over
     started(index, par) {
-      if (!game) return;
-      const held = game;
-      const { layout } = game;
-      const { name } = game.course[index];
-      try {
-        // ---- built ----
-        // the hole's own wind, which the grass bends in and the flag and the trees follow
-        const wind = windOf(name);
-        const fixed = scene.static(layout, name, game.obstacles, game.cup.radius);
-        // the kit's accessories that show more are drawn on the holes begun with them (the pennant is still the flag in rainbow stripes until it is drawn fresh), which is where their previews are made too
-        const moving = scene.dynamic(game.obstacles, layout, name, wind, {
-          ghost: game.kit.rest,
-          reader: game.kit.chalk,
-          pennant: game.kit.pennant,
-          chalk: game.kit.chalk,
-          ball: itemById(game.slots.ball)?.look,
-        });
-        // the title's lettering, in groups after the hole's own, when this is the hole the title is drawn over
-        const lettered = wantTitle ? titleDraw(standNext, reducedMotion, aspect) : null;
-        if (lettered) {
-          lettered.base = moving.length;
-          moving.push(...lettered.groups);
-        }
-        // the hole's rough, round the painted green: a hole too big for a field of grass is refused here, by its size
-        const field = fieldOf(layout, name, clearings(layout, name));
-        const grass = grassOptionsOf(layout);
-        // the preview of this hole's shots is worked out in a rehearsal of it, made once here and let go with the hole
-        const slopes = leansOnMinigolf(layout);
-        // a hole of minigolf is rehearsed when its ground leans, and when the rangefinder is worn, whose ring is where the roll rests
-        const rehearsal = layout.golf || slopes || game.kit.rest ? new Previewer(game) : null;
-        const map = mapOfHole();
-
-        // ---- shown ----
-        kickedAt = layout.kickers.map(() => -Infinity);
-        // the hole's wind, for the line under the pin and for how far the camera must stand back for a tailwind
-        const blowing = game.wind;
-        windNow.x = blowing.x;
-        windNow.y = blowing.y;
-        windNow.speed = layout.golf ? blowing.speed : 0;
-        titled = lettered;
-        standNext = false;
-        if (lettered) document.documentElement.setAttribute('data-title', '');
-        renderer.setStatic(fixed);
-        renderer.setDynamic(moving);
-        grown = renderer.setGrass(field, grass);
-        // nothing is pressed on a new hole: the grass stands as it was grown
-        renderer.clearPresses();
-        renderer.wind = wind;
-        renderer.setSunShadow(boxOf(layout), sunFitOf(layout));
-        // the camera glides to the tee from wherever it was looking, but for the first hole, with nowhere it was; and the
-        // ball on the tee is round
-        // (a golf hole lets the camera stand back as far as a drive needs, and begins looking at the tee shot from there;
-        // a hole of minigolf has its limits and its home view as it always had)
-        director.started();
-        leans = slopes;
-        rolls = slopes || (!layout.golf && game.kit.rest);
-        previewer = rehearsal;
-        // the fireworks of the hole before are over with it
-        fireworks.step = FIREWORK_STEPS;
-        previewed.club = '';
-        previewShown = false;
-        shownPreview = null;
-        scene.setShot(null);
-        hud.setLanding(null);
-        showHoleMap(map);
-        // the pin is read off the ball from the first frame of a golf hole, and is not there on a hole of minigolf
-        pinned.x = NaN;
-        if (!layout.golf) hud.setPin(null);
-        // the wind is told on a golf hole, as a number or as calm, and is not there on a hole of minigolf
-        hud.setWind(layout.golf ? windNow.speed : null);
-        // the greens' speed is told on a hole that has set one (The Links), and the putt's break when the ball rests on its green
-        hud.setGreens(layout.golf ? greensText(game.def.greens) : null);
-        hud.setPutt(null);
-        putted.x = NaN;
-        read.x = NaN;
-        scene.setArrows(false);
-        hud.setShaping(game.shape, game.spin);
-        // a hole is begun aiming, and the view eases home to the tee's over the glide
-        backToAim?.();
-        squash.clear();
-        trail.clear();
-        hud.started({ index, count: game.course.length, name, par });
-        // the bag on a golf hole, with the driver in hand, and none on a hole of minigolf
-        hud.setBag(
-          layout.golf
-            ? BAG.map((c) => ({
-                id: c.id,
-                name: c.name,
-                label: c.label,
-                carry: carryOf(held.club(c), 1),
-                loft: c.loft,
-              }))
-            : null,
-          game.inHand.id,
-        );
-      } catch (err) {
-        stop(index, name, err);
-      }
+      // a hole begun in play is made in one go; only the boot's first, under the title, is made a step at a time
+      const steps = starting(index, par);
+      while (!steps.next().done);
     },
     struck(power, x, y) {
       // one stroke in five has the camera follow the ball, and the rest hold the view where it stood
@@ -641,6 +717,92 @@ async function main() {
         (target[name as keyof GameEvents] as ((...a: unknown[]) => void) | undefined)?.(...args);
       },
   });
+  // ---- the first frame: the letters on the sky, before the course is in ----
+
+  /** Whether the letters are being drawn alone, a frame at a time, while the hole is made. */
+  let earlyOn = false;
+  let earlyDrawn = false;
+  /** Kept when the first frame of the letters has been drawn: the hole is not handed over before it, so the letters are seen first. */
+  let lettered: Promise<void> = Promise.resolve();
+  let letteredAt: () => void = () => undefined;
+  let earlyAspect = 0;
+  let earlyLast = 0;
+  /**
+   * A frame of the sky and the title's letters alone, the first thing the player sees: drawn as soon as the pipelines are
+   * compiled, wherever the hole has got to, so a slow machine sees the title while it makes the course. It is the title's own
+   * clock that starts here (the drop begins at the first of these), and a paused page does not step it. The hole is not
+   * handed to the renderer yet, so the letters are its only groups, from the first.
+   */
+  function lettersFrame(t: TitleDraw, dt: number) {
+    const lens = renderer.camera;
+    const size = canvasSize();
+    // the canvas's own pixels are set before the renderer is, as `resize` does, or a frame is drawn into the 300 by 150 it began with
+    if (canvas.width !== size.width || canvas.height !== size.height) {
+      canvas.width = size.width;
+      canvas.height = size.height;
+    }
+    renderer.resize(size.width, size.height);
+    if (earlyAspect !== lens.aspect) {
+      earlyAspect = lens.aspect;
+      t.fit = fitTitle(lens.aspect, cardsTop(innerWidth, innerHeight), t.word);
+    }
+    if (!earlyDrawn) {
+      renderer.economy = economyFor(RUNGS[Math.max(1, governor.rung)]);
+      renderer.setDynamic(t.groups);
+    }
+    if (!startsPaused) t.scene.advance(dt);
+    const { layout, world, ball } = played;
+    placeCamera(lens, layout.tee, layout.cup, world.z[ball], t.fit);
+    lens.update();
+    writeTitle(t, 0);
+    renderer.frame(ctx.context.getCurrentTexture().createView(), 'redraw', dt);
+    if (!earlyDrawn) {
+      earlyDrawn = true;
+      mark('letters');
+      letteredAt();
+      // the panel fades away to the sky and the letters, and the course comes in behind them as it is built
+      title.leave();
+    }
+  }
+  function earlyTick(now: number) {
+    if (!earlyOn) return;
+    requestAnimationFrame(earlyTick);
+    const t = early;
+    if (!t || !pipelined) return;
+    const { dt } = between(now, earlyLast || now);
+    earlyLast = now;
+    lettersFrame(t, dt);
+  }
+  /**
+   * The first hole begun under the title, a step at a time: the letters are made first, and while the rest is made the event
+   * loop is let run between the steps, so the compile's promises are kept and a frame of the letters is drawn as soon as the
+   * pipelines are in. The hole is handed to the renderer once it is all built and the pipelines are.
+   */
+  async function beginUnderTitle(index: number, par: number) {
+    const steps = starting(index, par);
+    lettered = new Promise<void>((done) => (letteredAt = done));
+    earlyOn = true;
+    requestAnimationFrame(earlyTick);
+    try {
+      for (let step = steps.next(); !step.done; step = steps.next()) {
+        // a test may hold the course back (a promise it left on the page as `courseGate`) to look at the letters on the sky alone
+        if (step.value === 'built') await (window as { courseGate?: Promise<void> }).courseGate;
+        if (step.value === 'letters') {
+          // the letters are built: nothing else is made until the pipelines are in and the letters are on the sky, so the
+          // compile has the page to itself and the first thing the player sees comes as soon as it can
+          await looked;
+          await lettered;
+        } else if (step.value === 'scene') {
+          // the scene was the long step: a turn of the loop for the letters' frames to run
+          await idle();
+        }
+      }
+    } finally {
+      earlyOn = false;
+      early = null;
+    }
+  }
+
   // ?seed=N makes chance the same from before the game is built, for a test that wants the same course every run
   const seed = query.get('seed');
   const played = new Game(progress, events, {
@@ -655,18 +817,15 @@ async function main() {
   director.setSeed(seed !== null ? +seed : crypto.getRandomValues(new Uint32Array(1))[0]);
   // the screen is not measured until after the first hole, which is begun looking from a desk's shape
   director.setScreen(aspect, innerHeight);
-  shown.started!(played.hole, played.def.par);
+  booted('hole');
+  if (wantTitle) await beginUnderTitle(played.hole, played.def.par);
+  else shown.started!(played.hole, played.def.par);
   // a first hole that cannot be drawn is the boot's failure: the screen says so, and there is no game to start
   if (stopped()) return;
   showPurse();
 
   // ---- the scene and the camera ----
 
-  // ?rung=N puts the picture on a rung of the quality ladder and holds it there; without it, the governor chooses
-  const asked = query.get('rung');
-  const governor = new Governor(asked !== null ? Math.max(0, Math.min(RUNGS.length - 1, +asked || 0)) : undefined);
-  /** Which economy the renderer is on, so it is set again when the title goes and not every frame. */
-  let economyOf: 'title' | 'play' | null = null;
   /**
    * The picture's economy: the governor's rung, and while the title is up no lower than the second, whose grass is thinned,
    * since the title is seen from far and high and its frame must be well inside the budget with the lettering on it.
@@ -677,7 +836,6 @@ async function main() {
   }
   applyEconomy();
 
-  renderer.setLights(new LightPool(LIGHT_CAPACITY));
   const cam = renderer.camera;
   /** Whether the test API has parked the camera where it wants it, and it is not to follow the ball. */
   let parked = false;
@@ -685,9 +843,7 @@ async function main() {
   let width = 1,
     height = 1;
   const resize = () => {
-    const dpr = Math.min(devicePixelRatio || 1, 1.5);
-    width = Math.max(1, Math.floor(canvas.clientWidth * dpr));
-    height = Math.max(1, Math.floor(canvas.clientHeight * dpr));
+    ({ width, height } = canvasSize());
     canvas.width = width;
     canvas.height = height;
     cam.aspect = aspect = width / height;
@@ -1059,13 +1215,13 @@ async function main() {
     placeCamera(cam, layout.tee, layout.cup, world.z[ball], t.fit);
   }
   /** The title's pieces posed by its own clock and placed in the word's plane for this frame's camera, none of them drawn that is not there yet. */
-  function writeTitle(t: TitleDraw) {
-    titleFrame(cam, t.fit, t.word, t.frame);
+  function writeTitle(t: TitleDraw, base = t.base) {
+    titleFrame(renderer.camera, t.fit, t.word, t.frame);
     t.pieces.forEach((piece, i) => {
       t.scene.pose(piece, t.pose);
       poseMatrix(t.mats[i], t.frame, piece.pivot, t.pose);
     });
-    t.groups.forEach((_, j) => renderer.move(t.base + j, t.mats[t.owners[j]], 1));
+    t.groups.forEach((_, j) => renderer.move(base + j, t.mats[t.owners[j]], 1));
   }
 
   /** The fireworks that are due by game time, thrown over the cup: none when none is under way. */
@@ -1206,6 +1362,10 @@ async function main() {
 
   await renderer.ready;
   await grown;
+  booted('grass');
+  bootOpen = false;
+  performance.mark('boot-ready');
+  // a page that has no letters to draw first (the title left out) lets the panel go here, as it always did
   title.leave();
   // the start screen over the title scene, or over the first hole of the first course on a page that has none, until a course
   // is chosen: held back until the letters have landed
@@ -1289,6 +1449,7 @@ async function main() {
     upload();
     const t = performance.now();
     renderer.frame(ctx.context.getCurrentTexture().createView(), 'redraw', dt);
+    mark('course');
     smoothed += (performance.now() - t - smoothed) * 0.05;
     if (frames % 30 === 0) stats.textContent = `${smoothed.toFixed(1)} ms`;
     return t;
@@ -1321,7 +1482,7 @@ async function main() {
   // ?paused=1 starts the game stopped where it was built, so a test sees the
   // same course every run: no frame of its own has run, and every one after is
   // the test's, of a length it chose
-  let paused = query.has('paused');
+  let paused = startsPaused;
   let ready = false;
   let bootMs = 0;
   window.game = createApi({
@@ -1440,7 +1601,8 @@ async function main() {
     choosing: () => choosing,
     title() {
       const t = titled;
-      if (!t) return { up: false, t: 0, landed: false, cards: false, fit: null, alive: titlesAlive, pieces: [] };
+      const at = { lettersAt: marks.letters, courseAt: marks.course };
+      if (!t) return { up: false, t: 0, landed: false, cards: false, fit: null, alive: titlesAlive, pieces: [], ...at };
       // the camera and the word's plane as they stand now, so a box is of the frame that would be drawn
       titleCamera(t);
       cam.update();
@@ -1448,6 +1610,7 @@ async function main() {
       const r = canvas.getBoundingClientRect();
       return {
         up: true,
+        ...at,
         alive: titlesAlive,
         t: t.scene.t,
         landed: t.scene.landed,

@@ -8,6 +8,7 @@
  * a slow machine fails nothing here by being slow.
  */
 import { expect, test, type Page } from '@playwright/test';
+import { BOOT_BAR } from '../src/bootsteps';
 import { DROP } from '../src/titlescene';
 import { landed, ready, start, watch } from './game';
 import { toCard } from './panels';
@@ -127,6 +128,132 @@ test.describe('the boot panel', () => {
   });
 });
 
+/**
+ * The bar's life as the page lived it, sampled every frame from before the page's own scripts run: whether it was in sight (it has
+ * come into view and its panel has not been let go) and how full it was then, kept for the test to read.
+ */
+async function watchBar(page: Page) {
+  await page.addInitScript(() => {
+    const seen: { at: number; shown: boolean; p: number }[] = [];
+    (window as unknown as { barSeen: typeof seen }).barSeen = seen;
+    const sample = () => {
+      const bar = document.getElementById('bootBar');
+      const boot = document.getElementById('boot');
+      if (bar && boot) {
+        const style = getComputedStyle(bar);
+        const shown = style.display !== 'none' && Number(style.opacity) > 0 && !boot.classList.contains('gone');
+        seen.push({ at: performance.now(), shown, p: Number(bar.style.getPropertyValue('--p') || 0) });
+      }
+      if (seen.length < 20000) requestAnimationFrame(sample);
+    };
+    requestAnimationFrame(sample);
+  });
+}
+const barSeen = (page: Page) =>
+  page.evaluate(() => (window as unknown as { barSeen: { at: number; shown: boolean; p: number }[] }).barSeen);
+
+test.describe('the letters come first', () => {
+  test.use(DESKTOP);
+
+  test('the sky and the letters are drawn before the course, and the course follows', async ({ page }) => {
+    const problems = watch(page);
+    await open(page);
+    const t = await title(page);
+    expect(t.lettersAt, 'the letters were drawn').not.toBeNull();
+    expect(t.courseAt, 'the course was drawn').not.toBeNull();
+    expect(t.lettersAt!, 'the letters first').toBeLessThan(t.courseAt!);
+    // and the page says so in the user-timing marks the boot timeline is read from
+    const marked = await page.evaluate(() => ({
+      letters: performance.getEntriesByName('title-letters')[0]?.startTime ?? null,
+      course: performance.getEntriesByName('title-course')[0]?.startTime ?? null,
+      steps: performance.getEntriesByType('mark').map((m) => m.name),
+    }));
+    expect(marked.letters).toBe(t.lettersAt);
+    expect(marked.course).toBe(t.courseAt);
+    for (const step of ['scripts', 'compile', 'hole', 'letters', 'scene', 'grass'])
+      expect(marked.steps, `${step} was done`).toContain(`boot-${step}`);
+    // the drop's clock starts at the letters: a paused page has not stepped it
+    expect(t.t).toBeLessThan(0);
+    expect(problems).toEqual([]);
+  });
+
+  test('a page that leaves the title out has no letters and no bar', async ({ page }) => {
+    await start(page, { paused: true, seed: 1, screen: true });
+    const t = await title(page);
+    expect(t.lettersAt).toBeNull();
+    expect(t.courseAt).not.toBeNull();
+    expect(await page.locator('#bootBar').isHidden(), 'and no bar').toBe(true);
+  });
+});
+
+test.describe('the letters on the sky', () => {
+  test.use(DESKTOP);
+
+  test('are on the screen, with the panel gone, before the course is in', async ({ page }) => {
+    // reduced motion stands the letters at once, so the moment is the same every run; the course is held back by a gate the page reads
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.addInitScript(() => {
+      const w = window as unknown as { courseGate: Promise<void>; letCourseIn: () => void };
+      w.courseGate = new Promise<void>((done) => (w.letCourseIn = done));
+    });
+    await page.goto('/?seed=1&flyin=0');
+    await expect
+      .poll(() => page.evaluate(() => performance.getEntriesByName('title-letters').length), { timeout: 30_000 })
+      .toBe(1);
+    // the panel is let go from the letters, and the course is not in: the game is not yet there to be asked
+    await expect(page.locator('#boot')).toHaveClass(/gone/);
+    await expect(page.locator('#boot')).toBeHidden();
+    expect(await page.evaluate(() => performance.getEntriesByName('title-course').length), 'no course yet').toBe(0);
+    expect(await page.evaluate(() => window.game === undefined), 'nor a game').toBe(true);
+    await page.addStyleTag({ content: SCENE_ONLY });
+    await expect(page).toHaveScreenshot('title-letters-first.png', { maxDiffPixelRatio: 0.02 });
+    await page.evaluate(() => (window as unknown as { letCourseIn: () => void }).letCourseIn());
+    await ready(page);
+    expect((await title(page)).lettersAt!).toBeLessThan((await title(page)).courseAt!);
+  });
+});
+
+test.describe('the progress bar', () => {
+  test.use(DESKTOP);
+
+  test('is never in sight on a boot that has the title up inside half a second', async ({ page }) => {
+    await watchBar(page);
+    await page.goto('/?seed=1&flyin=0');
+    await ready(page);
+    const boot = await page.evaluate(() => performance.getEntriesByName('title-letters')[0]?.startTime ?? Infinity);
+    await page.waitForTimeout(800);
+    const seen = await barSeen(page);
+    // a dev server serves hundreds of modules and may boot slower than half a second, which is a slow boot; on one that did not, the bar
+    // was never there. The bar's stylesheet is held to the same half second by a unit test
+    test.skip(boot >= BOOT_BAR.after, `this boot took ${Math.round(boot)} ms to the letters, which is a slow one`);
+    expect(seen.length, 'the bar was watched').toBeGreaterThan(5);
+    expect(
+      seen.filter((s) => s.shown),
+      'and never in sight',
+    ).toEqual([]);
+  });
+
+  test('on a machine six times slower it comes up, and only fills', async ({ page }) => {
+    test.setTimeout(120_000);
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 6 });
+    await watchBar(page);
+    await page.goto('/?seed=1&flyin=0');
+    await ready(page);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+    const seen = await barSeen(page);
+    const shown = seen.filter((s) => s.shown);
+    expect(shown.length, 'the bar was in sight').toBeGreaterThan(3);
+    expect(shown[0].at, 'and not before half a second').toBeGreaterThanOrEqual(BOOT_BAR.after - 50);
+    // it only grows, from the first frame to the last, in sight or not
+    for (let i = 1; i < seen.length; i++) expect(seen[i].p, `at sample ${i}`).toBeGreaterThanOrEqual(seen[i - 1].p);
+    expect(shown[shown.length - 1].p, 'and has got somewhere').toBeGreaterThan(0.2);
+    // gone with the panel
+    await faded(page);
+    expect(await page.locator('#bootBar').isHidden()).toBe(true);
+  });
+});
+
 test.describe('the letters', () => {
   test.use(DESKTOP);
 
@@ -186,7 +313,8 @@ test.describe('the letters', () => {
     await step(other, 48);
     const b = await title(other);
     await other.close();
-    expect(b).toEqual(a);
+    // the moments the two pages drew in are their own, and the rest is the same to the digit
+    expect({ ...b, lettersAt: 0, courseAt: 0 }).toEqual({ ...a, lettersAt: 0, courseAt: 0 });
   });
 
   test('stand at once for a player who asked for less motion, with the cards up and no fade', async ({ page }) => {
