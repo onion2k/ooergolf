@@ -287,3 +287,16 @@ function areaOf(mesh: Mesh): number {
   }
   return sum;
 }
+
+describe('no group of a hole is drawn of nothing', () => {
+  // the GPU warns of a draw with an index count of nought, once a frame a group of no triangles is drawn: a golf hole has no rail
+  for (const name of ['The Meadow', 'The Links']) {
+    it(`${name}'s first hole, still and moving`, () => {
+      const holes = course(name);
+      const { still, moving } = drawn(wearing('', holes), holes[0].name);
+      expect(still.filter((g) => g.mesh.indices.length === 0).length, 'still').toBe(0);
+      // the aim, the marker and the like are pools that begin with none drawn, and they hold their meshes
+      expect(moving.filter((g) => g.mesh.indices.length === 0).length, 'moving').toBe(0);
+    });
+  }
+});

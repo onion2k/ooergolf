@@ -619,8 +619,9 @@ export class Scene {
           ...(finish === 'turf' ? { texture: turf(golf) } : {}),
         })),
       { ...group({ ...collarPart, material: stripe(cupTile) }, atCup) },
-      { mesh: rails.sides, matrices: still, ...look(PALETTE.rail) },
-      { mesh: rails.cap, matrices: still, ...look(PALETTE.railCap) },
+      // a golf hole has no rail, and a group of no triangles is drawn by the GPU with an index count of nought, each frame
+      ...(rails.sides.indices.length ? [{ mesh: rails.sides, matrices: still, ...look(PALETTE.rail) }] : []),
+      ...(rails.cap.indices.length ? [{ mesh: rails.cap, matrices: still, ...look(PALETTE.railCap) }] : []),
       // under a hole of minigolf, the rough's own colour, which the grass on past it holds; under a hole of golf, the dry grass
       // out of bounds is, out to the horizon, with nothing standing on it past the stakes
       layout.golf

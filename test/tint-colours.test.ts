@@ -56,13 +56,13 @@ function drawn(course: string, hole: number) {
   return { groups: new Scene().static(layout, h.name), layout };
 }
 
-/** The hashes of what a golf hole's static groups hold, written from a3c39d3; the meshes' written again on 10 October 2026 from d918912 unchanged, when they came to be taken over steadied bytes (`steady.ts`), since the raw bytes, written on a Mac, differed on Linux in a last bit of the minigolf ponds' stones. */
+/** The hashes of what a golf hole's static groups hold, written from a3c39d3; the meshes' written again on 10 October 2026 from d918912 unchanged, when they came to be taken over steadied bytes (`steady.ts`), since the raw bytes, written on a Mac, differed on Linux in a last bit of the minigolf ponds' stones. The two golf holes' were written again the same day when the golf hole's two rail groups, which have no triangles, stopped being made (the GPU warned of a draw of nothing): a group of no triangles is left out of the hash. */
 const AT_MAIN = {
   'The Meadow/0': { meshes: 2351288662, looks: 2200126830 },
   'The Pinball Shed/0': { meshes: 3193777536, looks: 3808239087 },
   'The Waterworks/0': { meshes: 1616752155, looks: 3638244723 },
-  'The Links/0': { meshes: 3904169832, looks: 452526405, tintedMeshes: 4107679639 },
-  'The Isles/1': { meshes: 3274599426, looks: 215032629, tintedMeshes: 1776637673 },
+  'The Links/0': { meshes: 2911940638, looks: 79908569, tintedMeshes: 4107679639 },
+  'The Isles/1': { meshes: 1880295336, looks: 2508287545, tintedMeshes: 1776637673 },
 } as Record<string, { meshes: number; looks: number; tintedMeshes?: number }>;
 
 describe('what the banks tint leaves as it was', () => {
@@ -71,7 +71,7 @@ describe('what the banks tint leaves as it was', () => {
     const want = AT_MAIN[key];
     it(`${key}: every group but the rough's and out of bounds' is the bytes and the look it was`, () => {
       const { groups } = drawn(course, Number(hole));
-      const kept = groups.filter((g) => !tinted(g) || want.tintedMeshes === undefined);
+      const kept = groups.filter((g) => g.mesh.indices.length > 0 && (!tinted(g) || want.tintedMeshes === undefined));
       const meshes = kept.reduce((x, g) => Math.imul(x ^ meshHash(g), 16777619) >>> 0, 2166136261);
       const looks = fnv(new TextEncoder().encode(kept.map(lookOf).join('\n')));
       if (process.env.TINT_PRINT) console.log(key, JSON.stringify({ meshes, looks }));
