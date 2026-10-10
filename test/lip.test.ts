@@ -30,7 +30,9 @@ function chip(seed: number, back: number, shape: number, spin: number) {
 
 describe('a ball on the lip of the cup', () => {
   it('is not left asleep there: the chip that was found resting on the rim falls in', () => {
-    const g = chip(401, 34, -1, 1);
+    // found again on 10 October 2026: the chip that was found first (seed 401, from 34 yards) curved twice as far when the draw was
+    // doubled and no longer came to the rim; this one, struck the same way (a draw and topspin), does
+    const g = chip(403, 28.5, -1, 1);
     expect(checkInvariants(g)).toEqual([]);
     expect(g.phase, 'it dropped').toBe('done');
   });
