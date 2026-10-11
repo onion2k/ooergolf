@@ -76,6 +76,64 @@ describe('a gesture', () => {
   });
 });
 
+describe('a drag held', () => {
+  it('is held from the moment a pointer is pressed in aim mode, before it has moved, until it is let go or taken back', () => {
+    const g = make();
+    expect(g.holding).toBe(false);
+    g.down(1, 400, 300);
+    expect(
+      g.holding,
+      'pressed, and not yet pulled back, which is when a player wants to know how to take it back',
+    ).toBe(true);
+    expect(g.aim, 'no aim yet').toBe(null);
+    g.move(1, 400, 300 + full / 2);
+    expect(g.holding).toBe(true);
+    g.up(1, 400, 300 + full / 2);
+    expect(g.holding, 'let go').toBe(false);
+  });
+
+  it('is taken back by a second finger, by the browser taking the pointer, and by letting go where it began, and the hint goes with it', () => {
+    const second = make();
+    second.down(1, 400, 300);
+    second.move(1, 400, 500);
+    second.down(2, 500, 300);
+    expect(second.holding, 'a second finger').toBe(false);
+    second.up(2, 500, 300);
+    expect(second.holding, 'and the finger left behind starts nothing').toBe(false);
+    const cancelled = make();
+    cancelled.down(1, 400, 300);
+    cancelled.cancel(1);
+    expect(cancelled.holding, 'the browser took the pointer').toBe(false);
+    const back = make();
+    back.down(1, 400, 300);
+    back.move(1, 400, 500);
+    back.move(1, 401, 302);
+    expect(back.holding, 'pulled back to where it began it is still held, until it is let go').toBe(true);
+    back.up(1, 401, 302);
+    expect(back.holding).toBe(false);
+  });
+
+  it('is not held in overhead mode, where a drag is a pan and there is no shot to take back', () => {
+    const g = make();
+    g.setMode('overhead');
+    g.down(1, 400, 300);
+    expect(g.holding).toBe(false);
+    g.move(1, 420, 330);
+    expect(g.holding).toBe(false);
+    g.setMode('aim');
+    g.down(2, 500, 300);
+    expect(g.holding, 'a second finger is a pinch').toBe(false);
+  });
+
+  it('is dropped when the mode changes under it, as the drag is', () => {
+    const g = make();
+    g.down(1, 400, 300);
+    expect(g.holding).toBe(true);
+    g.setMode('overhead');
+    expect(g.holding).toBe(false);
+  });
+});
+
 describe('a gesture in overhead mode', () => {
   const over = () => {
     const g = make();

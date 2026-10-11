@@ -63,7 +63,10 @@ describe('the fuzzer', () => {
     // Seed 3's (level golf) moved from 2670 to 2702 on 9 October 2026 when a golf ball's lie began to be read from the curves the
     // ground is drawn by (`zones.ts`) and not the tile: shown by putting `lieAt` and `isOut` back to the tile's in a scratch
     // edit, which gives 2670 to the draw (the fuzzer's `aimed` fix, tried alone, leaves 2702): the rounds on a hole's edges differ.
-    expect([one.drawn, two.drawn, golf.drawn], "draws from the monkey's main stream").toEqual([3199, 3100, 2702]);
+    // Seed 26's moved from 3199 to 3142 and seed 3's (level golf) from 2702 to 2699 on 10 October 2026 when the draw and the fade began to
+    // turn a ball twice as far (`SHAPE.turn`, 0.19 to 0.38): the monkey shapes a good many strokes, and a ball that curves further comes
+    // down, and is played on from, somewhere else. Shown by putting 0.19 back in a scratch edit, which gives 3199 and 2702 again; 17 did not move.
+    expect([one.drawn, two.drawn, golf.drawn], "draws from the monkey's main stream").toEqual([3142, 3100, 2699]);
     // the framing rule was asked of the camera, on golf and on minigolf, a good many times: a check that never ran passes in silence
     expect(one.framed + two.framed, 'times the framing was checked').toBeGreaterThan(300);
     expect(golf.framed, 'times it was checked on level golf').toBeGreaterThan(30);
@@ -72,6 +75,8 @@ describe('the fuzzer', () => {
     const titled = sum(sum(sum(one.checked, two.checked), golf.checked), island.checked);
     expect(titled.title, 'frames of the title held to its rules').toBeGreaterThan(30);
     expect(titled['course chosen mid-drop'], 'courses chosen while the letters dropped').toBeGreaterThan(0);
+    // the sky is seen by a fly-in and by no other view, and the rule was asked of frames that saw it: a check that never ran passes in silence
+    expect(titled['sky seen'], 'frames that saw the sky, held to its rule').toBeGreaterThan(30);
     expect(one.failure, JSON.stringify(one.failure)).toBe(null);
     expect(two.failure, JSON.stringify(two.failure)).toBe(null);
     expect(golf.failure, JSON.stringify(golf.failure)).toBe(null);

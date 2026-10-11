@@ -7,9 +7,12 @@
  */
 import { Camera } from 'artshape-render/gpu/camera';
 import { describe, expect, it } from 'vitest';
-import { CLIP, CameraRig, FLY_IN, TILT } from '../src/camera';
+import { aimView, reachOf } from '../src/aimview';
+import { BAG } from '../src/bag';
+import { CLIP, CameraRig, FLY_IN, SKY_TILT, TILT, VIEW, seesSky } from '../src/camera';
 import { Director } from '../src/director';
 import { flyInProblems } from '../src/invariants';
+import { LIE } from '../src/surfaces';
 import { DT, golfGame, newGame, FLAT } from './helpers';
 
 const ASPECT = 1.6;
@@ -197,5 +200,99 @@ describe('the fly-in by the rules', () => {
     expect(flyInProblems(rig, 1, -10).length).toBeGreaterThan(0);
     // and it goes lower than the play view ever may, which is why it has a rule of its own
     expect(TILT.most).toBeLessThan(FLY_IN.tilt);
+  });
+});
+
+describe('the sky', () => {
+  /** A camera tilted `tilt` from the vertical, looking at the ground ahead of where it stands. */
+  function tilted(tilt: number): Camera {
+    const cam = new Camera();
+    cam.fov = VIEW.fov;
+    cam.aspect = ASPECT;
+    cam.target = [0, 0, 0];
+    cam.position = [0, -Math.sin(tilt) * 50, Math.cos(tilt) * 50];
+    cam.update();
+    return cam;
+  }
+
+  it('is seen by a view exactly when the top of its screen looks above the horizon, at every tilt', () => {
+    let above = 0,
+      below = 0;
+    for (let tilt = 0.05; tilt < 1.55; tilt += 0.01) {
+      const sees = topLooks(tilted(tilt)) > 0;
+      expect(seesSky(tilt), `tilt ${tilt.toFixed(2)}`).toBe(sees);
+      if (sees) above++;
+      else below++;
+    }
+    // a check that met only one side passes in silence
+    expect(above).toBeGreaterThan(10);
+    expect(below).toBeGreaterThan(100);
+  });
+
+  it('is seen by the fly-in and by no view a shot is played from, the tilt limits and every club’s aim view on every screen included', () => {
+    expect(FLY_IN.tilt).toBeGreaterThan(SKY_TILT);
+    expect(TILT.most).toBeLessThan(SKY_TILT);
+    for (const [aspect, height] of [
+      [1.6, 800],
+      [1.0, 800],
+      [400 / 860, 860],
+    ] as const)
+      for (const club of BAG) {
+        const rig = new CameraRig();
+        rig.setScreen(aspect);
+        rig.setGolf(true);
+        rig.aimAt(aimView(reachOf(club, LIE.fairway, 0), aspect, height), true);
+        expect(rig.seesSky(0), `${club.id} at ${aspect}`).toBe(false);
+        for (const tilt of [TILT.least, TILT.home, TILT.most]) {
+          rig.aimAt({ distance: rig.distance, tilt }, true);
+          expect(rig.seesSky(0), `${club.id} at tilt ${tilt}`).toBe(false);
+        }
+      }
+  });
+
+  it('is seen as the fly-in begins and while it holds, and not from the moment the top of the screen is under the horizon', () => {
+    const rig = new CameraRig();
+    rig.flyIn(0, 0, 0, 0, AHEAD);
+    for (const t of [0, FLY_IN.hold * 0.9]) expect(rig.seesSky(t), `at ${t}`).toBe(true);
+    let sawLast = -1,
+      lostAt = -1;
+    for (let t = 0; t < FLY_IN.hold + FLY_IN.time + 0.5; t += DT) {
+      const sees = rig.seesSky(t);
+      // the rig and the camera it places agree, at every moment of the flight
+      expect(sees, `at ${t.toFixed(2)}`).toBe(topLooks(placed(rig, t)) > 0);
+      if (sees) sawLast = t;
+      else if (lostAt < 0) lostAt = t;
+    }
+    // seen up to a time and not after it, which is inside the flight and not at its end
+    expect(lostAt).toBeGreaterThan(sawLast);
+    expect(lostAt).toBeLessThan(FLY_IN.hold + FLY_IN.time);
+    expect(rig.seesSky(FLY_IN.hold + FLY_IN.time + 0.1)).toBe(false);
+  });
+
+  it('is not seen from overhead, nor while the view is blending to it', () => {
+    const rig = new CameraRig();
+    rig.flyIn(0, 0, 0, 0, AHEAD);
+    expect(rig.seesSky(0)).toBe(true);
+    rig.setOverhead(true, { bounds: { minX: -20, minY: -20, maxX: 20, maxY: 20 }, distance: 300 }, 0);
+    for (let f = 0; f < 120; f++) rig.settle(DT);
+    expect(rig.blend).toBe(1);
+    expect(rig.seesSky(5)).toBe(false);
+    // and half way to it a view as tilted as the fly-in has come down past the horizon
+    expect(seesSky(FLY_IN.tilt, 0.5)).toBe(false);
+    expect(seesSky(FLY_IN.tilt, 0)).toBe(true);
+  });
+
+  it('is held to by the rules: a view that sees it with no fly-in under way is a problem, and the fly-in itself is not', () => {
+    const rig = new CameraRig();
+    rig.flyIn(0, 0, 0, 0, AHEAD);
+    for (let t = 0; t < FLY_IN.hold + FLY_IN.time + 0.5; t += 0.1)
+      expect(flyInProblems(rig, t, 0), `at ${t}`).toEqual([]);
+    // a play view tilted up to the horizon, which no limit of the camera allows and the rule is for
+    const wrong = new CameraRig();
+    wrong.tilt = FLY_IN.tilt;
+    expect(wrong.seesSky(0)).toBe(true);
+    const bad = flyInProblems(wrong, 0, 0);
+    expect(bad.length).toBeGreaterThan(0);
+    expect(bad.join(' ')).toMatch(/sky/);
   });
 });

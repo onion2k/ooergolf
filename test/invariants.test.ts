@@ -15,6 +15,7 @@ import {
   groundProblems,
   planProblems,
   framingProblems,
+  lineProblems,
   previewProblems,
   viewProblems,
   TURN_TIME,
@@ -737,5 +738,31 @@ describe('what must hold of the framing', () => {
     rig.distance = VIEW.near;
     const cam = seen(rig);
     expect(framingProblems(rig, cam, ball, reach, box).join('\n')).toMatch(/reach/);
+  });
+});
+
+describe('what must always hold of where the camera turns to a ball come to rest', () => {
+  it('holds where there is no way to face, and where the line is the flag’s own, and where it is a good way off it', () => {
+    const { game } = newGame();
+    expect(lineProblems(game, null, null)).toEqual([]);
+    expect(lineProblems(game, 0.5, 0.5)).toEqual([]);
+    // a hole with a line of play turns away from the flag, round a bend
+    const links = golfGame(linksHoles()[0]).game;
+    expect(links.layout.way).toBeDefined();
+    expect(lineProblems(links, 0.1, -0.4)).toEqual([]);
+    expect(lineProblems(links, 0.1, 0.1)).toEqual([]);
+  });
+
+  it('reports a way to face for the one and not the other, a heading that is not one, a line of play on a hole that has none, and one that looks away from the cup', () => {
+    const { game } = newGame();
+    expect(lineProblems(game, 0.2, null).join('\n')).toMatch(/one and not the other/);
+    expect(lineProblems(game, null, 0.2).join('\n')).toMatch(/one and not the other/);
+    expect(lineProblems(game, NaN, 0.2).join('\n')).toMatch(/not a heading/);
+    expect(lineProblems(game, 0.2, 4).join('\n')).toMatch(/not a heading/);
+    expect(lineProblems(game, 0.3, 0.2).join('\n'), 'minigolf has no line of play').toMatch(/no line of play/);
+    const links = golfGame(linksHoles()[0]).game;
+    expect(lineProblems(links, 0.1, 0.1 + Math.PI * 0.6).join('\n')).toMatch(/away from the cup/);
+    // the short way round is the one that counts
+    expect(lineProblems(links, Math.PI - 0.1, -Math.PI + 0.1)).toEqual([]);
   });
 });

@@ -37,7 +37,7 @@ import { uiScale } from './uiscale';
 import { mapInto, mapSize, paintMap, type MapSize } from './holemap';
 import { Previewer, type Preview } from './preview';
 import { breakAids, breakOf, leansOnMinigolf, readerArrows } from './green';
-import { greensText, landingText, pinReadout, pinText, puttText, windArrow } from './readout';
+import { greensText, heldHint, landingText, pinReadout, pinText, puttText, windArrow } from './readout';
 import { daylight } from './look';
 import { Progress } from './progress';
 import { seeded } from './random';
@@ -911,9 +911,16 @@ async function main() {
    * camera and a camera turning under it would turn the shot; and not when the ball is at the cup, where there is no way to face.
    */
   const faceFlag = (): boolean => !choosing && director.faceFlag(input.aim !== null);
+  /** How the drag now held was begun: a finger takes it back with a second one, and a mouse or a pen by letting go where it pressed. */
+  let pressedBy: 'touch' | 'pointer' = 'pointer';
+  /** Whether a drag was held at the last frame, and the game time it began at, which the help waits `HELD_HINT.after` of to tell how to take it back. */
+  let wasGripping = false,
+    grippedAt = 0;
   canvas.addEventListener('pointerdown', (e) => {
     // the mouse's other buttons are not a shot
     if (e.pointerType === 'mouse' && e.button !== 0) return;
+    // the first pointer of a drag is the one that says how it is taken back; a second finger is the taking back
+    if (input.idle) pressedBy = e.pointerType === 'touch' ? 'touch' : 'pointer';
     canvas.setPointerCapture(e.pointerId);
     input.down(e.pointerId, e.clientX, e.clientY);
   });
@@ -1137,6 +1144,12 @@ async function main() {
     // a ball gone into the cup is not drawn
     renderer.move(0, scene.ball, world.alive[ball] ? 1 : 0);
     drawn.squash = world.alive[ball] ? squashOf(scene.ball, 0, n[0], n[1], n[2]) : 0;
+    // while a drag has been held a moment on a ball that can be struck, the help says how to take it back (a second finger, or letting go
+    // where it began); a shot struck at once is not told
+    const gripping = input.holding && played.ready && played.phase === 'play' && !choosing;
+    if (gripping && !wasGripping) grippedAt = played.t;
+    wasGripping = gripping;
+    hud.setAiming(gripping ? heldHint(pressedBy, grippedAt, played.t) : null);
     // the aim shows only while a shot can be taken
     // a finer club's aim reaches further, as far again as its hardest shot rolls; and a golf club's as far as it carries
     const golf = played.layout.golf;
@@ -1193,6 +1206,9 @@ async function main() {
     // the nearest dot's size, as it was placed: nought for none
     drawn.pulse = dots ? scene.aim[0] - 1 : 0;
     if (dots) renderer.tint(1, scene.aimLooks);
+    // the clouds are drawn to a view that sees the sky, the fly-in's and the title's, and put away from every other: they drift over
+    // the hole at the height a shot is aimed from, and one drawn there covered the shot
+    scene.setSky(titled !== null || rig.seesSky(played.t));
     scene.writeMoving(played.t).forEach((m, k) => {
       renderer.move(2 + k, m.matrices, m.count);
       // what is coloured by game time, as the rings on the water fade, has its colours written again each frame
@@ -1541,6 +1557,7 @@ async function main() {
       turning: rig.turning,
       heading: rig.headed,
       flag: director.nearFlag(),
+      line: director.nearLine(),
       following: director.following,
       rung: governor.rung,
       held: governor.held,
@@ -1596,6 +1613,8 @@ async function main() {
       confetti: drawn.confetti,
       strips: scene.flagStrips(),
       retake: hud.retakeDrawn(),
+      sky: scene.skyDrawn(),
+      help: hud.helpDrawn(),
     }),
     course: () => courseName,
     choosing: () => choosing,

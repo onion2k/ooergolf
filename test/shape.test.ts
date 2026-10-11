@@ -4,8 +4,11 @@
  * nothing; it works only in the air, only for the shot it was chosen for, and never for a putt or on a hole of minigolf.
  */
 import { describe, expect, it } from 'vitest';
+import { aimView, reachOf, safeBox, screenOf } from '../src/aimview';
 import { BAG } from '../src/bag';
+import { standOf, tallOf } from '../src/camera';
 import { checkInvariants } from '../src/invariants';
+import { LIE } from '../src/surfaces';
 import { DT, GREEN, field, golfGame, newGame } from './helpers';
 import { NORTH } from './wind-helpers';
 
@@ -26,11 +29,11 @@ function strike(club: string, shape: number, power = 1, hole = LEVEL) {
 }
 
 describe('a fade and a draw', () => {
-  it('turn a full driver eighteen to thirty yards off its line at the landing, a 7-iron ten to eighteen, a sand wedge two to six', () => {
+  it('turn a full driver forty to fifty-five yards off its line at the landing, a 7-iron twenty to thirty, a sand wedge four and a half to eight and a half', () => {
     for (const [club, least, most] of [
-      ['driver', 18, 30],
-      ['7-iron', 10, 18],
-      ['sand-wedge', 2, 6],
+      ['driver', 40, 55],
+      ['7-iron', 20, 30],
+      ['sand-wedge', 4.5, 8.5],
     ] as const) {
       const fade = strike(club, 1).landing;
       const draw = strike(club, -1).landing;
@@ -45,19 +48,59 @@ describe('a fade and a draw', () => {
     }
   });
 
-  it('shorten the carry only as geometry says: a ball that turns goes less far along its first line, by the cosine of the turn', () => {
+  it('are a big difference, which a player said they were not (10 October 2026: a driver turned less than a ninth of its carry, a sand wedge less than a twenty-fifth): a seventh of the carry or more for the woods and the long and middle irons, a tenth for the short ones, a twelfth for the wedges and a fourteenth for the sand wedge', () => {
+    for (const [club, share] of [
+      ['driver', 1 / 7],
+      ['3-wood', 1 / 7],
+      ['5-iron', 1 / 7],
+      ['7-iron', 1 / 7],
+      ['9-iron', 1 / 10],
+      ['pitching-wedge', 1 / 12],
+      ['sand-wedge', 1 / 14],
+    ] as const) {
+      const straight = strike(club, 0).landing;
+      const fade = strike(club, 1).landing;
+      expect(-fade.across / straight.along, `${club}: a fade, as a share of the carry`).toBeGreaterThan(share);
+    }
+  });
+
+  it('land inside the aim view on a screen as narrow as a phone’s, for the club that curves furthest, so a shape is never aimed blind', () => {
+    for (const [aspect, height] of [
+      [1.6, 800],
+      [1.0, 800],
+      [400 / 860, 860],
+      [360 / 640, 640],
+    ] as const)
+      for (const club of BAG.filter((c) => c.loft > 0)) {
+        const straight = strike(club.id, 0).landing;
+        const fade = strike(club.id, 1).landing;
+        const view = aimView(reachOf(club, LIE.fairway, 0), aspect, height);
+        const r = Math.min(view.distance * tallOf(aspect), standOf(aspect));
+        const [nx] = screenOf(r, view.tilt, view.lead, aspect, fade.along, -fade.across, 0);
+        const box = safeBox(aspect, height);
+        expect(
+          Math.abs(nx),
+          `${club.id} at ${aspect}: the fullest fade at ${nx.toFixed(2)} of the half width`,
+        ).toBeLessThan(box.x);
+        // and the straight shot is the middle of it, so the check is of the curve and not of a shot that was off the screen
+        expect(straight.across).toBeCloseTo(0, 6);
+      }
+  });
+
+  it('shorten the carry only as geometry says: a ball that turns goes less far along its first line, as a steady turn along the same length of path does', () => {
     for (const club of ['driver', '7-iron', 'sand-wedge']) {
       const straight = strike(club, 0).landing;
       const fade = strike(club, 1).landing;
       const lost = straight.along - fade.along;
       expect(lost, club).toBeGreaterThan(0);
-      // the carry is the same length of path, turned by half the turn at most, so the loss is a small share of it
-      const turn = Math.atan2(-fade.across, fade.along);
-      expect(Math.hypot(fade.across, fade.along), `${club}: the path's own length`).toBeCloseTo(
-        Math.hypot(straight.across, straight.along),
-        0,
-      );
-      expect(lost, club).toBeLessThan(straight.along * (1 - Math.cos(turn)) * 1.2 + 0.5);
+      // a path that bends at a steady rate ends on a chord that leaves the line by half the whole turn, so the turn is read off the
+      // chord, and the path's own length is the chord over the share of the arc that it is (the sine of half the turn over half the turn)
+      const half = Math.atan2(-fade.across, fade.along);
+      const chord = Math.hypot(fade.across, fade.along);
+      const arc = chord * (half / Math.sin(half));
+      expect(arc, `${club}: the path's own length`).toBeCloseTo(Math.hypot(straight.across, straight.along), 0);
+      // and what it falls short by along the line is that arc less its chord's share along the line: nothing is lost to the air but the geometry
+      expect(Math.abs(lost - arc * (1 - Math.sin(2 * half) / (2 * half))), `${club}: the carry lost`).toBeLessThan(0.5);
     }
   });
 

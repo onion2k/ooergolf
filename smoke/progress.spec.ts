@@ -652,11 +652,21 @@ test('each hole is flown in to, low behind the tee with the horizon in view, eas
   expect(view.flying, 'flying in to the first hole').toBe(true);
   expect(view.tilt).toBeGreaterThan(1.2);
   expect(view.farPlane).toBeGreaterThan(3000);
+  // the sky is drawn to the fly-in, whose screen has the horizon on it
+  await page.evaluate(() => window.game!.step(1));
+  expect((await page.evaluate(() => window.game!.motions())).sky, 'the clouds drawn to the fly-in').toBeGreaterThan(10);
   // eased to the play view in a few seconds of the game's time
   await page.evaluate(() => window.game!.step(200));
   view = await page.evaluate(() => window.game!.view());
   expect(view.flying, 'over').toBe(false);
   expect(view.tilt).toBeLessThan(1.01);
+  // and to no view a shot is aimed from, nor to the one from overhead: a cloud drifts over the hole at the height they stand at
+  expect((await page.evaluate(() => window.game!.motions())).sky, 'no cloud drawn to the play view').toBe(0);
+  await page.evaluate(() => window.game!.overhead(true));
+  await page.evaluate(() => window.game!.step(60));
+  expect((await page.evaluate(() => window.game!.motions())).sky, 'none from overhead').toBe(0);
+  await page.evaluate(() => window.game!.overhead(false));
+  await page.evaluate(() => window.game!.step(60));
   // the next hole flown in to again, and a real drag from the ball cuts it short
   await page.evaluate(() => window.game!.startHole(1));
   await page.evaluate(() => window.game!.step(2));
@@ -2297,6 +2307,38 @@ test.describe('the flag button', () => {
     const v = await view(page);
     expect(gap(v.azimuth, want)).toBeLessThan(1e-6);
     expect(v.turning).toBe(false);
+    expect(problems).toEqual([]);
+  });
+
+  test('on a dogleg a ball come to rest has the camera turn by itself along the line of play, and not to the flag round the corner; the flag button still turns to the flag', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await longBend(page);
+    // the ball put down 100 yards up the first leg of The Links' Long Bend, and chipped a few yards: it comes to rest there and the camera turns by itself
+    const [a, b] = links()[2].way!;
+    const leg = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const to = [a[0] + ((b[0] - a[0]) / leg) * 100, a[1] + ((b[1] - a[1]) / leg) * 100];
+    await page.evaluate(([x, y]) => {
+      const g = window.game!;
+      g.lay(x, y);
+      g.step(120);
+    }, to);
+    expect(await page.evaluate(() => window.game!.shoot(Math.PI / 2, 0.05, 'sand-wedge'))).toBe(true);
+    await page.evaluate(() => {
+      const g = window.game!;
+      for (let f = 0; f < 40 && !g.state().ready; f++) g.step(30);
+      g.step(240);
+    });
+    const v = await view(page);
+    expect(v.turning, 'done turning').toBe(false);
+    expect(v.line, 'a line of play to look along').not.toBeNull();
+    expect(gap(v.azimuth, v.line!), 'turned to it by itself').toBeLessThan(1e-3);
+    expect(gap(v.azimuth, v.flag!), 'and not to the flag, which is round the bend').toBeGreaterThan(0.1);
+    // the flag button turns to the flag, from the same ball
+    await page.locator('#viewFlag').click();
+    await page.evaluate(() => window.game!.step(120));
+    expect(gap((await view(page)).azimuth, v.flag!), 'the button faces the flag').toBeLessThan(1e-3);
     expect(problems).toEqual([]);
   });
 

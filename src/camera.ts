@@ -114,6 +114,23 @@ export interface OverheadFit {
 const BLENDED = 0.002;
 
 /**
+ * How far from the vertical a view may be tilted before the top of its screen is above the horizon, in radians: a quarter turn
+ * less half the lens. A view tilted less sees no sky at all, which is every view a shot is played from (`TILT.most` is well
+ * under it) and the view from overhead; the fly-in, at `FLY_IN.tilt`, and the title's are the views that see it. A cloud is
+ * drawn only to a view that does: the clouds drift at a height the aim view stands at, and over the hole, and one that was
+ * drawn to a view a shot is aimed from hid the shot (it covered the whole screen of a phone, on The Fell Race).
+ */
+export const SKY_TILT = Math.PI / 2 - (VIEW.fov * Math.PI) / 360;
+
+/**
+ * Whether a view tilted `tilt` from the vertical, and `blend` of the way to the overhead view, has the horizon on its screen
+ * and so sees the sky: the tilt the blend leaves it with is past `SKY_TILT`.
+ */
+export function seesSky(tilt: number, blend = 0): boolean {
+  return tilt + (OVERHEAD.tilt - tilt) * blend > SKY_TILT;
+}
+
+/**
  * How far back the overhead view stands to show the whole of `bounds` (and `OVERHEAD.margin` more) for a camera turned to
  * `azimuth` on a screen of `aspect`: the least distance at which every corner is on the screen, and no more than
  * `OVERHEAD.far`. Worked out about the middle of the bounds, in the camera's own right and up, since the view is turned.
@@ -599,6 +616,11 @@ export class CameraRig {
     out.azimuth = this.azimuth + this.easeTurn * k;
     out.tilt = this.flown ? this.tilt + (this.easeFrom - this.tilt) * k : this.tilt + this.easeTilt * k;
     return out;
+  }
+
+  /** Whether the view at game time `t` has the horizon on its screen, and sees the sky (`SKY_TILT`): the fly-in does, and nothing a shot is played from. */
+  seesSky(t: number): boolean {
+    return seesSky(this.view(t, this.seen).tilt, this.k);
   }
 
   /** The camera put where the rig says at game time `t`, for a screen of the camera's aspect: any glide over, untold. */

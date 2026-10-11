@@ -507,6 +507,12 @@ export class Scene {
   private readonly bankNext = makeBank();
   /** How many pieces the flag's cloth is drawn in: one, or six on a hole begun with the rainbow flag; none before a hole. */
   private strips = 0;
+  /**
+   * Whether the view the page draws to can see the sky (`setSky`), and the matrices of the clouds the hole was begun with, kept
+   * so that what is drawn can be read back. The clouds are put away, a matrix of no size, while it cannot.
+   */
+  private sky = true;
+  private clouds: Float32Array[] = [];
   private banked: Entry | null = null;
   /** The shot in hand as the page last handed it, and how much bigger its marks are drawn for the view, and which way it is aimed. */
   private shot: { preview: Preview; scale: number } | null = null;
@@ -1083,12 +1089,14 @@ export class Scene {
     this.ghosting = null;
     this.banked = null;
     this.strips = 0;
+    this.clouds = [];
     const pool = (model: { parts: Model['parts'] }, write: (out: Float32Array, t: number) => void, count = 1) => {
       const matrices = new Float32Array(16 * count);
       for (const part of model.parts) {
         this.moving.push({ matrices, count, write });
         out.push(group(part, matrices, count));
       }
+      return matrices;
     };
     if (layout) {
       const { cup } = layout;
@@ -1128,14 +1136,18 @@ export class Scene {
       CLOUDS.forEach((model, k) => {
         const of = sky.filter((_, i) => i % CLOUDS.length === k);
         if (!of.length) return;
-        pool(
-          model,
-          (m, t) =>
-            of.forEach((c, i) => {
-              const at = cloudAt(c, t, way);
-              place(m, i, at.x, at.y, c.z, c.yaw, c.scale);
-            }),
-          of.length,
+        // drawn only to a view that sees the sky; to any other they are a matrix of no size, in the place they are in, since they
+        // drift at the height a shot is aimed from and over the hole itself, and one drawn there is a cloud over the shot
+        this.clouds.push(
+          pool(
+            model,
+            (m, t) =>
+              of.forEach((c, i) => {
+                const at = cloudAt(c, t, way);
+                place(m, i, at.x, at.y, c.z, c.yaw, this.sky ? c.scale : 0);
+              }),
+            of.length,
+          ),
         );
       });
       this.rings(layout, out);
@@ -1570,6 +1582,21 @@ export class Scene {
       knock: d.knock.count ? { x: m(d.knock)[12], y: m(d.knock)[13] } : null,
       rest,
     };
+  }
+
+  /**
+   * Whether the view the page draws to can see the sky (`CameraRig.seesSky`, or the title's own camera): the clouds are drawn
+   * while it can, as they always were, and put away while it cannot. Written each frame, and only read as the clouds are placed.
+   */
+  setSky(on: boolean) {
+    this.sky = on;
+  }
+
+  /** How many clouds the last frame placed with a size to be seen: all of them while the sky is seen, and none while it is not; for the page to read back. */
+  skyDrawn(): number {
+    let n = 0;
+    for (const m of this.clouds) for (let o = 0; o < m.length; o += 16) if (m[o] !== 0 || m[o + 1] !== 0) n++;
+    return n;
   }
 
   /** What moves on the hole where it is at game time `t`, into its pools, in the order of the groups after the aim. */

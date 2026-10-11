@@ -62,6 +62,15 @@ export class Gesture {
     return this.mode_;
   }
 
+  /**
+   * Whether an aim drag is under way: one pointer pressed in aim mode and not yet let go, whether or not it has been pulled
+   * back far enough to aim a shot (`aim` is null until it has), and not once a second finger has landed or the browser has taken
+   * the pointer. What the page says how to take it back while it is, since the shot is the player's to take back as long as it is.
+   */
+  get holding(): boolean {
+    return this.drag !== null;
+  }
+
   /** A drag now is a shot or a pan of the view, and any under way is dropped, so it never ends as the other. */
   setMode(mode: Mode) {
     if (mode === this.mode_) return;

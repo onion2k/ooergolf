@@ -16,6 +16,9 @@ import { Progress, memoryStore } from '../src/progress';
 import { Game } from '../src/game';
 import { seeded } from '../src/random';
 import { carryFrom } from '../src/flight';
+import type { HoleDef } from '../src/course';
+import { PLAY_AHEAD, lookAlong } from '../src/lineofplay';
+import { links } from '../src/links';
 import { windReach } from '../src/shaping';
 import { LIE } from '../src/surfaces';
 import { DT, field, golfGame, newGame, settle } from './helpers';
@@ -348,6 +351,119 @@ describe('the camera on a ball come to rest', () => {
       director.frame(DT, false);
     }
     expect(rig.turning).toBe(false);
+  });
+});
+
+describe('the camera on a ball come to rest on a dogleg', () => {
+  // The Big Dogleg: 560 yards, a bend of 40 degrees to the left with its corner 308 yards from the tee, and The Opener, which has none
+  const dogleg = links()[6];
+  const straight = links()[0];
+
+  /**
+   * A game on `hole` with the ball put down `back` yards up the first leg of its way (or `beyond` yards short of the cup, along
+   * the way, if that is given) and struck a few yards by the sand wedge, as a player's short shot is, and played until it is ready
+   * again and the camera has done what it does by itself.
+   */
+  function rested(hole: HoleDef, along: number, beyond = false) {
+    const { game } = golfGame(hole);
+    const { rig, director } = directed(game);
+    director.started();
+    run(director, 3);
+    const way = game.layout.way!;
+    const last = way[way.length - 1],
+      before = way[way.length - 2];
+    // the point `along` yards from the start of the way, or, with `beyond`, from its end back along the last leg
+    const [ax, ay] = beyond ? last : way[0];
+    const [bx, by] = beyond ? before : way[1];
+    const d = Math.hypot(bx - ax, by - ay);
+    const [px, py] = [ax + ((bx - ax) / d) * along, ay + ((by - ay) / d) * along];
+    game.place(px, py);
+    game.pick('sand-wedge');
+    expect(game.shoot(Math.atan2(game.layout.cup.y - py, game.layout.cup.x - px), 0.05)).toBe(true);
+    director.struck();
+    let frames = 0;
+    while (!game.ready && frames++ < 3000) {
+      game.step(DT);
+      director.frame(DT, false);
+    }
+    expect(game.ready).toBe(true);
+    run(director, 5);
+    return { game, rig, director };
+  }
+
+  const here = (game: ReturnType<typeof golfGame>['game']) => ({
+    x: game.world.x[game.ball],
+    y: game.world.y[game.ball],
+  });
+
+  it('turns to look along the line of play and not at the flag, which on a dogleg is round the corner', () => {
+    const { game, rig, director } = rested(dogleg, 100);
+    expect(rig.turning).toBe(false);
+    const ball = here(game);
+    const to = { x: 0, y: 0 };
+    expect(lookAlong(game.layout.way, ball.x, ball.y, PLAY_AHEAD, to)).toBe(true);
+    expect(rig.azimuth, 'it faces the line of play').toBe(facing(ball, to));
+    expect(rig.azimuth).toBe(director.nearLine());
+    // which is well off the flag from here: the cup is 22 degrees round the bend and the way ahead is 5
+    expect(Math.abs(wrap(rig.azimuth - (director.nearFlag() as number))), 'and not the flag').toBeGreaterThan(0.2);
+  });
+
+  it('leaves the flag button to the flag: it turns to the cup’s own heading from the same ball', () => {
+    const { game, rig, director } = rested(dogleg, 100);
+    expect(director.faceFlag(false)).toBe(true);
+    run(director, 3);
+    expect(rig.azimuth).toBe(facing(here(game), game.layout.cup));
+    expect(rig.azimuth).toBe(director.nearFlag());
+    expect(director.nearLine()).not.toBe(director.nearFlag());
+  });
+
+  it('turns to the flag itself once it is within reach, whatever the bend, as it always did', () => {
+    for (const back of [PLAY_AHEAD - 40, 60, 20]) {
+      const { game, rig, director } = rested(dogleg, back, true);
+      expect(
+        Math.hypot(game.world.x[game.ball] - game.layout.cup.x, game.world.y[game.ball] - game.layout.cup.y),
+      ).toBeLessThan(PLAY_AHEAD);
+      // a ball come to rest settles a hair on a slope after the camera has turned: the heading of its place now is within a thousandth
+      expect(Math.abs(wrap(rig.azimuth - (director.nearFlag() as number))), `${back} from the cup`).toBeLessThan(1e-3);
+      expect(director.nearLine(), `${back} from the cup`).toBe(director.nearFlag());
+    }
+  });
+
+  it('is the flag’s own heading on a hole with no line of play, which is every hole the tests make, and on minigolf', () => {
+    const { game } = golfGame(field('f'));
+    const rig = new CameraRig();
+    const d = new Director(rig);
+    d.use(game);
+    d.setScreen(ASPECT, HEIGHT);
+    d.started();
+    expect(game.layout.way).toBeUndefined();
+    expect(d.nearLine()).toBe(d.nearFlag());
+    const mini = newGame(1).game;
+    const r2 = new CameraRig();
+    const d2 = new Director(r2);
+    d2.use(mini);
+    d2.setScreen(ASPECT, HEIGHT);
+    d2.started();
+    expect(d2.nearLine()).toBe(d2.nearFlag());
+  });
+
+  it('is nothing at the cup, where there is no way to face, as the flag is', () => {
+    const { game } = golfGame(dogleg);
+    const { director } = directed(game);
+    director.started();
+    game.world.x[game.ball] = game.layout.cup.x;
+    game.world.y[game.ball] = game.layout.cup.y;
+    expect(director.nearLine()).toBe(null);
+    expect(director.nearFlag()).toBe(null);
+  });
+
+  it('changes a straight hole very little: a ball on the line of The Opener is turned to within a degree of the flag', () => {
+    for (const back of [60, 120, 180]) {
+      const { game, rig, director } = rested(straight, back);
+      const off = Math.abs(wrap(rig.azimuth - (director.nearFlag() as number)));
+      expect(off, `${back} yards up`).toBeLessThan(0.02);
+      expect(game.layout.way, 'The Opener has its line of play').toBeDefined();
+    }
   });
 });
 

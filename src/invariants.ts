@@ -27,7 +27,8 @@
  * (`GREEN`, and a tenth over for the smoothing the physics rolls a ball on); the first cut is only on ground a ball is
  * played from, never sand, water, out of bounds, rock or the rail; a ball at rest on a golf hole is on a slope its
  * lie holds a ball on; the break a putt is shown is a number across no further than the cup is; and the arrows laid over
- * a green are numbers, each on a tile of putting green, and no more than its tiles.
+ * a green are numbers, each on a tile of putting green, and no more than its tiles. And the camera: the sky is the fly-in's
+ * alone (`flyInProblems`), and a ball come to rest has it turn along the line of play, never away from the cup (`lineProblems`).
  *
  * Checked by the fuzzer after everything it does, by the test API on asking,
  * and by the unit tests. Each broken rule is a line saying what and where.
@@ -86,6 +87,38 @@ const WIND_FLIGHT = 8;
 export const TURN_TIME = 2;
 
 /**
+ * Where the camera turns by itself to a ball come to rest (`line`, from `Director.nearLine`) against where the flag button turns
+ * it (`flag`, `Director.nearFlag`): each a number within a turn, and neither only for a ball at the cup, where there is no way to
+ * face. The line of play looks along the hole toward where the cup is and never away from it, so it is within a quarter turn of
+ * the flag, and a hole with no line of play (every hole of minigolf, and a hole a test makes) has the flag's own heading exactly.
+ */
+export function lineProblems(game: Game, line: number | null, flag: number | null): string[] {
+  const out: string[] = [];
+  if ((line === null) !== (flag === null)) {
+    out.push(
+      `the camera turns by itself to ${line} and the flag button to ${flag}: a way to face for one and not the other`,
+    );
+    return out;
+  }
+  if (line === null || flag === null) return out;
+  for (const [what, a] of [
+    ['the line of play', line],
+    ['the flag', flag],
+  ] as const)
+    if (!Number.isFinite(a) || Math.abs(a) > Math.PI + 1e-9)
+      out.push(`${what} is faced at ${a}, which is not a heading within a turn`);
+  if (out.length) return out;
+  const off = Math.abs(((line - flag + 3 * Math.PI) % (2 * Math.PI)) - Math.PI);
+  if (!game.layout.way && line !== flag)
+    out.push(`a hole with no line of play has the camera turn to ${line} by itself and ${flag} at the flag button`);
+  if (off > Math.PI / 2)
+    out.push(
+      `the camera turns to look ${((off * 180) / Math.PI).toFixed(0)} degrees from the flag, which is away from the cup`,
+    );
+  return out;
+}
+
+/**
  * The rules a camera must always keep, however a player has turned, tilted and zoomed it: its turn and its tilt are
  * numbers, it has turned no more than a turn either way and is tilted within `TILT`, it is no nearer or further than the
  * zoom allows (which is further on a golf hole), and it looks ahead of the ball by a number of yards. And a camera turning
@@ -134,6 +167,8 @@ export function flyInProblems(rig: CameraRig, t: number, began: number): string[
     out.push(`the view is tilted to ${tilt}, past the fly-in's ${FLY_IN.tilt} or the least ${TILT.least}`);
   if (rig.flying(t) && t - began > FLY_IN.hold + FLY_IN.time + FLY_IN.cut + 1e-6)
     out.push(`the fly-in is still under way ${(t - began).toFixed(2)} seconds after the hole began`);
+  // the sky is the fly-in's alone: a view a shot is aimed from that saw it would have a cloud drawn between it and the shot
+  if (rig.seesSky(t) && !rig.flying(t)) out.push(`the view sees the sky, tilted to ${tilt}, with no fly-in under way`);
   return out;
 }
 

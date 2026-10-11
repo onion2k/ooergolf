@@ -107,6 +107,31 @@ describe('the input', () => {
   });
 });
 
+describe('the drag held, as the page says how to take it back', () => {
+  it('is held from the press to the end of the drag, and not while a screen is up over the course', () => {
+    const { input } = make();
+    expect(input.holding).toBe(false);
+    input.down(1, 400, 300);
+    expect(input.holding).toBe(true);
+    input.up(1, 400, 300);
+    expect(input.holding).toBe(false);
+    input.down(2, 400, 300);
+    input.down(3, 450, 300);
+    expect(input.holding, 'a second finger took it back').toBe(false);
+  });
+
+  it('is nothing in overhead mode, and held again in aim mode', () => {
+    const { input } = make();
+    input.setMode('overhead');
+    input.down(1, 400, 300);
+    expect(input.holding).toBe(false);
+    input.up(1, 400, 300);
+    input.setMode('aim');
+    input.down(2, 400, 300);
+    expect(input.holding).toBe(true);
+  });
+});
+
 describe('the view held for a drag', () => {
   it('is held once, at the first pointer of an aim drag and before the ground is read', () => {
     const order: string[] = [];

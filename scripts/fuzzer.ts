@@ -38,6 +38,7 @@ import {
   checkInvariants,
   framingProblems,
   flyInProblems,
+  lineProblems,
   kickerProblems,
   knockProblems,
   landingProblems,
@@ -223,6 +224,15 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
             told.push(...lieProblems(playing, args[0], args[1]));
             count(checked, 'lie at rest');
             if (onBank(playing.layout, args[0], args[1])) count(checked, 'rest on a bank');
+          }
+          // a ball come to rest has the camera turn to look along the hole's line of play: held to its rule, and counted, with how often
+          // it was a heading other than the flag's (a dogleg), since a check that never ran passes in silence
+          if (name === 'stopped' && playing && directing) {
+            const line = directing.nearLine(),
+              flag = directing.nearFlag();
+            told.push(...lineProblems(playing, line, flag));
+            count(checked, 'line of play');
+            if (line !== null && flag !== null && Math.abs(line - flag) > 0.05) count(checked, 'line off the flag');
           }
           if (name === 'knocked' && playing) told.push(...knockProblems(playing, ...(args as Knock)));
           // a stream is a belt: the ball is carried on it, and never lost
@@ -897,7 +907,10 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
         Math.max(0, Math.min(SCREEN.h, press[1] + Math.sin(turn) * length)),
       ] as const;
       input.down(1, ...press);
+      // a drag pressed is held, pulled back yet or not, which is what the page says how to take back while it is
+      if (!input.holding) told.push('a drag that was pressed was not said to be held');
       input.move(1, ...now);
+      if (!input.holding) told.push('a drag that was pulled back was not said to be held');
       const held = input.aim as Shot | null;
       const aim = held ? { angle: held.angle, power: held.power } : null;
       const strong = aim !== null && aim.power >= AIM_TURN.least;
@@ -931,10 +944,13 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
         input.up(1, ...press);
       } else if (how === 1) {
         input.down(2, at(0, SCREEN.w), at(0, SCREEN.h));
+        // a second finger takes the drag back as it lands, and what the page said of taking it back goes with it
+        if (input.holding) told.push('a second finger landed and the drag was still said to be held');
         input.up(2, ...press);
         input.up(1, ...press);
       } else input.cancel(1);
       if ((input.aim as Shot | null) !== null) told.push('a drag taken back left an aim');
+      if (input.holding) told.push('a drag taken back was still said to be held');
       const left = rig.azimuth;
       for (let k = 0; k < 60; k++) {
         director.aiming(input.aim);
@@ -1333,6 +1349,8 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
         const bad = flyInProblems(rig, game.t, holeBegan);
         if (bad.length) return fail(bad);
         if (rig.flying(game.t)) count(checked, 'flying');
+        // the sky is held to the same rule, which it is only as strong as the frames it was seen in (`flyInProblems` fails the rest)
+        if (rig.seesSky(game.t)) count(checked, 'sky seen');
       }
       // a kicker throws the hardest of anything on a course, so what it does to the ball is checked in every frame
       if (game.layout.kickers.length) {

@@ -24,7 +24,8 @@ round. A hole pays coins, more for beating par, and a hole in one pays a
 gem; the shop has three aisles of fifteen, clubs, balls and accessories, and
 you wear one from each. The coins, the kit you own and the best score on each hole are kept in the browser. The camera follows
 the ball; the wheel zooms on a desktop, and two fingers pinch on a phone. While you pull the ball back the camera turns to look the way you aim, and
-stays there if you think better of it; about one shot in five it follows
+stays there if you think better of it, which you do by putting a second finger down, or by letting go where you pressed (the help says so once a drag has been held a moment);
+a ball come to rest has the camera turn by itself along the hole's line of play, which on a dogleg is the fairway round the bend and not the flag; about one shot in five it follows
 the ball and otherwise holds the view of the shot, and it always keeps the ball and the furthest
 the shot can reach on the screen. An Overhead button shows the whole hole from above, to
 look round and never to aim from, and a flag button beside it turns the camera to look near the flag. On the courses of golf, a bag of
@@ -39,7 +40,7 @@ would come down is on the screen; a drag draws the shot's flight as an arc to a 
 (blue over water, red out of bounds, with a spread showing how far a swing may miss
 it), the bag says how far and onto what, the strokes say how far the pin is and how
 much higher or lower, and a map of the hole sits at the side. A shot can be shaped, a
-draw or a fade that curves in the air, and spun, backspin to check it and topspin to run
+draw or a fade that curves in the air (a sixth of the carry off the line with a wood or an iron), and spun, backspin to check it and topspin to run
 it on, each chosen by a button in the bag; and the holes of The Links have a wind, shown
 under the strokes as an arrow and a speed, that pushes a ball for as long as it is in the
 air, and which the drawn flight already allows for. The greens of The Links have a first cut

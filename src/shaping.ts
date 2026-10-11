@@ -27,8 +27,15 @@ export const WIND = { push: 1.4, most: 25 } as const;
  * A shape: how fast the ball's heading turns, in radians a second, at the fullest draw or fade from a club of no loft;
  * and the loft, in degrees, at which a club puts no shape on a ball at all. A flatter face puts more side spin on, so a
  * driver curves a long way and a sand wedge hardly at all, which is also what a golfer finds.
+ *
+ * `turn` was 0.19, which put a full fade 23 yards off the line from a driver, 12 from a 7-iron and 3 from a sand wedge, a ninth
+ * of the carry or less, and a player said the draw and the fade made no great difference (10 October 2026). Doubled, they put
+ * the ball 46, 25 and 6 off, a sixth of the carry with a wood or an iron and a twelfth with a wedge: a hook or a slice that a
+ * hole's corner or a wood can be played round. The most it could be is what the narrowest phone's aim view shows (the
+ * driver's lands at three quarters of the way to the safe box's edge there, held by `test/shape.test.ts`), so it was not made
+ * more than that; the shop's shapers, which curve a shot half again to twice as far, are relative to it.
  */
-export const SHAPE = { turn: 0.19, straight: 72 } as const;
+export const SHAPE = { turn: 0.38, straight: 72 } as const;
 
 /**
  * A spin: how much more of its speed along the ground a ball keeps at the landing for the fullest topspin, and how much

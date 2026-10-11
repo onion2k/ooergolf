@@ -986,6 +986,16 @@
     left: 16px;
     transform-origin: bottom left;
   }
+  /*
+   * while a drag is held it says how to take it back, in the sun's yellow as the best score's word is, so that it is seen: a second
+   * finger, or letting go where it was pressed. A phone has no help at all the rest of the time, and shows this one beside the switch.
+   */
+  #help[data-aiming] {
+    --edge: var(--paper);
+    --lip: var(--sun-deep);
+    color: var(--sun-ink);
+    background: var(--sun);
+  }
   #stats {
     right: 16px;
     font-variant-numeric: tabular-nums;
@@ -1089,6 +1099,19 @@
     /* and the instruction to drag back is not wanted on a phone: a player finds it */
     #help {
       display: none;
+    }
+    /*
+     * but how to take a drag back is: it is up while one is held, at the left just above the bag, which is clear of the shot (the ball
+     * stands in the middle across, low on the screen, and the aim runs up from it, within a few degrees of straight up once the camera
+     * has turned to it) and of every panel; the top of a phone is full, and a narrow one has no room there for a line of words
+     */
+    #help[data-aiming] {
+      display: block;
+      bottom: calc(16px + 130px + 8px + env(safe-area-inset-bottom, 0px));
+      left: calc(16px + env(safe-area-inset-left, 0px));
+      max-width: min(150px, calc(50vw / var(--ui, 1) - 36px));
+      line-height: 1.25;
+      text-align: center;
     }
   }
 
@@ -1389,6 +1412,17 @@
     }
     #help {
       display: none;
+    }
+    /* how to take a drag back is shown while one is held, at the top beside the chip, where nothing is */
+    #help[data-aiming] {
+      display: block;
+      top: calc(16px + 64px + 10px + env(safe-area-inset-top, 0px));
+      bottom: auto;
+      left: calc(16px + 56px + env(safe-area-inset-left, 0px));
+      max-width: 200px;
+      line-height: 1.25;
+      text-align: center;
+      transform-origin: top left;
     }
     #holePanel {
       top: auto;

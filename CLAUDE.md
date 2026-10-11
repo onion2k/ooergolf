@@ -186,7 +186,9 @@ today, and what the next features must hand it:
   between holes too, refused while a drag is held as the page refuses it and from overhead, where the button does nothing, and checked to
   turn the camera to look directly at the cup, at the cup's own heading and at the Director's own heading
   to a millionth of a radian, inside `TURN_TIME`, with the cup on the screen where it is in reach, touching nothing of the game, its
-  clock or its chance). The page's own `Director` runs in the fuzzer every frame, on a desk's screen (1280 by 800) on even seeds and a
+  clock or its chance); every aim drag is said to be held from its press until it is let go or taken back (`input.holding`, which the page
+  says how to take back by while it is: a second finger or letting go where it was pressed), and every ball come to rest is held to where the
+  camera turns by itself (`lineProblems`, counted in `checked['line of play']`, and `checked['line off the flag']` for a dogleg's). The page's own `Director` runs in the fuzzer every frame, on a desk's screen (1280 by 800) on even seeds and a
   phone's (400 by 860) on odd ones, and the framing rule is asked of the camera as it comes to rest; a test counts the numbers the
   monkey draws from its main stream (`drawn`, which every new action must leave alone: seeds 26 and 17 finish a round only while it does)
   and how often the rule was asked (`framed`, held above nothing, since a check that never ran passes in silence). It gets round every course. Each thing a
@@ -232,7 +234,7 @@ today, and what the next features must hand it:
   of unit length (`knockProblems`, which the fuzzer checks each one by).
   And the camera keeps to its limits: turned within a turn either way,
   tilted within `TILT`, stood back within the zoom, and never left turning to face a place for longer than `TURN_TIME`, two
-  seconds (`viewProblems`, checked after each look from overhead, every frame of a turn to the flag and every frame of an aim turned to; the blend to the overhead view is a number from nought to one, its distance within `OVERHEAD`'s near and far, and its place inside the hole's bounds). And the camera keeps the ball
+  seconds (`viewProblems`, checked after each look from overhead, every frame of a turn to the flag and every frame of an aim turned to; the blend to the overhead view is a number from nought to one, its distance within `OVERHEAD`'s near and far, and its place inside the hole's bounds). And the sky is the fly-in's alone: no view that sees the horizon (`seesSky`, tilted past `SKY_TILT`) is left with no fly-in under way (`flyInProblems`, every frame, counted in `checked['sky seen']`), so no cloud is drawn between a shot and the camera it is aimed from. And a ball come to rest has the camera turn by itself to a heading within a quarter turn of the flag's, which is exactly the flag's on a hole with no line of play (`lineProblems`). And the camera keeps the ball
   and the furthest a shot can reach on the screen (`framingProblems`, in `invariants.ts` and not in `checkInvariants(game)`, since it needs the
   camera and a screen's shape: the ball and the reach point inside `safeBox` to 0.02, asked only when the view has settled, which is not
   while it is turning, easing to an aim view, gliding, blended toward the overhead view or parked, and within `TURN_TIME` of a turn; the ball
@@ -416,11 +418,19 @@ angle, roll)` is how far the putter's hardest putt rolls along an angle before t
   camera is left looking the way the last strong aim had it; a shot let go faces its way while the ball is in the air.
   **At the flag**: the flag button turns the camera to the cup's own heading from the ball (`nearFlag`, which is `facing(ball, cup)`), so the flag is
   at the middle of the screen across; the earlier random offset of 0.10 to 0.26 was removed on 7 October 2026 after play-testing. Refused under the
-  start screen, while a drag is held, at the cup and from overhead. **On a ball come to rest** the Director does the same by itself (`frame` sees
+  start screen, while a drag is held, at the cup and from overhead. **On a ball come to rest** the Director turns the camera by itself (`frame` sees
   `game.ready` go from false to true; not at a hole's start, and not from overhead), but only once the camera has got to the ball (its target
   within `ARRIVED`, half a yard, along the ground): the move and the turn one after the other, since both at once swung the view round a place
   still moving (7 October 2026). A drag, the flag button, a stroke or a new hole before then takes the waiting turn back, and the player's
-  next aim turns it on from there.
+  next aim turns it on from there. **It looks along the line of play, and not at the flag** (10 October 2026, a player's say that on a dogleg the flag
+  is not the place to look): `nearLine()` is the heading to the point `PLAY_AHEAD` (130) yards along the hole's `way` from its nearest point to the
+  ball, or to the cup once that is within the 130 (`lookAlong` in `src/lineofplay.ts`, a leaf that makes nothing; the way ends a tile or so
+  from the cup, so the cup is `layout.cup` itself), which is the flag's own heading on minigolf and on any hole with no `way`, and the button is
+  still the flag's. Measured over the fifteen doglegs of 20 degrees and more on The Links, The Fells and The Isles, balls at rest on the fairway, rough
+  and cut: the straight line to the flag has a fifth or more of its first 150 yards in trees, rock or out of bounds for 37 per cent of them, and the
+  line of play 130 yards on for 8 per cent (60 yards 14, 100 yards 8, 160 yards 9, 200 yards 14, a driver's 260 yards 24); on straight holes it
+  turns the camera 0.7 degrees from the flag at the median and 5 at the ninetieth percentile, and blocks no more of the line. `view().line` is it, as
+  `view().flag` is the button's; it is never more than a quarter turn from the flag (`lineProblems`).
   **Follow one stroke in five**: `struck()` follows the ball when `hashed(viewSeed, hole, strokes, SALT.follow) < FOLLOW.share` (0.2), exactly as
   the camera always did (`catchUp`); for the other four the camera holds where it stood, exactly still, while the ball is in the inner
   0.6 of the safe box (`HAND_OVER.from`, in the box's own terms: |nx| over the half width, ny over the top or the bottom), and the
@@ -766,7 +776,15 @@ minigolf: true }`, read through `oceanFor`) is the one switch: `waterBed` and `s
   `camera.ts`, `rig.flyIn` and `rig.cutShort` (once only, since a held drag tells it every frame), the far plane out to
   `CLIP.horizon` while it flies (`farPlaneAt`); the Director's `{ flyIn: true }`, which the page and the fuzzer pass and a
   test's page leaves out with `?flyin=0` (`start(page, { flyIn: true })` asks for it); cut short by a drag, the flag button,
-  Overhead or a stroke; held by `flyInProblems`.
+  Overhead or a stroke; held by `flyInProblems`. **The sky is the fly-in's and the title's alone** (10 October 2026): the clouds drift at
+  90 to 250 yards up along the wind, straight over the hole (on 42 of the 54 holes one passes over it in an hour, and a golf hole has one over it for
+  3 to 51 per cent of that), which is the height the aim view stands at (108 on a desk, 216 on a phone), and one drawn there was a cloud over the shot:
+  The Fell Race at nine minutes in was one cloud over a phone's whole screen. Measured with the clouds' real meshes put through the real
+  aim view of a driver, at the tee and half way up the first leg, some cloud was on the screen for 1.0 per cent of an hour over every golf hole, and for
+  up to 9 per cent on one hole on a phone (The Fell Race 9, Two Lakes 8, Home Stretch 7) and 2 on a desk. `seesSky(tilt, blend)` and `rig.seesSky(t)` say whether the top
+  of the screen is above the horizon (tilted past `SKY_TILT`, 70 degrees, which no view a shot is played from is: `TILT.most` is 57), and
+  `main.ts` hands the scene `scene.setSky(titled || rig.seesSky(t))` each frame; with it off the clouds are a matrix of no size where they were
+  (as the title's ball is) and `motions().sky` reads 0, with it on they are as they were, which leaves the fly-in's pictures as they were.
 - `src/debug.ts` is `window.game`, the test API. `src/invariants.ts` lists
   the rules that must always hold. `src/autopilot.ts` plays the game by
   itself, for the gates and for par; its route over the tiles (`pathToCup`)
@@ -804,8 +822,11 @@ minigolf: true }`, read through `oceanFor`) is the one switch: `waterBed` and `s
 - `src/shaping.ts` is what a golf shot has besides its aim and power, and what the air does to it: a **shape** (the
   player's choice per lofted shot of straight, draw or fade: -1, 0, +1, a heading that turns in the air at
   `curveRate(shape, loft)` radians a second, positive a fade, to the right as seen from behind the ball, a pure
-  rotation that adds and takes no speed, falling with the club's loft to nothing at 72 degrees so a driver curves 22
-  yards at the fullest, a 7-iron 12 and a sand wedge 3, and only until the ball first comes down); a **spin** (flat,
+  rotation that adds and takes no speed, falling with the club's loft to nothing at 72 degrees so a driver curves 46
+  yards at the fullest, a 7-iron 25 and a sand wedge 6, and only until the ball first comes down: twice what it was, since on 10
+  October 2026 a player said the draw and the fade made little difference, at 23, 12 and 3, a ninth of the carry or less; `SHAPE.turn` is
+  0.38, which the narrowest phone's aim view shows the landing of at three quarters of the way to the safe box's edge, held by `test/shape.test.ts`, so it was not made more; a sixth of the carry with a wood or an iron, a twelfth with a wedge, and the
+  shop's shapers, 1.5 to 2 times it, are relative to it); a **spin** (flat,
   back or top: 0, -1, +1, which multiplies the share of its ground speed the ball keeps at its FIRST landing by
   `spunKeep`: full topspin about 2.7 times a driver's roll-out, full backspin takes more than all of it, so the ball is
   checked and comes back a yard or nine); and a **wind** (`HoleDef.wind`, miles an hour, `WIND.most` 25, calm
@@ -977,8 +998,13 @@ minigolf: true }`, read through `oceanFor`) is the one switch: `waterBed` and `s
   motion; in the system's rounded face, as decided. The view group
   (`#viewMode`) is a pill at the bottom right above the ms label, and the
   bottom slot on a phone; it is shown with the course's other panels and put
-  away under the start screen, and the help beside it says what a drag does (on a phone the help wraps to two lines and
-  keeps clear of the switch, held by a test at 400 and 360 wide). It holds the **Overhead** button (`#viewOverhead`, a text pill with
+  away under the start screen, and the help beside it says what a drag does, and, while a drag is held, how to take it back (10 October 2026,
+  `helpText` in `readout.ts`: "tap a second finger to cancel" for a finger, "let go where you pressed to cancel" for a mouse or a pen, in the
+  sun's yellow, `#help[data-aiming]`, said by `hud.setAiming` from `input.holding` each frame once the drag has been held `HELD_HINT.after`, 0.6 of a
+  second of game time (`heldHint`: a shot struck at once is not nagged, and a look picture taken a frame or two after a drag is held is as it was), and nothing of it
+  from overhead, where a drag is a pan). A phone has no help the rest of the time, and shows this one at the left just above the bag, clear of the shot and of every panel,
+  or at the top beside the chip on a phone on its side, where the bottom left is the map's; held by `smoke/hud.spec.ts` on a desk, two phones
+  and a phone on its side, with a second finger really putting the drag back (no stroke). It holds the **Overhead** button (`#viewOverhead`, a text pill with
   `aria-pressed`: not saved, off at boot and put away by a new hole, and while it is on a drag pans the view over the hole, two fingers or the wheel zoom it,
   nothing is struck and the help says "drag to look round the hole"), and the **flag** (`#viewFlag`, a flag
   icon, no text, labelled "Look at the flag"): an action, not a toggle, which turns the camera to look at the cup from the
@@ -1236,7 +1262,7 @@ landing of the shot being aimed are on it. `state()` has the shape and the spin 
 `medium`, `slow` or null) and `arrows`, how many stand over its green;
 `motions()` has `wind` (the arrow's turn in degrees and its text, read back from the page), `controls` (the two buttons as drawn),
 `arrows` ({ shown, count }: what the last frame wrote), `shot.heading` and `press` (the grass pressed flat round a ball at rest in the rough this frame: where, how wide, and whether
-the renderer took it; null otherwise). `view()` also has `turning` (whether the camera is turning to face the cup), and `putt` and `greens`, the two lines under the pin as drawn (null when none). `?rung=N` on the page puts the picture
+the renderer took it; null otherwise). `view()` also has `turning` (whether the camera is turning to face the cup), `line` (where it turns by itself to a ball come to rest, along the line of play; `flag` is the button's), and `putt` and `greens`, the two lines under the pin as drawn (null when none); `motions()` also has `sky` (how many clouds the last frame drew with a size: all to the fly-in and the title, none to any other view) and `help` (the help as drawn: its words, and `aiming` for how the drag now held was begun, or null). `?rung=N` on the page puts the picture
 on a rung and holds it; paused, the governor never moves it, so pictures are
 always taken at the top rung unless a test asks. In unit tests, `game.place(x, y)` puts the
 ball down at a lie.
@@ -1247,6 +1273,16 @@ ball down at a lie.
   after it lands is not seen, which is the biggest risk to how the course feels and is for the user to judge by playing. The
   autopilot and the pace player know no slope and play round the wood, so a lane is a human's shortcut that no gate plays.
   On steep ground a marginal slope does not run when a ball is put down on it, only when struck. A lake across one of The Isles' longer holes is 45 to 80 yards of water, no more than a flight needs.
+- A draw or a fade from a shaper, on a narrow phone. `SHAPE.turn` was doubled on 10 October 2026 and the narrowest phone's aim view shows a plain
+  fullest fade from a driver at three quarters of the way to the safe box's edge (`test/shape.test.ts`); the shop's shapers curve a shot 1.5 to 2
+  times as far again, 69 to 92 yards from a driver, which that view does not reach, since the aim view is worked out from the club's straight reach and
+  the wind's and knows nothing of a curve. With one worn, a fullest fade from a driver on such a phone is aimed with its ring past the screen's side.
+  Not widened, because the framing rule would have to know the shape and the kit, and was not asked for.
+- The camera looks along a line of play only where a hole has one. A hole of minigolf has none (`HoleDef.way` is the golf generator's), so a ball come to
+  rest there still has the camera turn to the flag; and on golf a ball far from the way, across a wood or on the other side of a bend, looks along it from
+  the way's nearest point, which can be behind a tree (8 per cent of the balls measured on the bends, against 37 for the flag).
+- The clouds leave a view in one frame: as the fly-in ends and the camera tilts past `SKY_TILT` they are a matrix of no size, so one low enough to be on
+  the screen at that moment is gone at once and not faded (the renderer has no alpha a group to fade it by). It was not seen as a fault in a picture.
 
 Each of these is the first feature's to bring, with every gate green at
 each step, and a gate handed what it needs in the same change:
