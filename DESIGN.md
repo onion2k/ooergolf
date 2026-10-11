@@ -369,7 +369,10 @@ there is no Look mode, and no free orbit, since a drag is a shot. The camera
 does the turning: while the ball is pulled back it turns to look the way the
 shot goes, and a drag taken back leaves it looking there; the flag button
 turns it to look near the flag, not at it, so the cup is ahead and not dead
-centre. It keeps the ball and the furthest the shot can reach on the screen,
+centre. A ball come to rest has it turn by itself along the hole's line of
+play, a hundred and thirty yards on, which is the flag itself once the flag is
+within that and on a dogleg the fairway round the bend: the flag round a
+corner is across the trees, and the shot is not played there. It keeps the ball and the furthest the shot can reach on the screen,
 and follows the ball on about one stroke in five, holding the view of the shot
 on the rest and taking the ball up only if it would leave the screen. On a
 phone held upright it turns so the hole runs up the screen. On a desktop the
@@ -380,7 +383,8 @@ whole hole from above to look round, by dragging, and never to aim from.
 
 - One pointer input for both, and nothing that needs a keyboard. Two
   fingers pinch the camera nearer or further; a second finger landing
-  mid-drag takes the shot back.
+  mid-drag takes the shot back, which the help beside the course says once a
+  drag has been held a moment (and, for a mouse, letting go where it was pressed).
 - The page in the upright and the sideways shape, nothing wider than the
   screen.
 - The pixel ratio capped, and the renderer's economy stepped down a rung at
