@@ -214,11 +214,12 @@ describe('what the retune did not touch', () => {
     // two lengths): The Big Dogleg's and Home Stretch's are as they were
     const WAS: Record<string, number> = {
       'The Opener': 129467283,
-      'Water Carry': 1080251253,
-      'Long Bend': 2579849166,
-      'Tight Left': 1665164726,
-      'Island Green': 3979605520,
-      'Rushing Brook': 1055624489,
+      // five written again on 14 October 2026 when a tree or two on a bank of each was felled (`felled` in `golf.ts`)
+      'Water Carry': 2639577041,
+      'Long Bend': 3249290978,
+      'Tight Left': 3205018342,
+      'Island Green': 851349684,
+      'Rushing Brook': 3581289437,
       'The Big Dogleg': 3635079015,
       'The Straight Mile': 2049515231,
       'Home Stretch': 3791081546,

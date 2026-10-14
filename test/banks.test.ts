@@ -41,60 +41,63 @@ function fnv(s: string): number {
 }
 
 /** Everything of a hole's map that is not the ground a ball is played from (fairway, rough, green, first cut): water, sand, trees, out of bounds, rock and rail, the tee and the cup. */
-const hazards = (map: readonly string[]) => fnv(map.join('\n').replace(/[frgc]/g, '.'));
+const hazards = (map: readonly string[]) => fnv(map.join('\n').replace(/[frgc^]/g, '.'));
 
 /**
  * Written from the code at 1a3e872 (main, before the land rolled) by running `hazards` over each hole in a copy of that
- * commit, so a hole that keeps its hazards keeps its layout.
+ * commit, so a hole that keeps its hazards keeps its layout. Written again on 14 October 2026 with the trees left out of
+ * `hazards`: a tree whose crown a ball at rest on a bank beside it would be inside is felled once the ground is final
+ * (`felled` in `golf.ts`), so a hole that rolls may have a tree or two fewer than the hole made without the rolling land,
+ * and the trees are held below instead: every tree of the rolled hole stands in the unrolled one.
  */
 const HAZARDS: Record<string, number> = {
-  'The Links/The Opener': 94800897,
-  'The Links/Water Carry': 2099014158,
-  'The Links/Long Bend': 617542884,
-  'The Links/Tight Left': 3454384494,
-  'The Links/Island Green': 1837342466,
-  'The Links/Rushing Brook': 3923685454,
-  'The Links/The Big Dogleg': 1762342224,
-  'The Links/The Straight Mile': 129154473,
-  'The Links/Home Stretch': 1673950552,
-  'The Isles/Landfall': 897317319,
-  'The Isles/The Green Isle': 613557592,
-  'The Isles/Long Water': 601886456,
-  'The Isles/The Archipelago': 2663650019,
-  'The Isles/Causeway': 1345589976,
-  'The Isles/The Long Swim': 2284031616,
-  'The Isles/Two Lakes': 1694709334,
-  'The Isles/The Peninsula': 3437257301,
-  'The Isles/Home Waters': 2281177161,
+  'The Links/The Opener': 4183876481,
+  'The Links/Water Carry': 4292173006,
+  'The Links/Long Bend': 3869889444,
+  'The Links/Tight Left': 3362991214,
+  'The Links/Island Green': 215200194,
+  'The Links/Rushing Brook': 1112617230,
+  'The Links/The Big Dogleg': 2021645360,
+  'The Links/The Straight Mile': 4173487689,
+  'The Links/Home Stretch': 3762317560,
+  'The Isles/Landfall': 1452802663,
+  'The Isles/The Green Isle': 3441466328,
+  'The Isles/Long Water': 2903616568,
+  'The Isles/The Archipelago': 4091719523,
+  'The Isles/Causeway': 1275957144,
+  'The Isles/The Long Swim': 4136182240,
+  'The Isles/Two Lakes': 2724283862,
+  'The Isles/The Peninsula': 1642783669,
+  'The Isles/Home Waters': 3273915081,
   // The Heath, The Woods and The Old Course, which roll from the first: written as they landed (7d41e7d, 14 October 2026)
   // from the same `hazards` over each hole with `rolling: false`, so they are held to keep their hazards as the others are
-  'The Heath/Gorse Gate': 528525969,
-  'The Heath/Bracken Bend': 3294995703,
-  'The Heath/Furze Hollow': 2128277627,
-  'The Heath/The Warren': 1318324459,
-  'The Heath/Heather Run': 354516681,
-  'The Heath/Beacon Top': 1076673948,
-  'The Heath/Nightjar Turn': 2911353160,
-  'The Heath/Adder Dip': 3980998994,
-  'The Heath/Common Ground': 2591797045,
-  'The Woods/Acorn Rise': 3324418468,
-  'The Woods/Pine Ride': 986383232,
-  'The Woods/The Beech Hanger': 3567976344,
-  'The Woods/Oak Avenue': 1580408527,
-  'The Woods/The Glade': 4270304993,
-  'The Woods/Bluebell Walk': 2234833941,
-  'The Woods/Rookery Walk': 2746298438,
-  'The Woods/The Coppice': 4099359028,
-  'The Woods/Lantern Clearing': 3897987485,
-  'The Old Course/The Burn': 1112668823,
-  'The Old Course/Cartgate': 3958717828,
-  'The Old Course/High Rigg': 3164724269,
-  'The Old Course/The Road Hole': 2797745495,
-  'The Old Course/Hell Bunker': 1058287746,
-  'The Old Course/The Long Way': 1648441910,
-  'The Old Course/Dyke End': 477568637,
-  'The Old Course/The Spectacles': 2738347987,
-  'The Old Course/The Auld Home': 4012818114,
+  'The Heath/Gorse Gate': 1173098721,
+  'The Heath/Bracken Bend': 3404431383,
+  'The Heath/Furze Hollow': 2005961451,
+  'The Heath/The Warren': 3837567275,
+  'The Heath/Heather Run': 4045629769,
+  'The Heath/Beacon Top': 1097636860,
+  'The Heath/Nightjar Turn': 3961203160,
+  'The Heath/Adder Dip': 823550834,
+  'The Heath/Common Ground': 3742628821,
+  'The Woods/Acorn Rise': 2589291956,
+  'The Woods/Pine Ride': 891608016,
+  'The Woods/The Beech Hanger': 49496616,
+  'The Woods/Oak Avenue': 2588239167,
+  'The Woods/The Glade': 2828425265,
+  'The Woods/Bluebell Walk': 969527909,
+  'The Woods/Rookery Walk': 1723670502,
+  'The Woods/The Coppice': 2408164532,
+  'The Woods/Lantern Clearing': 4271140333,
+  'The Old Course/The Burn': 2549994839,
+  'The Old Course/Cartgate': 180997268,
+  'The Old Course/High Rigg': 1661534893,
+  'The Old Course/The Road Hole': 241932535,
+  'The Old Course/Hell Bunker': 3798336450,
+  'The Old Course/The Long Way': 4263421590,
+  'The Old Course/Dyke End': 1198248701,
+  'The Old Course/The Spectacles': 4170718355,
+  'The Old Course/The Auld Home': 2680941922,
 };
 
 /** How high a bank stands, and the relief a hole of rolling land has, in yards: what the user chose on 9 October 2026. */
@@ -224,10 +227,18 @@ describe('rolling land: the banks', () => {
     for (const { key, hole } of HOLES) expect(hazards(hole.map), key).toBe(HAZARDS[key]);
   });
 
-  it('is the same map, tile for tile, as the hole made without the rolling land, and the same hole every time', () => {
+  it('is the same map, tile for tile but for a tree felled on a bank, as the hole made without the rolling land, and the same hole every time', () => {
     for (const { key, spec, hole } of HOLES) {
       const old = was(spec);
-      expect(hole.map, key).toEqual(old.map);
+      // the banks raise the rough a tree stands in, so a tree whose crown a resting ball would be inside goes with the
+      // rolling land and not without it: the maps are the same with the trees left out, and the rolled hole's trees all
+      // stand in the unrolled one
+      const bare = (map: readonly string[]) => map.map((row) => row.replace(/\^/g, 'r'));
+      expect(bare(hole.map), key).toEqual(bare(old.map));
+      hole.map.forEach((row, r) => {
+        for (let c = 0; c < row.length; c++)
+          if (row[c] === '^') expect(old.map[r][c], `${key}: a tree at ${c},${r} of the rolled hole`).toBe('^');
+      });
       expect(hole.wind).toBe(old.wind);
       expect(hole.greens).toBe(old.greens);
       expect(Array.from(golfHole(spec).terrain as Float32Array), `${key} twice`).toEqual(

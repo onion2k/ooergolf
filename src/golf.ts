@@ -19,7 +19,7 @@
  * made is refused, by name, and never returned as a hole that cannot be played. It is content's tool: handed a spec and
  * giving back a `HoleDef`, importing no content, only the type of a hole.
  */
-import { TILE, layoutOf } from './arena';
+import { BALL, KIND_RADIUS, TILE, heightAt, layoutOf, type Layout } from './arena';
 import type { HoleDef } from './course';
 import { GREEN as GREEN_RULES } from './green';
 import {
@@ -37,6 +37,7 @@ import { seeded, type Random } from './random';
 import { WIND } from './shaping';
 import { drainFault, holdsBall } from './slopes';
 import { GREENS, LIE } from './surfaces';
+import { TREE, insideCanopy, treeCone } from './trees';
 
 /** A pond: how far along the way of play it lies, which side of it (nought is across it, on the line) and how big, in tiles of radius. */
 export interface PondSpec {
@@ -205,6 +206,60 @@ const LANES = new WeakMap<HoleDef, Lane>();
  */
 export function laneOf(hole: HoleDef): Lane | undefined {
   return LANES.get(hole);
+}
+
+/**
+ * A crown and the ground under it. The canopy's underside stands `TREE.base` over the trunk's foot, so on a bank that
+ * climbs two yards a tile a ball at rest five yards uphill of the trunk, its middle a radius over the ground, is inside
+ * the crown: the crown is buried in the hillside. Found by the fuzzer on The Old Course's The Burn, 14 October 2026 (a
+ * ball at rest on the hillside 6.5 yards from a trunk and 3.8 above its foot), and the same on a bank of The Isles' Home
+ * Waters. Such a tree is felled when a hole is made (`felled`): the ground a ball can rest on round the trunk is sampled
+ * every `step` yards out to the crown's base and a radius more, and a tree whose crown a resting ball would be inside goes.
+ */
+export const CROWN = { step: 0.5 };
+
+/**
+ * How deep inside a tree's crown a ball at rest on the ground round its trunk at (x, y) can be: nought for a tree that
+ * stands clear. Ground a ball cannot rest on (water, rock, the rail, out of bounds) is left out, and so is the trunk itself.
+ */
+export function restUnderCrown(layout: Layout, x: number, y: number): number {
+  const r = KIND_RADIUS[BALL];
+  const cone = treeCone(x, y, heightAt(layout, x, y));
+  const reach = TREE.radius + r;
+  let deepest = 0;
+  for (let dx = -reach; dx <= reach; dx += CROWN.step)
+    for (let dy = -reach; dy <= reach; dy += CROWN.step) {
+      const rho = Math.hypot(dx, dy);
+      if (rho > reach || rho <= TREE.trunk + r) continue;
+      const c = Math.floor((x + dx - layout.originX) / TILE),
+        row = Math.floor((y + dy - layout.originY) / TILE);
+      if (c < 0 || row < 0 || c >= layout.cols || row >= layout.rows) continue;
+      const t = row * layout.cols + c;
+      if (layout.water[t] || layout.solid[t] || layout.oob[t]) continue;
+      deepest = Math.max(deepest, insideCanopy(cone, [x + dx, y + dy, heightAt(layout, x + dx, y + dy) + r], r));
+    }
+  return deepest;
+}
+
+/**
+ * The map with every tree felled whose crown a ball at rest beside it would be inside (`restUnderCrown`), and how many
+ * went: a felled tree's tile is the rough it stood on. Done once the ground is final, since the banks and the hills are
+ * what raise it. It spends no chance, so everything else of the hole is what it would have been.
+ */
+export function felled(map: readonly string[], terrain: Float32Array): { map: string[]; felled: number } {
+  const layout = layoutOf(map, terrain);
+  const rows = map.map((row) => row.split(''));
+  let count = 0;
+  for (const t of layout.trees) {
+    if (restUnderCrown(layout, t.x, t.y) <= 0) continue;
+    // the tree's tile: the map is drawn from the top, and the layout's origin is its south-west corner
+    const c = Math.floor((t.x - layout.originX) / TILE),
+      r = map.length - 1 - Math.floor((t.y - layout.originY) / TILE);
+    if (rows[r]?.[c] !== '^') throw new Error(`a tree at ${t.x},${t.y} is not on the map at ${c},${r}`);
+    rows[r][c] = 'r';
+    count++;
+  }
+  return { map: rows.map((row) => row.join('')), felled: count };
 }
 
 /** How wide the rough is either side of the fairway, and how wide out of bounds is beyond it, in tiles, and the rock beyond that. */
@@ -1249,11 +1304,13 @@ export function golfHole(spec: GolfSpec): HoleDef {
       const ways = points.map(
         ([x, y]) => [(x - minX + 0.5 - cols / 2) * TILE, (y - minY + 0.5 - rows / 2) * TILE] as [number, number],
       );
+      // the ground is final here, banks and all, so a tree whose crown it rises into is felled now and not before
+      const ground = rolling ? banked(terrain, kinds, cols, rows) : terrain;
       const hole: HoleDef = {
         name,
         par,
-        map,
-        terrain: rolling ? banked(terrain, kinds, cols, rows) : terrain,
+        map: felled(map, ground).map,
+        terrain: ground,
         ...(wind ? { wind } : {}),
         ...(greens !== undefined ? { greens } : {}),
         way: ways,

@@ -15,7 +15,8 @@ describe('the fuzzer', () => {
     for (const [name, seeds] of [
       ['The Heath', [1, 2, 3]],
       ['The Woods', [1, 2, 3]],
-      ['The Old Course', [1, 2, 3]],
+      // seed 12 found a ball at rest inside a crown on The Burn (14 October 2026), and is kept
+      ['The Old Course', [1, 2, 3, 12]],
     ] as const) {
       const holes = COURSES.find((c) => c.name === name)!.holes;
       const visited = new Set<string>();

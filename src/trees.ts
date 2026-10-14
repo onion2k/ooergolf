@@ -57,27 +57,40 @@ export interface Hit {
 }
 
 /**
- * The cone a ball's middle must stay out of: the canopy made a ball's radius `r` bigger all round. Its side is the
- * canopy's moved out by `r` along its normal, so it is as wide at the base as the canopy is and a little over, and its
- * tip stands higher; below the base it is a cylinder of that width down to a ball's radius under the base, which is the
- * underside.
+ * The canopy as a solid, in its own profile: how far a point stands from it (`d`, under nought inside, by the nearest
+ * face), which way the solid's surface looks there (`out`: outward along the ground, `up`: outward upward, a unit vector
+ * in the profile) and how far out from the trunk the point is (`rho`). The solid is the cone's side from the rim (the
+ * base's edge) to the tip, and the flat base under it. Outside, the nearest point of the solid is on the side, on the
+ * base, or the rim itself, so a ball's radius round the solid is a cone with a rounded rim and a flat underside no wider
+ * than the base: it was a cone with a sharp rim and a cylinder under it, which held a ball at rest on a hillside 6.5 yards
+ * from a trunk and 3.8 above its foot to be inside the crown by a tenth, where the ball's own sphere clears the rim by a
+ * hair (found by the fuzzer on The Old Course, 14 October 2026).
  */
-function inflated(c: Cone, r: number) {
-  const h = c.apex - c.base;
-  const slant = Math.hypot(h, c.radius);
-  const k = c.radius / h;
-  return { h, slant, k, tip: c.apex + (r * slant) / c.radius, low: c.base - r };
-}
-
-/** The distances from a point to the faces of the inflated cone, where it is inside it, and null where it is not. */
-function inside(c: Cone, p: V3, r: number): { side: number; under: number; rho: number } | null {
-  const { h, slant, k, tip, low } = inflated(c, r);
-  const rho = Math.hypot(p[0] - c.x, p[1] - c.y);
-  if (p[2] < low || p[2] > tip) return null;
-  const wide = k * (tip - Math.max(p[2], c.base));
-  if (rho >= wide) return null;
-  // how far out of each face it would have to go: through the side along its normal, or down through the underside
-  return { side: ((wide - rho) * h) / slant, under: p[2] - low, rho };
+function profile(c: Cone, p: V3): { d: number; out: number; up: number; rho: number } {
+  const h = c.apex - c.base,
+    slant = Math.hypot(h, c.radius);
+  const rho = Math.hypot(p[0] - c.x, p[1] - c.y),
+    z = p[2];
+  // the side's outward normal, and how far the point is past the side's line (over nought outside it)
+  const sideOut = h / slant,
+    sideUp = c.radius / slant;
+  const pastSide = (rho - c.radius) * sideOut + (z - c.base) * sideUp;
+  const belowBase = c.base - z;
+  if (pastSide <= 0 && belowBase <= 0) {
+    // inside the solid: out by the nearer face
+    if (-pastSide <= -belowBase) return { d: pastSide, out: sideOut, up: sideUp, rho };
+    return { d: belowBase, out: 0, up: -1, rho };
+  }
+  // outside: the nearest point is on the side's segment, the base's, or the rim where both end
+  const alongSide = (rho - c.radius) * -sideUp + (z - c.base) * sideOut;
+  if (pastSide > 0 && alongSide >= 0 && alongSide <= slant) return { d: pastSide, out: sideOut, up: sideUp, rho };
+  if (belowBase > 0 && rho <= c.radius) return { d: belowBase, out: 0, up: -1, rho };
+  // the rim (or the tip, past the side's far end): the way out is from that point to this
+  const at: [number, number] = alongSide > slant ? [0, c.apex] : [c.radius, c.base];
+  const dr = rho - at[0],
+    dz = z - at[1],
+    d = Math.hypot(dr, dz);
+  return d > 1e-9 ? { d, out: dr / d, up: dz / d, rho } : { d: 0, out: sideOut, up: sideUp, rho };
 }
 
 /**
@@ -85,27 +98,15 @@ function inside(c: Cone, p: V3, r: number): { side: number; under: number; rho: 
  * where it is on the surface, over nought inside, by the shortest way out.
  */
 export function insideCanopy(c: Cone, p: V3, r: number): number {
-  const d = inside(c, p, r);
-  return d ? Math.min(d.side, d.under) : 0;
+  return Math.max(0, r - profile(c, p).d);
 }
 
-/** The face a point on or in the cone is at, by the nearer of the side and the underside: which way it looks. */
+/** The face a point on or in the cone is at, by the nearest of the side, the underside and the rim: which way it looks. */
 function face(c: Cone, p: V3, r: number): { n: V3; depth: number } {
-  const { h, slant } = inflated(c, r);
-  const d = inside(c, p, r);
-  const rho = Math.hypot(p[0] - c.x, p[1] - c.y);
-  const side = d ? d.side : Math.abs(inflatedWide(c, p[2], r) - rho) * (h / slant);
-  const under = d ? d.under : Math.abs(p[2] - (c.base - r));
-  if (under <= side) return { n: [0, 0, -1], depth: under };
+  const { d, out, up, rho } = profile(c, p);
   const ux = rho > 1e-9 ? (p[0] - c.x) / rho : 1,
     uy = rho > 1e-9 ? (p[1] - c.y) / rho : 0;
-  return { n: [(h * ux) / slant, (h * uy) / slant, c.radius / slant], depth: side };
-}
-
-/** How wide the inflated cone is at a height: the width of its cylinder below the base. */
-function inflatedWide(c: Cone, z: number, r: number): number {
-  const { k, tip } = inflated(c, r);
-  return k * (tip - Math.max(z, c.base));
+  return { n: [out * ux, out * uy, up], depth: r - d };
 }
 
 /** How far apart the points a step is looked at are, in units: closer than a ball is wide, so a step cannot pass through unseen. */

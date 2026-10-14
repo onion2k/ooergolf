@@ -40,13 +40,13 @@ asked for a fourth course, was offered three, and took all three), the same way:
 each with its test (`test/heath.test.ts` and the rest) holding every count of its table on the holes as made. **The Heath** (par
 32: 3,4,3,4,4,3,4,3,4) is short and tight: par threes of 210 to 220 yards and fours of 300 to 320, fairways 8 or 9 tiles, every
 four a dogleg with a `gap` lane leaving a chip of 73 to 76 yards, 60 to 90 trees, winds 10 to 15, greens 11.5 to 13 and contour
-0.7 to 1; 29.13 strokes over the gate's sixteen seeds (0.32 a hole under par). **The Woods** (par 35: 3,4,5,4,3,4,5,4,3) is
+0.7 to 1; 30.19 strokes over the gate's sixteen seeds (0.20 a hole under par). **The Woods** (par 35: 3,4,5,4,3,4,5,4,3) is
 forest on every hole: `GolfSpec.woods` (below) on all nine, `trees` 0, five doglegs each with a lane, water across the line on
 every par three and a lake on the last, width 10, wind 8, greens 12.5, contour 0.8 to 0.9 (every hole at the hard edge of its
 table, since a looser draft played 35.6); 37.44 (0.27 over). **The Old Course** (par 37: 4,5,3,4,4,5,3,4,5) is the hardest: long
 holes (threes 240, fours 480, fives 600) that each have at least two of a lake with an island (four holes), a wood with a lane
 (three), running ground (`heighten` 2.2 with shelves, three), sand (86 bunkers) and a pond across the line; wind 15, greens 11.2,
-contour 1 on every hole; 45.19 (0.89 over, past The Isles' 0.68). Its lane test aims within 4 degrees of the lane for the cleanest
+contour 1 on every hole; 45.00 (0.89 over, past The Isles' 0.56). Its lane test aims within 4 degrees of the lane for the cleanest
 line and asks a swing 10 degrees off to meet the wood, since at wind 15 a straight drive is blown into the wood on most seeds.
 The six courses of golf stand in `COURSES` easiest first by the pace figure (Links, Heath, Fells, Woods, Isles, Old Course),
 which is only what a player reads: the pace gate holds the three new courses to their own figures and not to a place in the
@@ -298,8 +298,10 @@ today, and what the next features must hand it:
   in twenty-four rounds, where aiming at the cup across the corner lost one in every round). The Fells and The Isles
   are held to the order of how hard they are (`HARDER` in `scripts/pace.ts`: each course at least a tenth of a stroke a
   hole over par above the one before it, a rule `pace:check` fails and a test holds), and a hole is picked up in no more than
-  one round of sixteen. The Heath (29.13 for 32), The Woods (37.44 for 35) and The Old Course (45.19 for 37) are held each to
-  its own figure only, written 14 October 2026 when they came; a hole's chance is the next hole's, so a change to one hole
+  one round of sixteen. The Heath (30.19 for 32), The Woods (37.44 for 35) and The Old Course (45.00 for 37) are held each to
+  its own figure only, written 14 October 2026 when they came (29.13, 37.44 and 45.19 as built, and written again the same
+  day with every course's when trees on the banks were felled and the crown became exact: The Links 30.44 to 30.25, The
+  Fells 36.75 to 36.5, The Isles 51.19 to 50.06, all within tolerance, since a ball that clipped a rim is no longer knocked); a hole's chance is the next hole's, so a change to one hole
   moves a course's figure by a stroke or more, and the whole course is measured again after any. The Fells 36.75 for par 37 (0.03 a hole under, short of the target of a tenth to four tenths under) and The Isles
   51.19 for par 45 (0.68 a hole over: past its old target of a tenth under to four tenths over, since the long swell's steeper ground, and kept so at the user's word on 9 October 2026, "Accept it harder"), against The Links' 0.62 under;
   The Links and The Isles written again 9 October 2026 for the rolling land (the long swell and the banks: Links 30.5 to 30.44 over 16
@@ -920,7 +922,15 @@ minigolf: true }`, read through `oceanFor`) is the one switch: `waterBed` and `s
   its trunk is a post the physics has (`TREE`, in `src/trees.ts`) and its canopy a cone the game tests the ball's
   step against (`hitCanopy`, `turned`): a drive at twenty units high is stopped and drops, a high wedge (about 26 to
   51 units short of it) goes over, and one rising into the underside is knocked down. What is drawn is what is met:
-  `golfTree`'s tiers lie inside the cone a ball's radius bigger, which a test holds.
+  `golfTree`'s tiers lie inside the cone a ball's radius bigger, which a test holds. That cone (`insideCanopy`, the rule
+  the invariants hold a ball to) is the ball's radius round the solid cone exactly since 14 October 2026: a rounded rim and
+  an underside no wider than the base (it was a sharp rim and a cylinder under the base a little wider than it, which the
+  fuzzer found holding a ball at rest on The Old Course's The Burn, 6.5 yards from a trunk and 3.8 above its foot on the
+  hillside, to be inside the crown by a tenth where its sphere cleared the rim by a hair). And a tree whose crown a ball at
+  rest on the ground round it would be inside at all (`restUnderCrown`: the bank climbs two yards a tile, so a ball five
+  yards uphill of the trunk is above the crown's base) is **felled** once the ground is final, banks and all (`felled` in
+  `golf.ts`, spending no chance): a tree or two on 34 holes of the six courses, held by `test/tree-ground.test.ts` on every
+  tree of every course; the hole hashes, the kit hashes, the fuzzer's draws and the pace figures were written again for it.
 - `src/golf.ts` makes a golf hole from a `GolfSpec` and a seed (`golfHole`): a fairway along a way of play bent once
   (`bend`), rough, out of bounds and rock round it, a green, a tee's box, bunkers at the green and along the fairway,
   ponds set in hollows, trees in clusters in the rough, all placed clear of the tee and the cup, and the ground hills
