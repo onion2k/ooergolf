@@ -25,6 +25,10 @@ describe('seed-search arguments', () => {
     expect(parseArgs(['Tight Left', '--course', 'isles']).course).toBe('isles');
   });
 
+  it('knows the three courses that came after the hard two, by their short names', () => {
+    for (const course of ['heath', 'woods', 'old']) expect(parseArgs(['x', '--course', course]).course).toBe(course);
+  });
+
   it('refuses a course it does not know, by name', () => {
     expect(() => parseArgs(['x', '--course', 'moors'])).toThrow(/no course is called moors/);
   });

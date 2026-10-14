@@ -11,7 +11,7 @@
  *   npm run seed-search -- "Long Bend" --seeds 15 --rounds 48        (the figures of one seed, as it stands)
  *
  *   npm run seed-search -- --course fells "Tight Left" --seeds 1-20 --rounds 16
- *   --course links (the default), fells or isles chooses the list the hole is named from. The Fells' and The Isles' lists are
+ *   --course links (the default), fells, isles, heath, woods or old chooses the list the hole is named from. The lists after The Links' are
  *   loaded only when asked for, since they are other parts' modules; asked for before they exist, the script says which is
  *   missing and stops. A hole of either also prints the share of its fairway that runs a ball down (`running`, from
  *   `runningShare`, "n/a" until that helper exists), and the lake carries are `water`, the balls lost to a lake a round.
@@ -31,8 +31,8 @@ import { PLAYER, mean, round } from './pace';
 
 const DT = 1 / 60;
 
-export type CourseName = 'links' | 'fells' | 'isles';
-export const COURSE_NAMES: readonly CourseName[] = ['links', 'fells', 'isles'];
+export type CourseName = 'links' | 'fells' | 'isles' | 'heath' | 'woods' | 'old';
+export const COURSE_NAMES: readonly CourseName[] = ['links', 'fells', 'isles', 'heath', 'woods', 'old'];
 
 /** The options a command line gives: the hole's name, the course and the numbers, with the defaults the script always had. */
 export interface Options {
@@ -63,20 +63,35 @@ export function parseArgs(args: string[]): Options {
   };
 }
 
-const TITLES: Record<CourseName, string> = { links: 'The Links', fells: 'The Fells', isles: 'The Isles' };
+const TITLES: Record<CourseName, string> = {
+  links: 'The Links',
+  fells: 'The Fells',
+  isles: 'The Isles',
+  heath: 'The Heath',
+  woods: 'The Woods',
+  old: 'The Old Course',
+};
 
-/** A course's spec list. The Fells and The Isles are loaded on request, so this script runs before they are built. */
+/**
+ * Where each course after The Links keeps its specs: the module and the name it exports them by, loaded only when asked
+ * for, so this script runs before a course is built and the next course is a line here. The specifiers are asserted plain
+ * strings so the type checker does not need a module that may not exist yet.
+ */
+const MODULES: Record<Exclude<CourseName, 'links'>, { module: string; key: string; load: () => Promise<unknown> }> = {
+  fells: { module: 'src/fells.ts', key: 'FELLS_SPECS', load: () => import('../src/fells' as string) },
+  isles: { module: 'src/isles.ts', key: 'ISLES_SPECS', load: () => import('../src/isles' as string) },
+  heath: { module: 'src/heath.ts', key: 'HEATH_SPECS', load: () => import('../src/heath' as string) },
+  woods: { module: 'src/woods.ts', key: 'WOODS_SPECS', load: () => import('../src/woods' as string) },
+  old: { module: 'src/old.ts', key: 'OLD_SPECS', load: () => import('../src/old' as string) },
+};
+
+/** A course's spec list. Every course but The Links is loaded on request, so this script runs before it is built. */
 export async function specsOf(course: CourseName): Promise<readonly GolfSpec[]> {
   if (course === 'links') return LINKS_SPECS;
-  const module = course === 'fells' ? 'src/fells.ts' : 'src/isles.ts';
-  const key = course === 'fells' ? 'FELLS_SPECS' : 'ISLES_SPECS';
+  const { module, key, load } = MODULES[course];
   let loaded: Record<string, unknown>;
   try {
-    // The specifier is asserted a plain string so the type checker does not need a module that may not exist yet.
-    loaded =
-      course === 'fells'
-        ? await (import('../src/fells' as string) as Promise<Record<string, unknown>>)
-        : await (import('../src/isles' as string) as Promise<Record<string, unknown>>);
+    loaded = (await load()) as Record<string, unknown>;
   } catch (e) {
     throw new Error(`${TITLES[course]} cannot be searched yet: ${module} is not there (${(e as Error).message})`);
   }
