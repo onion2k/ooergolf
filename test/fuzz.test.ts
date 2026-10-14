@@ -66,7 +66,9 @@ describe('the fuzzer', () => {
     // Seed 26's moved from 3199 to 3142 and seed 3's (level golf) from 2702 to 2699 on 10 October 2026 when the draw and the fade began to
     // turn a ball twice as far (`SHAPE.turn`, 0.19 to 0.38): the monkey shapes a good many strokes, and a ball that curves further comes
     // down, and is played on from, somewhere else. Shown by putting 0.19 back in a scratch edit, which gives 3199 and 2702 again; 17 did not move.
-    expect([one.drawn, two.drawn, golf.drawn], "draws from the monkey's main stream").toEqual([3142, 3100, 2699]);
+    // Seeds 26 and 17 moved to 3327 and 3095 on 14 October 2026 when The Heath, The Woods and The Old Course joined the
+    // courses: a monkey choosing among nine plays other courses on those seeds; 3 (level golf) did not move.
+    expect([one.drawn, two.drawn, golf.drawn], "draws from the monkey's main stream").toEqual([3327, 3095, 2699]);
     // the framing rule was asked of the camera, on golf and on minigolf, a good many times: a check that never ran passes in silence
     expect(one.framed + two.framed, 'times the framing was checked').toBeGreaterThan(300);
     expect(golf.framed, 'times it was checked on level golf').toBeGreaterThan(30);
@@ -94,6 +96,8 @@ describe('the fuzzer', () => {
       'buy, refused',
       'choose a club',
       'choose a course',
+      // reached since 14 October 2026, when The Heath and The Woods brought a lane on to the seeds' rounds
+      'drive the lane',
       'equip',
       'face the flag',
       'fly to an island',
@@ -113,7 +117,11 @@ describe('the fuzzer', () => {
     expect(Object.keys(r.done).sort(), 'every action there is, and no other').toEqual(actions);
     for (const action of actions) expect(r.done[action], action).toBeGreaterThan(0);
     expect(r.happened.struck, 'the ball struck').toBe(
-      r.done.shoot + r.done['shoot well'] + r.done['shoot as aimed'] + r.done['fly to an island'],
+      r.done.shoot +
+        r.done['shoot well'] +
+        r.done['shoot as aimed'] +
+        r.done['fly to an island'] +
+        r.done['drive the lane'],
     );
     expect(r.happened.stopped, 'and come to rest').toBeGreaterThan(0);
     expect(r.happened.holed, 'holed out').toBeGreaterThan(0);

@@ -58,6 +58,18 @@ const KEPT: Record<string, Record<string, unknown>> = {
       'Dog-leg': { strokes: 3, kit: NONE },
     },
   },
+  // a best on a hole of each of the three courses of 14 October 2026, which an older game keeps by name as any best
+  '06-six-courses.json': {
+    coins: 90,
+    gems: 0,
+    owned: [],
+    kit: NONE,
+    best: {
+      'Heather Run': { strokes: 4, kit: NONE },
+      'Rookery Walk': { strokes: 5, kit: NONE },
+      'The Spectacles': { strokes: 6, kit: NONE },
+    },
+  },
 };
 
 describe('saves from every shape the game has written', () => {

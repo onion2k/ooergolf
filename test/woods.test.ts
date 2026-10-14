@@ -398,7 +398,7 @@ describe('The Woods', () => {
 
   it('has a name of its own on every hole: unique across every course, none of the themes of the other new courses, and each draws a wind that moves the grass', () => {
     expect(new Set(names).size).toBe(9);
-    const others = COURSES.flatMap((c) => c.holes.map((h) => h.name));
+    const others = COURSES.filter((c) => c.name !== 'The Woods').flatMap((c) => c.holes.map((h) => h.name));
     for (const name of names) {
       expect(others, name).not.toContain(name);
       expect(OTHERS, name).not.toContain(name);

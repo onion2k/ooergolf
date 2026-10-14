@@ -265,7 +265,7 @@ describe('what stands past a golf hole', () => {
       expect(nearTris, `${course}: ${hole.name}: near woods`).toBeLessThanOrEqual(BUDGET['near woods']);
       expect(farTris, `${course}: ${hole.name}: far woods`).toBeLessThanOrEqual(BUDGET['far woods']);
     }
-    expect(counted).toBe(27);
+    expect(counted, 'six courses of nine').toBe(54);
     // a ceiling that nothing comes near is not held: the worst hole uses most of its budget
     expect(worstNear).toBeGreaterThan(BUDGET['near woods'] * 0.5);
     // the far woods are thin, a few hundred trees of a few dozen triangles: nowhere near their ceiling, which is a cap and not a target

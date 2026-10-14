@@ -39,10 +39,10 @@ describe('what must stay bounded', () => {
     const holes = COURSES.flatMap((c) => c.holes);
     for (const hole of holes) progress.save.best[hole.name] = { strokes: 10, kit: { ...kit } };
     expect(ITEMS.length, 'the forty-five').toBe(45);
-    expect(holes.length, 'a hole of each, six courses of nine').toBe(54);
+    expect(holes.length, 'a hole of each, nine courses of nine').toBe(81);
     const bytes = JSON.stringify(progress.save).length;
     // held to the byte, so a longer id, a new hole or a new field in a best is seen and the ceiling thought about again
-    expect(bytes, `${bytes} bytes for ${holes.length} holes`).toBe(5_830);
+    expect(bytes, `${bytes} bytes for ${holes.length} holes`).toBe(8_508);
     expect(bytes, 'under the ceiling').toBeLessThan(WATCH['save bytes']!.ceiling);
     expect(WATCH['save bytes']!.ceiling, 'with room for about six holes more and no more').toBeLessThan(bytes * 1.15);
   });

@@ -16,7 +16,7 @@ const ASPECTS = [1280 / 800, 400 / 860];
 const AZIMUTHS = [0, Math.PI / 4, Math.PI / 2, Math.PI, -Math.PI / 2];
 
 describe('how far back the overhead view stands', () => {
-  for (const name of ['The Links', 'The Fells', 'The Isles']) {
+  for (const name of ['The Links', 'The Heath', 'The Fells', 'The Woods', 'The Isles', 'The Old Course']) {
     const course = COURSES.find((c) => c.name === name)!;
     it(`shows the whole of every hole of ${name}, on a desk and a phone, whichever way the view is turned`, () => {
       let tightest = Infinity;

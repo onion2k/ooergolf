@@ -4,7 +4,10 @@ export { FLAT, FLAT_HOLES, levelHole, type LevelSpec } from './level';
 import { golfHole } from '../src/golf';
 import { LINKS_SPECS } from '../src/links';
 import { FELLS_SPECS } from '../src/fells';
+import { HEATH_SPECS } from '../src/heath';
 import { ISLES_SPECS } from '../src/isles';
+import { OLD_SPECS } from '../src/old';
+import { WOODS_SPECS } from '../src/woods';
 import { Game, type GameEvents } from '../src/game';
 import { Progress, memoryStore } from '../src/progress';
 import { seeded } from '../src/random';
@@ -13,8 +16,8 @@ export const DT = 1 / 60;
 
 /**
  * The holes the slow tests that try every tile of every hole are run on: every hole of the minigolf courses. Of The Links, whose holes are
- * twenty thousand tiles of map and eight thousand of ground each: three, the shortest, a par four and the longest, and one of each of the others (The Plunge, The Green Isle), made
- * singly so that importing this does not make all nine.
+ * twenty thousand tiles of map and eight thousand of ground each: three, the shortest, a par four and the longest, and one of each of the others (The Plunge, The Green Isle,
+ * Heather Run, Rookery Walk, The Spectacles: a lane, the biggest wood, and a lake with a lane), made singly so that importing this does not make all nine.
  */
 export const SAMPLE_HOLES: HoleDef[] = COURSES.flatMap((c) =>
   c.name === 'The Links'
@@ -23,7 +26,13 @@ export const SAMPLE_HOLES: HoleDef[] = COURSES.flatMap((c) =>
       ? [golfHole(FELLS_SPECS[4])]
       : c.name === 'The Isles'
         ? [golfHole(ISLES_SPECS[1])]
-        : c.holes,
+        : c.name === 'The Heath'
+          ? [golfHole(HEATH_SPECS[4])]
+          : c.name === 'The Woods'
+            ? [golfHole(WOODS_SPECS[6])]
+            : c.name === 'The Old Course'
+              ? [golfHole(OLD_SPECS[7])]
+              : c.holes,
 );
 
 /**

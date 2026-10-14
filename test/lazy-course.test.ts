@@ -33,7 +33,7 @@ describe('a course made by a generator', () => {
     vi.resetModules();
   });
 
-  it('is made only when chosen for The Fells and The Isles too: summaries read, nothing made, until their holes are asked for', async () => {
+  it('is made only when chosen for the five later courses of golf too: summaries read, nothing made, until their holes are asked for', async () => {
     vi.resetModules();
     const made: string[] = [];
     vi.doMock('../src/golf', async () => {
@@ -48,7 +48,7 @@ describe('a course made by a generator', () => {
     });
     const course = await import('../src/course');
     expect(made).toEqual([]);
-    for (const name of ['The Fells', 'The Isles']) {
+    for (const name of ['The Fells', 'The Isles', 'The Heath', 'The Woods', 'The Old Course']) {
       const c = course.COURSES.find((x) => x.name === name)!;
       expect(c.golf, `${name} is golf`).toBe(true);
       expect(c.summary.holes).toBe(9);

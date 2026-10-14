@@ -152,7 +152,7 @@ const HOLES: { name: string; layout: Layout }[] = COURSES.filter((c) => c.golf).
 
 describe('the line of play on the holes there are', () => {
   it('has a way on every hole of golf the courses have, since they are made along one', () => {
-    expect(HOLES.length).toBe(27);
+    expect(HOLES.length, 'six courses of nine').toBe(54);
     for (const { name, layout } of HOLES) expect(layout.way?.length, name).toBeGreaterThanOrEqual(2);
   });
 

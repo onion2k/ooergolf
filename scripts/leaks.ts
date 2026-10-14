@@ -42,8 +42,10 @@ export const WATCH: Partial<Record<string, { ceiling: number; steady?: boolean }
   // (8 October 2026: a best now carries a kit of three ids, about 104 bytes a hole. Measured with all forty-five items
   // owned and worn, and a best of ten strokes on each of the fifty-four holes of the six courses, each best with a kit of
   // the three longest ids (streamers, fireworks, horseshoe): 5,830 bytes, which `test/leaks.test.ts` holds to the byte.
-  // 6,500 is that and about six holes more, since a seventh course would otherwise fail the gate before it failed the test)
-  'save bytes': { ceiling: 6_500 },
+  // 6,500 was that and about six holes more. 14 October 2026: nine courses of nine, The Heath, The Woods and The Old Course
+  // joining, measured the same way at 8,508 bytes, held to the byte; 9,200 is that and about six holes more, so a tenth
+  // course fails the test before it fails the gate)
+  'save bytes': { ceiling: 9_200 },
   // emptied at every new round: never more than a score a hole
   'card scores': { ceiling: COURSE.length },
   // the bodies in the rehearsal a golf hole's shots are previewed in: the ball, however many shots are tried, and the
@@ -106,14 +108,21 @@ export function trouble(samples: Record<string, number[]>): string[] {
 }
 
 /** The courses of golf a leak run may be played on, each by the name its course has. */
-export const GOLF_COURSES = { links: 'The Links', fells: 'The Fells', isles: 'The Isles' } as const;
+export const GOLF_COURSES = {
+  links: 'The Links',
+  heath: 'The Heath',
+  fells: 'The Fells',
+  woods: 'The Woods',
+  isles: 'The Isles',
+  old: 'The Old Course',
+} as const;
 export type GolfCourseKey = keyof typeof GOLF_COURSES;
 
 export interface LeakOptions {
   seed: number;
   /** Game minutes to play. */
   minutes: number;
-  /** Play a course of golf, The Links, The Fells or The Isles, instead of The Meadow. */
+  /** Play a course of golf, one of `GOLF_COURSES`, instead of The Meadow. */
   golf?: GolfCourseKey;
 }
 

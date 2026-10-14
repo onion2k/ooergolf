@@ -90,6 +90,13 @@ export const BEFORE: Record<string, string> = {
   'The Fells/11': 'a437179c',
   'The Isles/3': '37206db4',
   'The Isles/11': '5f5434b7',
+  // the three courses of 14 October 2026, hashed as they landed (7d41e7d): the six above did not move by a digit
+  'The Heath/3': '9ef55cc9',
+  'The Heath/11': 'a7b6e588',
+  'The Woods/3': '2bf9ba6c',
+  'The Woods/11': '6b1b7b03',
+  'The Old Course/3': '01ab595d',
+  'The Old Course/11': 'fbb8af39',
 };
 
 describe('a game with no kit is the game as it was', () => {

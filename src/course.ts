@@ -32,8 +32,11 @@
 
 import type { ObstacleDef } from './obstacles';
 import { FELLS_SUMMARY, fells } from './fells';
+import { HEATH_SUMMARY, heath } from './heath';
 import { ISLES_SUMMARY, isles } from './isles';
 import { LINKS_SUMMARY, links } from './links';
+import { OLD_SUMMARY, old } from './old';
+import { WOODS_SUMMARY, woods } from './woods';
 import { SHED } from './shed';
 import { WATERWORKS } from './waterworks';
 
@@ -286,7 +289,10 @@ export interface Course {
 
 const summaryOf = (holes: readonly HoleDef[]) => ({ holes: holes.length, par: holes.reduce((a, h) => a + h.par, 0) });
 
-/** Every course, the first the one a new player meets first. */
+/**
+ * Every course, the first the one a new player meets first: the three of minigolf, then the six of golf in the order of how
+ * hard the pace player finds them (strokes over par a hole), easiest first, which is what a player reads the order as.
+ */
 export const COURSES: readonly Course[] = [
   { name: 'The Meadow', holes: COURSE, summary: summaryOf(COURSE) },
   { name: 'The Pinball Shed', holes: SHED, summary: summaryOf(SHED) },
@@ -300,6 +306,14 @@ export const COURSES: readonly Course[] = [
     golf: true,
   },
   {
+    name: 'The Heath',
+    get holes() {
+      return heath();
+    },
+    summary: HEATH_SUMMARY,
+    golf: true,
+  },
+  {
     name: 'The Fells',
     get holes() {
       return fells();
@@ -308,11 +322,27 @@ export const COURSES: readonly Course[] = [
     golf: true,
   },
   {
+    name: 'The Woods',
+    get holes() {
+      return woods();
+    },
+    summary: WOODS_SUMMARY,
+    golf: true,
+  },
+  {
     name: 'The Isles',
     get holes() {
       return isles();
     },
     summary: ISLES_SUMMARY,
+    golf: true,
+  },
+  {
+    name: 'The Old Course',
+    get holes() {
+      return old();
+    },
+    summary: OLD_SUMMARY,
     golf: true,
   },
 ];

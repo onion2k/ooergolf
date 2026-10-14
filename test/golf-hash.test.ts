@@ -78,6 +78,33 @@ const BUILT: Record<string, number> = {
   'The Isles/Two Lakes': 158770685,
   'The Isles/The Peninsula': 3776180384,
   'The Isles/Home Waters': 1169433937,
+  'The Heath/Gorse Gate': 2726681230,
+  'The Heath/Bracken Bend': 1141858595,
+  'The Heath/Furze Hollow': 171855566,
+  'The Heath/The Warren': 1426650801,
+  'The Heath/Heather Run': 2895203824,
+  'The Heath/Beacon Top': 359674622,
+  'The Heath/Nightjar Turn': 3474298526,
+  'The Heath/Adder Dip': 2379645355,
+  'The Heath/Common Ground': 1401007140,
+  'The Woods/Acorn Rise': 1826943662,
+  'The Woods/Pine Ride': 1874026488,
+  'The Woods/The Beech Hanger': 991326848,
+  'The Woods/Oak Avenue': 2286345131,
+  'The Woods/The Glade': 1810506087,
+  'The Woods/Bluebell Walk': 1529370725,
+  'The Woods/Rookery Walk': 68892602,
+  'The Woods/The Coppice': 1632997673,
+  'The Woods/Lantern Clearing': 865538397,
+  'The Old Course/The Burn': 2615335412,
+  'The Old Course/Cartgate': 512361176,
+  'The Old Course/High Rigg': 851533161,
+  'The Old Course/The Road Hole': 1299049878,
+  'The Old Course/Hell Bunker': 912603200,
+  'The Old Course/The Long Way': 3596463224,
+  'The Old Course/Dyke End': 1186804525,
+  'The Old Course/The Spectacles': 1805605783,
+  'The Old Course/The Auld Home': 1294817553,
 };
 
 describe('the holes as they were', () => {
@@ -95,9 +122,10 @@ describe('the holes as they were', () => {
     for (const key of Object.keys(WAS)) expect(got[key], key).toBe(WAS[key]);
   });
 
-  it('holds every hole of The Fells and The Isles to the hash it was built with', () => {
+  it('holds every hole of The Fells, The Isles, The Heath, The Woods and The Old Course to the hash it was built with', () => {
     const got = Object.fromEntries(COURSES.flatMap((c) => c.holes.map((h) => [`${c.name}/${h.name}`, hashHole(h)])));
-    expect(Object.keys(BUILT)).toHaveLength(18);
+    // eighteen, and twenty-seven more on 14 October 2026 for The Heath, The Woods and The Old Course, written as they landed
+    expect(Object.keys(BUILT)).toHaveLength(45);
     for (const key of Object.keys(BUILT)) expect(got[key], key).toBe(BUILT[key]);
   });
 });

@@ -1,5 +1,5 @@
 /**
- * The rolling land of The Links and The Isles: the rough rises in banks beside each fairway and round each green, and a
+ * The rolling land of The Links and The Isles, and of The Heath, The Woods and The Old Course: the rough rises in banks beside each fairway and round each green, and a
  * long swell runs under the hills, so the ground a hole is played over rolls as the title picture's does. Held here, on
  * every hole of both courses, to what must still be true of a hole that rolls: the fairway, the tee and the green hold a
  * ball where the course's rule asks it, no step is more than the physics takes, the green's contour is the spec's, and the
@@ -12,8 +12,11 @@ import { TILE, layoutOf, slopeAt, terrainAt, type Layout } from '../src/arena';
 import { CUP } from '../src/course';
 import { BANKS, golfHole, type GolfSpec } from '../src/golf';
 import { GREEN as GREEN_RULES } from '../src/green';
+import { HEATH_SPECS } from '../src/heath';
 import { ISLES_SPECS } from '../src/isles';
 import { LINKS_SPECS } from '../src/links';
+import { OLD_SPECS } from '../src/old';
+import { WOODS_SPECS } from '../src/woods';
 import { terrainRefusal } from '../src/physics';
 import { drainFault, holdsBall } from '../src/slopes';
 import { LIE } from '../src/surfaces';
@@ -22,6 +25,9 @@ import { DT, golfGame } from './helpers';
 const SPECS: readonly [string, GolfSpec][] = [
   ...LINKS_SPECS.map((s) => ['The Links', s] as [string, GolfSpec]),
   ...ISLES_SPECS.map((s) => ['The Isles', s] as [string, GolfSpec]),
+  ...HEATH_SPECS.map((s) => ['The Heath', s] as [string, GolfSpec]),
+  ...WOODS_SPECS.map((s) => ['The Woods', s] as [string, GolfSpec]),
+  ...OLD_SPECS.map((s) => ['The Old Course', s] as [string, GolfSpec]),
 ];
 
 /** The hole as it was before the land rolled: the same spec without asking for it. */
@@ -60,6 +66,35 @@ const HAZARDS: Record<string, number> = {
   'The Isles/Two Lakes': 1694709334,
   'The Isles/The Peninsula': 3437257301,
   'The Isles/Home Waters': 2281177161,
+  // The Heath, The Woods and The Old Course, which roll from the first: written as they landed (7d41e7d, 14 October 2026)
+  // from the same `hazards` over each hole with `rolling: false`, so they are held to keep their hazards as the others are
+  'The Heath/Gorse Gate': 528525969,
+  'The Heath/Bracken Bend': 3294995703,
+  'The Heath/Furze Hollow': 2128277627,
+  'The Heath/The Warren': 1318324459,
+  'The Heath/Heather Run': 354516681,
+  'The Heath/Beacon Top': 1076673948,
+  'The Heath/Nightjar Turn': 2911353160,
+  'The Heath/Adder Dip': 3980998994,
+  'The Heath/Common Ground': 2591797045,
+  'The Woods/Acorn Rise': 3324418468,
+  'The Woods/Pine Ride': 986383232,
+  'The Woods/The Beech Hanger': 3567976344,
+  'The Woods/Oak Avenue': 1580408527,
+  'The Woods/The Glade': 4270304993,
+  'The Woods/Bluebell Walk': 2234833941,
+  'The Woods/Rookery Walk': 2746298438,
+  'The Woods/The Coppice': 4099359028,
+  'The Woods/Lantern Clearing': 3897987485,
+  'The Old Course/The Burn': 1112668823,
+  'The Old Course/Cartgate': 3958717828,
+  'The Old Course/High Rigg': 3164724269,
+  'The Old Course/The Road Hole': 2797745495,
+  'The Old Course/Hell Bunker': 1058287746,
+  'The Old Course/The Long Way': 1648441910,
+  'The Old Course/Dyke End': 477568637,
+  'The Old Course/The Spectacles': 2738347987,
+  'The Old Course/The Auld Home': 4012818114,
 };
 
 /** How high a bank stands, and the relief a hole of rolling land has, in yards: what the user chose on 9 October 2026. */
@@ -101,7 +136,7 @@ function nearWater(l: Layout, c: number, r: number): boolean {
 
 describe('rolling land: the banks', () => {
   it('stands the rough within 25 yards of the fairway (but for the ground by water, where no bank rises) at least half a bank above the fairway it lies beside, and the land has the relief', () => {
-    for (const { key, layout: l } of HOLES) {
+    for (const { key, layout: l, spec } of HOLES) {
       const reach = Math.ceil(25 / TILE);
       let sum = 0,
         n = 0,
@@ -132,7 +167,11 @@ describe('rolling land: the banks', () => {
         n++;
       }
       expect(n, `${key}: rough beside the fairway`).toBeGreaterThan(100);
-      expect(sum / n, `${key}: the rough's mean rise over the fairway`).toBeGreaterThanOrEqual(BANK / 2);
+      // a hole heightened past The Isles' 1.3 (The Old Course's three, at 2.2) stands on hills cut to the physics' step, as
+      // The Fells do, and its rough beside the fairway is as often below it as above: the banks are not asked of it, as they
+      // are not of The Fells; its hazards and its relief are held like any other's
+      if ((spec.heighten ?? 1) <= 1.3)
+        expect(sum / n, `${key}: the rough's mean rise over the fairway`).toBeGreaterThanOrEqual(BANK / 2);
       expect(hi - lo, `${key}: relief`).toBeGreaterThanOrEqual(RELIEF);
     }
   });

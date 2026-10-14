@@ -12,19 +12,31 @@ import { HILLS } from './hills';
 const holeNames = (course: string) => COURSES.find((c) => c.name === course)!.holes.map((h) => h.name);
 
 describe('the courses', () => {
-  it('are The Meadow, the first nine as they were, the two newer courses and The Links, The Fells and The Isles, the courses of golf, in order of difficulty', () => {
-    // four of minigolf were too many: The Fair went on 8 October 2026, its best holes shared between the other two
+  it('are The Meadow, the first nine as they were, the two newer courses and the six courses of golf, easiest first', () => {
+    // four of minigolf were too many: The Fair went on 8 October 2026, its best holes shared between the other two; the six
+    // of golf stand in the order of how hard the pace player finds them, which is what a player reads the order as (The
+    // Heath, The Woods and The Old Course joined on 14 October 2026, each between the courses it plays between)
     expect(COURSES.map((c) => c.name)).toEqual([
       'The Meadow',
       'The Pinball Shed',
       'The Waterworks',
       'The Links',
+      'The Heath',
       'The Fells',
+      'The Woods',
       'The Isles',
+      'The Old Course',
     ]);
     expect(COURSES[0].holes).toBe(COURSE);
     expect(COURSE.length).toBe(9);
-    expect(COURSES.filter((c) => c.golf).map((c) => c.name)).toEqual(['The Links', 'The Fells', 'The Isles']);
+    expect(COURSES.filter((c) => c.golf).map((c) => c.name)).toEqual([
+      'The Links',
+      'The Heath',
+      'The Fells',
+      'The Woods',
+      'The Isles',
+      'The Old Course',
+    ]);
   });
 
   it('draw The Meadow’s windmill and mill race so that the cup shows from the tee, and open the race’s barrier wider', () => {
@@ -54,11 +66,11 @@ describe('the courses', () => {
     expect(new Set(names).size).toBe(names.length);
   });
 
-  it('keep a best score by the name of each hole of The Fells and The Isles, saved and read back', () => {
-    const names = ['The Fells', 'The Isles'].flatMap((n) =>
+  it('keep a best score by the name of each hole of the five later courses of golf, saved and read back', () => {
+    const names = ['The Fells', 'The Isles', 'The Heath', 'The Woods', 'The Old Course'].flatMap((n) =>
       COURSES.find((c) => c.name === n)!.summary.holes ? holeNames(n) : [],
     );
-    expect(names.length).toBe(18);
+    expect(names.length).toBe(45);
     const best: Record<string, { strokes: number; kit: { club: string; ball: string; accessory: string } }> = {};
     names.forEach((n, i) => (best[n] = { strokes: 2 + (i % 5), kit: { club: '', ball: '', accessory: '' } }));
     const store = memoryStore(
