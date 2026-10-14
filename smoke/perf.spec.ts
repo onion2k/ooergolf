@@ -15,7 +15,6 @@
  * times first, and the frame is the lower quartile of many. The download is
  * the built bundle, gzipped, and does not wobble at all.
  */
-import { execFileSync } from 'node:child_process';
 import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
@@ -23,6 +22,7 @@ import { expect, test } from '@playwright/test';
 import { layoutOf } from '../src/arena';
 import { COURSES } from '../src/course';
 import { bigHole, smallHole } from './bighole';
+import { buildDist } from './build';
 import { BUDGET } from './budget';
 import { start, watch } from './game';
 
@@ -90,7 +90,7 @@ interface Figures {
 
 /** The built game's download: every script and stylesheet in dist/, gzipped, in kilobytes. */
 function bundleKb(): number {
-  execFileSync('npx', ['vite', 'build', '--logLevel', 'silent'], { stdio: 'ignore' });
+  buildDist();
   const dir = 'dist/assets';
   let bytes = 0;
   for (const f of readdirSync(dir)) {

@@ -44,6 +44,8 @@ export interface HudHandlers {
   shape(value: number): void;
   /** The spin button pressed: the next spin in its cycle, from minus one (backspin) to one (topspin). */
   spin(value: number): void;
+  /** The Install button pressed on the start screen: the browser's offer to install the page as an app, taken. */
+  install(): void;
 }
 
 /** A club of the bag as the picker shows it: what to press, what to call it, how far it carries at full power, and its loft (none for the putter). */
@@ -163,6 +165,8 @@ export class Hud {
   /** What the shop was last told of the save, so a tab pressed can show its rows without waiting for the game to tell again. */
   private saved: Purse | null = null;
   private readonly start = document.getElementById('start')!;
+  /** The Install button on the start screen, shown only while the browser offers to install (`showInstall`). */
+  private readonly installButton = document.getElementById('install') as HTMLButtonElement;
   /** Whether the start screen is up but held back, out of sight, until the title's letters have landed: everything else is away as if it showed. */
   private held = false;
   private readonly courseList = document.getElementById('courses')!;
@@ -227,6 +231,7 @@ export class Hud {
   ) {
     document.getElementById('again')!.addEventListener('click', () => handlers.again());
     document.getElementById('cardCourses')!.addEventListener('click', () => handlers.courses());
+    this.installButton.addEventListener('click', () => handlers.install());
     const open = () => {
       this.shop.hidden = false;
     };
@@ -693,6 +698,11 @@ export class Hud {
   }
 
   /** The start screen put away, and the course's words shown. */
+  /** The browser offers to install, or has stopped offering: the Install button shown on the start screen, or put away. */
+  showInstall(on: boolean) {
+    this.installButton.hidden = !on;
+  }
+
   hideStart() {
     this.held = false;
     this.start.hidden = true;

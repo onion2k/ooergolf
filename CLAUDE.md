@@ -331,6 +331,7 @@ today, and what the next features must hand it:
     npm run smoke          the game in headless Chromium on the real GPU (Playwright, smoke/)
     npm run look           the scenes, and the models' showcase, held to the pictures in smoke/screens
     npm run look:metrics   the look's colour, framing, contrast, cool shade and shape, held to their floors
+    node scripts/make-icons.mjs   the app's icons again from src/title_sq.png (committed; run when the picture or the crop changes)
 
 `--update` on `pace:check` or `bench`, `npm run perf:update` and `npm run
 look:update` write a baseline again. `look:update` leaves a picture that is
@@ -785,6 +786,26 @@ minigolf: true }`, read through `oceanFor`) is the one switch: `waterBed` and `s
   of the screen is above the horizon (tilted past `SKY_TILT`, 70 degrees, which no view a shot is played from is: `TILT.most` is 57), and
   `main.ts` hands the scene `scene.setSky(titled || rig.seesSky(t))` each frame; with it off the clouds are a matrix of no size where they were
   (as the title's ball is) and `motions().sky` reads 0, with it on they are as they were, which leaves the fly-in's pictures as they were.
+- **The game is an installable app** (14 October 2026; plan `~/.claude/plans/humble-humming-dream.md`). It is served at
+  https://golf.ooer.com/, at the root, so every path is relative and Vite's base is untouched. `public/manifest.webmanifest`
+  names it (Ooergolf; "Of Course!" under the icon; standalone; the boot sky `--boot` for its colours, held equal by
+  `test/manifest.test.ts`) and `public/icons/` are its icons, cut from `src/title_sq.png` (the ball on its tee) by
+  `node scripts/make-icons.mjs`, run by hand when the picture or the crop changes, quantised to 32 levels a channel (the 512s
+  halved by it) and held under a ceiling; the maskable one is cut wider so the ball sits in the launcher's safe zone. The
+  service worker is `src/sw.ts`, a shell over `src/offline.ts` (the decisions, tested headless: the files a build keeps, the
+  cache named by a hash of them so a new build is a new cache and the old is thrown away on activate, a navigation
+  network-first with the cached page as fallback, a same-origin asset cache-first, matched by URL alone since Vite's preview
+  says `Vary: Origin`, anything else passed); the plugin `worker()` in `vite.config.ts` bundles it to `dist/sw.js` as the build
+  closes with `__ASSETS__` the files the build wrote (about 1.8 kB, 0.9 gzipped, at the root and not counted by `perf`'s
+  download). `src/install.ts` says when it is registered (`shouldRegister`: a built page only, so the dev server and every
+  smoke test on it register nothing, and `?sw=0` leaves a built page without one; `main.ts` registers it after `ready`, so the
+  boot cannot move) and keeps the browser's install offer (`InstallOffer`: `beforeinstallprompt` held, `prompt()` once when
+  the **Install the game** pill under the start screen's cards (`#install`, `Hud.showInstall`) is pressed, withdrawn on
+  `appinstalled`; Safari and iOS fire nothing and show no button, their Share → Add to Home Screen installs it).
+  `smoke/pwa.spec.ts` builds `dist` (`buildDist` in `smoke/build.ts`, which `perf` uses too) and serves it with Vite's preview on
+  the smoke port plus one: the worker ready, the build in one cache, the page booted offline with its save, `?sw=0`, and the
+  button through a synthetic offer. Not done: no "update ready" toast (a player online is on the new build from their next
+  load, and the open page is not told), no hint for iOS, the showcase is not cached.
 - `src/debug.ts` is `window.game`, the test API. `src/invariants.ts` lists
   the rules that must always hold. `src/autopilot.ts` plays the game by
   itself, for the gates and for par; its route over the tiles (`pathToCup`)
@@ -1260,7 +1281,9 @@ colour and size, the spread's half axes, where a tree knocks it and what it come
 from what the last frame placed; and `map()`, the hole's map over the course: its size and where the ball, the cup and the
 landing of the shot being aimed are on it. `state()` has the shape and the spin chosen, the hole's `wind` (x, y, speed), its `greens` speed and its name (`greenSpeed`: `fast`,
 `medium`, `slow` or null) and `arrows`, how many stand over its green;
-`motions()` has `wind` (the arrow's turn in degrees and its text, read back from the page), `controls` (the two buttons as drawn),
+`app()` says the service worker's registration (`worker`: `none`, `registering`, `ready` or `failed`), whether the browser
+offers to install (`offered`) and whether the page runs standalone, and `install()` presses the Install button's action (false
+with no offer to take). `motions()` has `wind` (the arrow's turn in degrees and its text, read back from the page), `controls` (the two buttons as drawn),
 `arrows` ({ shown, count }: what the last frame wrote), `shot.heading` and `press` (the grass pressed flat round a ball at rest in the rough this frame: where, how wide, and whether
 the renderer took it; null otherwise). `view()` also has `turning` (whether the camera is turning to face the cup), `line` (where it turns by itself to a ball come to rest, along the line of play; `flag` is the button's), and `putt` and `greens`, the two lines under the pin as drawn (null when none); `motions()` also has `sky` (how many clouds the last frame drew with a size: all to the fly-in and the title, none to any other view) and `help` (the help as drawn: its words, and `aiming` for how the drag now held was begun, or null). `?rung=N` on the page puts the picture
 on a rung and holds it; paused, the governor never moves it, so pictures are

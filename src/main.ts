@@ -33,6 +33,7 @@ import { frameCost } from './frame-cost';
 import { COURSES } from './course';
 import { Game, type GameEvents } from './game';
 import { Hud } from './hud';
+import { InstallOffer, registerWorker, shouldRegister, type WorkerState } from './install';
 import { uiScale } from './uiscale';
 import { mapInto, mapSize, paintMap, type MapSize } from './holemap';
 import { Previewer, type Preview } from './preview';
@@ -367,9 +368,17 @@ async function main() {
         game?.setSpin(value);
         if (game) hud.setShaping(game.shape, game.spin);
       },
+      // the Install button: the browser's offer taken (the button is only shown while there is one)
+      install() {
+        offer.prompt();
+      },
     },
     ITEMS,
   );
+  // the browser's offer to install the page as an app, kept until the player presses Install on the start screen
+  const offer = new InstallOffer(window, (on) => hud.showInstall(on));
+  /** Where the service worker's registration has got to; a dev page and a test's page register none. */
+  let worker: WorkerState = 'none';
   /** Whether the waders took the loss being told of, which the word for it says: set just before it, and read by it. */
   let wadedNow = false;
   const showPurse = () => game && hud.setPurse(game.progress.save);
@@ -1618,6 +1627,8 @@ async function main() {
     }),
     course: () => courseName,
     choosing: () => choosing,
+    app: () => ({ worker, offered: offer.offered, standalone: matchMedia('(display-mode: standalone)').matches }),
+    install: () => offer.prompt(),
     title() {
       const t = titled;
       const at = { lettersAt: marks.letters, courseAt: marks.course };
@@ -1707,4 +1718,10 @@ async function main() {
   ready = true;
   bootMs = performance.now();
   requestAnimationFrame(frame);
+  // the service worker, after the game is ready and never before: a boot is the first frame's business, and the worker's
+  // caching of the build is for the next boot, not this one
+  if (shouldRegister({ prod: import.meta.env.PROD, search: location.search, supported: 'serviceWorker' in navigator }))
+    registerWorker(navigator.serviceWorker, (state) => {
+      worker = state;
+    });
 }

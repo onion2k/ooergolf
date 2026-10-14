@@ -5,6 +5,14 @@
   content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
 />
 <title>Ooergolf</title>
+<!-- installable: the manifest names the app and its icons, and the metas give the sky to the window's chrome and iOS its icon -->
+<link rel="manifest" href="manifest.webmanifest" />
+<meta name="theme-color" content="#bfe3ff" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="Of Course!" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
 <!-- inline, so the browser does not go asking for a /favicon.ico there is none of -->
 <link
   rel="icon"
@@ -826,6 +834,10 @@
     font-size: 16px;
     font-weight: 700;
     color: var(--ink-soft);
+  }
+  /* the Install button, under the cards, only while the browser offers to install the page as an app */
+  #install {
+    margin-top: 20px;
   }
   #courses {
     display: grid;
@@ -1770,6 +1782,7 @@
   <h1>ooergolf</h1>
   <p>Choose a course</p>
   <div id="courses"></div>
+  <button id="install" type="button" hidden>Install the game</button>
 </div>
 <div class="panel" id="stats" hidden></div>
 <div class="panel" id="bag" role="group" aria-label="Club" hidden>

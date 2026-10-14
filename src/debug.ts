@@ -12,6 +12,7 @@
  * The types are shared with the smoke tests, so a test that calls something
  * that is not here does not compile.
  */
+import type { WorkerState } from './install';
 import type { Antialias } from 'artshape-render/game/renderer';
 import { KIND_NAME, TILE, type Layout } from './arena';
 import { Autopilot, type Plan } from './autopilot';
@@ -126,6 +127,13 @@ export interface Content {
  * the course cards are in sight, and each piece's pose and the box it covers on the page (left, top, right and bottom in
  * CSS pixels), which a hidden piece has none of. Nothing of the game: the title plays nothing.
  */
+/** The page as an app, for a test of the built page: see `install.ts`. */
+export interface AppReport {
+  worker: WorkerState;
+  offered: boolean;
+  standalone: boolean;
+}
+
 export interface TitleReport {
   up: boolean;
   t: number;
@@ -215,6 +223,10 @@ export interface GameApi {
   chooseCourse(name: string): void;
   /** The title scene as the last frame drew it: see `TitleReport`. It is not up on a page that left the title out (`?title=0`) or once a course is chosen. */
   title(): TitleReport;
+  /** The page as an app: the service worker's registration, whether the browser offers to install, and whether it runs standalone. */
+  app(): AppReport;
+  /** The Install button's action: the browser's prompt shown; false when there is no offer to take. */
+  install(): boolean;
   /** A new round, as the card's button asks for. */
   newRound(): void;
   /** An item bought, as the shop's button does; whether it was. */
@@ -455,6 +467,8 @@ export interface DebugHost {
   choosing(): boolean;
   chooseCourse(name: string): void;
   title(): TitleReport;
+  app(): AppReport;
+  install(): boolean;
   events: string[];
 }
 
@@ -582,6 +596,8 @@ export function createApi(host: DebugHost): GameApi {
     playCourse: (holes) => game.playCourse(holes),
     chooseCourse: (name) => host.chooseCourse(name),
     title: () => host.title(),
+    app: () => host.app(),
+    install: () => host.install(),
     newRound: () => game.newRound(),
     buy: (id) => game.buy(id),
     equip: (id) => game.equip(id),

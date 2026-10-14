@@ -39,6 +39,16 @@ import { openDrawer } from './panels';
 /** How far the pictures may differ before it is a change and not the GPU: a fiftieth of the pixels, each well off. */
 const TOLERANCE = { maxDiffPixelRatio: 0.002, threshold: 0.02 };
 
+/** The browser's offer to install the page as an app, fired as Chrome fires it, so the start screen shows its Install button. */
+async function offerInstall(page: Page) {
+  await page.evaluate(() => {
+    window.dispatchEvent(
+      Object.assign(new Event('beforeinstallprompt', { cancelable: true }), { prompt: () => Promise.resolve() }),
+    );
+  });
+  await expect(page.locator('#install')).toBeVisible();
+}
+
 /** The corner that counts the milliseconds a frame takes is different every run, and says nothing about the look. */
 async function hideStats(page: Page) {
   await page.locator('#stats').evaluate((el: HTMLElement) => (el.hidden = true));
@@ -644,6 +654,18 @@ test.describe('what it looks like', () => {
     expect(problems).toEqual([]);
   });
 
+  test('the start screen with the Install button, while the browser offers to install the page as an app', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true, screen: true });
+    await offerInstall(page);
+    await page.evaluate(() => window.game!.step(1));
+    await hideStats(page);
+    await expect(page).toHaveScreenshot('start-install.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
   test('the page stopped on a hole that cannot be drawn: the boot screen again, saying which hole and why', async ({
     page,
   }) => {
@@ -1208,6 +1230,16 @@ test.describe('what it looks like', () => {
       await page.evaluate(() => window.game!.step(1));
       await hideStats(page);
       await expect(page).toHaveScreenshot('phone-start.png', TOLERANCE);
+      expect(problems).toEqual([]);
+    });
+
+    test('the start screen with the Install button, on a phone', async ({ page }) => {
+      const problems = watch(page);
+      await start(page, { seed: 11, paused: true, screen: true });
+      await offerInstall(page);
+      await page.evaluate(() => window.game!.step(1));
+      await hideStats(page);
+      await expect(page).toHaveScreenshot('phone-start-install.png', TOLERANCE);
       expect(problems).toEqual([]);
     });
 
