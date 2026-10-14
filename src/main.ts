@@ -827,6 +827,10 @@ async function main() {
   // the screen is not measured until after the first hole, which is begun looking from a desk's shape
   director.setScreen(aspect, innerHeight);
   booted('hole');
+  // the start screen is up, held back, before the first hole is: the boot panel is let go as soon as the letters are drawn,
+  // while the hole is still being built behind them, and a hole begun with no start screen up puts its bag and its map on
+  // the screen, which were seen over the sky until the end of the boot put the start screen up and hid them
+  if (wantTitle) hud.showStart(summaries, true);
   if (wantTitle) await beginUnderTitle(played.hole, played.def.par);
   else shown.started!(played.hole, played.def.par);
   // a first hole that cannot be drawn is the boot's failure: the screen says so, and there is no game to start

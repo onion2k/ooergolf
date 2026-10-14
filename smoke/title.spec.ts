@@ -152,6 +152,37 @@ async function watchBar(page: Page) {
 const barSeen = (page: Page) =>
   page.evaluate(() => (window as unknown as { barSeen: { at: number; shown: boolean; p: number }[] }).barSeen);
 
+test.describe('nothing of the hole shows under the title', () => {
+  test.use(DESKTOP);
+
+  test('no panel of play is shown at any moment of the boot: the start screen is up, held back, from before the hole is', async ({
+    page,
+  }) => {
+    // every panel that comes out of hiding while the page boots, in the order it did, from before the page's own scripts run:
+    // the panel is let go as soon as the letters are drawn, and anything shown between then and the start screen is seen over the sky
+    await page.addInitScript(() => {
+      const shown: string[] = [];
+      (window as unknown as { shownWhileBooting: string[] }).shownWhileBooting = shown;
+      new MutationObserver((changes) => {
+        for (const c of changes) {
+          const el = c.target as HTMLElement;
+          // the panels alone: a line inside one is written whether or not its panel is up
+          if (c.attributeName === 'hidden' && !el.hidden && el.classList.contains('panel')) shown.push(el.id);
+        }
+      }).observe(document, { attributes: true, attributeFilter: ['hidden'], subtree: true });
+    });
+    await open(page);
+    const shown = await page.evaluate(() => (window as unknown as { shownWhileBooting: string[] }).shownWhileBooting);
+    // the frame's cost is the one panel that stands over the title, and is not of the hole
+    expect(
+      shown.filter((id) => id !== 'stats'),
+      'nothing of the hole is shown while the page boots',
+    ).toEqual([]);
+    await expect(page.locator('#bag')).toBeHidden();
+    await expect(page.locator('#holePanel')).toBeHidden();
+  });
+});
+
 test.describe('the letters come first', () => {
   test.use(DESKTOP);
 
