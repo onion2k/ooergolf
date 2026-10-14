@@ -36,7 +36,7 @@ for (const [where, device] of [
   test.describe(where, () => {
     test.use(device);
 
-    test('the start screen holds its three minigolf and three golf courses without scrolling, a colour to each card', async ({
+    test('the start screen holds its three minigolf and six golf courses without scrolling, the six colours going round', async ({
       page,
     }) => {
       const problems = watch(page);
@@ -49,10 +49,13 @@ for (const [where, device] of [
         return { fits: panel.scrollHeight <= panel.clientHeight, faces };
       });
       expect(r.fits, 'no scrolling in the start screen').toBe(true);
-      // six cards and six colours, each card its own (seven went round, the seventh wearing the first's, until The Fair went on
-      // 8 October 2026); a heading between the minigolf and the golf must not shift the cycle, so the colours are all there
-      expect(r.faces.length, 'a card for each course').toBe(6);
-      expect(new Set(r.faces).size, 'six colours, one a card').toBe(6);
+      // nine cards and six colours, the seventh to the ninth wearing the first three's again (six cards had one each from
+      // 8 October 2026, when The Fair went, to 14 October, when the three new golf courses came); a heading between the
+      // minigolf and the golf must not shift the cycle, so the colours are all there and no two cards side by side share one
+      expect(r.faces.length, 'a card for each course').toBe(9);
+      expect(new Set(r.faces).size, 'six colours going round').toBe(6);
+      for (let k = 1; k < r.faces.length; k++)
+        expect(r.faces[k], `card ${k} against its neighbour`).not.toBe(r.faces[k - 1]);
       expect(problems).toEqual([]);
     });
 

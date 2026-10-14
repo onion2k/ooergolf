@@ -808,13 +808,16 @@ test('a hole of golf played with the bag: a club chosen by its button, struck in
 for (const [course, first] of [
   ['The Fells', 'Fell Foot'],
   ['The Isles', 'Landfall'],
+  ['The Heath', 'Gorse Gate'],
+  ['The Woods', 'Acorn Rise'],
+  ['The Old Course', 'The Burn'],
 ] as const) {
   test(`${course} is chosen by its card on the start screen, begun on its first hole with the driver in hand, and a stroke is struck by a drag`, async ({
     page,
   }) => {
     const problems = watch(page);
     await start(page, { seed: 1, paused: true, screen: true });
-    await expect(page.locator('#start .course')).toHaveCount(6);
+    await expect(page.locator('#start .course')).toHaveCount(9);
     await page.locator('#start .course', { hasText: course }).click();
     await expect(page.locator('#start')).toBeHidden();
     await page.evaluate(() => window.game!.step(75));

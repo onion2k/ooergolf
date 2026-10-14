@@ -815,7 +815,8 @@
   #start {
     --edge: var(--sky);
     --lip: var(--sky-deep);
-    /* wide enough for three cards across, so The Links, The Fells and The Isles stand in one row and the screen holds seven cards without scrolling */
+    /* wide enough for three cards across, so the three minigolf courses stand in one row and the six of golf in two, and a
+       desk's screen holds the nine cards without scrolling */
     width: min(820px, calc(100vw / var(--ui, 1) - 32px));
     padding: 22px 22px 26px;
     text-align: center;
@@ -958,9 +959,16 @@
   }
 
   @media (max-width: 600px) {
-    /* seven cards fit a tall phone's screen at this height, and a short one scrolls */
+    /* nine cards fit a tall phone's screen (seven did at 76 high with the full heading): a card is as high as its name and
+       its pills, 64, so the room comes from the heading and the gaps, and a short phone scrolls */
+    #start h1 {
+      font-size: 40px;
+    }
+    #start p {
+      margin: 2px 0 6px;
+    }
     #courses {
-      gap: 8px 16px;
+      gap: 5px 16px;
     }
     #courses h2 {
       font-size: 13px;
@@ -970,11 +978,11 @@
       margin-top: 0;
     }
     #courses .course {
-      min-height: 76px;
-      padding: 8px 16px 10px;
+      min-height: 56px;
+      padding: 4px 14px 6px;
     }
     .course b {
-      font-size: 23px;
+      font-size: 20px;
     }
   }
 
@@ -1493,7 +1501,7 @@
     }
     #courses .course {
       min-height: 56px;
-      padding: 6px 14px 8px;
+      padding: 4px 14px 6px;
     }
     .course b {
       font-size: 20px;

@@ -14,6 +14,9 @@ import { CLIP, OVERHEAD } from '../src/camera';
 import { LIE } from '../src/surfaces';
 import { LINKS_SPECS, links } from '../src/links';
 import { fells } from '../src/fells';
+import { heath } from '../src/heath';
+import { old } from '../src/old';
+import { woods } from '../src/woods';
 import { zonesOf, type Zone } from '../src/zones';
 import { isles } from '../src/isles';
 import { FLAT } from '../test/level';
@@ -187,9 +190,10 @@ test.describe('the start screen', () => {
     const problems = watch(page);
     await start(page, { seed: 1, paused: true, screen: true });
     await expect(page.locator('#start')).toBeVisible();
-    await expect(page.locator('#start .course')).toHaveCount(6);
-    // the courses sit under two headings, minigolf then golf, the Meadow first of all
-    await expect(page.locator('#start h2')).toHaveText(['Minigolf', 'Golf']);
+    await expect(page.locator('#start .course')).toHaveCount(9);
+    // the courses sit under two headings, golf then minigolf (the game leans to proper golf, 14 October 2026), the golf
+    // easiest first and The Meadow first of the minigolf
+    await expect(page.locator('#start h2')).toHaveText(['Golf', 'Minigolf']);
     expect(
       await page.evaluate(() =>
         Array.from(document.querySelectorAll('#courses > *')).map(
@@ -197,30 +201,34 @@ test.describe('the start screen', () => {
         ),
       ),
     ).toEqual([
+      'H2:Golf',
+      'BUTTON:The Links',
+      'BUTTON:The Heath',
+      'BUTTON:The Fells',
+      'BUTTON:The Woods',
+      'BUTTON:The Isles',
+      'BUTTON:The Old Course',
       'H2:Minigolf',
       'BUTTON:The Meadow',
       'BUTTON:The Pinball Shed',
       'BUTTON:The Waterworks',
-      'H2:Golf',
-      'BUTTON:The Links',
-      'BUTTON:The Fells',
-      'BUTTON:The Isles',
     ]);
-    await expect(page.locator('#start .course').nth(1)).toContainText('The Pinball Shed');
-    await expect(page.locator('#start .course').nth(1)).toContainText('9 holes');
-    await expect(page.locator('#start .course').nth(1)).toContainText('par 27');
-    await expect(page.locator('#start .course').nth(2)).toContainText('The Waterworks');
-    await expect(page.locator('#start .course').nth(2)).toContainText('9 holes');
-    await expect(page.locator('#start .course').nth(2)).toContainText('par 28');
-    await expect(page.locator('#start .course').nth(3)).toContainText('The Links');
-    await expect(page.locator('#start .course').nth(3)).toContainText('9 holes');
-    await expect(page.locator('#start .course').nth(3)).toContainText('par 36');
-    await expect(page.locator('#start .course').nth(4)).toContainText('The Fells');
-    await expect(page.locator('#start .course').nth(4)).toContainText('par 37');
-    await expect(page.locator('#start .course').nth(5)).toContainText('The Isles');
-    await expect(page.locator('#start .course').nth(5)).toContainText('par 45');
-    await expect(page.locator('#start .course').first()).toContainText('The Meadow');
-    await expect(page.locator('#start .course').first()).toContainText('9 holes');
+    const cards = page.locator('#start .course');
+    for (const [k, name, par] of [
+      [0, 'The Links', 36],
+      [1, 'The Heath', 32],
+      [2, 'The Fells', 37],
+      [3, 'The Woods', 35],
+      [4, 'The Isles', 45],
+      [5, 'The Old Course', 37],
+      [6, 'The Meadow', 26],
+      [7, 'The Pinball Shed', 27],
+      [8, 'The Waterworks', 28],
+    ] as const) {
+      await expect(cards.nth(k)).toContainText(name);
+      await expect(cards.nth(k)).toContainText('9 holes');
+      await expect(cards.nth(k)).toContainText(`par ${par}`);
+    }
     expect(await page.evaluate(() => window.game!.state())).toMatchObject({ choosing: true, course: 'The Meadow' });
     // nothing is struck through it
     const box = (await page.locator('#view').boundingBox())!;
@@ -829,10 +837,13 @@ const biggestOf = (holes: readonly HoleDef[]) => {
 // that draw the most: the home view from the tee, the lowest tilt turned round, the driver's aim view at its worst heading
 // (facing up the hole, and turned right round), and the whole hole at the widest zoom; each inside the frame's budget and
 // short of the renderer's room for blades.
-test.describe('golf on The Fells and The Isles', () => {
+test.describe('golf on The Fells and The Isles, and the three courses that came after', () => {
   for (const [course, holes] of [
     ['The Fells', fells()],
     ['The Isles', isles()],
+    ['The Heath', heath()],
+    ['The Woods', woods()],
+    ['The Old Course', old()],
   ] as const) {
     const hole = biggestOf(holes);
     test(`costs a frame inside the budget, and keeps room for blades, on the biggest hole of ${course} (${holes[hole].name}) at four views`, async ({

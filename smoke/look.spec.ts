@@ -22,6 +22,9 @@ import { COURSE, COURSES, type HoleDef } from '../src/course';
 import { LINKS_SPECS, links as linksHoles } from '../src/links';
 import { FELLS_SPECS, fells as fellsHoles } from '../src/fells';
 import { ISLES_SPECS, isles as islesHoles } from '../src/isles';
+import { HEATH_SPECS, heath as heathHoles } from '../src/heath';
+import { WOODS_SPECS, woods as woodsHoles } from '../src/woods';
+import { OLD_SPECS, old as oldHoles } from '../src/old';
 import { laneOf } from '../src/golf';
 import { holdsBall } from '../src/slopes';
 import { breakOf } from '../src/green';
@@ -981,6 +984,9 @@ test.describe('what it looks like', () => {
     for (const [course, key, specs] of [
       ['The Fells', 'fells', FELLS_SPECS],
       ['The Isles', 'isles', ISLES_SPECS],
+      ['The Heath', 'heath', HEATH_SPECS],
+      ['The Woods', 'woods', WOODS_SPECS],
+      ['The Old Course', 'old', OLD_SPECS],
     ] as const) {
       for (const [k, spec] of specs.entries()) {
         test(`${spec.name}, hole ${k + 1} of ${course}, from its tee`, async ({ page }) => {
@@ -991,6 +997,85 @@ test.describe('what it looks like', () => {
         });
       }
     }
+
+    // the three courses of 14 October 2026, each from where what it is for is seen: a lane of The Heath from its tee, a
+    // corridor of The Woods from its fairway with the wood both sides, and The Old Course's lake and island from the approach
+    test("Bracken Bend's lane from the tee, on The Heath: a short hole's wood with the gap through it", async ({
+      page,
+    }) => {
+      const problems = watch(page);
+      await hole(page, 'The Heath', 1);
+      const lane = laneOf(heathHoles()[1])!;
+      expect(lane, 'the hole has a lane').toBeTruthy();
+      await page.evaluate((lane) => {
+        const g = window.game!;
+        const dx = lane.to.x - lane.from.x,
+          dy = lane.to.y - lane.from.y,
+          d = Math.hypot(dx, dy);
+        g.look(lane.from.x + (dx / d) * 150, lane.from.y + (dy / d) * 150, 70);
+        g.orbit(Math.atan2(dx, dy), 0.35);
+        g.step(2);
+      }, lane);
+      await expect(page.locator('#view')).toHaveScreenshot('heath-lane.png', TOLERANCE);
+      expect(problems).toEqual([]);
+    });
+
+    test("Oak Avenue's corridor from its fairway, on The Woods: the wood walling the hole on both sides", async ({
+      page,
+    }) => {
+      const problems = watch(page);
+      await hole(page, 'The Woods', 3);
+      const def = woodsHoles()[3];
+      const l = layoutOf(def.map, def.terrain);
+      const { tee } = await page.evaluate(() => window.game!.content());
+      // a point of fairway about 150 yards up the hole, so the corridor runs away up the screen
+      let best = { x: 0, y: 0, d: Infinity };
+      for (let t = 0; t < l.cols * l.rows; t++) {
+        if (l.lie[t] !== LIE.fairway || l.water[t] || l.solid[t]) continue;
+        const x = l.originX + ((t % l.cols) + 0.5) * TILE,
+          y = l.originY + (Math.floor(t / l.cols) + 0.5) * TILE;
+        const d = Math.abs(Math.hypot(x - tee.x, y - tee.y) - 150) + Math.abs(x - tee.x) * 0.2;
+        if (d < best.d) best = { x, y, d };
+      }
+      await page.evaluate((b) => {
+        const g = window.game!;
+        g.lay(b.x, b.y);
+        g.step(150);
+      }, best);
+      await expect(page).toHaveScreenshot('woods-corridor.png', TOLERANCE);
+      expect(problems).toEqual([]);
+    });
+
+    test("Hell Bunker's lake and island from the approach, on The Old Course: the water to carry and the sand on the island", async ({
+      page,
+    }) => {
+      const problems = watch(page);
+      await hole(page, 'The Old Course', 4);
+      const def = oldHoles()[4];
+      const l = layoutOf(def.map, def.terrain);
+      const { tee } = await page.evaluate(() => window.game!.content());
+      // the last dry fairway thirty yards short of the lake, along the way from the tee
+      let lakeY = Infinity;
+      for (let t = 0; t < l.cols * l.rows; t++)
+        if (l.water[t]) lakeY = Math.min(lakeY, l.originY + (Math.floor(t / l.cols) + 0.5) * TILE);
+      let best = { x: 0, y: 0, d: Infinity };
+      for (let t = 0; t < l.cols * l.rows; t++) {
+        if (l.lie[t] !== LIE.fairway || l.water[t] || l.solid[t]) continue;
+        const x = l.originX + ((t % l.cols) + 0.5) * TILE,
+          y = l.originY + (Math.floor(t / l.cols) + 0.5) * TILE;
+        if (y > lakeY - 20) continue;
+        const d = Math.abs(lakeY - 30 - y) + Math.abs(x - tee.x) * 0.3;
+        if (d < best.d) best = { x, y, d };
+      }
+      expect(best.d, 'dry fairway short of the lake').toBeLessThan(60);
+      await page.evaluate((b) => {
+        const g = window.game!;
+        g.lay(b.x, b.y);
+        g.step(150);
+      }, best);
+      await expect(page).toHaveScreenshot('old-lake-approach.png', TOLERANCE);
+      expect(problems).toEqual([]);
+    });
 
     test("The Pinewood's lane from the tee: a low, close view down the gap in the wood", async ({ page }) => {
       const problems = watch(page);
