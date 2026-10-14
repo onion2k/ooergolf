@@ -1,6 +1,7 @@
 /** The pace gate's arithmetic and its round: what it holds, and how it decides a figure has moved. */
 import { describe, expect, it } from 'vitest';
-import { COURSE } from '../src/course';
+import { readFileSync } from 'node:fs';
+import { COURSE, COURSES } from '../src/course';
 import { HARDER, mean, median, moved, orderProblems, paceRun } from '../scripts/pace';
 import { FLAT } from './helpers';
 
@@ -46,5 +47,15 @@ describe('the pace gate', () => {
     const run = paceRun(2, undefined, holes);
     expect(run.finished).toBe(true);
     expect(run.card.length).toBe(holes.length);
+  });
+  it('has a baseline figure for every course there is, and holds only the three courses that were ordered in `HARDER`', () => {
+    // the three courses of 14 October 2026 are each held to a figure of their own and not to a place in the order, as the
+    // user chose: a course the baseline has no figure for fails `pace:check` outright, so one is added here as it is added there
+    const baseline = JSON.parse(
+      readFileSync(new URL('../scripts/pace-baseline.json', import.meta.url), 'utf8'),
+    ) as Record<string, number>;
+    for (const c of COURSES) expect(typeof baseline[c.name], `${c.name} has a baseline`).toBe('number');
+    expect(Object.keys(baseline).sort()).toEqual(COURSES.map((c) => c.name).sort());
+    expect(HARDER).toEqual(['The Links', 'The Fells', 'The Isles']);
   });
 });
