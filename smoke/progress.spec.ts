@@ -588,6 +588,11 @@ test('the round finished to the card, and begun again from its button', async ({
     wind: null,
     controls: { shown: false, shape: 0, shapeText: 'Shape: Straight', spin: 0, spinText: 'Spin: Flat' },
     arrows: { shown: false, count: 0 },
+    // the help says what a drag does on a hole of minigolf, and no drag is held under the card, so it is not telling how
+    // to take one back
+    help: { aiming: null, text: 'drag back and let go to putt' },
+    // the sky is the fly-in's and the title's alone: no cloud is drawn to the view the card stands over
+    sky: 0,
     // the items' own: no glow trail without the item, one strip of cloth without the rainbow, no Retake without the
     // Mulligan, and the particles the last holing threw, which are kept to be read until the next holing (not put to nought
     // at a new hole): 84 is the plain cup's, 14 for each of five confetti colours and the sparkle, off a hole not in one
