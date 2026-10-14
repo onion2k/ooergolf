@@ -130,6 +130,13 @@ export interface GolfSpec {
    * hole it was, byte for byte.
    */
   rolling?: boolean;
+  /**
+   * A wood along the whole hole: the rough on both sides planted `WOOD.apart` tiles apart, from `from` tiles off the
+   * fairway's edge (`WOODS.from` unless told: open rough a ball is played from) out to the stakes, keeping clear of the tee,
+   * the green, water, sand and a gap's lane as a gap's own wood does, and spending no chance. A hole that strays is under a
+   * canopy, so the hole is a corridor. Off unless asked: a hole without it is the hole it was, byte for byte.
+   */
+  woods?: boolean | { from?: number };
 }
 
 /**
@@ -153,6 +160,11 @@ export const SHELF = { radius: 4, apart: 40 };
  * kept from the lane's edge past half its width.
  */
 export const WOOD = { bend: 35, width: 8, widths: [4, 20], apart: 3, shift: 1, past: 20, base: 6.5 };
+/**
+ * A wood along the whole hole (`GolfSpec.woods`): how many tiles of open rough lie between the fairway's edge and the first
+ * trunks unless told (two: six yards, a stray ball's lie and a swing's room), and the range that may be asked for.
+ */
+export const WOODS = { from: 2, range: [1, 5] } as const;
 
 /**
  * The longest flight over water a hole asks of a ball, in tiles of water on a straight line: a hundred and thirty-five
@@ -255,6 +267,7 @@ function refuse(spec: GolfSpec) {
     heighten,
     shelves,
     gap,
+    woods,
   } = spec;
   const fault = (what: string) => new RangeError(`${name || 'a golf hole'}: ${what}`);
   if (!name) throw new RangeError('a golf hole has to have a name');
@@ -286,6 +299,11 @@ function refuse(spec: GolfSpec) {
       throw fault(
         `a gap's target is on the second leg, ten yards past the corner and ${SHELF.apart} short of the cup, not ${gap.to} yards from the tee`,
       );
+  }
+  if (typeof woods === 'object' && woods.from !== undefined) {
+    const [least, most] = WOODS.range;
+    if (!(woods.from >= least && woods.from <= most))
+      throw fault(`a wood stands ${least} to ${most} tiles off the fairway, not ${woods.from}`);
   }
   if (greens !== undefined && !(greens >= GREENS.fast && greens <= GREENS.slow))
     throw fault(`its greens run from ${GREENS.fast} (fast) to ${GREENS.slow} (slow), not ${greens}`);
@@ -1078,6 +1096,19 @@ export function golfHole(spec: GolfSpec): HoleDef {
     if (!joined()) throw new Error(`${name}: its wood leaves no way from the tee to the cup`);
     const cell = (t: Tile) => ({ x: (t[0] + 0.5 - cols / 2) * TILE, y: (t[1] + 0.5 - rows / 2) * TILE });
     made = { from: cell(tee), to: cell(wayTo), width: spec.gap?.width ?? WOOD.width, keep: keepT * TILE };
+  }
+  // a wood along the whole hole: every tile of rough `from` tiles or more off the fairway's edge, out to the margin
+  // `treeFits` keeps from the stakes, planted on the gap's grid after the gap's own wood, so a hole with both is the gap's
+  // hole with the rest of its rough filled and the lane as clear as `treeFits` keeps it. Chance is spent on none of it.
+  if (spec.woods) {
+    const from = typeof spec.woods === 'object' ? (spec.woods.from ?? WOODS.from) : WOODS.from;
+    for (let r = 0; r < rows; r += WOOD.apart)
+      for (let c = ((r / WOOD.apart) * WOOD.shift) % WOOD.apart; c < cols; c += WOOD.apart)
+        if (reach[r * cols + c] >= edge[r * cols + c] + from && treeFits(c, r)) {
+          grid[r][c] = '^';
+          placedTrees.push([c, r]);
+        }
+    if (!joined()) throw new Error(`${name}: its wood leaves no way from the tee to the cup`);
   }
   for (let n = 0; n < trees;) {
     let placed = false;

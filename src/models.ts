@@ -108,6 +108,8 @@ export const BUDGET = {
   'stream bed': 80,
   conveyor: 120,
   golfTree: 320,
+  /** The trees of a hole with a wood along its whole length (`GolfSpec.woods`), a golf tree each: about 130 on a 500-yard hole and 215 on the longest, each side a band three and a half tiles wide with a trunk for every nine tiles. */
+  'wooded hole': 120000,
   stake: 120,
   breakArrow: 8,
   flowers: 650,
