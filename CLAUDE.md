@@ -11,7 +11,7 @@ made. The house
 rules in `~/.claude/CLAUDE.md` apply too. What is in `src/` is a round of
 a course, chosen on a start screen: holes drawn as maps, each played from
 its tee to its cup with a drag pulled back and let go, scored against par,
-and the card at the end. Six courses are here, on artshape-physics v0.8.0, three of minigolf and three of golf.
+and the card at the end. Nine courses are here, on artshape-physics v0.8.0, three of minigolf and six of golf.
 The Meadow is nine holes of grass, rail, sand, water, raised grass, posts,
 sliding barriers, a windmill and a conveyor, with a green that lets a putt
 die, a rail and obstacles that bounce, posts that throw a ball back faster
@@ -35,6 +35,22 @@ own, and arrows and words that show the break). The golf goes in
 a feature at a time, in the order `DESIGN.md` gives.
 The Fells and The Isles are the two hard courses of golf, built from `~/.claude/plans/ooergolf-two-hard-courses.md` on
 5 October 2026, each nine holes made by `golfHole` from specs, as The Links is, and each chosen on the start screen after it.
+**The Heath, The Woods and The Old Course** came on 14 October 2026 from `~/.claude/plans/fizzy-wandering-whisper.md` (the user
+asked for a fourth course, was offered three, and took all three), the same way: `src/heath.ts`, `src/woods.ts`, `src/old.ts`,
+each with its test (`test/heath.test.ts` and the rest) holding every count of its table on the holes as made. **The Heath** (par
+32: 3,4,3,4,4,3,4,3,4) is short and tight: par threes of 210 to 220 yards and fours of 300 to 320, fairways 8 or 9 tiles, every
+four a dogleg with a `gap` lane leaving a chip of 73 to 76 yards, 60 to 90 trees, winds 10 to 15, greens 11.5 to 13 and contour
+0.7 to 1; 29.13 strokes over the gate's sixteen seeds (0.32 a hole under par). **The Woods** (par 35: 3,4,5,4,3,4,5,4,3) is
+forest on every hole: `GolfSpec.woods` (below) on all nine, `trees` 0, five doglegs each with a lane, water across the line on
+every par three and a lake on the last, width 10, wind 8, greens 12.5, contour 0.8 to 0.9 (every hole at the hard edge of its
+table, since a looser draft played 35.6); 37.44 (0.27 over). **The Old Course** (par 37: 4,5,3,4,4,5,3,4,5) is the hardest: long
+holes (threes 240, fours 480, fives 600) that each have at least two of a lake with an island (four holes), a wood with a lane
+(three), running ground (`heighten` 2.2 with shelves, three), sand (86 bunkers) and a pond across the line; wind 15, greens 11.2,
+contour 1 on every hole; 45.19 (0.89 over, past The Isles' 0.68). Its lane test aims within 4 degrees of the lane for the cleanest
+line and asks a swing 10 degrees off to meet the wood, since at wind 15 a straight drive is blown into the wood on most seeds.
+The six courses of golf stand in `COURSES` easiest first by the pace figure (Links, Heath, Fells, Woods, Isles, Old Course),
+which is only what a player reads: the pace gate holds the three new courses to their own figures and not to a place in the
+order (`HARDER` is still the three it was, the user's choice on 14 October 2026).
 **The Fells** (`src/fells.ts`, par 37) is steep fell-side golf: every hole's hills are heightened 2.5 and cut to nine tenths
 of the physics' step, so a seventh to two fifths of a fairway is slope a ball runs down, with level shelves to land on; five
 holes are doglegs, four have a lake, and three have a lane through a wood that a driver struck true flies and one six degrees
@@ -216,9 +232,9 @@ today, and what the next features must hand it:
   `npm run fuzz` plays every seed eight times, as a player who
   chooses among the courses, on The Links alone (whose nine holes have winds of 4 to 12 miles an hour, which is the wind the
   runs cover; a gale of 12, 18 and 6 in turn on level holes is played in `test/fuzz.test.ts` and not in the queue), on the contoured Links (`--on contoured`: its nine holes at contour 1 with greens at
-  12, 22, 12.96 and 14.4 by hole), and on each of The Fells, The Isles, The Pinball Shed and The Waterworks alone
-  (`--on fells`, `isles`, `shed`, `waterworks`), since a monkey
-  choosing among six is on golf too seldom to hold it to anything and on a minigolf course's own kind not much oftener; each landing
+  12, 22, 12.96 and 14.4 by hole), and on each of The Heath, The Fells, The Woods, The Isles, The Old Course, The Pinball Shed and The Waterworks alone
+  (`--on heath`, `fells`, `woods`, `isles`, `old`, `shed`, `waterworks`), since a monkey
+  choosing among nine is on golf too seldom to hold it to anything and on a minigolf course's own kind not much oftener; each landing
   the game tells of is checked as it is told (`landingProblems`). Two runs are for replays and are not in the queue:
   `--on kickers`, `KICKER_HOLES` in `scripts/fuzzer.ts` (a kicker in the way of the cup, a pair facing each other, which
   is the ceiling's hardest case, and a ring of four), and `--on stream`, `STREAM_HOLE` in `test/stream-hole.ts`.
@@ -282,7 +298,9 @@ today, and what the next features must hand it:
   in twenty-four rounds, where aiming at the cup across the corner lost one in every round). The Fells and The Isles
   are held to the order of how hard they are (`HARDER` in `scripts/pace.ts`: each course at least a tenth of a stroke a
   hole over par above the one before it, a rule `pace:check` fails and a test holds), and a hole is picked up in no more than
-  one round of sixteen. The Fells 36.75 for par 37 (0.03 a hole under, short of the target of a tenth to four tenths under) and The Isles
+  one round of sixteen. The Heath (29.13 for 32), The Woods (37.44 for 35) and The Old Course (45.19 for 37) are held each to
+  its own figure only, written 14 October 2026 when they came; a hole's chance is the next hole's, so a change to one hole
+  moves a course's figure by a stroke or more, and the whole course is measured again after any. The Fells 36.75 for par 37 (0.03 a hole under, short of the target of a tenth to four tenths under) and The Isles
   51.19 for par 45 (0.68 a hole over: past its old target of a tenth under to four tenths over, since the long swell's steeper ground, and kept so at the user's word on 9 October 2026, "Accept it harder"), against The Links' 0.62 under;
   The Links and The Isles written again 9 October 2026 for the rolling land (the long swell and the banks: Links 30.5 to 30.44 over 16
   seeds, 30.25 to 30.75 over 48; Isles 47.63 to 51.19 over 16, 46.79 to 50.52 over 48, a real swing of 3.7 a round, and every set of
@@ -300,8 +318,9 @@ today, and what the next features must hand it:
   retune them is for the user. Before that, 5 October 2026, when the Fells' hole five was renamed The Plunge (its wind is a
   name's, and it moved the figure from 34.63 to 35.44).
 - **Leaks:** ten minutes of the autopilot playing round after round, on The
-  Meadow and again on each golf course (`GOLF_COURSES` in `scripts/leaks.ts`: The Links, The Fells, The Isles, under
-  the Links' ceilings; `leaks:check` queues the four, and `--on` narrows a run to one kind for a short look; a test holds that a hole
+  Meadow and again on each golf course (`GOLF_COURSES` in `scripts/leaks.ts`: the six, under
+  the Links' ceilings but for the save's bytes, 9,200 since 14 October 2026 for eighty-one holes' bests (8,508 measured, held
+  to the byte by `test/leaks.test.ts`); `leaks:check` queues the seven, an hour and ten minutes, and `--on` narrows a run to one kind for a short look; a test holds that a hole
   with a lane is collectable, so `laneOf`'s cache keeps nothing alive, and one each that `zonesOf`'s and `pondOf`'s tables are weak; the
   arena's reused ground weights are emptied at 256, held by a test, and nothing of the new caches is kept for a game's life, so
   nothing was added to `scripts/leaks.ts`). The card is emptied each round and
@@ -943,7 +962,12 @@ minigolf: true }`, read through `oceanFor`) is the one switch: `waterBed` and `s
   water too big to go round, before any bunker or pond; `CARRY` is the most water, 45 tiles, a flight may need, and a lake that
   would leave no way is not laid; **`bunkers.island`** puts sand on an island (radius 5 or more, since two on a radius of
   4 fail half the seeds). A lake across a 560-yard hole is only 45 to 80 yards of water on its shortest line, so an island is a
-  lay-up only from well back. The seed search takes `--course links|fells|isles` and prints the running share.
+  lay-up only from well back. The seed search takes `--course links|fells|isles|heath|woods|old` (a table in `scripts/seed-search.ts`, a row a course) and prints the running share.
+  **`woods`** (`true`, or `{ from }` tiles, `WOODS.from` 2, 1 to 5) plants the rough on both sides of the whole hole on the gap's
+  grid from `from` tiles off the fairway's edge to the stakes, after a gap's own wood and before the scattered trees, keeping
+  the tee's and the green's clearings and a gap's lane as `treeFits` does and spending no chance: about 130 trunks on 500 yards
+  (a trunk for every nine tiles of a band three and a half tiles wide each side), drawn under `BUDGET['wooded hole']`; off, a
+  hole is the hole it was to the byte (`test/woods-option.test.ts`). The Woods are made of it.
 - **Putting** (stage 6). A golf map's `c` is the **first cut** (`LIE.cut`): mown, but longer than the green, one tile
   (3 yards) wide round every putting green (eight ways, so no gap at a corner) and one tile of rough along each side of a
   fairway, laid by `mown` in `golf.ts` after everything else is placed, spending no chance, and only on a tile that is
@@ -1007,9 +1031,11 @@ minigolf: true }`, read through `oceanFor`) is the one switch: `waterBed` and `s
 - `src/hud.ts` is the words over the course: the hole and strokes, the
   score's name when a hole is done, the card, the coins and gems, the
   shop, and the start screen, a card for each course with its holes and
-  par, shown at boot and from the card's Courses button. The page plays no
-  shot while it is up; the panel is 820 wide and three cards across on a desk, two rows of three, and the cards' colours
-  cycle through six (`#courses .course:nth-of-type(6n + k)` in `index.html`), one each. `src/score.ts` names a score
+  par, under a Golf heading and then a Minigolf one (golf first since 14 October 2026, at the user's word: the game leans to
+  proper golf now), shown at boot and from the card's Courses button. The page plays no
+  shot while it is up; the panel is 820 wide and three cards across on a desk, three rows of three since 14 October 2026, and the cards' colours
+  cycle through six (`#courses .course:nth-of-type(6n + k)` in `index.html`), the seventh to the ninth wearing the first three's again;
+  on a phone the cards are 56 high so that nine fit a tall screen without scrolling. `src/score.ts` names a score
   (four or more under par is a Condor!, a hole in one still first) and says what kind it
   is, which colours its callout. Both are given what to show and never read
   the game. How the words look and move is `index.html`'s stylesheet, in the
@@ -1109,7 +1135,8 @@ minigolf: true }`, read through `oceanFor`) is the one switch: `waterBed` and `s
   of the ground a ball rests on), which the tests hold each hole to.
 - The courses are content in `course.ts`, `COURSES`, each a name and its holes: The Meadow (`COURSE`), The Pinball Shed
   (`SHED`, `src/shed.ts`), The Waterworks (`WATERWORKS`, `src/waterworks.ts`),
-  The Links, The Fells (`src/fells.ts`) and The Isles (`src/isles.ts`). The three minigolf courses are nine holes each, drawn by hand as The Meadow's are, with no generator, and
+  The Links, The Heath (`src/heath.ts`), The Fells (`src/fells.ts`), The Woods (`src/woods.ts`), The Isles (`src/isles.ts`) and
+  The Old Course (`src/old.ts`), the golf easiest first by the pace figure. The three minigolf courses are nine holes each, drawn by hand as The Meadow's are, with no generator, and
   made as the page loads. Each hole has a comment saying its idea and why it is drawn as it is, since what the
   autopilot would play decided the drawing: a ball's radius and three tenths of a unit clear of the water, a timing window at
   the autopilot's margin, a cup on level grass with a tile of grass round it. The Pinball Shed (par 27) is banks and bounces:

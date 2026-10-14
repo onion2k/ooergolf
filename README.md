@@ -62,10 +62,14 @@ is a cushion, posts and round kickers throw the ball back harder than it came, a
 flings a ball timed to it, bumpers slide and throw, and the cup is often round a corner that only a bank gets to. The
 Waterworks is water and timing: the ball one slip from the water on causeways, stones and a tilted lane, streams, belts
 drawn as running water, that carry a ball along and never sink it, and barriers, a windmill's door and a bumper to time. A hole's ground may slope, and the break is shown over one that does: arrows, the putt's
-roll and the words. Three courses of golf follow, nine holes each. The Links is hills, bunkers, water and trees. The Fells is steep fell-side ground
+roll and the words. Six courses of golf follow, nine holes each, easiest first. The Links is hills, bunkers, water and trees. The
+Heath is short and tight: par threes and short fours through woods, a lane cut through the wood on every dogleg, small quick
+greens and a fresh wind. The Fells is steep fell-side ground
 that a ball runs down, with level shelves to land on, doglegs, lakes and lanes cut through woods that a true drive can fly
-and a slice cannot. The Isles is nine long holes, a par four to a par six, round big lakes with islands, one of them a green
-that is itself an island, and sand everywhere.
+and a slice cannot. The Woods is forest on every hole: a wood walls each fairway, a lane cuts every corner, and a drive that
+strays is under a canopy. The Isles is nine long holes, a par four to a par six, round big lakes with islands, one of them a green
+that is itself an island, and sand everywhere. The Old Course is the hardest, long holes that each ask two things of a player:
+a lake to carry, a wood with a lane, ground that runs, sand, a pond on the line.
 
 ## What is here
 
@@ -127,6 +131,9 @@ fixed, and no baseline is moved to make it green.
     src/links.ts       The Links: nine holes, made when asked for
     src/fells.ts       The Fells: nine steep holes with lanes and lakes, made when asked for
     src/isles.ts       The Isles: nine long holes round lakes and islands, made when asked for
+    src/heath.ts       The Heath: nine short, tight holes through woods with a lane on every dogleg, made when asked for
+    src/woods.ts       The Woods: nine holes walled by forest, a lane through every corner, made when asked for
+    src/old.ts         The Old Course: nine long holes that each ask two things, the hardest, made when asked for
     src/trees.ts       a tree's trunk and its canopy, a cone the game tests a ball's step against
     src/route.ts       the way to the cup round water, out of bounds and trees
     src/planner.ts     a golf shot tried in a rehearsal, judged, and chosen
