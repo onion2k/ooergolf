@@ -19,6 +19,7 @@ import { helpText, windText, type Held } from './readout';
 import { swatchOf } from './swatch';
 import { SCORE_KINDS, againstPar, scoreKind, scoreName } from './score';
 import type { PlayMode } from './career';
+import type { Kind, Picker } from './picker';
 
 /** Each kind of word the callout over the course says, which the stylesheet colours: a score's kind, the water, or out of bounds. */
 export const CALLOUTS = [...SCORE_KINDS, 'splash', 'out'] as const;
@@ -193,7 +194,6 @@ export class Hud {
   private readonly installButton = document.getElementById('install') as HTMLButtonElement;
   /** Whether the start screen is up but held back, out of sight, until the title's letters have landed: everything else is away as if it showed. */
   private held = false;
-  private readonly courseList = document.getElementById('courses')!;
   private readonly startWords = document.getElementById('startWords')!;
   private readonly modeButton = document.getElementById('playMode') as HTMLButtonElement;
   /** The mode the start screen's button shows, which a press asks for the other of. */
@@ -201,8 +201,23 @@ export class Hud {
   /** The course whose card goes on with the career round kept, or '' for none: its card is Continue. */
   private going = '';
   private readonly prize = document.getElementById('cardPrize')!;
-  /** The courses' cards as the start screen last drew them, by name, with the holes they have: what the career's words are written into. */
-  private readonly cardsByName = new Map<string, { pills: HTMLElement; holes: number }>();
+  /** The career as the start screen last drew it: the mode, each course's record in words, and the round kept. */
+  private career: StartCareer = { mode: 'career', records: {}, round: null };
+  /** The course picker's parts: the two tabs, the arrows, the card in view and Play; what they show is the picker's say. */
+  private readonly kindTabs: Record<Kind, HTMLButtonElement> = {
+    golf: document.getElementById('tab-golf') as HTMLButtonElement,
+    minigolf: document.getElementById('tab-minigolf') as HTMLButtonElement,
+  };
+  private readonly pickerPanel = document.getElementById('picker')!;
+  private readonly courseCard = document.getElementById('courseCard')!;
+  private readonly coursePreview = document.getElementById('coursePreview') as HTMLImageElement;
+  private readonly courseName = document.getElementById('courseName')!;
+  private readonly courseData = document.getElementById('courseData')!;
+  private readonly courseNote = document.getElementById('courseNote')!;
+  private readonly courseDots = document.getElementById('courseDots')!;
+  private readonly playButton = document.getElementById('playCourse') as HTMLButtonElement;
+  /** The picker the start screen draws, handed in with `showStart`; none until then. */
+  private picker: Picker | null = null;
   private readonly help = document.getElementById('help')!;
   private readonly modes = document.getElementById('viewMode')!;
   private readonly overheadButton = document.getElementById('viewOverhead') as HTMLButtonElement;
@@ -266,6 +281,45 @@ export class Hud {
     document.getElementById('cardCourses')!.addEventListener('click', () => handlers.courses());
     this.installButton.addEventListener('click', () => handlers.install());
     this.modeButton.addEventListener('click', () => handlers.mode(this.modeShown === 'career' ? 'free' : 'career'));
+    // the course picker: the tabs are a tablist (a press chooses a kind, the arrow keys, home and end walk along them), the
+    // arrows step the tab's courses either way and wrap, the arrow keys anywhere else on the screen do the same, and Play
+    // begins the course in view
+    const kinds: Kind[] = ['golf', 'minigolf'];
+    kinds.forEach((kind, i) => {
+      const tab = this.kindTabs[kind];
+      tab.addEventListener('click', () => this.pressKind(kind));
+      tab.addEventListener('keydown', (e) => {
+        const to =
+          e.key === 'ArrowRight'
+            ? i + 1
+            : e.key === 'ArrowLeft'
+              ? i - 1
+              : e.key === 'Home'
+                ? 0
+                : e.key === 'End'
+                  ? 1
+                  : -1;
+        if (to < 0) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const next = kinds[(to + kinds.length) % kinds.length];
+        if (this.pressKind(next)) this.kindTabs[next].focus();
+      });
+    });
+    document.getElementById('coursePrev')!.addEventListener('click', () => this.stepCourse(-1));
+    document.getElementById('courseNext')!.addEventListener('click', () => this.stepCourse(1));
+    this.start.addEventListener('keydown', (e) => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      e.preventDefault();
+      this.stepCourse(e.key === 'ArrowRight' ? 1 : -1);
+    });
+    // Play begins the course in view, or goes on with the career round kept when that is the course in view (Continue)
+    this.playButton.addEventListener('click', () => {
+      if (!this.picker) return;
+      const name = this.picker.shown().name;
+      if (this.going === name) handlers.resume();
+      else handlers.choose(name);
+    });
     const open = () => {
       this.shop.hidden = false;
     };
@@ -663,51 +717,87 @@ export class Hud {
     this.mapPanel.hidden = !this.mapBase;
   }
 
-  /**
-   * The start screen, over the course, with a card for each course: its name,
-   * how many holes and its par, under a heading for each kind of game (Golf, then
-   * Minigolf, since 14 October 2026: the game leans to proper golf now, the user
-   * said), since the two are played so differently and a player chooses
-   * between them first. A kind with no course has no heading. Everything else over
-   * the course is put away while it is up; a click on a card goes back through `choose`.
-   */
-  showStart(
-    courses: readonly { name: string; holes: number; par: number; golf?: boolean }[],
-    wait = false,
-    career: StartCareer = { mode: 'career', records: {}, round: null },
-  ) {
-    this.cardsByName.clear();
-    const cardOf = (c: { name: string; holes: number; par: number }) => {
-      const card = document.createElement('button');
-      card.className = 'course';
-      const name = document.createElement('b');
-      name.textContent = c.name;
-      const about = document.createElement('small');
-      for (const text of [`${c.holes} holes`, `par ${c.par}`]) {
+  /** A tab pressed: the kind shown, or nothing for a kind with no course (its tab is disabled, so a press cannot reach it). */
+  private pressKind(kind: Kind): boolean {
+    if (!this.picker || !this.picker.courses(kind).length) return false;
+    this.picker.tab(kind);
+    this.drawPicker();
+    return true;
+  }
+
+  /** An arrow pressed: the next course of the tab, or the one before. */
+  private stepCourse(by: number): void {
+    if (!this.picker) return;
+    this.picker.step(by);
+    this.drawPicker();
+  }
+
+  /** The picker as it stands, drawn: the tabs' state, the course in view with its preview and figures, the dots, and the card's colour. */
+  private drawPicker(): void {
+    const picker = this.picker;
+    if (!picker) return;
+    const shown = picker.shown();
+    for (const kind of ['golf', 'minigolf'] as const) {
+      const tab = this.kindTabs[kind];
+      const on = picker.kind === kind;
+      tab.setAttribute('aria-selected', String(on));
+      tab.tabIndex = on ? 0 : -1;
+      tab.disabled = !picker.courses(kind).length;
+    }
+    this.pickerPanel.setAttribute('aria-labelledby', this.kindTabs[picker.kind].id);
+    // the pictures stand beside the page, so the path is relative and a page served under a prefix finds them
+    this.coursePreview.src = `previews/${shown.preview.slug}.png`;
+    this.coursePreview.width = shown.preview.width;
+    this.coursePreview.height = shown.preview.height;
+    this.coursePreview.alt = `${shown.name} from above`;
+    this.courseName.textContent = shown.name;
+    // the first pill is the count of holes, or the course's record in the career, or the hole the round kept goes on from
+    const { records } = this.career;
+    const record = Object.hasOwn(records, shown.name) ? records[shown.name] : '';
+    const going = this.going === shown.name;
+    const round = going ? this.career.round : null;
+    const pills: [string, string][] = [
+      round ? [`On hole ${round.hole}`, 'round'] : record ? [record, 'record'] : [`${shown.holes} holes`, ''],
+      [`par ${shown.par}`, ''],
+    ];
+    if (shown.golf) pills.push([`${shown.yards.toLocaleString('en-GB')} yd`, '']);
+    this.courseData.replaceChildren(
+      ...pills.map(([text, career]) => {
         const pill = document.createElement('span');
         pill.textContent = text;
-        about.append(pill);
-      }
-      this.cardsByName.set(c.name, { pills: about, holes: c.holes });
-      card.append(name, about);
-      // the card of the career round kept goes on with it, and any other begins a round afresh
-      card.addEventListener('click', () =>
-        this.going === c.name ? this.handlers.resume() : this.handlers.choose(c.name),
-      );
-      return card;
-    };
-    const parts: HTMLElement[] = [];
-    for (const [title, golf] of [
-      ['Golf', true],
-      ['Minigolf', false],
-    ] as const) {
-      const of = courses.filter((c) => !!c.golf === golf);
-      if (!of.length) continue;
-      const heading = document.createElement('h2');
-      heading.textContent = title;
-      parts.push(heading, ...of.map(cardOf));
-    }
-    this.courseList.replaceChildren(...parts);
+        pill.dataset.career = career;
+        return pill;
+      }),
+    );
+    // Play goes on with the round kept when its course is the one in view, and says so
+    this.playButton.textContent = round ? 'Continue' : 'Play course';
+    this.playButton.setAttribute(
+      'aria-label',
+      round ? `Continue ${shown.name} from hole ${round.hole}` : `Play ${shown.name}`,
+    );
+    this.courseNote.textContent = `${shown.place} for difficulty · ${shown.best === null ? 'Not yet played' : `Best round ${shown.best}`}`;
+    this.courseDots.replaceChildren(
+      ...Array.from({ length: shown.count }, (_, k) => {
+        const dot = document.createElement('i');
+        if (k === shown.index) dot.className = 'on';
+        return dot;
+      }),
+    );
+    // the six colours go round the tab's courses, so a course keeps the colour its card had
+    this.courseCard.dataset.colour = String(shown.index % 6);
+  }
+
+  /**
+   * The start screen, over the course: the course picker (15 October 2026; it was a card for each course, which were cramped
+   * at nine), a tab for proper golf and one for minigolf, since the two are played so differently and a player chooses between
+   * them first, and one course of the tab in view at a time with its preview and its figures, stepped by the arrows, and Play.
+   * What is shown is the `Picker`'s say, drawn here and never worked out again, with the career's words on it (`setCareer`:
+   * the mode button beside Play, a course's record as its first pill, and the round kept, whose course the picker opens on
+   * and whose Play is Continue). Everything else over the course is put away while it is up; Play goes back through
+   * `choose` with the name of the course in view, or `resume` for the round kept.
+   */
+  showStart(picker: Picker, wait = false, career: StartCareer = { mode: 'career', records: {}, round: null }) {
+    this.picker = picker;
     this.setCareer(career);
     this.retakeButton.disabled = true;
     for (const el of [
@@ -737,7 +827,13 @@ export class Hud {
    * goes on with nothing), whose course's card says the hole it goes on from and is the way to go on with it. There is
    * no Continue button of its own, since a phone's screen under the title has no row to spare for one.
    */
+  /**
+   * The career's words on the start screen: the mode button, the heading's line, and the round kept, whose course the
+   * picker opens on so that Continue is the first thing a player sees (in free play no round is going on with). Drawn
+   * again whenever the career changes, since the pills and Play read it.
+   */
   setCareer(career: StartCareer) {
+    this.career = career;
     this.modeShown = career.mode;
     const free = career.mode === 'free';
     this.modeButton.textContent = free ? 'Free play' : 'Career mode';
@@ -751,15 +847,8 @@ export class Hud {
     this.startWords.textContent = free ? 'Choose a course to play for nothing' : 'Choose a course';
     const round = free ? null : career.round;
     this.going = round?.course ?? '';
-    for (const [name, { pills, holes }] of this.cardsByName) {
-      const record = Object.hasOwn(career.records, name) ? career.records[name] : '';
-      const first = pills.firstElementChild as HTMLElement;
-      const going = round?.course === name;
-      first.textContent = going ? `On hole ${round.hole}` : record || `${holes} holes`;
-      first.dataset.career = going ? 'round' : record ? 'record' : '';
-      // read as what pressing the card does
-      pills.parentElement!.setAttribute('aria-label', going ? `Continue ${name} from hole ${round.hole}` : name);
-    }
+    if (round && this.picker?.has(round.course)) this.picker.show(round.course);
+    this.drawPicker();
   }
 
   /** Whether the start screen is up, in sight or held back for the title's letters. */

@@ -870,15 +870,20 @@
     font-size: 13px;
   }
   /*
-   * The career's button (15 October 2026), on the heading's line: Career mode or Free play, cycled by a press as the bag's
-   * shape is. A row of its own was tried and a phone 360 wide under the title had no room for it (the cards had 7 pixels
-   * to spare), so on a phone it stands alone on that line, at the left, where the Install button is at the right.
+   * The career's button (15 October 2026): Career mode or Free play, cycled by a press as the bag's shape is, beside Play
+   * at the panel's foot, where a desk and a phone both have the width for it (it was on the heading's line, which the
+   * picker's tabs took).
    */
+  #startFoot {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+  }
   #playMode {
-    margin-left: 8px;
     padding: 0 14px;
     font-size: 15px;
-    vertical-align: middle;
   }
   #playMode[data-mode='free'] {
     background: var(--mist);
@@ -886,193 +891,254 @@
       inset 0 0 0 3px var(--ink-soft),
       0 4px 0 var(--mist-deep);
   }
-  /* a record stands in a card where the count of holes did, in the sun's yellow; the hole a round kept goes on from, in the sky's */
-  .course small span[data-career='record'] {
+  /* a record stands in the card where the count of holes did, in the sun's yellow; the hole a round kept goes on from, in the sky's */
+  #courseData span[data-career='record'] {
     background: var(--sun);
   }
-  .course small span[data-career='round'] {
+  #courseData span[data-career='round'] {
     color: var(--title);
     box-shadow:
       inset 0 0 0 2px var(--title),
       0 2px 0 var(--deep);
   }
   /*
-   * The cards are compact (15 October 2026): a name, its pills and the arrow in one row of 58, three across, so that all nine
-   * stand in sight under the title on a desk, a tablet and a phone without the panel scrolling, which it did on every screen
-   * when a card was 128 high (a desk saw six of the nine and a phone five, with no sign of more below).
+   * The course picker (15 October 2026; it was a card for each course, cramped at nine): two tabs as a pill switch, the
+   * arrows either side as round buttons, one course's card in its colour with the preview on a pale plate beside its figures
+   * on a desk and above them on a phone, dots for its place, and Play. The preview is a hole painted from above at `PREVIEW.box`
+   * pixels a side and shown at that size on a desk, smaller on a phone; it is drawn crisp, since it is a map and not a photo.
    */
-  #courses {
-    display: grid;
-    /* as many columns of 220 as fit: three on a desk and a tablet, two on a phone on its side, since a name is one line and a
-       column of a fraction will not shrink below it, which pushed the third column past the screen at 640 wide */
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 10px 12px;
+  #startTabs {
+    display: flex;
+    gap: 6px;
+    width: max-content;
+    margin: 0 auto 12px;
+    padding: 4px;
+    background: #e9f3fb;
+    border-radius: 999px;
   }
-  /* a heading for each kind of game runs across the grid; the cards count among the buttons only (nth-of-type), so
-     the colours go round the courses as they did before there were headings */
-  #courses h2 {
-    grid-column: 1 / -1;
-    margin: 0;
-    font-size: 13px;
-    font-weight: 900;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    text-align: left;
+  #startTabs button {
+    min-height: 44px;
+    padding: 0 20px;
+    font-weight: 800;
     color: var(--ink-soft);
+    background: transparent;
+    border-radius: 999px;
+    box-shadow: none;
   }
-  #courses h2:not(:first-child) {
-    margin-top: 8px;
+  #startTabs button[aria-selected='true'] {
+    color: var(--ink);
+    background: var(--sun);
+    box-shadow: 0 3px 0 var(--sun-deep);
   }
-  /* a card for each course, a colour each, striped as a mown green is */
-  #courses .course {
+  #startTabs button:disabled {
+    opacity: 0.5;
+  }
+  #picker {
+    display: grid;
+    grid-template-columns: 44px 1fr 44px;
+    gap: 12px;
+    align-items: center;
+  }
+  #picker .arrow {
+    position: relative;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border-radius: 50%;
+  }
+  /* the arrows are drawn, a chevron each in the middle of its disc, so the button has no text to size */
+  #picker .arrow::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 12px;
+    height: 12px;
+    border: solid var(--ink);
+    border-width: 0 0 3px 3px;
+    transform: translate(-30%, -50%) rotate(45deg);
+  }
+  #picker #courseNext::after {
+    border-width: 3px 3px 0 0;
+    transform: translate(-70%, -50%) rotate(45deg);
+  }
+  #courseCard {
     --face: var(--leaf);
     --deep: var(--leaf-deep);
-    position: relative;
     display: grid;
-    align-content: center;
-    gap: 2px;
-    min-height: 58px;
-    padding: 7px 60px 9px 14px;
+    grid-template-columns: auto 1fr;
+    gap: 14px;
+    align-items: center;
+    padding: 14px 16px;
     text-align: left;
     color: var(--ink);
     background: var(--face) repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.16) 0 16px, transparent 16px 32px);
-    border-radius: 16px;
+    border-radius: 18px;
     box-shadow:
       inset 0 0 0 3px rgba(255, 255, 255, 0.5),
-      0 4px 0 var(--deep),
-      0 8px 14px var(--shade);
+      0 5px 0 var(--deep),
+      0 10px 16px var(--shade);
   }
-  #courses .course:nth-of-type(6n + 2) {
+  #courseCard[data-colour='1'] {
     --face: var(--orange);
     --deep: var(--orange-deep);
   }
-  #courses .course:nth-of-type(6n + 3) {
+  #courseCard[data-colour='2'] {
     --face: var(--sky-face);
     --deep: var(--sky-deep);
   }
-  #courses .course:nth-of-type(6n + 4) {
+  #courseCard[data-colour='3'] {
     --face: var(--grape);
     --deep: var(--grape-deep);
   }
-  #courses .course:nth-of-type(6n + 5) {
+  #courseCard[data-colour='4'] {
     --face: var(--rose);
     --deep: var(--rose-deep);
   }
-  #courses .course:nth-of-type(6n + 6) {
+  #courseCard[data-colour='5'] {
     --face: var(--teal);
     --deep: var(--teal-deep);
   }
-  @media (hover: hover) {
-    #courses .course:hover {
-      translate: 0 -2px;
-      box-shadow:
-        inset 0 0 0 3px rgba(255, 255, 255, 0.7),
-        0 6px 0 var(--deep),
-        0 10px 16px var(--shade);
-    }
+  #coursePreview {
+    display: block;
+    box-sizing: content-box;
+    height: 170px;
+    width: auto;
+    padding: 6px;
+    background: rgba(255, 255, 255, 0.55);
+    border-radius: 12px;
+    image-rendering: pixelated;
   }
-  #courses .course:active {
-    translate: 0 3px;
-    box-shadow:
-      inset 0 0 0 3px rgba(255, 255, 255, 0.5),
-      0 1px 0 var(--deep),
-      0 4px 8px var(--shade);
+  #courseInfo {
+    display: grid;
+    gap: 6px;
   }
-  .course b {
-    font-size: 19px;
+  #courseInfo b {
+    font-size: 26px;
     font-weight: 900;
-    line-height: 1.1;
-    /* a name is one line: the card is as high as its name and its pills, and a wrapped name made it a row of its own */
-    white-space: nowrap;
+    line-height: 1.05;
   }
-  /* how many holes and the par, each on a white pill */
-  .course small {
+  #courseInfo small {
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
-    margin-top: 2px;
   }
-  .course small span {
-    padding: 2px 9px;
-    font-size: 12px;
+  #courseInfo small span {
+    padding: 2px 10px;
+    font-size: 13px;
     font-weight: 800;
     color: var(--ink);
     background: var(--paper);
     border-radius: 999px;
     box-shadow: 0 2px 0 var(--deep);
   }
-  /* a round button to go, drawn: a white disc with a triangle on it */
-  .course::before {
-    content: '';
-    position: absolute;
-    right: 12px;
-    top: 50%;
-    width: 36px;
-    height: 36px;
-    translate: 0 -50%;
-    border-radius: 50%;
-    background: var(--paper);
-    box-shadow: 0 3px 0 var(--deep);
+  #courseNote {
+    font-size: 14px;
+    font-weight: 700;
   }
-  .course::after {
-    content: '';
-    position: absolute;
-    right: 23px;
-    top: 50%;
-    translate: 0 -50%;
-    border-style: solid;
-    border-width: 7px 0 7px 12px;
-    border-color: transparent transparent transparent var(--deep);
+  #courseDots {
+    display: flex;
+    justify-content: center;
+    gap: 7px;
+    margin: 12px 0 10px;
+  }
+  #courseDots i {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #c6d6e3;
+  }
+  #courseDots i.on {
+    background: var(--sky-deep);
+  }
+  #playCourse {
+    min-height: 48px;
+    padding: 0 34px;
+    font-size: 18px;
   }
 
   @media (max-width: 600px) {
-    /* nine cards two across fit a phone's screen under the title (one across, nine rows scrolled): a card is as high as its
-       name and its pills, 50, with no arrow, since the whole card is the button; the name's size follows the width so that
-       the longest, The Pinball Shed, is one line on a phone 360 wide */
+    /* on a phone the preview stands above the figures, the tabs at the left with the Install button beside them, and the
+       arrows and the picture are smaller, so that the card and Play fit under the title's word without scrolling */
     #start h1 {
       font-size: 40px;
     }
     #start p {
       margin: 2px 0 8px;
     }
-    html[data-title] #start p {
-      text-align: left;
+    html[data-title] #startTabs {
+      margin-left: 0;
     }
+    /* under the title a phone has no room for the Install button's words beside the tabs: it is a round button with a
+       download arrow drawn in it, its words kept for a screen reader (the font is sized to nothing, not hidden) */
     html[data-title] #install {
-      top: 10px;
+      top: 12px;
       right: 12px;
+      width: 44px;
+      height: 44px;
+      padding: 0;
+      font-size: 0;
+      border-radius: 50%;
     }
-    #startWords {
-      display: none;
+    /* Play and the mode button share one row at 360 wide, where the panel has about 286 pixels between its edges */
+    #startFoot {
+      gap: 8px;
+    }
+    #playCourse {
+      padding: 0 20px;
+      font-size: 16px;
     }
     #playMode {
-      margin-left: 0;
+      padding: 0 12px;
       font-size: 14px;
     }
-    #courses {
-      grid-template-columns: repeat(2, 1fr);
-      gap: 6px 8px;
+    html[data-title] #install::before {
+      content: '';
+      display: block;
+      width: 12px;
+      height: 12px;
+      margin: 0 auto 2px;
+      border: solid var(--ink);
+      border-width: 0 3px 3px 0;
+      transform: translateY(-3px) rotate(45deg);
     }
-    #courses h2 {
-      margin-top: 0;
+    html[data-title] #install::after {
+      content: '';
+      display: block;
+      width: 18px;
+      height: 3px;
+      margin: 0 auto;
+      background: var(--ink);
+      border-radius: 2px;
     }
-    #courses h2:not(:first-child) {
-      margin-top: 4px;
+    #startTabs button {
+      padding: 0 12px;
+      font-size: 14px;
     }
-    #courses .course {
-      min-height: 50px;
-      padding: 5px 10px 6px;
+    #picker {
+      gap: 6px;
     }
-    .course b {
-      font-size: clamp(14px, 4.2vw, 16px);
+    #courseCard {
+      grid-template-columns: 1fr;
+      justify-items: center;
+      gap: 6px;
+      padding: 8px 12px;
+      text-align: center;
     }
-    .course small span {
-      padding: 1px 7px;
-      font-size: 11px;
+    #coursePreview {
+      height: 110px;
     }
-    .course::before,
-    .course::after {
-      display: none;
+    #courseInfo {
+      justify-items: center;
+    }
+    #courseInfo b {
+      font-size: 20px;
+    }
+    #courseInfo small {
+      justify-content: center;
+    }
+    #courseDots {
+      margin: 8px 0;
     }
   }
 
@@ -1462,7 +1528,8 @@
     translate: -50% 0;
     max-height: calc(var(--cards-max, 56vh) / var(--ui, 1));
   }
-  html[data-title] #start h1 {
+  html[data-title] #start h1,
+  html[data-title] #start p {
     display: none;
   }
 
@@ -1870,11 +1937,34 @@
 </div>
 <div class="panel" id="start" hidden>
   <h1>ooergolf</h1>
-  <p>
-    <span id="startWords">Choose a course</span> <button id="playMode" type="button" class="quiet">Career mode</button>
-  </p>
+  <p><span id="startWords">Choose a course</span></p>
   <button id="install" type="button" hidden>Install the game</button>
-  <div id="courses"></div>
+  <!-- the course picker: a tab for each kind of golf, one course of it in view at a time, stepped by the arrows, and Play -->
+  <div id="startTabs" role="tablist" aria-label="Kind of golf">
+    <button id="tab-golf" role="tab" type="button" aria-selected="true" aria-controls="picker" tabindex="0">
+      Proper Golf
+    </button>
+    <button id="tab-minigolf" role="tab" type="button" aria-selected="false" aria-controls="picker" tabindex="-1">
+      Mini Golf
+    </button>
+  </div>
+  <div id="picker" role="tabpanel" aria-labelledby="tab-golf">
+    <button id="coursePrev" class="arrow" type="button" aria-label="Previous course"></button>
+    <div id="courseCard">
+      <img id="coursePreview" alt="" width="40" height="180" />
+      <div id="courseInfo" aria-live="polite">
+        <b id="courseName"></b>
+        <small id="courseData"></small>
+        <span id="courseNote"></span>
+      </div>
+    </div>
+    <button id="courseNext" class="arrow" type="button" aria-label="Next course"></button>
+  </div>
+  <div id="courseDots" aria-hidden="true"></div>
+  <div id="startFoot">
+    <button id="playCourse" type="button">Play course</button>
+    <button id="playMode" type="button" class="quiet">Career mode</button>
+  </div>
 </div>
 <div class="panel" id="stats" hidden></div>
 <div class="panel" id="bag" role="group" aria-label="Club" hidden>

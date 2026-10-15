@@ -667,7 +667,7 @@ test.describe('what it looks like', () => {
     round: { course: 'The Pinball Shed', hole: 3, card: [3, 2, 4], retaken: false, pickedUp: false },
   };
 
-  test('the start screen in a career: the records on their cards, and the card of the round kept saying its hole', async ({
+  test('the start screen in a career: the picker open on the round kept, its hole as the first pill and Play as Continue', async ({
     page,
   }) => {
     const problems = watch(page);
@@ -1339,9 +1339,7 @@ test.describe('what it looks like', () => {
       expect(problems).toEqual([]);
     });
 
-    test('the start screen in a career, on a phone: the records, the round kept, and the mode on the heading’s line', async ({
-      page,
-    }) => {
+    test('the start screen in a career, on a phone: the round kept, and the mode beside Continue', async ({ page }) => {
       const problems = watch(page);
       await start(page, { seed: 11, paused: true, screen: true, save: CAREER });
       await page.evaluate(() => window.game!.step(1));

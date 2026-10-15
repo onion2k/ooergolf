@@ -624,11 +624,13 @@ test('a career round: Continue after a reload goes on from the kept hole, and th
     screen: true,
     save: { coins: 10, round: { course: 'The Meadow', hole: 8, card, retaken: false, pickedUp: false } },
   });
-  const meadow = page.locator('#start .course', { hasText: 'The Meadow' });
-  await expect(meadow.locator('small span').first()).toHaveText('On hole 9');
+  // the picker opens on the course of the round kept, its first pill the hole to go on from and its Play Continue
+  await expect(page.locator('#courseName')).toHaveText('The Meadow');
+  await expect(page.locator('#courseData span').first()).toHaveText('On hole 9');
+  await expect(page.locator('#playCourse')).toHaveText('Continue');
   await expect(page.locator('#playMode')).toHaveText('Career mode');
-  // the card of the round kept is Continue, pressed by a real pointer
-  await meadow.click();
+  // Continue, pressed by a real pointer
+  await page.locator('#playCourse').click();
   const resumed = await page.evaluate(() => window.game!.state());
   expect(resumed.choosing).toBe(false);
   expect(resumed.hole).toBe(8);
@@ -773,7 +775,7 @@ test('a hole of golf played with the bag: a club chosen by its button, struck in
   await start(page, { seed: 1, paused: true, screen: true });
   // the course chosen as a player chooses it, from its card, and the bag is there with the driver in hand
   await expect(page.locator('#bag')).toBeHidden();
-  await page.locator('#start .course', { hasText: 'The Links' }).click();
+  await page.evaluate(() => window.game!.chooseCourse('The Links'));
   await expect(page.locator('#start')).toBeHidden();
   await page.evaluate(() => window.game!.step(75));
   await expect(page.locator('#bag')).toBeVisible();
@@ -887,13 +889,12 @@ for (const [course, first] of [
   ['The Woods', 'Acorn Rise'],
   ['The Old Course', 'The Burn'],
 ] as const) {
-  test(`${course} is chosen by its card on the start screen, begun on its first hole with the driver in hand, and a stroke is struck by a drag`, async ({
+  test(`${course} is chosen on the start screen, begun on its first hole with the driver in hand, and a stroke is struck by a drag`, async ({
     page,
   }) => {
     const problems = watch(page);
     await start(page, { seed: 1, paused: true, screen: true });
-    await expect(page.locator('#start .course')).toHaveCount(9);
-    await page.locator('#start .course', { hasText: course }).click();
+    await page.evaluate((c) => window.game!.chooseCourse(c), course);
     await expect(page.locator('#start')).toBeHidden();
     await page.evaluate(() => window.game!.step(75));
     await expect(page.locator('#bag')).toBeVisible();
@@ -1478,7 +1479,7 @@ test.describe('aiming a golf shot', () => {
     await start(page, { seed: 11, paused: true, screen: true });
     await expect(page.locator('#pin')).toBeHidden();
     await expect(page.locator('#holeMap')).toBeHidden();
-    await page.locator('#start .course', { hasText: 'The Meadow' }).click();
+    await page.evaluate(() => window.game!.chooseCourse('The Meadow'));
     await page.evaluate(() => window.game!.step(75));
     await expect(page.locator('#pin')).toBeHidden();
     await expect(page.locator('#holeMap')).toBeHidden();
@@ -2476,7 +2477,7 @@ test.describe('the flag button', () => {
 
 /**
  * The first thing a player does: a course chosen from the start screen over the title scene, with a real pointer on the
- * card, once the letters have landed and the cards have sprung in. The title is let go, the course's first hole begins, and
+ * picker's tab, arrow and Play, once the letters have landed and the panel has sprung in. The title is let go, the course's first hole begins, and
  * a stroke can be taken with a drag as on any hole.
  */
 test('a course is chosen from over the title with a real pointer, and played', async ({ page }) => {
@@ -2486,7 +2487,11 @@ test('a course is chosen from over the title with a real pointer, and played', a
   expect(await page.evaluate(() => window.game!.title().landed)).toBe(true);
   await expect(page.locator('#start')).toBeVisible();
   await landed(page);
-  await page.locator('#courses .course', { hasText: 'The Pinball Shed' }).click();
+  // the picker worked by a real pointer: the Mini Golf tab, the next arrow to the second course, and Play
+  await page.locator('#tab-minigolf').click();
+  await page.locator('#courseNext').click();
+  await expect(page.locator('#courseName')).toHaveText('The Pinball Shed');
+  await page.locator('#playCourse').click();
   const chosen = await page.evaluate(() => window.game!.state());
   expect([chosen.course, chosen.hole, chosen.choosing]).toEqual(['The Pinball Shed', 0, false]);
   expect((await page.evaluate(() => window.game!.title())).up, 'the title is let go').toBe(false);

@@ -290,6 +290,8 @@ export interface Course {
    * rising with how hard the pace player finds it, to two for The Old Course.
    */
   readonly purse: number;
+  /** Which hole the start screen's preview shows, by index; the first without it (`PREVIEW.hole`). Chosen by looking. */
+  readonly preview?: number;
 }
 
 const summaryOf = (holes: readonly HoleDef[]) => ({ holes: holes.length, par: holes.reduce((a, h) => a + h.par, 0) });

@@ -36,26 +36,82 @@ for (const [where, device] of [
   test.describe(where, () => {
     test.use(device);
 
-    test('the start screen holds its three minigolf and six golf courses without scrolling, the six colours going round', async ({
+    test('the picker: the tabs switch kinds and keep their places, the arrows and the keys step and wrap, the colours go round, and Play begins the course in view', async ({
       page,
     }) => {
       const problems = watch(page);
       await start(page, { seed: 11, paused: true, screen: true });
-      const r = await page.evaluate(() => {
-        const panel = document.querySelector<HTMLElement>('#start')!;
-        const faces = Array.from(document.querySelectorAll<HTMLElement>('#courses .course')).map(
-          (c) => getComputedStyle(c).getPropertyValue('--face').trim() || getComputedStyle(c).backgroundColor,
-        );
-        return { fits: panel.scrollHeight <= panel.clientHeight, faces };
+      const shown = () => page.locator('#courseName').textContent();
+      const colour = () => page.locator('#courseCard').getAttribute('data-colour');
+      expect(await shown()).toBe('The Links');
+      // the arrows, wrapping either way, and a colour of six for each course in turn
+      const colours: string[] = [];
+      for (let k = 0; k < 6; k++) {
+        colours.push((await colour())!);
+        await page.locator('#courseNext').click();
+      }
+      expect(await shown(), 'six steps wrap to the first').toBe('The Links');
+      expect(colours, 'six colours, one each').toEqual(['0', '1', '2', '3', '4', '5']);
+      await page.locator('#coursePrev').click();
+      expect(await shown(), 'back from the first is the last').toBe('The Old Course');
+      // the keys: the arrows anywhere on the screen step the courses, and on a tab they walk the tabs
+      await page.locator('#playCourse').focus();
+      await page.keyboard.press('ArrowRight');
+      expect(await shown(), 'the right arrow key steps on').toBe('The Links');
+      await page.keyboard.press('ArrowLeft');
+      expect(await shown(), 'the left arrow key steps back').toBe('The Old Course');
+      await page.locator('#tab-golf').focus();
+      await page.keyboard.press('ArrowRight');
+      await expect(page.locator('#tab-minigolf')).toHaveAttribute('aria-selected', 'true');
+      await expect(page.locator('#tab-minigolf')).toBeFocused();
+      expect(await shown(), 'the minigolf tab opens on its first course').toBe('The Meadow');
+      expect(await colour()).toBe('0');
+      await page.locator('#courseNext').click();
+      expect(await shown()).toBe('The Pinball Shed');
+      // each tab keeps its place when the other is shown
+      await page.locator('#tab-golf').click();
+      expect(await shown(), 'golf where it was left').toBe('The Old Course');
+      await page.locator('#tab-minigolf').click();
+      expect(await shown(), 'minigolf where it was left').toBe('The Pinball Shed');
+      // the panel never scrolls, whichever is in view
+      expect(
+        await page.evaluate(() => {
+          const panel = document.querySelector<HTMLElement>('#start')!;
+          return panel.scrollHeight <= panel.clientHeight;
+        }),
+        'no scrolling in the start screen',
+      ).toBe(true);
+      // Play begins the course in view, and nothing else does
+      await page.locator('#playCourse').click();
+      expect(await page.evaluate(() => window.game!.state())).toMatchObject({
+        course: 'The Pinball Shed',
+        hole: 0,
+        choosing: false,
       });
-      expect(r.fits, 'no scrolling in the start screen').toBe(true);
-      // nine cards and six colours, the seventh to the ninth wearing the first three's again (six cards had one each from
-      // 8 October 2026, when The Fair went, to 14 October, when the three new golf courses came); a heading between the
-      // minigolf and the golf must not shift the cycle, so the colours are all there and no two cards side by side share one
-      expect(r.faces.length, 'a card for each course').toBe(9);
-      expect(new Set(r.faces).size, 'six colours going round').toBe(6);
-      for (let k = 1; k < r.faces.length; k++)
-        expect(r.faces[k], `card ${k} against its neighbour`).not.toBe(r.faces[k - 1]);
+      expect(problems).toEqual([]);
+    });
+
+    test('the picker says the best round once every hole of a course has a best, and not before', async ({ page }) => {
+      const problems = watch(page);
+      const meadow = [
+        'Straight',
+        'Dog-leg',
+        'The Bunker',
+        'Pond',
+        'Barriers',
+        'Bumpers',
+        'Up and Over',
+        'Windmill',
+        'The Mill Race',
+      ];
+      const kit = { club: '', ball: '', accessory: '' };
+      const best = Object.fromEntries(meadow.map((name, k) => [name, { strokes: 2 + (k % 2), kit }]));
+      await start(page, { seed: 11, paused: true, screen: true, save: { coins: 0, gems: 0, owned: [], kit, best } });
+      await expect(page.locator('#courseNote')).toHaveText('1st of 6 for difficulty · Not yet played');
+      await page.locator('#tab-minigolf').click();
+      await expect(page.locator('#courseNote')).toHaveText('1st of 3 for difficulty · Best round 22');
+      await page.locator('#courseNext').click();
+      await expect(page.locator('#courseNote')).toHaveText('2nd of 3 for difficulty · Not yet played');
       expect(problems).toEqual([]);
     });
 
@@ -690,7 +746,7 @@ for (const [where, device] of [
       await expect(page.locator('#start')).toBeVisible();
       await expect(page.locator('#holeMap'), 'no map over the start screen').toBeHidden();
       await expect(page.locator('#bag')).toBeHidden();
-      await page.locator('#start .course', { hasText: 'The Links' }).click();
+      await page.evaluate(() => window.game!.chooseCourse('The Links'));
       await page.evaluate(() => window.game!.step(60));
       await expect(page.locator('#holeMap')).toBeVisible();
       await openDrawer(page);

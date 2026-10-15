@@ -32,6 +32,9 @@ import { holeFailureText, reasonOf } from './failure';
 import { frameCost } from './frame-cost';
 import { COURSES, type Course } from './course';
 import { dayOf, recordText, type RoundOf } from './career';
+import { Picker, type PickerCourse } from './picker';
+import type { CoursePreview } from './previews';
+import previewData from './previews.json';
 import { Game, type GameEvents } from './game';
 import { Hud } from './hud';
 import { InstallOffer, registerWorker, shouldRegister, type WorkerState } from './install';
@@ -301,8 +304,29 @@ async function main() {
     titled = null;
     document.documentElement.removeAttribute('data-title');
   };
-  // what the start screen says of each course, which is known without making a course that is made when it is chosen
-  const summaries = COURSES.map((c) => ({ name: c.name, ...c.summary, golf: c.golf }));
+  // what the start screen says of each course, known without making a course that is made when it is chosen: its summary,
+  // and from the generated previews its picture, its length and its holes' names (a course without one is a build that forgot
+  // `npm run previews`, and is refused here by name rather than shown with nothing)
+  const previews = previewData as Partial<Record<string, CoursePreview>>;
+  const pickable: PickerCourse[] = COURSES.map((c) => {
+    const p = previews[c.name];
+    if (!p) throw new Error(`no preview for ${c.name}: run npm run previews`);
+    return {
+      name: c.name,
+      golf: !!c.golf,
+      holes: c.summary.holes,
+      par: c.summary.par,
+      yards: p.yards,
+      preview: { slug: p.slug, width: p.width, height: p.height },
+      holeNames: p.holes.map((h) => h.name),
+    };
+  });
+  const picker = new Picker(pickable, progress.save.best);
+  /** The start screen up with the picker, the save's bests and the career as they now are, held back while the title's letters drop. */
+  const openStart = (wait: boolean) => {
+    picker.setBests((game ?? { progress }).progress.save.best);
+    hud.showStart(picker, wait, careerWords());
+  };
   /** A course as the career knows a round of it: its name and its purse. */
   const roundOf = (c: Course): RoundOf => ({ name: c.name, purse: c.purse });
   /** What the start screen says of the career, from the save as it stands. */
@@ -375,7 +399,7 @@ async function main() {
           game?.playCourse([titleHole()]);
         }
         const standing = titleNow();
-        hud.showStart(summaries, standing !== null && !standing.scene.landed, careerWords());
+        openStart(standing !== null && !standing.scene.landed);
       },
       // the overhead button: the view from above on or off, and so what a drag on the course is
       overhead(on) {
@@ -883,7 +907,7 @@ async function main() {
   // the start screen is up, held back, before the first hole is: the boot panel is let go as soon as the letters are drawn,
   // while the hole is still being built behind them, and a hole begun with no start screen up puts its bag and its map on
   // the screen, which were seen over the sky until the end of the boot put the start screen up and hid them
-  if (wantTitle) hud.showStart(summaries, true, careerWords());
+  if (wantTitle) openStart(true);
   if (wantTitle) await beginUnderTitle(played.hole, played.def.par);
   else shown.started!(played.hole, played.def.par);
   // a first hole that cannot be drawn is the boot's failure: the screen says so, and there is no game to start
@@ -1452,7 +1476,7 @@ async function main() {
   // the start screen over the title scene, or over the first hole of the first course on a page that has none, until a course
   // is chosen: held back until the letters have landed
   const standing = titleNow();
-  hud.showStart(summaries, standing !== null && !standing.scene.landed, careerWords());
+  openStart(standing !== null && !standing.scene.landed);
   stats.hidden = choosing;
 
   // ---- each frame ----
@@ -1735,17 +1759,22 @@ async function main() {
       if (button.dataset.mode !== mode) button.click();
     },
     continueRound: () => {
-      const card = document.querySelector("#start .course small span[data-career='round']")?.closest('button');
-      if (!card) return false;
-      card.click();
+      // the picker opens on the course of the round kept, whose Play is Continue; nothing to press without one
+      const play = document.getElementById('playCourse') as HTMLButtonElement;
+      if (play.textContent !== 'Continue') return false;
+      play.click();
       return true;
     },
     chooseCourse: (name) => {
-      const card = Array.from(document.querySelectorAll<HTMLButtonElement>('#start .course')).find((b) =>
-        b.textContent.startsWith(name),
-      );
-      if (!card) throw new Error(`no course called ${name} on the start screen`);
-      card.click();
+      // as a player does: the course's tab pressed, the next arrow pressed until the course is in view, and Play pressed
+      const course = pickable.find((c) => c.name === name);
+      if (!course) throw new Error(`no course called ${name} on the start screen`);
+      (document.getElementById(course.golf ? 'tab-golf' : 'tab-minigolf') as HTMLButtonElement).click();
+      const next = document.getElementById('courseNext') as HTMLButtonElement;
+      const shown = () => document.getElementById('courseName')!.textContent;
+      for (let k = 0; k < COURSES.length && shown() !== name; k++) next.click();
+      if (shown() !== name) throw new Error(`the picker could not reach ${name}`);
+      (document.getElementById('playCourse') as HTMLButtonElement).click();
     },
     async grass() {
       await grown;

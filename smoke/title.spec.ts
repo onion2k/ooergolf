@@ -53,7 +53,9 @@ async function wordBox(page: Page) {
 test.describe('the boot panel', () => {
   test.use(DESKTOP);
 
-  test('is plain sky: no picture is fetched, and it says nothing at any moment of a good boot', async ({ page }) => {
+  test('is plain sky: no picture is fetched but the course preview, and it says nothing at any moment of a good boot', async ({
+    page,
+  }) => {
     const pictures: string[] = [];
     page.on('request', (r) => {
       if (r.resourceType() === 'image') pictures.push(r.url());
@@ -68,7 +70,11 @@ test.describe('the boot panel', () => {
     });
     await page.goto('/?paused=1&seed=1');
     await ready(page);
-    expect(pictures, 'no picture is fetched by the page').toEqual([]);
+    // the one picture the page fetches is the picker's preview of the course in view (15 October 2026): nothing of the panel
+    expect(
+      pictures.map((url) => new URL(url).pathname),
+      'no picture is fetched by the page but the course preview',
+    ).toEqual(['/previews/the-links.png']);
     const boot = await page.evaluate(() => {
       const el = document.getElementById('boot')!;
       return {
@@ -162,36 +168,27 @@ async function offerInstall(page: Page) {
   await expect(page.locator('#install')).toBeVisible();
 }
 
-/** The start screen's panel, its cards, its heading and its Install button as drawn: whether it scrolls, and where each is. */
+/** The start screen's panel and the picker's parts as drawn: whether it scrolls, and where each is. */
 const startBoxes = (page: Page) =>
   page.evaluate(() => {
-    const box = (el: Element | Range) => {
+    const box = (el: Element) => {
       const r = el.getBoundingClientRect();
       return { x0: r.left, y0: r.top, x1: r.right, y1: r.bottom };
     };
     const panel = document.getElementById('start')!;
+    const by = (id: string) => box(document.getElementById(id)!);
+    const name = document.getElementById('courseName')!;
     return {
       scrolls: panel.scrollHeight > panel.clientHeight,
-      panel: box(panel),
-      cards: Array.from(document.querySelectorAll('#courses .course')).map((c) => ({
-        name: c.querySelector('b')!.textContent,
-        box: box(c),
-        // a name on more than one line, or cut by its card, is wider or taller than the room it has
-        wraps: c.querySelector('b')!.scrollWidth > c.querySelector('b')!.clientWidth + 1,
-        lines: Math.round(
-          c.querySelector('b')!.getBoundingClientRect().height /
-            parseFloat(getComputedStyle(c.querySelector('b')!).fontSize) /
-            1.1,
-        ),
-      })),
-      // the heading's words and not its block, which is the panel's width
-      heading: (() => {
-        const range = document.createRange();
-        range.selectNodeContents(document.querySelector('#start p')!);
-        return box(range);
-      })(),
       height: { content: panel.scrollHeight, room: panel.clientHeight },
-      install: box(document.getElementById('install')!),
+      panel: box(panel),
+      tabs: by('startTabs'),
+      prev: by('coursePrev'),
+      next: by('courseNext'),
+      preview: by('coursePreview'),
+      name: { text: name.textContent, box: box(name), cut: name.scrollWidth > name.clientWidth + 1 },
+      play: by('playCourse'),
+      install: by('install'),
       stats: document.getElementById('stats')!.hidden,
       screen: { w: innerWidth, h: innerHeight },
     };
@@ -201,8 +198,9 @@ const inside = (a: { x0: number; y0: number; x1: number; y1: number }, b: typeof
   a.x0 >= b.x0 - slack && a.y0 >= b.y0 - slack && a.x1 <= b.x1 + slack && a.y1 <= b.y1 + slack;
 const apart = (a: { x0: number; y0: number; x1: number; y1: number }, b: typeof a) =>
   a.x1 <= b.x0 || b.x1 <= a.x0 || a.y1 <= b.y0 || b.y1 <= a.y0;
+const thumb = (a: { y0: number; y1: number }) => a.y1 - a.y0 >= 44;
 
-test.describe('the cards fit the screen under the title', () => {
+test.describe('the picker fits the screen under the title', () => {
   for (const [where, width, height, touch] of [
     ['a desk, 1280 by 800', 1280, 800, false],
     ['a laptop, 1440 by 900', 1440, 900, false],
@@ -212,7 +210,7 @@ test.describe('the cards fit the screen under the title', () => {
   ] as const) {
     test.describe(where, () => {
       test.use({ viewport: { width, height }, hasTouch: touch, isMobile: touch });
-      test('all nine, without scrolling, each name on one line, and the Install button in the panel’s head', async ({
+      test('the tabs, the course in view, the arrows, Play and the Install button, whole and without scrolling, on every course', async ({
         page,
       }) => {
         await open(page);
@@ -221,38 +219,61 @@ test.describe('the cards fit the screen under the title', () => {
         await offerInstall(page);
         // the panel springs in: measured once it has landed
         await landed(page);
-        const r = await startBoxes(page);
-        expect(r.cards.length).toBe(9);
-        expect(r.scrolls, `the panel does not scroll: ${r.height.content} of content in ${r.height.room}`).toBe(false);
-        const screen = { x0: 0, y0: 0, x1: r.screen.w, y1: r.screen.h };
-        for (const c of r.cards) {
-          expect(inside(c.box, r.panel), `${c.name} inside the panel`).toBe(true);
-          expect(inside(c.box, screen), `${c.name} on the screen`).toBe(true);
-          expect(c.wraps, `${c.name} is not cut`).toBe(false);
-          expect(c.lines, `${c.name} on one line`).toBe(1);
-          expect(c.box.y1 - c.box.y0, `${c.name} is a thumb high`).toBeGreaterThanOrEqual(44);
+        const screen = { x0: 0, y0: 0, x1: width, y1: height };
+        // every course of both tabs, since the longest name and the widest preview are what could not fit
+        for (const [tab, count] of [
+          ['tab-golf', 6],
+          ['tab-minigolf', 3],
+        ] as const) {
+          await page.locator(`#${tab}`).click();
+          for (let k = 0; k < count; k++) {
+            const r = await startBoxes(page);
+            const what = `${r.name.text} on ${where}`;
+            expect(r.scrolls, `no scrolling at ${what}: ${r.height.content} of content in ${r.height.room}`).toBe(
+              false,
+            );
+            for (const [part, b] of Object.entries({
+              tabs: r.tabs,
+              prev: r.prev,
+              next: r.next,
+              preview: r.preview,
+              name: r.name.box,
+              play: r.play,
+              install: r.install,
+            }))
+              expect(inside(b, r.panel) && inside(b, screen), `${part} whole on the screen at ${what}`).toBe(true);
+            expect(r.name.cut, `the name is not cut at ${what}`).toBe(false);
+            for (const [part, b] of Object.entries({ prev: r.prev, next: r.next, play: r.play, install: r.install }))
+              expect(thumb(b), `${part} a thumb high at ${what}`).toBe(true);
+            // the Install button stands in the panel's head: above the course in view, and clear of the tabs
+            expect(r.install.y1, 'the Install button above the course').toBeLessThanOrEqual(r.preview.y0 + 1);
+            expect(apart(r.install, r.tabs), 'and clear of the tabs').toBe(true);
+            expect(r.stats, 'the frame-cost label is away under the start screen').toBe(true);
+            await page.locator('#courseNext').click();
+          }
         }
-        // the Install button stands in the panel's head, above every card and clear of the heading
-        expect(inside(r.install, r.panel), 'the Install button inside the panel').toBe(true);
-        expect(r.install.y1, 'above the cards').toBeLessThanOrEqual(Math.min(...r.cards.map((c) => c.box.y0)) + 1);
-        expect(apart(r.install, r.heading), 'clear of the heading').toBe(true);
-        expect(r.install.y1 - r.install.y0, 'a thumb high').toBeGreaterThanOrEqual(44);
-        expect(r.stats, 'the frame-cost label is away under the start screen').toBe(true);
       });
     });
   }
 
-  test('on a phone on its side the panel may scroll, and every card is whole across it', async ({ page }) => {
+  test('on a phone on its side the panel may scroll, and the picker is whole across it', async ({ page }) => {
     await page.setViewportSize({ width: 844, height: 390 });
     await page.reload();
     await open(page);
     await step(page, framesTo(1.7));
+    await landed(page);
     const r = await startBoxes(page);
-    for (const c of r.cards) {
-      expect(c.box.x0, `${c.name} inside the panel's sides`).toBeGreaterThanOrEqual(r.panel.x0);
-      expect(c.box.x1).toBeLessThanOrEqual(r.panel.x1);
-      expect(c.lines, `${c.name} on one line`).toBe(1);
+    for (const [part, b] of Object.entries({
+      tabs: r.tabs,
+      prev: r.prev,
+      next: r.next,
+      preview: r.preview,
+      play: r.play,
+    })) {
+      expect(b.x0, `${part} inside the panel's sides`).toBeGreaterThanOrEqual(r.panel.x0 - 1);
+      expect(b.x1, `${part} inside the panel's sides`).toBeLessThanOrEqual(r.panel.x1 + 1);
     }
+    expect(r.name.cut).toBe(false);
     expect(r.stats).toBe(true);
   });
 

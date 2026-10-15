@@ -108,7 +108,8 @@ describe('the title camera and the word fitted to a screen', () => {
     for (const [, w, h] of SCREENS) {
       const max = cardsMax(w, h);
       expect(max).toBeGreaterThan(0);
-      expect(max).toBeLessThanOrEqual(0.56 * h + 1e-9);
+      // no more than the larger of the two shares (a phone's is the larger since the picker, 15 October 2026)
+      expect(max).toBeLessThanOrEqual(Math.max(CARDS.share, CARDS.tall) * h + 1e-9);
       // the panel's top edge, as a share of the screen from its foot, in normalised coordinates
       expect(cardsTop(w, h)).toBeCloseTo(1 - (2 * (h - CARDS.foot - max)) / h, 9);
     }

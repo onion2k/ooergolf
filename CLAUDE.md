@@ -1048,16 +1048,30 @@ minigolf: true }`, read through `oceanFor`) is the one switch: `waterBed` and `s
   between neighbours), so the planner there finds the nearest it can (2 to 3 off) and not its tolerance.
 - `src/hud.ts` is the words over the course: the hole and strokes, the
   score's name when a hole is done, the card, the coins and gems, the
-  shop, and the start screen, a card for each course with its holes and
-  par, under a Golf heading and then a Minigolf one (golf first since 14 October 2026, at the user's word: the game leans to
-  proper golf now), shown at boot and from the card's Courses button. The page plays no
-  shot while it is up; the panel is 820 wide and the cards are compact since 15 October 2026 (a name, its pills and the arrow in
-  one row of 58, as many columns of 220 as fit, three on a desk and a tablet; on a phone two across, 50 high and no arrow, the
-  name's size following the width so The Pinball Shed is one line at 360 wide), so that all nine stand in sight under the title
-  without the panel scrolling on a desk, a laptop, a tablet and a phone (`smoke/title.spec.ts` holds it on each; a phone on its
-  side still scrolls, the cards' panel having half its height), where a card 128 high scrolled on every screen and a desk saw six
-  of the nine; a phone's cards take `CARDS.tall`, 0.55, of its screen for it. The cards' colours
-  cycle through six (`#courses .course:nth-of-type(6n + k)` in `index.html`), the seventh to the ninth wearing the first three's again.
+  shop, and the start screen, shown at boot and from the card's Courses button, which since 15 October 2026 is the
+  **course picker** (plan `~/.claude/plans/ooergolf-course-picker.md`; it was a card for each course, cramped at nine): two
+  tabs, Proper Golf and Mini Golf (an ARIA tablist, golf first since the game leans to proper golf), one course of the tab in
+  view at a time in a card of its colour (the six colours going round the tab's courses, `data-colour`), with its preview (a
+  hole of it painted from above), its name, pills for its holes, par and on golf its yards, a line for its place in the order
+  of difficulty and the player's best round ("3rd of 6 for difficulty · Best round 34", or "Not yet played" until every hole
+  has a best in the save), arrows either side that step and wrap (the arrow keys anywhere on the screen do the same, and on
+  a tab walk the tabs), dots for its place, and one Play button; the Install pill stands in the panel's head, at the top
+  right under the title (a round download button on a phone, its words kept for a screen reader). `src/picker.ts` is the
+  arithmetic with no page (`Picker`: `tab`, `step`, `show(name)`, `shown()`, `bestRound`, `ordinal`), which the hud draws
+  (`drawPicker`) and never works out again; the test API's `chooseCourse(name)` presses the tab, the next arrow until the
+  course is in view and Play, as a player does. The previews are generated: `npm run previews` (`scripts/make-previews.ts`)
+  makes every course (0.2 to 0.9 s each in Node, which is why nothing is painted as a player steps), paints `Course.preview`
+  (a hole index, the first by default, chosen by looking) through the hole map's `paintMap` at `PREVIEW.box` (180) pixels a
+  side (`previewSize` in `src/previews.ts`, which unlike the hole map's size is not held to a pixel a yard, since a hole of
+  minigolf is twenty yards across) into `public/previews/<slug>.png` (nine, 18.9 kB together, under `test/previews.test.ts`'s
+  ceiling of 40 kB and `perf`'s 120 for pictures fetched with the page) and `src/previews.json` (each course's picture size,
+  its holes' names, which the best round is summed by, and their lengths in yards along `way` or tee to cup, `holeLength`),
+  both committed and never edited; the test holds the pictures to the painter's pixels and the figures to the courses, so a
+  course changed without the script run fails it. The panel does not scroll on a desk, a laptop, a tablet or a phone
+  (`smoke/title.spec.ts`, on every course of both tabs; a phone on its side still scrolls), the start screen's "Choose a
+  course" line shows only on a page without the title, a phone's panel takes `CARDS.tall`, 0.6, of its screen, and the
+  stepping has no animation (a slide was in the plan and not asked for). Not done: part 5 of the plan, the course last shown
+  kept in the save.
   The frame-cost label (`#stats`) is away under the start screen and back once a course is chosen. `src/score.ts` names a score
   (four or more under par is a Condor!, a hole in one still first) and says what kind it
   is, which colours its callout. Both are given what to show and never read
@@ -1228,11 +1242,11 @@ minigolf: true }`, read through `oceanFor`) is the one switch: `waterBed` and `s
   is a round with no hole picked up, under the one held (`isRecord`). `newRound`, and a course's card, give up a round kept;
   `resume(holes, of)` goes on with it from its next hole's tee, its card and retake as they were, and refuses (and lets go) one
   of another course or with no hole left. In free play (`setMode`, which leaves the round in play no course's) nothing is paid,
-  no best or record kept, no round kept and no piggy bank spent. On the start screen the mode is one cycle button on the
-  heading's line (`#playMode`, "Career mode" or "Free play"; on a phone it stands alone there, the words hidden), a card's
-  first pill says its record ("Record 31") where its count of holes stood, and the card of the round kept says "On hole 4" and
-  goes on with it when pressed (`Hud.setCareer`): there is no Continue button and no row of its own, since a phone 360 wide under
-  the title had 7 pixels to spare. The card at the end has a Best column and says the prize, a new record as a sticker, or "Free
+  no best or record kept, no round kept and no piggy bank spent. On the start screen the mode is one cycle button beside Play
+  (`#playMode`, "Career mode" or "Free play"; it was on the heading's line until the picker's tabs took it), the course in
+  view's first pill says its record ("Record 31") where its count of holes stood, and the picker opens on the course of the
+  round kept, whose first pill says "On hole 4" and whose Play is Continue and goes on with it (`Hud.setCareer`, which redraws
+  the picker; the test API's `continueRound` presses that Play). The card at the end has a Best column and says the prize, a new record as a sticker, or "Free
   play: nothing won". `careerProblems` holds it in `checkInvariants`. A reload keeps the round between holes and not where a
   ball lies part way round one, so that hole is begun again from its tee.
 - `src/physics.ts` is the game's side of artshape-physics, and nothing else

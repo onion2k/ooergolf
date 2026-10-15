@@ -51,12 +51,13 @@ export const VIEW = {
 
 /**
  * The course cards on the start screen, which the stylesheet places and this says: the panel stands on the foot of the
- * screen `foot` pixels up, and is no taller than `share` of it, `tall` of a phone's (0.55 since 15 October 2026, when the
- * cards became compact and two across on a phone: nine of them in 407 pixels on a phone 360 by 800, where 0.5 gave 390, and
- * the word is limited by the width there and stands as high as it did). One place, so the word is held clear of the most
- * the panel can be, and the stylesheet reads the height through `--cards-max` and holds no figure of its own.
+ * screen `foot` pixels up, and is no taller than `share` of it, `tall` of a phone's (0.6 since 15 October 2026, when the
+ * course picker came: its tabs, a course's card with the preview above its figures, and Play are about 460 pixels on a
+ * phone, where 0.5 gave 390 on one 360 by 800; the word is limited by the width on a phone and stands as high as it did).
+ * One place, so the word is held clear of the most the panel can be, and the stylesheet reads the height through
+ * `--cards-max` and holds no figure of its own.
  */
-export const CARDS = { foot: 14, share: 0.56, tall: 0.55, gap: 0.05, top: 0.05, side: 0.92 } as const;
+export const CARDS = { foot: 14, share: 0.56, tall: 0.6, gap: 0.05, top: 0.05, side: 0.92 } as const;
 
 /** Whether a screen of this size is a phone's or a short one's, which the cards take half the height of. */
 const isPhone = (width: number, height: number) => width <= 600 || height <= 500;

@@ -188,55 +188,61 @@ test('the shop shows an aisle each of clubs, balls and accessories, with none wo
 });
 
 test.describe('the start screen', () => {
-  test('opens over the first hole, a card for each course, and a click on one plays it', async ({ page }) => {
+  test('opens over the first hole with the picker, every course stepped through in its order, and Play plays the one in view', async ({
+    page,
+  }) => {
     const problems = watch(page);
     await start(page, { seed: 1, paused: true, screen: true });
     await expect(page.locator('#start')).toBeVisible();
-    await expect(page.locator('#start .course')).toHaveCount(9);
-    // the courses sit under two headings, golf then minigolf (the game leans to proper golf, 14 October 2026), the golf
-    // easiest first and The Meadow first of the minigolf
-    await expect(page.locator('#start h2')).toHaveText(['Golf', 'Minigolf']);
-    expect(
-      await page.evaluate(() =>
-        Array.from(document.querySelectorAll('#courses > *')).map(
-          (e) => `${e.tagName}:${e.textContent.split(/\d/)[0]}`,
-        ),
-      ),
-    ).toEqual([
-      'H2:Golf',
-      'BUTTON:The Links',
-      'BUTTON:The Heath',
-      'BUTTON:The Fells',
-      'BUTTON:The Woods',
-      'BUTTON:The Isles',
-      'BUTTON:The Old Course',
-      'H2:Minigolf',
-      'BUTTON:The Meadow',
-      'BUTTON:The Pinball Shed',
-      'BUTTON:The Waterworks',
-    ]);
-    const cards = page.locator('#start .course');
-    for (const [k, name, par] of [
-      [0, 'The Links', 36],
-      [1, 'The Heath', 32],
-      [2, 'The Fells', 37],
-      [3, 'The Woods', 35],
-      [4, 'The Isles', 45],
-      [5, 'The Old Course', 37],
-      [6, 'The Meadow', 26],
-      [7, 'The Pinball Shed', 27],
-      [8, 'The Waterworks', 28],
-    ] as const) {
-      await expect(cards.nth(k)).toContainText(name);
-      await expect(cards.nth(k)).toContainText('9 holes');
-      await expect(cards.nth(k)).toContainText(`par ${par}`);
+    // the picker opens on proper golf (the game leans to proper golf, 14 October 2026) at the easiest course, and steps
+    // through the six and then the three of minigolf in the order they stand, each with its holes, par and, on golf, yards
+    await expect(page.locator('#startTabs [role=tab]')).toHaveText(['Proper Golf', 'Mini Golf']);
+    await expect(page.locator('#tab-golf')).toHaveAttribute('aria-selected', 'true');
+    const seen = async () => ({
+      name: await page.locator('#courseName').textContent(),
+      pills: await page.locator('#courseData span').allTextContents(),
+      note: await page.locator('#courseNote').textContent(),
+      dots: await page.locator('#courseDots i').count(),
+      on: await page.locator('#courseDots i.on').count(),
+    });
+    const golf: [string, number, number][] = [
+      ['The Links', 36, 3510],
+      ['The Heath', 32, 2408],
+      ['The Fells', 37, 3805],
+      ['The Woods', 35, 3555],
+      ['The Isles', 45, 5460],
+      ['The Old Course', 37, 4200],
+    ];
+    for (const [k, [name, par, yards]] of golf.entries()) {
+      expect(await seen(), name).toEqual({
+        name,
+        pills: ['9 holes', `par ${par}`, `${yards.toLocaleString('en-GB')} yd`],
+        note: `${['1st', '2nd', '3rd', '4th', '5th', '6th'][k]} of 6 for difficulty · Not yet played`,
+        dots: 6,
+        on: 1,
+      });
+      await page.locator('#courseNext').click();
     }
+    expect((await seen()).name, 'wrapped round to the first').toBe('The Links');
+    await page.locator('#tab-minigolf').click();
+    await expect(page.locator('#tab-minigolf')).toHaveAttribute('aria-selected', 'true');
+    for (const [name, par] of [
+      ['The Meadow', 26],
+      ['The Pinball Shed', 27],
+      ['The Waterworks', 28],
+    ] as const) {
+      const s = await seen();
+      expect([s.name, s.pills, s.dots], name).toEqual([name, ['9 holes', `par ${par}`], 3]);
+      await page.locator('#courseNext').click();
+    }
+    await page.locator('#coursePrev').click();
+    expect((await seen()).name, 'back from the first wraps to the last').toBe('The Waterworks');
     expect(await page.evaluate(() => window.game!.state())).toMatchObject({ choosing: true, course: 'The Meadow' });
     // nothing is struck through it
     const box = (await page.locator('#view').boundingBox())!;
     await drag(page, { x: box.x + 40, y: box.y + box.height - 60 }, { x: box.x + 40, y: box.y + box.height - 10 });
     expect((await page.evaluate(() => window.game!.state())).strokes, 'no stroke through the start screen').toBe(0);
-    await page.locator('#start .course', { hasText: 'The Links' }).click();
+    await page.evaluate(() => window.game!.chooseCourse('The Links'));
     await expect(page.locator('#start')).toBeHidden();
     await expect(page.locator('#strokes')).toBeVisible();
     await expect(page.locator('#holeName')).toContainText('Hole 1 of 9');
@@ -264,7 +270,7 @@ test.describe('the start screen', () => {
     await expect(page.locator('#card')).toBeVisible();
     await page.locator('#cardCourses').click();
     await expect(page.locator('#start')).toBeVisible();
-    await page.locator('#start .course', { hasText: 'The Links' }).click();
+    await page.evaluate(() => window.game!.chooseCourse('The Links'));
     expect(await page.evaluate(() => window.game!.state())).toMatchObject({ course: 'The Links', hole: 0, card: [] });
     expect(problems).toEqual([]);
   });
