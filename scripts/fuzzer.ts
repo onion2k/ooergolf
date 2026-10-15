@@ -29,7 +29,8 @@ import { Autopilot, timeAlong } from '../src/autopilot';
 import { CameraRig, facing, overheadFit, wrap } from '../src/camera';
 import { AISLES, ITEMS, paid } from '../src/items';
 import { retakeShown } from '../src/retake';
-import { COURSES, type HoleDef } from '../src/course';
+import { COURSES, type Course, type HoleDef } from '../src/course';
+import type { RoundOf } from '../src/career';
 import { Game, type GameEvents } from '../src/game';
 import { Input } from '../src/input';
 import {
@@ -127,6 +128,9 @@ type Knock = Parameters<NonNullable<GameEvents['knocked']>>;
 type Landing = Parameters<NonNullable<GameEvents['landed']>>;
 /** How many frames between checks, when nothing has just been done. */
 const CHECK_EVERY = 10;
+
+/** A course as the career knows a round of it, as the page names one from its card. */
+const roundOf = (c: Course): RoundOf => ({ name: c.name, purse: c.purse });
 /** How many of the last things done a failure reports. */
 const LOG_TAIL = 25;
 
@@ -166,7 +170,7 @@ const letters = (): readonly TitlePiece[] => (lettering ??= titleLetters(titleTr
  * the others by choosing them, as a player does; given `course` it plays that one throughout, at the start, after a
  * reload and whenever it chooses, so a course of its own gets the whole of a run and not a share of it.
  */
-export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]): FuzzResult {
+export function fuzz(seed: number, frames: number, course?: readonly HoleDef[], named?: RoundOf): FuzzResult {
   // the monkey's own chance, apart from the game's, so what it decides does not shift what the game does
   const monkey = seeded(seed * 7 + 1);
   /** How many numbers the monkey has drawn from its own stream, which a test holds to a figure so a stray draw is seen. */
@@ -180,13 +184,15 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
   const checked: Record<string, number> = {};
   /**
    * What the game told since the last step, for the rules an item adds: a ball lost, the waders told of, a hole finished
-   * (with its score and its par), and the penny spent. Read and emptied by `afterwards`.
+   * (with its score and its par), the penny spent, and the coins a career round's prize paid. Read and emptied by
+   * `afterwards`.
    */
   const lately = {
     lost: 0,
     waded: 0,
     finished: null as null | { holed: boolean; par: number; score: number },
     spent: 0,
+    prize: 0,
   };
   /** The piggy bank's id if one was worn as the hole being played began, which is the hole it pays double for; '' if none. */
   let piggyOnHole = '';
@@ -210,6 +216,19 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
           if (name === 'splash' || name === 'outOfBounds') lately.lost++;
           if (name === 'waded') lately.waded++;
           if (name === 'spent') lately.spent++;
+          // a prize is a career round's, of a named course, told as its last hole is done; and free play is told of no pay
+          if (name === 'roundPaid' && playing) {
+            lately.prize += args[0];
+            count(checked, 'round paid');
+            if (
+              !playing.counting ||
+              playing.hole !== playing.course.length - 1 ||
+              !(Number.isInteger(args[0]) && args[0] > 0)
+            )
+              told.push(`a prize of ${args[0]} was paid on hole ${playing.hole + 1} of a round that does not count`);
+          }
+          if ((name === 'paid' || name === 'spent') && playing?.progress.save.mode === 'free')
+            told.push(`free play was told it was ${name}`);
           if (name === 'holed' || name === 'pickedUp')
             lately.finished = { holed: name === 'holed', score: args[0], par: args[1] };
           if (name === 'started' && playing && directing) {
@@ -381,6 +400,50 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
         throw new Error('reading the green changed the game');
       if (draws !== drawn) throw new Error(`reading the green drew ${draws - drawn} numbers of the game's chance`);
       did('read the break');
+    };
+    /**
+     * The start screen's Continue, for the career round the save keeps: its course (the run's own, named, or the one the
+     * save names) gone on with from its next hole, its card as it was kept. Draws no chance, and does nothing in free play
+     * or with no round kept.
+     */
+    const goOn = () => {
+      const kept = game.progress.save.round;
+      if (!kept || game.progress.save.mode !== 'career') return;
+      const card = [...kept.card];
+      let of: RoundOf | null = null,
+        holes: readonly HoleDef[] | null = null;
+      if (course) {
+        if (named?.name === kept.course) [of, holes] = [named, course];
+      } else {
+        const found = COURSES.find((c) => c.name === kept.course);
+        if (found) [of, holes] = [roundOf(found), found.holes];
+      }
+      // a round of a course this run does not play (none is kept so: a run alone on a course plays only it)
+      if (!of || !holes) return;
+      if (!game.resume(holes, of)) return;
+      if (game.card.join() !== card.join() || game.hole !== card.length || game.strokes !== 0)
+        told.push(`the round kept, ${card.join(',')}, went on as ${game.card.join(',')} on hole ${game.hole + 1}`);
+      count(checked, 'round gone on with');
+      did('continue');
+    };
+    /** The career's buttons on the start screen, pressed on a chance of their own: Career or Free play, and Continue. */
+    const careerer = seeded(seed * 71 + 29);
+    const career = () => {
+      const atStart = game.phase === 'play' && game.hole === 0 && game.strokes === 0 && game.card.length === 0;
+      if (game.phase !== 'over' && !atStart) return;
+      const save = game.progress.save;
+      if (careerer() < 0.5) {
+        // a mode changed leaves the round no course's, so the page begins one as a course is chosen: the course stood behind
+        // the screen, chosen again as its card would
+        const of = game.of;
+        const mode = save.mode === 'career' ? 'free' : 'career';
+        const coins = save.coins;
+        game.setMode(mode);
+        if (game.of !== null && game.of !== of) told.push('a mode changed and the round was still named');
+        if (of && atStart) game.adopt(of);
+        if (save.coins !== coins) told.push(`choosing ${mode} changed the coins`);
+        did('choose career or free play', mode);
+      } else goOn();
     };
     /** Everything a player can make happen, each as often as it is weighted. */
     const actions: [number, () => void][] = [
@@ -628,7 +691,7 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
           // card's button when a round is over
           const atStart = game.hole === 0 && game.strokes === 0 && game.card.length === 0;
           if (game.phase !== 'over' && !atStart) return;
-          const chosen = COURSES[Math.floor(random() * COURSES.length)].holes;
+          const picked = COURSES[Math.floor(random() * COURSES.length)];
           // the title scene was up behind the screen, its letters dropping for as long as the monkey looked at it, and the
           // course is chosen at any moment of that, on a chance of its own so that no other run changes; from the card's
           // Courses button its letters are standing
@@ -641,7 +704,9 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
             scene.advance(1 / 60);
           }
           if (!scene.landed) count(checked, 'course chosen mid-drop');
-          game.playCourse(course ?? chosen);
+          // a course's card names it, so a round of it counts in the career; a test's holes are no course's
+          if (course) game.playCourse(course, named ?? null);
+          else game.playCourse(picked.holes, roundOf(picked));
           did('choose a course');
         },
       ],
@@ -654,6 +719,9 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
           store = memoryStore(store.json);
           game = new Game(new Progress(store), events, { random: chance(seed + frame), course });
           playing = game;
+          // the start screen offers Continue for a career round kept, and the monkey takes it: the round goes on from the hole
+          // after the last it finished, its card as it was
+          goOn();
           director.use(game);
           director.started();
           holeBegan = game.t;
@@ -1137,11 +1205,11 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
       hole: game.hole,
     });
     const quiet = () => {
-      lately.lost = lately.waded = lately.spent = 0;
+      lately.lost = lately.waded = lately.spent = lately.prize = 0;
       lately.finished = null;
     };
     const afterwards = (was: ReturnType<typeof snapshot>) => {
-      const { lost, waded, spent, finished } = lately;
+      const { lost, waded, spent, finished, prize } = lately;
       quiet();
       if (game !== was.game || was.phase !== 'play') return;
       // the waders: the first ball lost to water or out of bounds on a hole costs no stroke, and the second costs one
@@ -1159,11 +1227,16 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
       }
       // the lucky penny: a hole holed with it in hand at its start pays its coins twice, once, and it is spent; a hole picked up
       // pays nothing and spends nothing
+      // (and in free play nothing at all: no pay, no penny spent; a career round's last hole pays its prize on top)
       if (finished) {
-        const pay = paid(finished.score, finished.par, !finished.holed, game.kit.underParPay);
-        const double = finished.holed && was.penny;
+        const free = game.progress.save.mode === 'free';
+        const pay = free
+          ? { coins: 0, gems: 0 }
+          : paid(finished.score, finished.par, !finished.holed, game.kit.underParPay);
+        const double = !free && finished.holed && was.penny;
         const save = game.progress.save;
-        const coins = pay.coins * (double ? 2 : 1);
+        const coins = pay.coins * (double ? 2 : 1) + prize;
+        if (free) count(checked, 'free hole paid nothing');
         if (save.coins - was.coins !== coins || save.gems - was.gems !== pay.gems)
           throw new Error(
             `a hole ${finished.holed ? 'holed' : 'picked up'} in ${finished.score} on a par of ${finished.par}, with ${was.penny ? 'the penny' : 'no penny'}, paid ${save.coins - was.coins} coins and ${save.gems - was.gems} gems, not ${coins} and ${pay.gems}`,
@@ -1337,6 +1410,7 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[]):
       count(itemFrames, `${game.slots.club || '-'}|${game.slots.ball || '-'}|${game.slots.accessory || '-'}`);
       if (seed % 5 === 0 && wardrobe() < 0.004) tryOn();
       if (retaker() < 0.01) retake();
+      if (careerer() < 0.01) career();
       if (reading() < 0.03) readOff();
       if (!game.layout.golf && ranging() < 0.03) rangeOff();
       const was = snapshot();

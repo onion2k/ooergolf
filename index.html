@@ -666,6 +666,26 @@
     text-align: right;
     white-space: nowrap;
   }
+  /* each hole's best, quieter than the round's own score beside it */
+  #card td:nth-child(4) {
+    color: var(--ink-soft);
+  }
+  /* what the round won, under the card, and a new record as a tilted sticker */
+  #cardPrize {
+    margin: 12px 0 0;
+    font-weight: 900;
+    text-align: center;
+  }
+  #cardPrize span {
+    display: block;
+  }
+  #cardPrize[data-record='true'] {
+    padding: 6px 12px;
+    background: var(--sun);
+    border-radius: 12px;
+    box-shadow: 0 3px 0 var(--sun-deep);
+    rotate: -2deg;
+  }
   #again {
     display: block;
     width: 100%;
@@ -850,6 +870,33 @@
     font-size: 13px;
   }
   /*
+   * The career's button (15 October 2026), on the heading's line: Career mode or Free play, cycled by a press as the bag's
+   * shape is. A row of its own was tried and a phone 360 wide under the title had no room for it (the cards had 7 pixels
+   * to spare), so on a phone it stands alone on that line, at the left, where the Install button is at the right.
+   */
+  #playMode {
+    margin-left: 8px;
+    padding: 0 14px;
+    font-size: 15px;
+    vertical-align: middle;
+  }
+  #playMode[data-mode='free'] {
+    background: var(--mist);
+    box-shadow:
+      inset 0 0 0 3px var(--ink-soft),
+      0 4px 0 var(--mist-deep);
+  }
+  /* a record stands in a card where the count of holes did, in the sun's yellow; the hole a round kept goes on from, in the sky's */
+  .course small span[data-career='record'] {
+    background: var(--sun);
+  }
+  .course small span[data-career='round'] {
+    color: var(--title);
+    box-shadow:
+      inset 0 0 0 2px var(--title),
+      0 2px 0 var(--deep);
+  }
+  /*
    * The cards are compact (15 October 2026): a name, its pills and the arrow in one row of 58, three across, so that all nine
    * stand in sight under the title on a desk, a tablet and a phone without the panel scrolling, which it did on every screen
    * when a card was 128 high (a desk saw six of the nine and a phone five, with no sign of more below).
@@ -994,6 +1041,13 @@
     html[data-title] #install {
       top: 10px;
       right: 12px;
+    }
+    #startWords {
+      display: none;
+    }
+    #playMode {
+      margin-left: 0;
+      font-size: 14px;
     }
     #courses {
       grid-template-columns: repeat(2, 1fr);
@@ -1757,17 +1811,19 @@
         <th>#</th>
         <th>Hole</th>
         <th>Par</th>
+        <th>Best</th>
         <th>Score</th>
       </tr>
     </thead>
     <tbody id="cardRows"></tbody>
     <tfoot>
       <tr>
-        <td colspan="3">Total</td>
+        <td colspan="4">Total</td>
         <td id="cardTotal"></td>
       </tr>
     </tfoot>
   </table>
+  <p id="cardPrize" hidden></p>
   <button id="again">Play again</button>
   <div class="pair">
     <button id="cardCourses" class="quiet">Courses</button>
@@ -1814,7 +1870,9 @@
 </div>
 <div class="panel" id="start" hidden>
   <h1>ooergolf</h1>
-  <p>Choose a course</p>
+  <p>
+    <span id="startWords">Choose a course</span> <button id="playMode" type="button" class="quiet">Career mode</button>
+  </p>
   <button id="install" type="button" hidden>Install the game</button>
   <div id="courses"></div>
 </div>

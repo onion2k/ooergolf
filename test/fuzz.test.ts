@@ -71,7 +71,12 @@ describe('the fuzzer', () => {
     // courses: a monkey choosing among nine plays other courses on those seeds; 3 (level golf) did not move.
     // Seed 26's moved to 3335 later that day when the crown became the ball's radius round the solid cone and trees on steep
     // banks were felled: the rounds on golf go on differently where a ball once clipped a rim; 17 and 3 did not move.
-    expect([one.drawn, two.drawn, golf.drawn], "draws from the monkey's main stream").toEqual([3335, 3095, 2699]);
+    // Seed 26's moved from 3335 to 3549 on 15 October 2026 with the career: a course chosen is a named round, whose last hole
+    // pays a prize (the monkey has other coins to shop with) and which a reload goes on with; shown by choosing the courses
+    // unnamed in a scratch edit, which gives 3335 again. 17 and 3 did not move.
+    expect([one.drawn, two.drawn, golf.drawn], "draws from the monkey's main stream").toEqual([3549, 3095, 2699]);
+    // a reload went on with the career round kept, as the start screen's Continue does: a check that never ran passes in silence
+    expect(one.checked['round gone on with'], 'career rounds gone on with after a reload').toBeGreaterThan(0);
     // the framing rule was asked of the camera, on golf and on minigolf, a good many times: a check that never ran passes in silence
     expect(one.framed + two.framed, 'times the framing was checked').toBeGreaterThan(300);
     expect(golf.framed, 'times it was checked on level golf').toBeGreaterThan(30);
@@ -99,6 +104,9 @@ describe('the fuzzer', () => {
       'buy, refused',
       'choose a club',
       'choose a course',
+      // the career's buttons on the start screen: Career or Free play, and Continue (which a reload takes, too)
+      'choose career or free play',
+      'continue',
       'equip',
       'face the flag',
       'fly to an island',

@@ -313,6 +313,10 @@ limits, so a score is a score with a given club and ball.
   under par (5 each); a hole picked up pays nothing. **Gems** are paid for a
   hole in one, on every course. The shop is open from the purse's button and from the card.
 - The best score on a hole is kept with the kit it was made with.
+- **The career** (15 October 2026). A round of a course played to its card in the career pays a prize as well (20 coins times
+  the course's purse, from 1 on minigolf to 2 on The Old Course, 10 for each stroke under par, and 25 for a new record), keeps the
+  course's record (its best round with every hole holed), and is kept between holes so a reload goes on with it. Free play,
+  chosen on the start screen, pays nothing and keeps nothing, for trying a course without it counting.
 
 ## The look
 

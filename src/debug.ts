@@ -18,6 +18,7 @@ import { KIND_NAME, TILE, type Layout } from './arena';
 import { Autopilot, type Plan } from './autopilot';
 import { BAG, carryOf } from './bag';
 import type { HoleDef } from './course';
+import type { CourseRecord, PlayMode, RoundOf, SavedRound } from './career';
 import { greenArrows, speedName } from './green';
 import type { Game } from './game';
 import { checkInvariants } from './invariants';
@@ -227,6 +228,12 @@ export interface GameApi {
   app(): AppReport;
   /** The Install button's action: the browser's prompt shown; false when there is no offer to take. */
   install(): boolean;
+  /** The career as the save has it, and the round in play as the career knows it: see `CareerReport`. */
+  career(): CareerReport;
+  /** Career mode or Free play chosen on the start screen, as clicks on its button (none if it shows that already). */
+  playMode(mode: PlayMode): void;
+  /** The card of the career round kept pressed on the start screen, which goes on with it: false when there is none. */
+  continueRound(): boolean;
   /** A new round, as the card's button asks for. */
   newRound(): void;
   /** An item bought, as the shop's button does; whether it was. */
@@ -469,7 +476,22 @@ export interface DebugHost {
   title(): TitleReport;
   app(): AppReport;
   install(): boolean;
+  /** The start screen's career buttons pressed, as a click on each. */
+  playMode(mode: PlayMode): void;
+  continueRound(): boolean;
   events: string[];
+}
+
+/**
+ * The career: whether rounds count in it, each course's record, the career round kept, the course the round in play is
+ * of (null for holes that are no course's) and whether it counts.
+ */
+export interface CareerReport {
+  mode: PlayMode;
+  records: Record<string, CourseRecord>;
+  round: SavedRound | null;
+  of: RoundOf | null;
+  counting: boolean;
 }
 
 export function createApi(host: DebugHost): GameApi {
@@ -598,6 +620,15 @@ export function createApi(host: DebugHost): GameApi {
     title: () => host.title(),
     app: () => host.app(),
     install: () => host.install(),
+    career: () => ({
+      mode: progress.save.mode,
+      records: structuredClone(progress.save.records),
+      round: structuredClone(progress.save.round),
+      of: game.of && { ...game.of },
+      counting: game.counting,
+    }),
+    playMode: (mode) => host.playMode(mode),
+    continueRound: () => host.continueRound(),
     newRound: () => game.newRound(),
     buy: (id) => game.buy(id),
     equip: (id) => game.equip(id),

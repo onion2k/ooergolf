@@ -65,6 +65,7 @@ import { BAG, PUTTER, bagClub, carrying, strikeFactor, type BagClub } from './ba
 import { CUP } from './course';
 import { AISLES, CEILINGS, FIRST_STROKE_MOST, itemById, kitOf, type Kit } from './items';
 import { LIMIT_OVER_PAR, fastest, type Game } from './game';
+import { PLAY_MODES } from './career';
 import type { Preview } from './preview';
 import type { Bank } from './bank';
 import { GREEN, READER, breakOf, greenArrows, leansOnMinigolf, readerArrows, type Arrow, type Break } from './green';
@@ -592,6 +593,49 @@ export function checkInvariants(game: Game): string[] {
   report('a chip', chipProblems(game));
   out.push(...boxProblems(game));
   report('a flipper', flipperProblems(game.obstacles));
+  report('the career', careerProblems(game));
+  return out;
+}
+
+/**
+ * What is wrong with the career as the save keeps it: the mode is one there is, each course's record is a round of
+ * whole strokes against a par, and a round of the career's own course is a record no better than its holes' bests
+ * together (a record is a round with every hole holed in the career, and each of those set a best). The round kept,
+ * while a career round of a course is played, is that round: its card the game's, its next hole the one after it,
+ * and none at all at its first tee and once its last hole is done.
+ */
+export function careerProblems(game: Game): string[] {
+  const out: string[] = [];
+  const save = game.progress.save;
+  if (!PLAY_MODES.includes(save.mode)) out.push(`the mode is ${String(save.mode)}`);
+  for (const [name, r] of Object.entries(save.records))
+    if (!(Number.isInteger(r.strokes) && r.strokes >= 1 && Number.isInteger(r.par) && r.par >= 1))
+      out.push(`${name}'s record is ${r.strokes} for par ${r.par}`);
+  const of = game.of;
+  if (!of || !game.counting) return out;
+  const { course, card } = game;
+  const record = Object.hasOwn(save.records, of.name) ? save.records[of.name] : undefined;
+  // held only where every hole has a best: a course whose holes have changed since its record was made (a hole put in
+  // that the record's round never played) has a record no rule of today's holes can hold
+  if (record && course.every((h) => Object.hasOwn(save.best, h.name))) {
+    const bests = course.reduce((sum, h) => sum + save.best[h.name].strokes, 0);
+    if (record.strokes < bests) out.push(`${of.name}'s record of ${record.strokes} beats its holes' bests, ${bests}`);
+  }
+  const round = save.round;
+  if (round === null) {
+    if (card.length !== 0 && card.length !== course.length)
+      out.push(`no round is kept, with ${card.length} of ${course.length} holes of ${of.name} finished`);
+  } else {
+    if (round.course !== of.name) out.push(`the round kept is of ${round.course}, and ${of.name} is played`);
+    if (
+      round.hole !== round.card.length ||
+      round.card.length !== card.length ||
+      round.card.some((s, h) => s !== card[h])
+    )
+      out.push(
+        `the round kept is ${round.card.join(',')} to hole ${round.hole + 1}, and the card is ${card.join(',')}`,
+      );
+  }
   return out;
 }
 

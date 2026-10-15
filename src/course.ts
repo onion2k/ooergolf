@@ -285,6 +285,11 @@ export interface Course {
   readonly summary: { holes: number; par: number };
   /** Whether its holes are golf, played with a bag of clubs and not the putter alone: see `layoutOf`. */
   readonly golf?: boolean;
+  /**
+   * How many times the career's plain prize a round of it pays (`PRIZE` in `career.ts`): one for minigolf, and on golf
+   * rising with how hard the pace player finds it, to two for The Old Course.
+   */
+  readonly purse: number;
 }
 
 const summaryOf = (holes: readonly HoleDef[]) => ({ holes: holes.length, par: holes.reduce((a, h) => a + h.par, 0) });
@@ -294,11 +299,12 @@ const summaryOf = (holes: readonly HoleDef[]) => ({ holes: holes.length, par: ho
  * hard the pace player finds them (strokes over par a hole), easiest first, which is what a player reads the order as.
  */
 export const COURSES: readonly Course[] = [
-  { name: 'The Meadow', holes: COURSE, summary: summaryOf(COURSE) },
-  { name: 'The Pinball Shed', holes: SHED, summary: summaryOf(SHED) },
-  { name: 'The Waterworks', holes: WATERWORKS, summary: summaryOf(WATERWORKS) },
+  { name: 'The Meadow', purse: 1, holes: COURSE, summary: summaryOf(COURSE) },
+  { name: 'The Pinball Shed', purse: 1, holes: SHED, summary: summaryOf(SHED) },
+  { name: 'The Waterworks', purse: 1, holes: WATERWORKS, summary: summaryOf(WATERWORKS) },
   {
     name: 'The Links',
+    purse: 1.2,
     get holes() {
       return links();
     },
@@ -307,6 +313,7 @@ export const COURSES: readonly Course[] = [
   },
   {
     name: 'The Heath',
+    purse: 1.3,
     get holes() {
       return heath();
     },
@@ -315,6 +322,7 @@ export const COURSES: readonly Course[] = [
   },
   {
     name: 'The Fells',
+    purse: 1.5,
     get holes() {
       return fells();
     },
@@ -323,6 +331,7 @@ export const COURSES: readonly Course[] = [
   },
   {
     name: 'The Woods',
+    purse: 1.6,
     get holes() {
       return woods();
     },
@@ -331,6 +340,7 @@ export const COURSES: readonly Course[] = [
   },
   {
     name: 'The Isles',
+    purse: 1.8,
     get holes() {
       return isles();
     },
@@ -339,6 +349,7 @@ export const COURSES: readonly Course[] = [
   },
   {
     name: 'The Old Course',
+    purse: 2,
     get holes() {
       return old();
     },
