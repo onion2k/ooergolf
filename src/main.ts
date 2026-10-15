@@ -326,10 +326,13 @@ async function main() {
         courseName = name;
         choosing = false;
         hud.hideStart();
+        // the frame's cost is a corner of the course, and not of the start screen
+        stats.hidden = false;
         showPurse();
       },
       courses() {
         choosing = true;
+        stats.hidden = true;
         setOverhead(false);
         // the title scene again behind the cards, its letters already standing
         if (!titleOff) {
@@ -1400,7 +1403,7 @@ async function main() {
   // is chosen: held back until the letters have landed
   const standing = titleNow();
   hud.showStart(summaries, standing !== null && !standing.scene.landed);
-  stats.hidden = false;
+  stats.hidden = choosing;
 
   // ---- each frame ----
 

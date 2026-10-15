@@ -836,21 +836,37 @@
     font-weight: 700;
     color: var(--ink-soft);
   }
-  /* the Install button, under the cards, only while the browser offers to install the page as an app */
+  /* the Install button, in the panel's head above the cards, only while the browser offers to install the page as an app;
+     under the title it stands at the panel's top right, beside the heading, so the cards take no more height for it */
   #install {
-    margin-top: 20px;
+    margin: 0 0 14px;
   }
+  html[data-title] #install {
+    position: absolute;
+    top: 12px;
+    right: 14px;
+    margin: 0;
+    padding: 0 14px;
+    font-size: 13px;
+  }
+  /*
+   * The cards are compact (15 October 2026): a name, its pills and the arrow in one row of 58, three across, so that all nine
+   * stand in sight under the title on a desk, a tablet and a phone without the panel scrolling, which it did on every screen
+   * when a card was 128 high (a desk saw six of the nine and a phone five, with no sign of more below).
+   */
   #courses {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-    gap: 18px 16px;
+    /* as many columns of 220 as fit: three on a desk and a tablet, two on a phone on its side, since a name is one line and a
+       column of a fraction will not shrink below it, which pushed the third column past the screen at 640 wide */
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 10px 12px;
   }
   /* a heading for each kind of game runs across the grid; the cards count among the buttons only (nth-of-type), so
      the colours go round the courses as they did before there were headings */
   #courses h2 {
     grid-column: 1 / -1;
     margin: 0;
-    font-size: 15px;
+    font-size: 13px;
     font-weight: 900;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -858,7 +874,7 @@
     color: var(--ink-soft);
   }
   #courses h2:not(:first-child) {
-    margin-top: 6px;
+    margin-top: 8px;
   }
   /* a card for each course, a colour each, striped as a mown green is */
   #courses .course {
@@ -866,18 +882,18 @@
     --deep: var(--leaf-deep);
     position: relative;
     display: grid;
-    align-content: start;
-    gap: 4px;
-    min-height: 128px;
-    padding: 16px 18px 18px;
+    align-content: center;
+    gap: 2px;
+    min-height: 58px;
+    padding: 7px 60px 9px 14px;
     text-align: left;
     color: var(--ink);
     background: var(--face) repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.16) 0 16px, transparent 16px 32px);
-    border-radius: 22px;
+    border-radius: 16px;
     box-shadow:
       inset 0 0 0 3px rgba(255, 255, 255, 0.5),
-      0 6px 0 var(--deep),
-      0 12px 20px var(--shade);
+      0 4px 0 var(--deep),
+      0 8px 14px var(--shade);
   }
   #courses .course:nth-of-type(6n + 2) {
     --face: var(--orange);
@@ -904,32 +920,34 @@
       translate: 0 -2px;
       box-shadow:
         inset 0 0 0 3px rgba(255, 255, 255, 0.7),
-        0 8px 0 var(--deep),
-        0 14px 22px var(--shade);
+        0 6px 0 var(--deep),
+        0 10px 16px var(--shade);
     }
   }
   #courses .course:active {
-    translate: 0 5px;
+    translate: 0 3px;
     box-shadow:
       inset 0 0 0 3px rgba(255, 255, 255, 0.5),
       0 1px 0 var(--deep),
       0 4px 8px var(--shade);
   }
   .course b {
-    font-size: 26px;
+    font-size: 19px;
     font-weight: 900;
     line-height: 1.1;
+    /* a name is one line: the card is as high as its name and its pills, and a wrapped name made it a row of its own */
+    white-space: nowrap;
   }
   /* how many holes and the par, each on a white pill */
   .course small {
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
-    margin-top: 4px;
+    margin-top: 2px;
   }
   .course small span {
-    padding: 3px 11px;
-    font-size: 14px;
+    padding: 2px 9px;
+    font-size: 12px;
     font-weight: 800;
     color: var(--ink);
     background: var(--paper);
@@ -940,10 +958,11 @@
   .course::before {
     content: '';
     position: absolute;
-    right: 14px;
-    bottom: 14px;
-    width: 44px;
-    height: 44px;
+    right: 12px;
+    top: 50%;
+    width: 36px;
+    height: 36px;
+    translate: 0 -50%;
     border-radius: 50%;
     background: var(--paper);
     box-shadow: 0 3px 0 var(--deep);
@@ -951,38 +970,55 @@
   .course::after {
     content: '';
     position: absolute;
-    right: 28px;
-    bottom: 27px;
+    right: 23px;
+    top: 50%;
+    translate: 0 -50%;
     border-style: solid;
-    border-width: 9px 0 9px 15px;
+    border-width: 7px 0 7px 12px;
     border-color: transparent transparent transparent var(--deep);
   }
 
   @media (max-width: 600px) {
-    /* nine cards fit a tall phone's screen (seven did at 76 high with the full heading): a card is as high as its name and
-       its pills, 64, so the room comes from the heading and the gaps, and a short phone scrolls */
+    /* nine cards two across fit a phone's screen under the title (one across, nine rows scrolled): a card is as high as its
+       name and its pills, 50, with no arrow, since the whole card is the button; the name's size follows the width so that
+       the longest, The Pinball Shed, is one line on a phone 360 wide */
     #start h1 {
       font-size: 40px;
     }
     #start p {
-      margin: 2px 0 6px;
+      margin: 2px 0 8px;
+    }
+    html[data-title] #start p {
+      text-align: left;
+    }
+    html[data-title] #install {
+      top: 10px;
+      right: 12px;
     }
     #courses {
-      gap: 5px 16px;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 6px 8px;
     }
     #courses h2 {
-      font-size: 13px;
-      margin-top: -4px;
-    }
-    #courses h2:not(:first-child) {
       margin-top: 0;
     }
+    #courses h2:not(:first-child) {
+      margin-top: 4px;
+    }
     #courses .course {
-      min-height: 56px;
-      padding: 4px 14px 6px;
+      min-height: 50px;
+      padding: 5px 10px 6px;
     }
     .course b {
-      font-size: 20px;
+      font-size: clamp(14px, 4.2vw, 16px);
+    }
+    .course small span {
+      padding: 1px 7px;
+      font-size: 11px;
+    }
+    .course::before,
+    .course::after {
+      display: none;
     }
   }
 
@@ -1496,16 +1532,6 @@
     #start p {
       margin: 4px 0 10px;
     }
-    #courses {
-      gap: 8px 12px;
-    }
-    #courses .course {
-      min-height: 56px;
-      padding: 4px 14px 6px;
-    }
-    .course b {
-      font-size: 20px;
-    }
   }
   /*
    * The hole's words on a phone, upright or on its side: a chip at the top left that says which hole and how many strokes,
@@ -1789,8 +1815,8 @@
 <div class="panel" id="start" hidden>
   <h1>ooergolf</h1>
   <p>Choose a course</p>
-  <div id="courses"></div>
   <button id="install" type="button" hidden>Install the game</button>
+  <div id="courses"></div>
 </div>
 <div class="panel" id="stats" hidden></div>
 <div class="panel" id="bag" role="group" aria-label="Club" hidden>

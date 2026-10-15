@@ -782,14 +782,15 @@ const panelsIn = (m: Motion[]) => [...new Set(m.map((x) => x.panel))].sort();
 
 /** The panels each thing done brings or takes away, in the order a round goes, from the start screen and back. */
 const ROUND: [Act, string[]][] = [
-  ['choose', ['help', 'purse', 'start', 'strokes', 'viewMode']],
+  // the frame's cost arrives with the course too, since 15 October 2026, when it was put away under the start screen
+  ['choose', ['help', 'purse', 'start', 'stats', 'strokes', 'viewMode']],
   ['shop', ['shop']],
   ['close', ['shop']],
   ['hole', ['toast']],
   ['next', ['toast']],
   ['last', ['toast']],
   ['card', ['card', 'toast']],
-  ['courses', ['card', 'help', 'purse', 'start', 'strokes', 'viewMode']],
+  ['courses', ['card', 'help', 'purse', 'start', 'stats', 'strokes', 'viewMode']],
 ];
 
 test.describe('motion', () => {

@@ -821,7 +821,8 @@ minigolf: true }`, read through `oceanFor`) is the one switch: `waterBed` and `s
   download). `src/install.ts` says when it is registered (`shouldRegister`: a built page only, so the dev server and every
   smoke test on it register nothing, and `?sw=0` leaves a built page without one; `main.ts` registers it after `ready`, so the
   boot cannot move) and keeps the browser's install offer (`InstallOffer`: `beforeinstallprompt` held, `prompt()` once when
-  the **Install the game** pill under the start screen's cards (`#install`, `Hud.showInstall`) is pressed, withdrawn on
+  the **Install the game** pill in the start screen's head (`#install`, `Hud.showInstall`: under the heading, and under the
+  title at the panel's top right beside it, so the cards take no height for it; it was under the cards, below the fold) is pressed, withdrawn on
   `appinstalled`; Safari and iOS fire nothing and show no button, their Share → Add to Home Screen installs it).
   `smoke/pwa.spec.ts` builds `dist` (`buildDist` in `smoke/build.ts`, which `perf` uses too) and serves it with Vite's preview on
   the smoke port plus one: the worker ready, the build in one cache, the page booted offline with its save, `?sw=0`, and the
@@ -1043,9 +1044,14 @@ minigolf: true }`, read through `oceanFor`) is the one switch: `waterBed` and `s
   shop, and the start screen, a card for each course with its holes and
   par, under a Golf heading and then a Minigolf one (golf first since 14 October 2026, at the user's word: the game leans to
   proper golf now), shown at boot and from the card's Courses button. The page plays no
-  shot while it is up; the panel is 820 wide and three cards across on a desk, three rows of three since 14 October 2026, and the cards' colours
-  cycle through six (`#courses .course:nth-of-type(6n + k)` in `index.html`), the seventh to the ninth wearing the first three's again;
-  on a phone the cards are 56 high so that nine fit a tall screen without scrolling. `src/score.ts` names a score
+  shot while it is up; the panel is 820 wide and the cards are compact since 15 October 2026 (a name, its pills and the arrow in
+  one row of 58, as many columns of 220 as fit, three on a desk and a tablet; on a phone two across, 50 high and no arrow, the
+  name's size following the width so The Pinball Shed is one line at 360 wide), so that all nine stand in sight under the title
+  without the panel scrolling on a desk, a laptop, a tablet and a phone (`smoke/title.spec.ts` holds it on each; a phone on its
+  side still scrolls, the cards' panel having half its height), where a card 128 high scrolled on every screen and a desk saw six
+  of the nine; a phone's cards take `CARDS.tall`, 0.55, of its screen for it. The cards' colours
+  cycle through six (`#courses .course:nth-of-type(6n + k)` in `index.html`), the seventh to the ninth wearing the first three's again.
+  The frame-cost label (`#stats`) is away under the start screen and back once a course is chosen. `src/score.ts` names a score
   (four or more under par is a Condor!, a hole in one still first) and says what kind it
   is, which colours its callout. Both are given what to show and never read
   the game. How the words look and move is `index.html`'s stylesheet, in the

@@ -152,6 +152,124 @@ async function watchBar(page: Page) {
 const barSeen = (page: Page) =>
   page.evaluate(() => (window as unknown as { barSeen: { at: number; shown: boolean; p: number }[] }).barSeen);
 
+/** The browser's offer to install the page as an app, fired as Chrome fires it, so the start screen shows its Install button. */
+async function offerInstall(page: Page) {
+  await page.evaluate(() => {
+    window.dispatchEvent(
+      Object.assign(new Event('beforeinstallprompt', { cancelable: true }), { prompt: () => Promise.resolve() }),
+    );
+  });
+  await expect(page.locator('#install')).toBeVisible();
+}
+
+/** The start screen's panel, its cards, its heading and its Install button as drawn: whether it scrolls, and where each is. */
+const startBoxes = (page: Page) =>
+  page.evaluate(() => {
+    const box = (el: Element | Range) => {
+      const r = el.getBoundingClientRect();
+      return { x0: r.left, y0: r.top, x1: r.right, y1: r.bottom };
+    };
+    const panel = document.getElementById('start')!;
+    return {
+      scrolls: panel.scrollHeight > panel.clientHeight,
+      panel: box(panel),
+      cards: Array.from(document.querySelectorAll('#courses .course')).map((c) => ({
+        name: c.querySelector('b')!.textContent,
+        box: box(c),
+        // a name on more than one line, or cut by its card, is wider or taller than the room it has
+        wraps: c.querySelector('b')!.scrollWidth > c.querySelector('b')!.clientWidth + 1,
+        lines: Math.round(
+          c.querySelector('b')!.getBoundingClientRect().height /
+            parseFloat(getComputedStyle(c.querySelector('b')!).fontSize) /
+            1.1,
+        ),
+      })),
+      // the heading's words and not its block, which is the panel's width
+      heading: (() => {
+        const range = document.createRange();
+        range.selectNodeContents(document.querySelector('#start p')!);
+        return box(range);
+      })(),
+      height: { content: panel.scrollHeight, room: panel.clientHeight },
+      install: box(document.getElementById('install')!),
+      stats: document.getElementById('stats')!.hidden,
+      screen: { w: innerWidth, h: innerHeight },
+    };
+  });
+
+const inside = (a: { x0: number; y0: number; x1: number; y1: number }, b: typeof a, slack = 1) =>
+  a.x0 >= b.x0 - slack && a.y0 >= b.y0 - slack && a.x1 <= b.x1 + slack && a.y1 <= b.y1 + slack;
+const apart = (a: { x0: number; y0: number; x1: number; y1: number }, b: typeof a) =>
+  a.x1 <= b.x0 || b.x1 <= a.x0 || a.y1 <= b.y0 || b.y1 <= a.y0;
+
+test.describe('the cards fit the screen under the title', () => {
+  for (const [where, width, height, touch] of [
+    ['a desk, 1280 by 800', 1280, 800, false],
+    ['a laptop, 1440 by 900', 1440, 900, false],
+    ['a tablet upright, 768 by 1024', 768, 1024, true],
+    ['a phone upright, 400 by 860', 400, 860, true],
+    ['a tall phone, 360 by 800', 360, 800, true],
+  ] as const) {
+    test.describe(where, () => {
+      test.use({ viewport: { width, height }, hasTouch: touch, isMobile: touch });
+      test('all nine, without scrolling, each name on one line, and the Install button in the panel’s head', async ({
+        page,
+      }) => {
+        await open(page);
+        await step(page, framesTo(1.7));
+        await expect(page.locator('#start')).toBeVisible();
+        await offerInstall(page);
+        // the panel springs in: measured once it has landed
+        await landed(page);
+        const r = await startBoxes(page);
+        expect(r.cards.length).toBe(9);
+        expect(r.scrolls, `the panel does not scroll: ${r.height.content} of content in ${r.height.room}`).toBe(false);
+        const screen = { x0: 0, y0: 0, x1: r.screen.w, y1: r.screen.h };
+        for (const c of r.cards) {
+          expect(inside(c.box, r.panel), `${c.name} inside the panel`).toBe(true);
+          expect(inside(c.box, screen), `${c.name} on the screen`).toBe(true);
+          expect(c.wraps, `${c.name} is not cut`).toBe(false);
+          expect(c.lines, `${c.name} on one line`).toBe(1);
+          expect(c.box.y1 - c.box.y0, `${c.name} is a thumb high`).toBeGreaterThanOrEqual(44);
+        }
+        // the Install button stands in the panel's head, above every card and clear of the heading
+        expect(inside(r.install, r.panel), 'the Install button inside the panel').toBe(true);
+        expect(r.install.y1, 'above the cards').toBeLessThanOrEqual(Math.min(...r.cards.map((c) => c.box.y0)) + 1);
+        expect(apart(r.install, r.heading), 'clear of the heading').toBe(true);
+        expect(r.install.y1 - r.install.y0, 'a thumb high').toBeGreaterThanOrEqual(44);
+        expect(r.stats, 'the frame-cost label is away under the start screen').toBe(true);
+      });
+    });
+  }
+
+  test('on a phone on its side the panel may scroll, and every card is whole across it', async ({ page }) => {
+    await page.setViewportSize({ width: 844, height: 390 });
+    await page.reload();
+    await open(page);
+    await step(page, framesTo(1.7));
+    const r = await startBoxes(page);
+    for (const c of r.cards) {
+      expect(c.box.x0, `${c.name} inside the panel's sides`).toBeGreaterThanOrEqual(r.panel.x0);
+      expect(c.box.x1).toBeLessThanOrEqual(r.panel.x1);
+      expect(c.lines, `${c.name} on one line`).toBe(1);
+    }
+    expect(r.stats).toBe(true);
+  });
+
+  test('the frame-cost label shows once a course is chosen, and goes again under the card’s Courses button', async ({
+    page,
+  }) => {
+    await open(page);
+    await step(page, framesTo(1.7));
+    await expect(page.locator('#stats')).toBeHidden();
+    await page.evaluate(() => window.game!.chooseCourse('The Meadow'));
+    await expect(page.locator('#stats')).toBeVisible();
+    await toCard(page);
+    await page.locator('#cardCourses').click();
+    await expect(page.locator('#stats')).toBeHidden();
+  });
+});
+
 test.describe('nothing of the hole shows under the title', () => {
   test.use(DESKTOP);
 
