@@ -53,7 +53,7 @@ async function wordBox(page: Page) {
 test.describe('the boot panel', () => {
   test.use(DESKTOP);
 
-  test('is plain sky: no picture is fetched but the course preview, and it says nothing at any moment of a good boot', async ({
+  test('is plain sky: no picture is fetched but the strip of the course in view, and it says nothing at any moment of a good boot', async ({
     page,
   }) => {
     const pictures: string[] = [];
@@ -70,11 +70,11 @@ test.describe('the boot panel', () => {
     });
     await page.goto('/?paused=1&seed=1');
     await ready(page);
-    // the one picture the page fetches is the picker's preview of the course in view (15 October 2026): nothing of the panel
+    // the pictures the page fetches are the strip of the course in view, its nine holes (15 October 2026): nothing of the panel
     expect(
       pictures.map((url) => new URL(url).pathname),
-      'no picture is fetched by the page but the course preview',
-    ).toEqual(['/previews/the-links.png']);
+      'no picture is fetched by the page but the course in view’s holes',
+    ).toEqual(Array.from({ length: 9 }, (_, k) => `/previews/the-links/${k + 1}.png`));
     const boot = await page.evaluate(() => {
       const el = document.getElementById('boot')!;
       return {
@@ -185,7 +185,7 @@ const startBoxes = (page: Page) =>
       tabs: by('startTabs'),
       prev: by('coursePrev'),
       next: by('courseNext'),
-      preview: by('coursePreview'),
+      preview: by('courseStrip'),
       name: { text: name.textContent, box: box(name), cut: name.scrollWidth > name.clientWidth + 1 },
       play: by('playCourse'),
       install: by('install'),

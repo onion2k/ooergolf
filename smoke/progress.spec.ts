@@ -624,9 +624,9 @@ test('a career round: Continue after a reload goes on from the kept hole, and th
     screen: true,
     save: { coins: 10, round: { course: 'The Meadow', hole: 8, card, retaken: false, pickedUp: false } },
   });
-  // the picker opens on the course of the round kept, its first pill the hole to go on from and its Play Continue
+  // the picker opens on the course of the round kept, its badge the hole to go on from and its Play Continue
   await expect(page.locator('#courseName')).toHaveText('The Meadow');
-  await expect(page.locator('#courseData span').first()).toHaveText('On hole 9');
+  await expect(page.locator('#courseBadge')).toHaveText('On hole 9');
   await expect(page.locator('#playCourse')).toHaveText('Continue');
   await expect(page.locator('#playMode')).toHaveText('Career mode');
   // Continue, pressed by a real pointer

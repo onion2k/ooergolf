@@ -210,10 +210,11 @@ export class Hud {
   };
   private readonly pickerPanel = document.getElementById('picker')!;
   private readonly courseCard = document.getElementById('courseCard')!;
-  private readonly coursePreview = document.getElementById('coursePreview') as HTMLImageElement;
   private readonly courseName = document.getElementById('courseName')!;
-  private readonly courseData = document.getElementById('courseData')!;
-  private readonly courseNote = document.getElementById('courseNote')!;
+  private readonly courseStats = document.getElementById('courseStats')!;
+  private readonly coursePips = document.getElementById('coursePips')!;
+  private readonly courseBadge = document.getElementById('courseBadge')!;
+  private readonly courseStrip = document.getElementById('courseStrip')!;
   private readonly courseDots = document.getElementById('courseDots')!;
   private readonly playButton = document.getElementById('playCourse') as HTMLButtonElement;
   /** The picker the start screen draws, handed in with `showStart`; none until then. */
@@ -732,7 +733,7 @@ export class Hud {
     this.drawPicker();
   }
 
-  /** The picker as it stands, drawn: the tabs' state, the course in view with its preview and figures, the dots, and the card's colour. */
+  /** The picker as it stands, drawn: the tabs' state, the course in view with its figures, its badge and its strip of holes, the dots, and the card's colour. */
   private drawPicker(): void {
     const picker = this.picker;
     if (!picker) return;
@@ -745,28 +746,62 @@ export class Hud {
       tab.disabled = !picker.courses(kind).length;
     }
     this.pickerPanel.setAttribute('aria-labelledby', this.kindTabs[picker.kind].id);
-    // the pictures stand beside the page, so the path is relative and a page served under a prefix finds them
-    this.coursePreview.src = `previews/${shown.preview.slug}.png`;
-    this.coursePreview.width = shown.preview.width;
-    this.coursePreview.height = shown.preview.height;
-    this.coursePreview.alt = `${shown.name} from above`;
     this.courseName.textContent = shown.name;
-    // the first pill is the count of holes, or the course's record in the career, or the hole the round kept goes on from
+    // the figures as tiles, a word over a number: its holes, its par and, on golf, its length
+    const stats: [string, string][] = [
+      ['Holes', String(shown.holes)],
+      ['Par', String(shown.par)],
+    ];
+    if (shown.golf) stats.push(['Yards', shown.yards.toLocaleString('en-GB')]);
+    this.courseStats.replaceChildren(
+      ...stats.map(([word, figure]) => {
+        const tile = document.createElement('span');
+        const label = document.createElement('i');
+        label.textContent = word;
+        tile.append(label, figure);
+        return tile;
+      }),
+    );
+    // how hard it is, as a pip for each course of the tab up to its place, since the courses stand easiest first
+    this.coursePips.setAttribute('aria-label', `Difficulty ${shown.index + 1} of ${shown.count}`);
+    this.coursePips.replaceChildren(
+      ...Array.from({ length: shown.count }, (_, k) => {
+        const pip = document.createElement('em');
+        if (k <= shown.index) pip.className = 'on';
+        return pip;
+      }),
+    );
+    // one badge: the hole the round kept goes on from, or the course's record in the career, or the best round its
+    // holes' bests add up to, or that it has not been played
     const { records } = this.career;
     const record = Object.hasOwn(records, shown.name) ? records[shown.name] : '';
-    const going = this.going === shown.name;
-    const round = going ? this.career.round : null;
-    const pills: [string, string][] = [
-      round ? [`On hole ${round.hole}`, 'round'] : record ? [record, 'record'] : [`${shown.holes} holes`, ''],
-      [`par ${shown.par}`, ''],
-    ];
-    if (shown.golf) pills.push([`${shown.yards.toLocaleString('en-GB')} yd`, '']);
-    this.courseData.replaceChildren(
-      ...pills.map(([text, career]) => {
-        const pill = document.createElement('span');
-        pill.textContent = text;
-        pill.dataset.career = career;
-        return pill;
+    const round = this.going === shown.name ? this.career.round : null;
+    const [badge, kind] = round
+      ? [`On hole ${round.hole}`, 'round']
+      : record
+        ? [record, 'record']
+        : shown.best !== null
+          ? [`Best ${shown.best}`, 'best']
+          : ['Not yet played', 'none'];
+    this.courseBadge.textContent = badge;
+    this.courseBadge.dataset.kind = kind;
+    // the strip: each hole from above with its par; the pictures stand beside the page, so the path is relative and a
+    // page served under a prefix finds them
+    this.courseStrip.replaceChildren(
+      ...shown.strip.map((hole, k) => {
+        const figure = document.createElement('figure');
+        const cell = document.createElement('div');
+        const picture = document.createElement('img');
+        picture.src = `previews/${shown.slug}/${k + 1}.png`;
+        picture.width = hole.width;
+        picture.height = hole.height;
+        picture.alt = '';
+        picture.decoding = 'async';
+        cell.append(picture);
+        const caption = document.createElement('figcaption');
+        caption.textContent = `${k + 1} · p${hole.par}`;
+        figure.append(cell, caption);
+        return figure;
       }),
     );
     // Play goes on with the round kept when its course is the one in view, and says so
@@ -775,7 +810,6 @@ export class Hud {
       'aria-label',
       round ? `Continue ${shown.name} from hole ${round.hole}` : `Play ${shown.name}`,
     );
-    this.courseNote.textContent = `${shown.place} for difficulty · ${shown.best === null ? 'Not yet played' : `Best round ${shown.best}`}`;
     this.courseDots.replaceChildren(
       ...Array.from({ length: shown.count }, (_, k) => {
         const dot = document.createElement('i');

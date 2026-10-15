@@ -107,11 +107,13 @@ for (const [where, device] of [
       const kit = { club: '', ball: '', accessory: '' };
       const best = Object.fromEntries(meadow.map((name, k) => [name, { strokes: 2 + (k % 2), kit }]));
       await start(page, { seed: 11, paused: true, screen: true, save: { coins: 0, gems: 0, owned: [], kit, best } });
-      await expect(page.locator('#courseNote')).toHaveText('1st of 6 for difficulty · Not yet played');
+      await expect(page.locator('#courseBadge')).toHaveText('Not yet played');
       await page.locator('#tab-minigolf').click();
-      await expect(page.locator('#courseNote')).toHaveText('1st of 3 for difficulty · Best round 22');
+      await expect(page.locator('#courseBadge')).toHaveText('Best 22');
+      await expect(page.locator('#courseBadge')).toHaveAttribute('data-kind', 'best');
       await page.locator('#courseNext').click();
-      await expect(page.locator('#courseNote')).toHaveText('2nd of 3 for difficulty · Not yet played');
+      await expect(page.locator('#courseBadge')).toHaveText('Not yet played');
+      await expect(page.locator('#coursePips')).toHaveAttribute('aria-label', 'Difficulty 2 of 3');
       expect(problems).toEqual([]);
     });
 

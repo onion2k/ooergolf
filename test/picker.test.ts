@@ -6,14 +6,14 @@
 import { describe, expect, it } from 'vitest';
 import { Picker, bestRound, ordinal, type PickerCourse } from '../src/picker';
 
-const preview = { slug: 'x', width: 40, height: 180 };
 const golf = (name: string, par: number, holes: string[]): PickerCourse => ({
   name,
   golf: true,
   holes: holes.length,
   par,
   yards: 3000,
-  preview,
+  slug: name.toLowerCase().replace(/ /g, '-'),
+  strip: holes.map(() => ({ par: 4, width: 30, height: 120 })),
   holeNames: holes,
 });
 const mini = (name: string, holes: string[]): PickerCourse => ({ ...golf(name, 27, holes), golf: false, yards: 300 });
@@ -31,6 +31,7 @@ describe('the picker', () => {
     const p = new Picker(COURSES);
     const s = p.shown();
     expect([p.kind, s.name, s.index, s.count, s.place]).toEqual(['golf', 'The Links', 0, 3, '1st of 3']);
+    expect(s.strip, 'the strip of its holes').toHaveLength(3);
   });
 
   it('steps either way and wraps, on each tab', () => {

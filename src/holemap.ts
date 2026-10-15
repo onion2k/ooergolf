@@ -34,14 +34,15 @@ const LIFT = 1.5;
 /** How much of a tree's canopy is drawn, as a share of its radius: a tree on a map is a dot, and not the whole of its shadow. */
 const TREE_SHARE = 0.7;
 
-type Rgb = readonly [number, number, number];
+export type Rgb = readonly [number, number, number];
 
 /** A palette colour as bytes: lifted, then the sRGB curve the screen shows it by. */
 function byte(linear: number): number {
   const c = Math.min(1, Math.max(0, linear * LIFT));
   return Math.round(255 * (c <= 0.0031308 ? c * 12.92 : 1.055 * c ** (1 / 2.4) - 0.055));
 }
-const screen = (c: readonly number[]): Rgb => [byte(c[0]), byte(c[1]), byte(c[2])];
+/** A palette colour as the map paints it, in bytes: the one conversion, which the course previews' minigolf painter reads too. */
+export const screen = (c: readonly number[]): Rgb => [byte(c[0]), byte(c[1]), byte(c[2])];
 
 /** The ground's kinds, in the colours the map paints them, made once. */
 const COLOUR = {

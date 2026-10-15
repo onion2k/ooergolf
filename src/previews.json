@@ -1,396 +1,621 @@
 {
   "The Meadow": {
     "slug": "the-meadow",
-    "width": 64,
-    "height": 180,
     "holes": [
       {
         "name": "Straight",
-        "yards": 33
+        "par": 2,
+        "yards": 33,
+        "width": 49,
+        "height": 112
       },
       {
         "name": "Dog-leg",
-        "yards": 36
+        "par": 3,
+        "yards": 36,
+        "width": 120,
+        "height": 112
       },
       {
         "name": "The Bunker",
-        "yards": 21
+        "par": 2,
+        "yards": 21,
+        "width": 90,
+        "height": 110
       },
       {
         "name": "Pond",
-        "yards": 18
+        "par": 3,
+        "yards": 18,
+        "width": 90,
+        "height": 110
       },
       {
         "name": "Barriers",
-        "yards": 24
+        "par": 3,
+        "yards": 24,
+        "width": 81,
+        "height": 117
       },
       {
         "name": "Bumpers",
-        "yards": 24
+        "par": 3,
+        "yards": 24,
+        "width": 110,
+        "height": 120
       },
       {
         "name": "Up and Over",
-        "yards": 24
+        "par": 3,
+        "yards": 24,
+        "width": 81,
+        "height": 117
       },
       {
         "name": "Windmill",
-        "yards": 30
+        "par": 3,
+        "yards": 30,
+        "width": 72,
+        "height": 120
       },
       {
         "name": "The Mill Race",
-        "yards": 36
+        "par": 4,
+        "yards": 36,
+        "width": 63,
+        "height": 119
       }
     ],
     "yards": 246
   },
   "The Pinball Shed": {
     "slug": "the-pinball-shed",
-    "width": 180,
-    "height": 160,
     "holes": [
       {
         "name": "Corner Pocket",
-        "yards": 21
+        "par": 2,
+        "yards": 21,
+        "width": 110,
+        "height": 100
       },
       {
         "name": "Half-pipe",
-        "yards": 34
+        "par": 3,
+        "yards": 34,
+        "width": 63,
+        "height": 112
       },
       {
         "name": "The Kicker",
-        "yards": 21
+        "par": 2,
+        "yards": 21,
+        "width": 120,
+        "height": 96
       },
       {
         "name": "Three Cushion",
-        "yards": 13
+        "par": 3,
+        "yards": 13,
+        "width": 120,
+        "height": 88
       },
       {
         "name": "Dodgems",
-        "yards": 57
+        "par": 3,
+        "yards": 57,
+        "width": 85,
+        "height": 120
       },
       {
         "name": "Flipper Alley",
-        "yards": 30
+        "par": 3,
+        "yards": 30,
+        "width": 112,
+        "height": 88
       },
       {
         "name": "The Bowl Pit",
-        "yards": 12
+        "par": 3,
+        "yards": 12,
+        "width": 110,
+        "height": 110
       },
       {
         "name": "Shooting Gallery",
-        "yards": 90
+        "par": 4,
+        "yards": 90,
+        "width": 39,
+        "height": 108
       },
       {
         "name": "Multiball",
-        "yards": 52
+        "par": 4,
+        "yards": 52,
+        "width": 55,
+        "height": 110
       }
     ],
     "yards": 330
   },
   "The Waterworks": {
     "slug": "the-waterworks",
-    "width": 96,
-    "height": 180,
     "holes": [
       {
         "name": "The Causeway",
-        "yards": 36
+        "par": 2,
+        "yards": 36,
+        "width": 70,
+        "height": 119
       },
       {
         "name": "The Stepping Stones",
-        "yards": 24
+        "par": 3,
+        "yards": 24,
+        "width": 112,
+        "height": 88
       },
       {
         "name": "Traffic",
-        "yards": 69
+        "par": 3,
+        "yards": 69,
+        "width": 44,
+        "height": 112
       },
       {
         "name": "The Spillway",
-        "yards": 32
+        "par": 3,
+        "yards": 32,
+        "width": 88,
+        "height": 120
       },
       {
         "name": "Ferris",
-        "yards": 26
+        "par": 3,
+        "yards": 26,
+        "width": 88,
+        "height": 120
       },
       {
         "name": "The Weir",
-        "yards": 45
+        "par": 3,
+        "yards": 45,
+        "width": 66,
+        "height": 120
       },
       {
         "name": "The Rapids",
-        "yards": 54
+        "par": 3,
+        "yards": 54,
+        "width": 65,
+        "height": 115
       },
       {
         "name": "The Big Wheel",
-        "yards": 117
+        "par": 4,
+        "yards": 117,
+        "width": 22,
+        "height": 86
       },
       {
         "name": "The Flood",
-        "yards": 54
+        "par": 4,
+        "yards": 54,
+        "width": 65,
+        "height": 120
       }
     ],
     "yards": 457
   },
   "The Links": {
     "slug": "the-links",
-    "width": 45,
-    "height": 180,
     "holes": [
       {
         "name": "The Opener",
-        "yards": 400
+        "par": 4,
+        "yards": 400,
+        "width": 30,
+        "height": 120
       },
       {
         "name": "Water Carry",
-        "yards": 165
+        "par": 3,
+        "yards": 165,
+        "width": 51,
+        "height": 120
       },
       {
         "name": "Long Bend",
-        "yards": 520
+        "par": 5,
+        "yards": 520,
+        "width": 42,
+        "height": 120
       },
       {
         "name": "Tight Left",
-        "yards": 410
+        "par": 4,
+        "yards": 410,
+        "width": 47,
+        "height": 120
       },
       {
         "name": "Island Green",
-        "yards": 195
+        "par": 3,
+        "yards": 195,
+        "width": 45,
+        "height": 120
       },
       {
         "name": "Rushing Brook",
-        "yards": 385
+        "par": 4,
+        "yards": 385,
+        "width": 41,
+        "height": 120
       },
       {
         "name": "The Big Dogleg",
-        "yards": 560
+        "par": 5,
+        "yards": 560,
+        "width": 54,
+        "height": 120
       },
       {
         "name": "The Straight Mile",
-        "yards": 475
+        "par": 4,
+        "yards": 475,
+        "width": 25,
+        "height": 120
       },
       {
         "name": "Home Stretch",
-        "yards": 400
+        "par": 4,
+        "yards": 400,
+        "width": 61,
+        "height": 120
       }
     ],
     "yards": 3510
   },
   "The Heath": {
     "slug": "the-heath",
-    "width": 57,
-    "height": 179,
     "holes": [
       {
         "name": "Gorse Gate",
-        "yards": 218
+        "par": 3,
+        "yards": 218,
+        "width": 38,
+        "height": 120
       },
       {
         "name": "Bracken Bend",
-        "yards": 300
+        "par": 4,
+        "yards": 300,
+        "width": 64,
+        "height": 120
       },
       {
         "name": "Furze Hollow",
-        "yards": 215
+        "par": 3,
+        "yards": 215,
+        "width": 42,
+        "height": 120
       },
       {
         "name": "The Warren",
-        "yards": 320
+        "par": 4,
+        "yards": 320,
+        "width": 64,
+        "height": 120
       },
       {
         "name": "Heather Run",
-        "yards": 310
+        "par": 4,
+        "yards": 310,
+        "width": 61,
+        "height": 120
       },
       {
         "name": "Beacon Top",
-        "yards": 220
+        "par": 3,
+        "yards": 220,
+        "width": 41,
+        "height": 120
       },
       {
         "name": "Nightjar Turn",
-        "yards": 310
+        "par": 4,
+        "yards": 310,
+        "width": 58,
+        "height": 120
       },
       {
         "name": "Adder Dip",
-        "yards": 210
+        "par": 3,
+        "yards": 210,
+        "width": 41,
+        "height": 120
       },
       {
         "name": "Common Ground",
-        "yards": 305
+        "par": 4,
+        "yards": 305,
+        "width": 56,
+        "height": 120
       }
     ],
     "yards": 2408
   },
   "The Fells": {
     "slug": "the-fells",
-    "width": 41,
-    "height": 180,
     "holes": [
       {
         "name": "Fell Foot",
-        "yards": 400
+        "par": 4,
+        "yards": 400,
+        "width": 27,
+        "height": 120
       },
       {
         "name": "The Pinewood",
-        "yards": 420
+        "par": 4,
+        "yards": 420,
+        "width": 78,
+        "height": 120
       },
       {
         "name": "Tarn",
-        "yards": 215
+        "par": 3,
+        "yards": 215,
+        "width": 45,
+        "height": 120
       },
       {
         "name": "Scree Corner",
-        "yards": 540
+        "par": 5,
+        "yards": 540,
+        "width": 85,
+        "height": 120
       },
       {
         "name": "The Plunge",
-        "yards": 210
+        "par": 3,
+        "yards": 210,
+        "width": 43,
+        "height": 120
       },
       {
         "name": "Beck Bend",
-        "yards": 440
+        "par": 4,
+        "yards": 440,
+        "width": 57,
+        "height": 120
       },
       {
         "name": "The Shortcut",
-        "yards": 540
+        "par": 5,
+        "yards": 540,
+        "width": 86,
+        "height": 120
       },
       {
         "name": "Waterfall",
-        "yards": 460
+        "par": 4,
+        "yards": 460,
+        "width": 24,
+        "height": 120
       },
       {
         "name": "The Fell Race",
-        "yards": 580
+        "par": 5,
+        "yards": 580,
+        "width": 50,
+        "height": 119
       }
     ],
     "yards": 3805
   },
   "The Woods": {
     "slug": "the-woods",
-    "width": 66,
-    "height": 180,
     "holes": [
       {
         "name": "Acorn Rise",
-        "yards": 215
+        "par": 3,
+        "yards": 215,
+        "width": 44,
+        "height": 120
       },
       {
         "name": "Pine Ride",
-        "yards": 440
+        "par": 4,
+        "yards": 440,
+        "width": 64,
+        "height": 120
       },
       {
         "name": "The Beech Hanger",
-        "yards": 580
+        "par": 5,
+        "yards": 580,
+        "width": 57,
+        "height": 120
       },
       {
         "name": "Oak Avenue",
-        "yards": 440
+        "par": 4,
+        "yards": 440,
+        "width": 24,
+        "height": 119
       },
       {
         "name": "The Glade",
-        "yards": 220
+        "par": 3,
+        "yards": 220,
+        "width": 42,
+        "height": 120
       },
       {
         "name": "Bluebell Walk",
-        "yards": 440
+        "par": 4,
+        "yards": 440,
+        "width": 71,
+        "height": 119
       },
       {
         "name": "Rookery Walk",
-        "yards": 580
+        "par": 5,
+        "yards": 580,
+        "width": 62,
+        "height": 120
       },
       {
         "name": "The Coppice",
-        "yards": 420
+        "par": 4,
+        "yards": 420,
+        "width": 60,
+        "height": 119
       },
       {
         "name": "Lantern Clearing",
-        "yards": 220
+        "par": 3,
+        "yards": 220,
+        "width": 42,
+        "height": 120
       }
     ],
     "yards": 3555
   },
   "The Isles": {
     "slug": "the-isles",
-    "width": 41,
-    "height": 179,
     "holes": [
       {
         "name": "Landfall",
-        "yards": 560
+        "par": 5,
+        "yards": 560,
+        "width": 27,
+        "height": 120
       },
       {
         "name": "The Green Isle",
-        "yards": 480
+        "par": 4,
+        "yards": 480,
+        "width": 25,
+        "height": 120
       },
       {
         "name": "Long Water",
-        "yards": 760
+        "par": 6,
+        "yards": 760,
+        "width": 40,
+        "height": 120
       },
       {
         "name": "The Archipelago",
-        "yards": 580
+        "par": 5,
+        "yards": 580,
+        "width": 48,
+        "height": 120
       },
       {
         "name": "Causeway",
-        "yards": 480
+        "par": 4,
+        "yards": 480,
+        "width": 23,
+        "height": 120
       },
       {
         "name": "The Long Swim",
-        "yards": 790
+        "par": 6,
+        "yards": 790,
+        "width": 30,
+        "height": 120
       },
       {
         "name": "Two Lakes",
-        "yards": 560
+        "par": 5,
+        "yards": 560,
+        "width": 54,
+        "height": 120
       },
       {
         "name": "The Peninsula",
-        "yards": 470
+        "par": 4,
+        "yards": 470,
+        "width": 59,
+        "height": 120
       },
       {
         "name": "Home Waters",
-        "yards": 780
+        "par": 6,
+        "yards": 780,
+        "width": 45,
+        "height": 120
       }
     ],
     "yards": 5460
   },
   "The Old Course": {
     "slug": "the-old-course",
-    "width": 34,
-    "height": 180,
     "holes": [
       {
         "name": "The Burn",
-        "yards": 480
+        "par": 4,
+        "yards": 480,
+        "width": 23,
+        "height": 119
       },
       {
         "name": "Cartgate",
-        "yards": 600
+        "par": 5,
+        "yards": 600,
+        "width": 83,
+        "height": 120
       },
       {
         "name": "High Rigg",
-        "yards": 240
+        "par": 3,
+        "yards": 240,
+        "width": 42,
+        "height": 120
       },
       {
         "name": "The Road Hole",
-        "yards": 480
+        "par": 4,
+        "yards": 480,
+        "width": 71,
+        "height": 120
       },
       {
         "name": "Hell Bunker",
-        "yards": 480
+        "par": 4,
+        "yards": 480,
+        "width": 23,
+        "height": 119
       },
       {
         "name": "The Long Way",
-        "yards": 600
+        "par": 5,
+        "yards": 600,
+        "width": 53,
+        "height": 120
       },
       {
         "name": "Dyke End",
-        "yards": 240
+        "par": 3,
+        "yards": 240,
+        "width": 39,
+        "height": 120
       },
       {
         "name": "The Spectacles",
-        "yards": 480
+        "par": 4,
+        "yards": 480,
+        "width": 76,
+        "height": 119
       },
       {
         "name": "The Auld Home",
-        "yards": 600
+        "par": 5,
+        "yards": 600,
+        "width": 61,
+        "height": 120
       }
     ],
     "yards": 4200

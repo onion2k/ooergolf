@@ -1051,27 +1051,32 @@ minigolf: true }`, read through `oceanFor`) is the one switch: `waterBed` and `s
   shop, and the start screen, shown at boot and from the card's Courses button, which since 15 October 2026 is the
   **course picker** (plan `~/.claude/plans/ooergolf-course-picker.md`; it was a card for each course, cramped at nine): two
   tabs, Proper Golf and Mini Golf (an ARIA tablist, golf first since the game leans to proper golf), one course of the tab in
-  view at a time in a card of its colour (the six colours going round the tab's courses, `data-colour`), with its preview (a
-  hole of it painted from above), its name, pills for its holes, par and on golf its yards, a line for its place in the order
-  of difficulty and the player's best round ("3rd of 6 for difficulty · Best round 34", or "Not yet played" until every hole
-  has a best in the save), arrows either side that step and wrap (the arrow keys anywhere on the screen do the same, and on
-  a tab walk the tabs), dots for its place, and one Play button; the Install pill stands in the panel's head, at the top
+  view at a time in a card of its colour (the six colours going round the tab's courses, `data-colour`). The card is layout C
+  of a sheet of three, chosen 15 October 2026: its name, its figures as tiles (Holes, Par and on golf Yards), its difficulty as
+  pips up to its place among the tab's courses (`#coursePips`, "Difficulty 3 of 6" to a screen reader, since the courses stand
+  easiest first), one badge (`#courseBadge`: the hole the round kept goes on from, else the course's career record, else the
+  best round its holes' bests in the save add up to, else "Not yet played"), and under them a strip of its nine holes from
+  above, each with its number and par (`#courseStrip`, hidden from a screen reader as the words say it all). Arrows either side
+  step and wrap (the arrow keys anywhere on the screen do the same, and on a tab walk the tabs), dots under the card say which
+  of how many, and Play begins the course in view, or reads Continue for the round kept; on a phone the card takes the
+  panel's width and the arrows stand under it either side of the dots. The Install pill stands in the panel's head, at the top
   right under the title (a round download button on a phone, its words kept for a screen reader). `src/picker.ts` is the
-  arithmetic with no page (`Picker`: `tab`, `step`, `show(name)`, `shown()`, `bestRound`, `ordinal`), which the hud draws
+  arithmetic with no page (`Picker`: `tab`, `step`, `show(name)`, `has`, `shown()`, `bestRound`, `ordinal`), which the hud draws
   (`drawPicker`) and never works out again; the test API's `chooseCourse(name)` presses the tab, the next arrow until the
-  course is in view and Play, as a player does. The previews are generated: `npm run previews` (`scripts/make-previews.ts`)
-  makes every course (0.2 to 0.9 s each in Node, which is why nothing is painted as a player steps), paints `Course.preview`
-  (a hole index, the first by default, chosen by looking) through the hole map's `paintMap` at `PREVIEW.box` (180) pixels a
-  side (`previewSize` in `src/previews.ts`, which unlike the hole map's size is not held to a pixel a yard, since a hole of
-  minigolf is twenty yards across) into `public/previews/<slug>.png` (nine, 18.9 kB together, under `test/previews.test.ts`'s
-  ceiling of 40 kB and `perf`'s 120 for pictures fetched with the page) and `src/previews.json` (each course's picture size,
-  its holes' names, which the best round is summed by, and their lengths in yards along `way` or tee to cup, `holeLength`),
-  both committed and never edited; the test holds the pictures to the painter's pixels and the figures to the courses, so a
-  course changed without the script run fails it. The panel does not scroll on a desk, a laptop, a tablet or a phone
-  (`smoke/title.spec.ts`, on every course of both tabs; a phone on its side still scrolls), the start screen's "Choose a
-  course" line shows only on a page without the title, a phone's panel takes `CARDS.tall`, 0.6, of its screen, and the
-  stepping has no animation (a slide was in the plan and not asked for). Not done: part 5 of the plan, the course last shown
-  kept in the save.
+  course is in view and Play, as a player does. The strips are generated: `npm run previews` (`scripts/make-previews.ts`)
+  makes every course (0.2 to 1 s each in Node, which is why nothing is painted as a player steps) and paints each hole
+  (`paintPreview` in `src/previews.ts`) into `public/previews/<slug>/<n>.png`, a golf hole by the hole map's `paintMap` fitted to
+  `PREVIEW.box` (120) pixels a side and a hole of minigolf by its own painter a whole number of pixels a tile (the rail with its
+  cap, raised steps lighter, sand, water and streams, belts, posts, kickers, the cup in a white rim and the tee's mark, in
+  `MINI_COLOUR`, the palette through the hole map's `screen`; the hole map paints minigolf as flat grass, which read as green
+  blocks; barriers and windmills, which move, are not drawn); and writes `src/previews.json` (each course's holes' names, pars,
+  lengths in yards along `way` or tee to cup, `holeLength`, and picture sizes). Both are committed and never edited; the folder
+  is emptied first. 81 pictures, 155 kB in all and 9 to 23 kB a course, held by `test/previews.test.ts` under 40 kB a course and
+  200 kB in all, and to the painter's pixels and the courses' figures, so a course changed without the script run fails it; a
+  step to a course fetches its nine. The panel does not scroll on a desk, a laptop, a tablet or a phone (`smoke/title.spec.ts`,
+  on every course of both tabs; a phone on its side still scrolls), the start screen's "Choose a course" line shows only on a
+  page without the title, a phone's panel takes `CARDS.tall`, 0.6, of its screen, and the stepping has no animation. Not done:
+  part 5 of the plan, the course last shown kept in the save.
   The frame-cost label (`#stats`) is away under the start screen and back once a course is chosen. `src/score.ts` names a score
   (four or more under par is a Condor!, a hole in one still first) and says what kind it
   is, which colours its callout. Both are given what to show and never read

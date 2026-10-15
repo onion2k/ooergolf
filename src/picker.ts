@@ -16,7 +16,9 @@ export interface PickerCourse {
   par: number;
   /** The course's length in yards, from the generated previews. */
   yards: number;
-  preview: { slug: string; width: number; height: number };
+  /** The folder of its holes' pictures, and each hole's par and picture size, in order: the card's strip. */
+  slug: string;
+  strip: readonly { par: number; width: number; height: number }[];
   /** The holes' names, which the save keeps a best score by. */
   holeNames: readonly string[];
 }

@@ -317,7 +317,8 @@ async function main() {
       holes: c.summary.holes,
       par: c.summary.par,
       yards: p.yards,
-      preview: { slug: p.slug, width: p.width, height: p.height },
+      slug: p.slug,
+      strip: p.holes.map(({ par, width, height }) => ({ par, width, height })),
       holeNames: p.holes.map((h) => h.name),
     };
   });

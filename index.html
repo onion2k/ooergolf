@@ -891,15 +891,28 @@
       inset 0 0 0 3px var(--ink-soft),
       0 4px 0 var(--mist-deep);
   }
-  /* a record stands in the card where the count of holes did, in the sun's yellow; the hole a round kept goes on from, in the sky's */
-  #courseData span[data-career='record'] {
-    background: var(--sun);
+  /* the card's one badge: a record or a best round in the sun's yellow, the hole a round kept goes on from in the sky's, and a
+     course not yet played as plain words */
+  #courseBadge {
+    padding: 2px 10px;
+    font-size: 14px;
+    font-weight: 800;
+    border-radius: 999px;
   }
-  #courseData span[data-career='round'] {
+  #courseBadge[data-kind='record'],
+  #courseBadge[data-kind='best'] {
+    background: var(--sun);
+    box-shadow: 0 2px 0 var(--sun-deep);
+  }
+  #courseBadge[data-kind='round'] {
     color: var(--title);
+    background: var(--paper);
     box-shadow:
       inset 0 0 0 2px var(--title),
       0 2px 0 var(--deep);
+  }
+  #courseBadge[data-kind='none'] {
+    padding: 2px 0;
   }
   /*
    * The course picker (15 October 2026; it was a card for each course, cramped at nine): two tabs as a pill switch, the
@@ -933,10 +946,11 @@
   #startTabs button:disabled {
     opacity: 0.5;
   }
+  /* the arrows either side of the card on a desk, the dots under it; on a phone the card takes the row and the arrows go under it */
   #picker {
     display: grid;
     grid-template-columns: 44px 1fr 44px;
-    gap: 12px;
+    gap: 10px 12px;
     align-items: center;
   }
   #picker .arrow {
@@ -962,14 +976,15 @@
     border-width: 3px 3px 0 0;
     transform: translate(-70%, -50%) rotate(45deg);
   }
+  /*
+   * The course's card (15 October 2026, layout C of a sheet of three): its name, its figures as tiles, its difficulty as
+   * pips and one badge over a strip of its nine holes from above, each with its par, so a course's character (its doglegs
+   * and water, its rails and kickers) is seen before it is chosen. In its colour, the six going round the tab's courses.
+   */
   #courseCard {
     --face: var(--leaf);
     --deep: var(--leaf-deep);
-    display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 14px;
-    align-items: center;
-    padding: 14px 16px;
+    min-width: 0;
     text-align: left;
     color: var(--ink);
     background: var(--face) repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.16) 0 16px, transparent 16px 32px);
@@ -999,48 +1014,106 @@
     --face: var(--teal);
     --deep: var(--teal-deep);
   }
-  #coursePreview {
-    display: block;
-    box-sizing: content-box;
-    height: 170px;
-    width: auto;
-    padding: 6px;
-    background: rgba(255, 255, 255, 0.55);
-    border-radius: 12px;
-    image-rendering: pixelated;
-  }
-  #courseInfo {
+  #courseHead {
     display: grid;
-    gap: 6px;
+    grid-template-columns: auto 1fr;
+    grid-template-areas: 'name name' 'stats meta';
+    gap: 8px 12px;
+    align-items: center;
+    padding: 12px 16px 4px;
   }
-  #courseInfo b {
-    font-size: 26px;
+  #courseName {
+    grid-area: name;
+    font-size: 28px;
     font-weight: 900;
     line-height: 1.05;
   }
-  #courseInfo small {
+  #courseStats {
+    grid-area: stats;
     display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
+    gap: 8px;
   }
-  #courseInfo small span {
-    padding: 2px 10px;
-    font-size: 13px;
-    font-weight: 800;
-    color: var(--ink);
+  #courseStats span {
+    display: grid;
+    min-width: 58px;
+    padding: 4px 12px 5px;
+    font-size: 18px;
+    font-weight: 900;
+    line-height: 1.1;
+    text-align: center;
     background: var(--paper);
-    border-radius: 999px;
+    border-radius: 12px;
     box-shadow: 0 2px 0 var(--deep);
   }
-  #courseNote {
-    font-size: 14px;
-    font-weight: 700;
+  #courseStats i {
+    font-size: 10px;
+    font-style: normal;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+  #courseMeta {
+    grid-area: meta;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  #coursePips {
+    display: inline-flex;
+    gap: 3px;
+  }
+  #coursePips em {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.55);
+    box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.18);
+  }
+  #coursePips em.on {
+    background: var(--ink);
+    box-shadow: none;
+  }
+  #courseStrip {
+    display: grid;
+    grid-template-columns: repeat(9, minmax(0, 1fr));
+    gap: 6px;
+    padding: 8px 12px 12px;
+  }
+  #courseStrip figure {
+    display: grid;
+    justify-items: center;
+    gap: 3px;
+    margin: 0;
+    min-width: 0;
+  }
+  #courseStrip div {
+    display: grid;
+    place-items: center;
+    width: 100%;
+    height: 92px;
+    background: rgba(255, 255, 255, 0.55);
+    border-radius: 8px;
+  }
+  /* a hole's picture fitted to its cell at its own shape, and crisp, since it is a map and not a photograph */
+  #courseStrip img {
+    width: auto;
+    height: auto;
+    max-width: 90%;
+    max-height: 84px;
+    image-rendering: pixelated;
+  }
+  #courseStrip figcaption {
+    font-size: 11px;
+    font-weight: 800;
   }
   #courseDots {
+    grid-column: 2;
     display: flex;
     justify-content: center;
     gap: 7px;
-    margin: 12px 0 10px;
   }
   #courseDots i {
     width: 9px;
@@ -1051,6 +1124,9 @@
   #courseDots i.on {
     background: var(--sky-deep);
   }
+  #startFoot {
+    margin-top: 10px;
+  }
   #playCourse {
     min-height: 48px;
     padding: 0 34px;
@@ -1058,8 +1134,8 @@
   }
 
   @media (max-width: 600px) {
-    /* on a phone the preview stands above the figures, the tabs at the left with the Install button beside them, and the
-       arrows and the picture are smaller, so that the card and Play fit under the title's word without scrolling */
+    /* on a phone the card takes the panel's width with the arrows under it, the tabs stand at the left with the Install
+       button beside them, and the strip is smaller, so that the card and Play fit under the title's word without scrolling */
     #start h1 {
       font-size: 40px;
     }
@@ -1115,30 +1191,58 @@
       padding: 0 12px;
       font-size: 14px;
     }
+    /* the card takes the whole width, and the arrows go under it either side of the dots */
     #picker {
-      gap: 6px;
+      gap: 8px;
     }
     #courseCard {
+      grid-column: 1 / -1;
+      grid-row: 1;
+    }
+    #coursePrev,
+    #courseNext,
+    #courseDots {
+      grid-row: 2;
+    }
+    #courseHead {
       grid-template-columns: 1fr;
+      grid-template-areas: 'name' 'stats' 'meta';
       justify-items: center;
       gap: 6px;
-      padding: 8px 12px;
+      padding: 8px 10px 2px;
+    }
+    #courseName {
+      font-size: 21px;
       text-align: center;
     }
-    #coursePreview {
-      height: 110px;
+    #courseStats span {
+      min-width: 50px;
+      padding: 3px 8px 4px;
+      font-size: 15px;
     }
-    #courseInfo {
-      justify-items: center;
-    }
-    #courseInfo b {
-      font-size: 20px;
-    }
-    #courseInfo small {
+    #courseMeta {
       justify-content: center;
+      gap: 8px;
     }
-    #courseDots {
-      margin: 8px 0;
+    #courseBadge {
+      font-size: 12px;
+    }
+    #courseStrip {
+      gap: 3px;
+      padding: 6px 8px 10px;
+    }
+    #courseStrip div {
+      height: 64px;
+      border-radius: 6px;
+    }
+    #courseStrip img {
+      max-height: 58px;
+    }
+    #courseStrip figcaption {
+      font-size: 9px;
+    }
+    #startFoot {
+      margin-top: 4px;
     }
   }
 
@@ -1951,16 +2055,17 @@
   <div id="picker" role="tabpanel" aria-labelledby="tab-golf">
     <button id="coursePrev" class="arrow" type="button" aria-label="Previous course"></button>
     <div id="courseCard">
-      <img id="coursePreview" alt="" width="40" height="180" />
-      <div id="courseInfo" aria-live="polite">
+      <div id="courseHead" aria-live="polite">
         <b id="courseName"></b>
-        <small id="courseData"></small>
-        <span id="courseNote"></span>
+        <div id="courseStats"></div>
+        <div id="courseMeta"><span id="coursePips" role="img"></span><span id="courseBadge"></span></div>
       </div>
+      <!-- each hole from above, with its par: a picture of the course, which the words above already say in full -->
+      <div id="courseStrip" aria-hidden="true"></div>
     </div>
     <button id="courseNext" class="arrow" type="button" aria-label="Next course"></button>
+    <div id="courseDots" aria-hidden="true"></div>
   </div>
-  <div id="courseDots" aria-hidden="true"></div>
   <div id="startFoot">
     <button id="playCourse" type="button">Play course</button>
     <button id="playMode" type="button" class="quiet">Career mode</button>

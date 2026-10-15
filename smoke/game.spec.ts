@@ -5,6 +5,8 @@
  * that would make it plainly broken: an error, a black screen, a clock that
  * does not run, a save it cannot boot from again.
  */
+import { readFileSync } from 'node:fs';
+import type { CoursePreview } from '../src/previews';
 import { expect, test, type Page } from '@playwright/test';
 import { PNG } from 'pngjs';
 import { BALL, KIND_RADIUS, ROLL, heightAt, layoutOf, powerFor } from '../src/arena';
@@ -26,6 +28,9 @@ import { BLADE_ROOM, GOLF_FAIRWAY_DENSITY, GOLF_ROUGH_DENSITY, cellFor } from '.
 import { BUDGET } from './budget';
 import { drag, intoThePond, start, touches, watch } from './game';
 import { holeOut, read, toCard } from './panels';
+
+/** The strips the course card shows, as the generated data has them. */
+const STRIPS = JSON.parse(readFileSync('src/previews.json', 'utf8')) as Record<string, CoursePreview>;
 
 /** How many frames the page draws in a second. */
 function framesInASecond(page: Page) {
@@ -195,13 +200,24 @@ test.describe('the start screen', () => {
     await start(page, { seed: 1, paused: true, screen: true });
     await expect(page.locator('#start')).toBeVisible();
     // the picker opens on proper golf (the game leans to proper golf, 14 October 2026) at the easiest course, and steps
-    // through the six and then the three of minigolf in the order they stand, each with its holes, par and, on golf, yards
+    // through the six and then the three of minigolf in the order they stand, each with its holes, par and, on golf, yards as
+    // tiles, its difficulty as pips up to its place, its badge, and a strip of its nine holes, each loaded, with its par
     await expect(page.locator('#startTabs [role=tab]')).toHaveText(['Proper Golf', 'Mini Golf']);
     await expect(page.locator('#tab-golf')).toHaveAttribute('aria-selected', 'true');
     const seen = async () => ({
       name: await page.locator('#courseName').textContent(),
-      pills: await page.locator('#courseData span').allTextContents(),
-      note: await page.locator('#courseNote').textContent(),
+      stats: await page.locator('#courseStats span').allInnerTexts(),
+      pips: await page.locator('#coursePips').getAttribute('aria-label'),
+      badge: await page.locator('#courseBadge').textContent(),
+      strip: await page.locator('#courseStrip figcaption').allTextContents(),
+      // every hole's picture fetched and decoded, so none of the strip is a broken image
+      loaded: await page
+        .locator('#courseStrip img')
+        .evaluateAll((images) =>
+          Promise.all(
+            images.map((i) => (i as HTMLImageElement).decode().then(() => (i as HTMLImageElement).naturalWidth > 0)),
+          ),
+        ),
       dots: await page.locator('#courseDots i').count(),
       on: await page.locator('#courseDots i.on').count(),
     });
@@ -216,8 +232,11 @@ test.describe('the start screen', () => {
     for (const [k, [name, par, yards]] of golf.entries()) {
       expect(await seen(), name).toEqual({
         name,
-        pills: ['9 holes', `par ${par}`, `${yards.toLocaleString('en-GB')} yd`],
-        note: `${['1st', '2nd', '3rd', '4th', '5th', '6th'][k]} of 6 for difficulty · Not yet played`,
+        stats: ['HOLES\n9', `PAR\n${par}`, `YARDS\n${yards.toLocaleString('en-GB')}`],
+        pips: `Difficulty ${k + 1} of 6`,
+        badge: 'Not yet played',
+        strip: STRIPS[name].holes.map((h, n) => `${n + 1} · p${h.par}`),
+        loaded: Array(9).fill(true),
         dots: 6,
         on: 1,
       });
@@ -232,7 +251,13 @@ test.describe('the start screen', () => {
       ['The Waterworks', 28],
     ] as const) {
       const s = await seen();
-      expect([s.name, s.pills, s.dots], name).toEqual([name, ['9 holes', `par ${par}`], 3]);
+      expect([s.name, s.stats, s.dots, s.strip.length, s.loaded], name).toEqual([
+        name,
+        ['HOLES\n9', `PAR\n${par}`],
+        3,
+        9,
+        Array(9).fill(true),
+      ]);
       await page.locator('#courseNext').click();
     }
     await page.locator('#coursePrev').click();
