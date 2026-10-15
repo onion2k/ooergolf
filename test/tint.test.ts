@@ -144,6 +144,38 @@ describe('the tint meets the plain ground beyond the hole in one colour', () => 
       expect(inner, 'the middle of the hole is tinted').toBeGreaterThan(0);
       expect(Math.abs(tint.at(minX - 50, minY - 50)), 'off the hole').toBe(0);
     });
+    it(`on ${name}: the field is nought where out of bounds meets the rock beyond it, whose tiles show the plain ground`, () => {
+      // Rock has no ground of its own: past the last tile of out of bounds the plane under the hole shows, untinted, so a field
+      // there drew the line between them as a stair of tiles a few yards high, which on a phone read as screen burn (15 October
+      // 2026). Read along every side of a tile that meets rock, a few points a side.
+      const tint = tintOf(layout)!;
+      let sides = 0,
+        worst = 0;
+      for (let t = 0; t < layout.cols * layout.rows; t++) {
+        if (layout.solid[t]) continue;
+        const i = t % layout.cols,
+          j = Math.floor(t / layout.cols);
+        for (const [di, dj] of [
+          [1, 0],
+          [-1, 0],
+          [0, 1],
+          [0, -1],
+        ]) {
+          const u = i + di,
+            v = j + dj;
+          if (u < 0 || v < 0 || u >= layout.cols || v >= layout.rows || !layout.solid[v * layout.cols + u]) continue;
+          sides++;
+          // the side's middle, and its ends a little in from the corners
+          for (const along of [0.1, 0.5, 0.9]) {
+            const x = layout.originX + (i + 0.5 + di * 0.5 + (di === 0 ? along - 0.5 : 0)) * TILE,
+              y = layout.originY + (j + 0.5 + dj * 0.5 + (dj === 0 ? along - 0.5 : 0)) * TILE;
+            worst = Math.max(worst, Math.abs(tint.at(x, y)));
+          }
+        }
+      }
+      expect(sides, 'sides of tiles that meet rock').toBeGreaterThan(50);
+      expect(worst, 'the field at the rock, at its furthest from nought').toBeLessThan(0.01);
+    });
   }
 });
 

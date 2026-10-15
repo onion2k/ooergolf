@@ -149,6 +149,66 @@ export const valueOf = (level: number) => level / BANK_TINT.levels;
 /** The kinds of grass the rough's steps are, past the rough's own (0) and the fairway's (1): the three darker and then the three lighter. Step nought is the rough itself. */
 export const kindOfLevel = (level: number) => (level === 0 ? 0 : level < 0 ? 2 + level + BANK_TINT.levels : 4 + level);
 
+/**
+ * How far a point is from the rock round a hole, less the reach of the field's reading (a cell's diagonal, since a point is
+ * read between the four cells round it), so the field is nought on every point of the rock's edge: nought within that reach,
+ * and the most it is asked for, `BANK_TINT.fade`, where no rock is nearer than that.
+ */
+function rockOf(l: Layout, near: Uint8Array, x: number, y: number): number {
+  const u = (x - l.originX) / TILE,
+    v = (y - l.originY) / TILE;
+  const t = tileAt(l, x, y);
+  // on the rock, and far from it, there is nothing to look for
+  if (t >= 0 && l.solid[t]) return 0;
+  if (t < 0 || near[t] > ROCK_SPAN) return BANK_TINT.fade;
+  const span = ROCK_SPAN;
+  let nearest = ROCK_REACH + BANK_TINT.fade;
+  for (let j = Math.max(0, Math.floor(v) - span); j <= Math.min(l.rows - 1, Math.floor(v) + span); j++)
+    for (let i = Math.max(0, Math.floor(u) - span); i <= Math.min(l.cols - 1, Math.floor(u) + span); i++) {
+      if (!l.solid[j * l.cols + i]) continue;
+      // the distance to the tile's square, nought inside it
+      const dx = Math.max(i - u, 0, u - (i + 1)) * TILE,
+        dy = Math.max(j - v, 0, v - (j + 1)) * TILE;
+      nearest = Math.min(nearest, Math.hypot(dx, dy));
+    }
+  return Math.max(0, nearest - ROCK_REACH);
+}
+
+/** The reach of the field's reading, a cell's diagonal, and how many tiles round a point the rock within it and a fade is looked for in. */
+const ROCK_REACH = BANK_TINT.cell * Math.SQRT2;
+const ROCK_SPAN = Math.ceil((ROCK_REACH + BANK_TINT.fade) / TILE);
+
+/** How many tiles each tile is from the nearest rock, counting a diagonal as one, up to one past `ROCK_SPAN`: for `rockOf` to pass by a tile far from any. */
+function nearRock(l: Layout): Uint8Array {
+  const n = l.cols * l.rows;
+  const near = new Uint8Array(n).fill(ROCK_SPAN + 1);
+  const queue = new Int32Array(n);
+  let head = 0,
+    tail = 0;
+  for (let t = 0; t < n; t++)
+    if (l.solid[t]) {
+      near[t] = 0;
+      queue[tail++] = t;
+    }
+  while (head < tail) {
+    const t = queue[head++];
+    if (near[t] >= ROCK_SPAN) continue;
+    const x = t % l.cols,
+      y = Math.floor(t / l.cols);
+    for (let dy = -1; dy <= 1; dy++)
+      for (let dx = -1; dx <= 1; dx++) {
+        const nx = x + dx,
+          ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= l.cols || ny >= l.rows) continue;
+        const u = ny * l.cols + nx;
+        if (near[u] <= near[t] + 1) continue;
+        near[u] = near[t] + 1;
+        queue[tail++] = u;
+      }
+  }
+  return near;
+}
+
 /** The tints made, by layout, so a hole's is made once, and let go when its layout is. */
 const made = new WeakMap<Layout, Tint | null>();
 
@@ -166,6 +226,7 @@ export function tintOf(l: Layout): Tint | null {
     rows = Math.ceil((l.rows * TILE) / cell);
   const n = cols * rows;
   const base = baseOf(l);
+  const rocky = nearRock(l);
   const high = new Float32Array(n).fill(NaN),
     low = new Float32Array(n).fill(NaN),
     bend = new Float32Array(n);
@@ -188,8 +249,13 @@ export function tintOf(l: Layout): Tint | null {
       if (Number.isNaN(high[k])) continue;
       // a hole with nowhere to be played from has no valley to measure from: its ground is neither
       const floor = Number.isNaN(blurred[k]) ? high[k] - BANK_TINT.over / 2 : blurred[k];
-      // the field comes back to nought at the hole's edge by a smooth step, so what is drawn there is the plain ground beyond it
-      const edge = Math.min(i + 0.5, cols - i - 0.5, j + 0.5, rows - j - 0.5) * cell;
+      // the field comes back to nought at the hole's edge by a smooth step, so what is drawn there is the plain ground beyond it;
+      // and at the rock beyond out of bounds, which has no ground of its own, so the plain ground shows there too: the line
+      // between them runs along the tiles, and drawn with a field either side of it was a stair (15 October 2026)
+      const edge = Math.min(
+        Math.min(i + 0.5, cols - i - 0.5, j + 0.5, rows - j - 0.5) * cell,
+        rockOf(l, rocky, l.originX + (i + 0.5) * cell, l.originY + (j + 0.5) * cell),
+      );
       const near = clamp(edge / BANK_TINT.fade, 0, 1);
       field[k] = fieldFrom(high[k] - floor, bend[k]) * near * near * (3 - 2 * near);
     }
