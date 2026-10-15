@@ -657,6 +657,27 @@ test.describe('what it looks like', () => {
     expect(problems).toEqual([]);
   });
 
+  /** A career a few rounds in: a record on two courses of golf, and a round of The Pinball Shed kept at its fourth hole. */
+  const CAREER = {
+    coins: 120,
+    records: {
+      'The Links': { strokes: 31, par: 36, kit: { club: '', ball: '', accessory: '' }, when: '2026-10-15' },
+      'The Old Course': { strokes: 44, par: 37, kit: { club: '', ball: '', accessory: '' }, when: '2026-10-15' },
+    },
+    round: { course: 'The Pinball Shed', hole: 3, card: [3, 2, 4], retaken: false, pickedUp: false },
+  };
+
+  test('the start screen in a career: the records on their cards, and the card of the round kept saying its hole', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true, screen: true, save: CAREER });
+    await page.evaluate(() => window.game!.step(1));
+    await hideStats(page);
+    await expect(page).toHaveScreenshot('start-career.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
   test('the start screen with the Install button, while the browser offers to install the page as an app', async ({
     page,
   }) => {
@@ -1315,6 +1336,17 @@ test.describe('what it looks like', () => {
       await page.evaluate(() => window.game!.step(1));
       await hideStats(page);
       await expect(page).toHaveScreenshot('phone-start.png', TOLERANCE);
+      expect(problems).toEqual([]);
+    });
+
+    test('the start screen in a career, on a phone: the records, the round kept, and the mode on the heading’s line', async ({
+      page,
+    }) => {
+      const problems = watch(page);
+      await start(page, { seed: 11, paused: true, screen: true, save: CAREER });
+      await page.evaluate(() => window.game!.step(1));
+      await hideStats(page);
+      await expect(page).toHaveScreenshot('phone-start-career.png', TOLERANCE);
       expect(problems).toEqual([]);
     });
 

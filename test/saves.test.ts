@@ -21,7 +21,9 @@ const read = (file: string) => readFileSync(new URL(file, DIR), 'utf8');
 
 /** A save with nothing in it yet, as every field's default makes it. */
 const NONE = { club: '', ball: '', accessory: '' };
-const FRESH = { coins: 0, gems: 0, owned: [], kit: NONE, best: {} };
+/** What a save from before the career loads its career as: counted in it, as every round was, with no record and no round. */
+const CAREER = { mode: 'career', records: {}, round: null };
+const FRESH = { coins: 0, gems: 0, owned: [], kit: NONE, best: {}, ...CAREER };
 
 /**
  * What each save loads as. The first is the template's stub's, a bank the
@@ -32,6 +34,7 @@ const KEPT: Record<string, Record<string, unknown>> = {
   '01-first.json': FRESH,
   '02-empty.json': FRESH,
   '03-shop.json': {
+    ...CAREER,
     coins: 145,
     gems: 2,
     // the putters are not sold any more: neither the ones owned nor the one in hand nor a best's club is kept
@@ -41,6 +44,7 @@ const KEPT: Record<string, Record<string, unknown>> = {
   },
   // the eighteen first items were withdrawn on 8 October 2026: the coins, gems and bests stay and the items go
   '04-items.json': {
+    ...CAREER,
     coins: 310,
     gems: 3,
     owned: [],
@@ -49,6 +53,7 @@ const KEPT: Record<string, Record<string, unknown>> = {
   },
   // the three aisles' shape: a mallet, a featherie and a comet owned and worn, and a best made with the mallet and the comet
   '05-kit.json': {
+    ...CAREER,
     coins: 220,
     gems: 1,
     owned: ['mallet', 'feather', 'comet'],
@@ -60,6 +65,7 @@ const KEPT: Record<string, Record<string, unknown>> = {
   },
   // a best on a hole of each of the three courses of 14 October 2026, which an older game keeps by name as any best
   '06-six-courses.json': {
+    ...CAREER,
     coins: 90,
     gems: 0,
     owned: [],
@@ -69,6 +75,23 @@ const KEPT: Record<string, Record<string, unknown>> = {
       'Rookery Walk': { strokes: 5, kit: NONE },
       'The Spectacles': { strokes: 6, kit: NONE },
     },
+  },
+  // the career of 15 October 2026: free play chosen, a record on two courses and a round of The Heath two holes in
+  '07-career.json': {
+    coins: 340,
+    gems: 1,
+    owned: ['mallet'],
+    kit: { club: 'mallet', ball: '', accessory: '' },
+    best: {
+      Straight: { strokes: 1, kit: NONE },
+      'Heather Run': { strokes: 3, kit: { club: 'mallet', ball: '', accessory: '' } },
+    },
+    mode: 'free',
+    records: {
+      'The Meadow': { strokes: 19, par: 26, kit: NONE, when: '2026-10-15' },
+      'The Heath': { strokes: 31, par: 32, kit: { club: 'mallet', ball: '', accessory: '' }, when: '2026-10-15' },
+    },
+    round: { course: 'The Heath', hole: 2, card: [3, 4], retaken: false, pickedUp: false },
   },
 };
 
@@ -192,6 +215,33 @@ describe('saves from every shape the game has written', () => {
     const game = new Game(new Progress(memoryStore(json)), {}, { random: seeded(7) });
     for (let f = 0; f < 300; f++) game.step(1 / 60);
     expect(checkInvariants(game)).toEqual([]);
+  });
+
+  it('reads a career only as it should be: a known mode, records of whole counts, and a round whose card is its holes', () => {
+    const save = new Progress(
+      memoryStore(
+        JSON.stringify({
+          mode: 'ranked',
+          records: {
+            Good: { strokes: 30, par: 36, kit: { club: 'mallet' }, when: 'Tuesday' },
+            Nought: { strokes: 0, par: 36 },
+            Odd: 'thirty',
+          },
+          round: { course: 'The Links', hole: 2, card: [4] },
+        }),
+      ),
+    ).save;
+    expect(save.mode).toBe('career');
+    // the mallet is not owned, but a record's kit is what was worn then, as a best's is
+    expect(save.records).toEqual({ Good: { strokes: 30, par: 36, kit: { ...NONE, club: 'mallet' }, when: '' } });
+    expect(save.round, 'a card short of its holes').toBeNull();
+    for (const round of [
+      { course: '', hole: 1, card: [3] },
+      { course: 'The Links', hole: 0, card: [] },
+      { course: 'The Links', hole: 1, card: [0] },
+      'The Links',
+    ])
+      expect(new Progress(memoryStore(JSON.stringify({ round }))).save.round, JSON.stringify(round)).toBeNull();
   });
 
   it('has the shape the game writes now: a new field means a new file here', () => {

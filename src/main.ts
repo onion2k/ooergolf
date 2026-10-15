@@ -30,7 +30,8 @@ import { ITEMS, itemById } from './items';
 import { createApi } from './debug';
 import { holeFailureText, reasonOf } from './failure';
 import { frameCost } from './frame-cost';
-import { COURSES } from './course';
+import { COURSES, type Course } from './course';
+import { dayOf, recordText, type RoundOf } from './career';
 import { Game, type GameEvents } from './game';
 import { Hud } from './hud';
 import { InstallOffer, registerWorker, shouldRegister, type WorkerState } from './install';
@@ -302,6 +303,28 @@ async function main() {
   };
   // what the start screen says of each course, which is known without making a course that is made when it is chosen
   const summaries = COURSES.map((c) => ({ name: c.name, ...c.summary, golf: c.golf }));
+  /** A course as the career knows a round of it: its name and its purse. */
+  const roundOf = (c: Course): RoundOf => ({ name: c.name, purse: c.purse });
+  /** What the start screen says of the career, from the save as it stands. */
+  const careerWords = () => {
+    const save = progress.save;
+    return {
+      mode: save.mode,
+      records: Object.fromEntries(Object.entries(save.records).map(([name, r]) => [name, recordText(r)])),
+      round: save.round ? { course: save.round.course, hole: save.round.hole + 1 } : null,
+    };
+  };
+  /** What the round's last hole paid as its prize, told before the card is shown, and let go as a round begins. */
+  let prized: { coins: number; record: boolean } | null = null;
+  /** The start screen put away for a course now in play: the course's words up, and its purse. */
+  const playing = (name: string) => {
+    courseName = name;
+    choosing = false;
+    hud.hideStart();
+    // the frame's cost is a corner of the course, and not of the start screen
+    stats.hidden = false;
+    showPurse();
+  };
   const hud = new Hud(
     {
       again: () => game?.newRound(),
@@ -322,13 +345,24 @@ async function main() {
           !game.card.length;
         // the title is let go before the hole is begun, so that the new hole is built with none of it
         endTitle();
-        if (!fresh) game.playCourse(course.holes);
-        courseName = name;
-        choosing = false;
-        hud.hideStart();
-        // the frame's cost is a corner of the course, and not of the start screen
-        stats.hidden = false;
-        showPurse();
+        // a course's card begins a round of it afresh, which gives up a career round kept: Continue goes on with one
+        if (!fresh) game.playCourse(course.holes, roundOf(course));
+        else game.adopt(roundOf(course));
+        playing(name);
+      },
+      // the card of the career round kept: the round gone on with from its next hole, or the screen's words put right where it cannot be
+      resume() {
+        const kept = progress.save.round;
+        const course = kept && COURSES.find((c) => c.name === kept.course);
+        if (!game || !course) return;
+        endTitle();
+        if (game.resume(course.holes, roundOf(course))) playing(course.name);
+        else hud.setCareer(careerWords());
+      },
+      // Career or Free play, chosen on the start screen: the words over the cards say what it means
+      mode(mode) {
+        game?.setMode(mode);
+        hud.setCareer(careerWords());
       },
       courses() {
         choosing = true;
@@ -341,7 +375,7 @@ async function main() {
           game?.playCourse([titleHole()]);
         }
         const standing = titleNow();
-        hud.showStart(summaries, standing !== null && !standing.scene.landed);
+        hud.showStart(summaries, standing !== null && !standing.scene.landed, careerWords());
       },
       // the overhead button: the view from above on or off, and so what a drag on the course is
       overhead(on) {
@@ -716,7 +750,21 @@ async function main() {
       }
     },
     pickedUp: (strokes, par) => hud.done(strokes, par, true),
-    finished: () => game && hud.finished(game.course, game.card),
+    finished: () => {
+      if (!game) return;
+      const best = progress.save.best;
+      hud.finished(game.course, game.card, {
+        bests: game.course.map((h) => (Object.hasOwn(best, h.name) ? best[h.name].strokes : null)),
+        prize: prized ? prized.coins : null,
+        record: prized?.record ?? false,
+        free: progress.save.mode === 'free' && game.of !== null,
+      });
+      prized = null;
+    },
+    roundPaid: (coins, record) => {
+      prized = { coins, record };
+      showPurse();
+    },
     paid: showPurse,
     bought: showPurse,
     equipped: showPurse,
@@ -819,6 +867,8 @@ async function main() {
   const seed = query.get('seed');
   const played = new Game(progress, events, {
     ...(seed !== null ? { random: seeded(+seed) } : {}),
+    // the day a course record is made, in the player's own time
+    today: () => dayOf(new Date()),
     // the title is drawn over a hole of its own, which nothing is played on
     ...(wantTitle ? { course: [titleHole()] } : {}),
   });
@@ -833,7 +883,7 @@ async function main() {
   // the start screen is up, held back, before the first hole is: the boot panel is let go as soon as the letters are drawn,
   // while the hole is still being built behind them, and a hole begun with no start screen up puts its bag and its map on
   // the screen, which were seen over the sky until the end of the boot put the start screen up and hid them
-  if (wantTitle) hud.showStart(summaries, true);
+  if (wantTitle) hud.showStart(summaries, true, careerWords());
   if (wantTitle) await beginUnderTitle(played.hole, played.def.par);
   else shown.started!(played.hole, played.def.par);
   // a first hole that cannot be drawn is the boot's failure: the screen says so, and there is no game to start
@@ -1402,7 +1452,7 @@ async function main() {
   // the start screen over the title scene, or over the first hole of the first course on a page that has none, until a course
   // is chosen: held back until the letters have landed
   const standing = titleNow();
-  hud.showStart(summaries, standing !== null && !standing.scene.landed);
+  hud.showStart(summaries, standing !== null && !standing.scene.landed, careerWords());
   stats.hidden = choosing;
 
   // ---- each frame ----
@@ -1679,6 +1729,16 @@ async function main() {
           };
         }),
       };
+    },
+    playMode: (mode) => {
+      const button = document.getElementById('playMode') as HTMLButtonElement;
+      if (button.dataset.mode !== mode) button.click();
+    },
+    continueRound: () => {
+      const card = document.querySelector("#start .course small span[data-career='round']")?.closest('button');
+      if (!card) return false;
+      card.click();
+      return true;
     },
     chooseCourse: (name) => {
       const card = Array.from(document.querySelectorAll<HTMLButtonElement>('#start .course')).find((b) =>

@@ -141,7 +141,9 @@ test('writes its save, and boots again from it', async ({ page }) => {
   const problems = watch(page);
   await start(page);
   const written = await page.evaluate(() => window.game!.save());
-  expect(written).toBe('{"coins":0,"gems":0,"owned":[],"kit":{"club":"","ball":"","accessory":""},"best":{}}');
+  expect(written).toBe(
+    '{"coins":0,"gems":0,"owned":[],"kit":{"club":"","ball":"","accessory":""},"best":{},"mode":"career","records":{},"round":null}',
+  );
   expect(await page.evaluate(() => localStorage.getItem('ooergolf-save-v1'))).toBe(written);
   await page.reload();
   await expect.poll(() => page.evaluate(() => window.game?.ready ?? false), { timeout: 60_000 }).toBe(true);
@@ -153,7 +155,7 @@ test("boots from the stub's save, which has a bank the game no longer knows", as
   const problems = watch(page);
   await start(page, { save: { bank: 7, banked: 7 } });
   expect(await page.evaluate(() => window.game!.save())).toBe(
-    '{"coins":0,"gems":0,"owned":[],"kit":{"club":"","ball":"","accessory":""},"best":{}}',
+    '{"coins":0,"gems":0,"owned":[],"kit":{"club":"","ball":"","accessory":""},"best":{},"mode":"career","records":{},"round":null}',
   );
   expect(await page.evaluate(() => window.game!.invariants())).toEqual([]);
   expect(problems).toEqual([]);

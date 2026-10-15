@@ -18,6 +18,7 @@ import type { Mode } from './gesture';
 import { helpText, windText, type Held } from './readout';
 import { swatchOf } from './swatch';
 import { SCORE_KINDS, againstPar, scoreKind, scoreName } from './score';
+import type { PlayMode } from './career';
 
 /** Each kind of word the callout over the course says, which the stylesheet colours: a score's kind, the water, or out of bounds. */
 export const CALLOUTS = [...SCORE_KINDS, 'splash', 'out'] as const;
@@ -46,6 +47,29 @@ export interface HudHandlers {
   spin(value: number): void;
   /** The Install button pressed on the start screen: the browser's offer to install the page as an app, taken. */
   install(): void;
+  /** Career or Free play chosen on the start screen. */
+  mode(mode: PlayMode): void;
+  /** The card of the career round kept pressed on the start screen: the round gone on with. */
+  resume(): void;
+}
+
+/**
+ * What the start screen says of the career: whether rounds count in it, each course's record as words (none for a
+ * course with no record), and the career round kept, by its course and the hole it goes on from (from one), or none.
+ */
+export interface StartCareer {
+  mode: PlayMode;
+  records: Readonly<Record<string, string>>;
+  round: { course: string; hole: number } | null;
+}
+
+/** What the card says of the round besides its scores: each hole's best (null for none), and the prize, in the career. */
+export interface CardCareer {
+  bests: readonly (number | null)[];
+  /** The coins the round's prize paid, or null where there was none (free play, a round no course's). */
+  prize: number | null;
+  record: boolean;
+  free: boolean;
 }
 
 /** A club of the bag as the picker shows it: what to press, what to call it, how far it carries at full power, and its loft (none for the putter). */
@@ -170,6 +194,15 @@ export class Hud {
   /** Whether the start screen is up but held back, out of sight, until the title's letters have landed: everything else is away as if it showed. */
   private held = false;
   private readonly courseList = document.getElementById('courses')!;
+  private readonly startWords = document.getElementById('startWords')!;
+  private readonly modeButton = document.getElementById('playMode') as HTMLButtonElement;
+  /** The mode the start screen's button shows, which a press asks for the other of. */
+  private modeShown: PlayMode = 'career';
+  /** The course whose card goes on with the career round kept, or '' for none: its card is Continue. */
+  private going = '';
+  private readonly prize = document.getElementById('cardPrize')!;
+  /** The courses' cards as the start screen last drew them, by name, with the holes they have: what the career's words are written into. */
+  private readonly cardsByName = new Map<string, { pills: HTMLElement; holes: number }>();
   private readonly help = document.getElementById('help')!;
   private readonly modes = document.getElementById('viewMode')!;
   private readonly overheadButton = document.getElementById('viewOverhead') as HTMLButtonElement;
@@ -232,6 +265,7 @@ export class Hud {
     document.getElementById('again')!.addEventListener('click', () => handlers.again());
     document.getElementById('cardCourses')!.addEventListener('click', () => handlers.courses());
     this.installButton.addEventListener('click', () => handlers.install());
+    this.modeButton.addEventListener('click', () => handlers.mode(this.modeShown === 'career' ? 'free' : 'career'));
     const open = () => {
       this.shop.hidden = false;
     };
@@ -637,7 +671,12 @@ export class Hud {
    * between them first. A kind with no course has no heading. Everything else over
    * the course is put away while it is up; a click on a card goes back through `choose`.
    */
-  showStart(courses: readonly { name: string; holes: number; par: number; golf?: boolean }[], wait = false) {
+  showStart(
+    courses: readonly { name: string; holes: number; par: number; golf?: boolean }[],
+    wait = false,
+    career: StartCareer = { mode: 'career', records: {}, round: null },
+  ) {
+    this.cardsByName.clear();
     const cardOf = (c: { name: string; holes: number; par: number }) => {
       const card = document.createElement('button');
       card.className = 'course';
@@ -649,8 +688,12 @@ export class Hud {
         pill.textContent = text;
         about.append(pill);
       }
+      this.cardsByName.set(c.name, { pills: about, holes: c.holes });
       card.append(name, about);
-      card.addEventListener('click', () => this.handlers.choose(c.name));
+      // the card of the career round kept goes on with it, and any other begins a round afresh
+      card.addEventListener('click', () =>
+        this.going === c.name ? this.handlers.resume() : this.handlers.choose(c.name),
+      );
       return card;
     };
     const parts: HTMLElement[] = [];
@@ -665,6 +708,7 @@ export class Hud {
       parts.push(heading, ...of.map(cardOf));
     }
     this.courseList.replaceChildren(...parts);
+    this.setCareer(career);
     this.retakeButton.disabled = true;
     for (const el of [
       this.panel,
@@ -684,6 +728,38 @@ export class Hud {
     this.held = wait;
     this.start.hidden = wait;
     this.setDrawer(false);
+  }
+
+  /**
+   * The start screen's word of the career: the mode, on a button that cycles between the two as the bag's shape does,
+   * and what choosing a course does in it; each card's record, which stands where its count of holes stood, since a card
+   * has room for two pills on a phone and the record says more; and the career round kept (none in free play, which
+   * goes on with nothing), whose course's card says the hole it goes on from and is the way to go on with it. There is
+   * no Continue button of its own, since a phone's screen under the title has no row to spare for one.
+   */
+  setCareer(career: StartCareer) {
+    this.modeShown = career.mode;
+    const free = career.mode === 'free';
+    this.modeButton.textContent = free ? 'Free play' : 'Career mode';
+    this.modeButton.dataset.mode = career.mode;
+    this.modeButton.setAttribute(
+      'aria-label',
+      free
+        ? 'Free play: nothing won or kept. Press for the career'
+        : 'Career mode: rounds pay and set records. Press for free play',
+    );
+    this.startWords.textContent = free ? 'Choose a course to play for nothing' : 'Choose a course';
+    const round = free ? null : career.round;
+    this.going = round?.course ?? '';
+    for (const [name, { pills, holes }] of this.cardsByName) {
+      const record = Object.hasOwn(career.records, name) ? career.records[name] : '';
+      const first = pills.firstElementChild as HTMLElement;
+      const going = round?.course === name;
+      first.textContent = going ? `On hole ${round.hole}` : record || `${holes} holes`;
+      first.dataset.career = going ? 'round' : record ? 'record' : '';
+      // read as what pressing the card does
+      pills.parentElement!.setAttribute('aria-label', going ? `Continue ${name} from hole ${round.hole}` : name);
+    }
   }
 
   /** Whether the start screen is up, in sight or held back for the title's letters. */
@@ -854,12 +930,16 @@ export class Hud {
   }
 
   /** The round over: every hole's par and score, each score marked by its kind, and the total against par. */
-  finished(holes: readonly { name: string; par: number }[], card: readonly number[]) {
+  finished(
+    holes: readonly { name: string; par: number }[],
+    card: readonly number[],
+    career: CardCareer = { bests: [], prize: null, record: false, free: false },
+  ) {
     this.toast.hidden = true;
     this.rows.replaceChildren(
       ...holes.map((h, i) => {
         const tr = document.createElement('tr');
-        for (const text of [String(i + 1), h.name, String(h.par)]) {
+        for (const text of [String(i + 1), h.name, String(h.par), String(career.bests[i] ?? '–')]) {
           const td = document.createElement('td');
           td.textContent = text;
           tr.append(td);
@@ -880,6 +960,18 @@ export class Hud {
     const strokes = card.reduce((a, b) => a + b, 0),
       par = holes.reduce((a, h) => a + h.par, 0);
     this.total.textContent = `${strokes} (${againstPar(strokes, par)})`;
+    // what the round won: its prize, a new record's word as a sticker, or free play's nothing
+    this.prize.hidden = !career.free && career.prize === null;
+    this.prize.dataset.record = String(career.record);
+    if (career.free) this.prize.textContent = 'Free play: nothing won';
+    else {
+      this.prize.textContent = `Prize ${career.prize} coins`;
+      if (career.record) {
+        const record = document.createElement('span');
+        record.textContent = 'New course record!';
+        this.prize.append(record);
+      }
+    }
     this.card.hidden = false;
   }
 }

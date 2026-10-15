@@ -612,6 +612,76 @@ test('the round finished to the card, and begun again from its button', async ({
   expect(problems).toEqual([]);
 });
 
+test('a career round: Continue after a reload goes on from the kept hole, and the last hole pays a prize and sets a record', async ({
+  page,
+}) => {
+  const problems = watch(page);
+  // a round of The Meadow kept at its last hole, the eight before it scored two each, as a reload finds it
+  const card = [2, 2, 2, 2, 2, 2, 2, 2];
+  await start(page, {
+    seed: 1,
+    paused: true,
+    screen: true,
+    save: { coins: 10, round: { course: 'The Meadow', hole: 8, card, retaken: false, pickedUp: false } },
+  });
+  const meadow = page.locator('#start .course', { hasText: 'The Meadow' });
+  await expect(meadow.locator('small span').first()).toHaveText('On hole 9');
+  await expect(page.locator('#playMode')).toHaveText('Career mode');
+  // the card of the round kept is Continue, pressed by a real pointer
+  await meadow.click();
+  const resumed = await page.evaluate(() => window.game!.state());
+  expect(resumed.choosing).toBe(false);
+  expect(resumed.hole).toBe(8);
+  expect(resumed.card).toEqual(card);
+  expect((await page.evaluate(() => window.game!.career())).of?.name).toBe('The Meadow');
+  // the last hole played out as the autopilot would
+  for (let stroke = 1; stroke <= 12; stroke++) {
+    await page.evaluate(() => {
+      const shot = window.game!.suggest();
+      if (shot) window.game!.shoot(shot.angle, shot.power);
+    });
+    for (let f = 0; f < 12 * 60; f += 20) {
+      await play(page, 20, `stroke ${stroke} of the kept round's last hole`);
+      const { phase, ready } = await page.evaluate(() => window.game!.state());
+      if (phase !== 'play' || ready) break;
+    }
+    if ((await page.evaluate(() => window.game!.state().phase)) !== 'play') break;
+  }
+  await play(page, 150, 'after the last hole');
+  const over = await page.evaluate(() => window.game!.state());
+  expect(over.phase).toBe('over');
+  const career = await page.evaluate(() => window.game!.career());
+  expect(career.round, 'the round kept is let go').toBeNull();
+  const total = over.card.reduce((a, b) => a + b, 0);
+  const holed = over.card[8] < 9;
+  if (holed) expect(career.records['The Meadow']).toMatchObject({ strokes: total, par: 26 });
+  // the card says the prize, and a record as a sticker; the coins took the hole's pay and the prize
+  await expect(page.locator('#cardPrize')).toBeVisible();
+  await expect(page.locator('#cardPrize')).toContainText('Prize');
+  if (holed) await expect(page.locator('#cardPrize')).toContainText('New course record!');
+  expect(over.coins).toBeGreaterThan(10 + 20);
+  // each hole's best is on the card beside its score, and the round was the first finished, so the last hole has one
+  await expect(page.locator('#cardRows tr').last().locator('td').nth(3)).toHaveText(holed ? String(over.card[8]) : '–');
+
+  // free play, chosen on the start screen by a real click, pays nothing and keeps nothing
+  await page.locator('#cardCourses').click();
+  await page.locator('#playMode').click();
+  await expect(page.locator('#playMode')).toHaveText('Free play');
+  expect((await page.evaluate(() => window.game!.career())).mode).toBe('free');
+  await page.evaluate(() => window.game!.chooseCourse('The Meadow'));
+  const coins = (await page.evaluate(() => window.game!.state())).coins;
+  const done = await holeOut(page);
+  expect(done.phase).toBe('done');
+  expect((await page.evaluate(() => window.game!.state())).coins, 'free play pays nothing').toBe(coins);
+  expect((await page.evaluate(() => window.game!.career())).round, 'and keeps no round').toBeNull();
+  // the mode is kept in the save, and a reload comes back to it
+  await page.reload();
+  await expect.poll(() => page.evaluate(() => window.game?.ready ?? false), { timeout: 60_000 }).toBe(true);
+  expect((await page.evaluate(() => window.game!.career())).mode).toBe('free');
+  expect(await page.evaluate(() => window.game!.invariants())).toEqual([]);
+  expect(problems).toEqual([]);
+});
+
 test('a ball putted into the water costs a stroke, is splashed, and comes back to where it was struck from', async ({
   page,
 }) => {

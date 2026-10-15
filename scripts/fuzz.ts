@@ -52,7 +52,11 @@ const holesOf = (on: Golf) =>
 
 if (!isMainThread) {
   const { seed, frames, on } = workerData as { seed: number; frames: number; on: Golf | undefined };
-  parentPort!.postMessage(fuzz(seed, frames, on ? holesOf(on) : undefined));
+  // a course of the game's own is played as a course, named, so its career rounds are paid and kept; a test's holes are no course's
+  const named = on && on in GOLF ? COURSES.find((c) => c.name === GOLF[on]) : undefined;
+  parentPort!.postMessage(
+    fuzz(seed, frames, on ? holesOf(on) : undefined, named && { name: named.name, purse: named.purse }),
+  );
 } else {
   await main();
 }

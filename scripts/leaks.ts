@@ -44,8 +44,10 @@ export const WATCH: Partial<Record<string, { ceiling: number; steady?: boolean }
   // the three longest ids (streamers, fireworks, horseshoe): 5,830 bytes, which `test/leaks.test.ts` holds to the byte.
   // 6,500 was that and about six holes more. 14 October 2026: nine courses of nine, The Heath, The Woods and The Old Course
   // joining, measured the same way at 8,508 bytes, held to the byte; 9,200 is that and about six holes more, so a tenth
-  // course fails the test before it fails the gate)
-  'save bytes': { ceiling: 9_200 },
+  // course fails the test before it fails the gate. 15 October 2026: the career's record of each of the nine courses and
+  // a round kept at its last hole, measured the same way at 9,800 bytes, held to the byte; 10,500 is that and about six
+  // holes more)
+  'save bytes': { ceiling: 10_500 },
   // emptied at every new round: never more than a score a hole
   'card scores': { ceiling: COURSE.length },
   // the bodies in the rehearsal a golf hole's shots are previewed in: the ball, however many shots are tried, and the

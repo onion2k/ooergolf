@@ -167,6 +167,9 @@ describe('the game', () => {
       owned: [],
       kit: { club: '', ball: '', accessory: '' },
       best: {},
+      mode: 'career',
+      records: {},
+      round: null,
     });
   });
 });

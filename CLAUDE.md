@@ -224,6 +224,11 @@ today, and what the next features must hand it:
   without that kind plays as it did: it strikes a moving bumper where the barrier is, strikes a kicker, strikes at
   a flipper through every phase of its swing, and strikes onto a stream, where the ball must be carried and never told lost
   (`lostOnStreamProblems`, checked as a loss is told).
+  The career's buttons are on a stream of their own (`careerer`): Career or Free play at a round's first tee or its end
+  (`choose career or free play`), and the card of the round kept (`continue`), which a reload also takes, held to go on
+  from the hole after the last it finished with its card as it was (`checked['round gone on with']`); a course chosen is
+  named, as the page names it, and a run `--on` a course of the game's names its rounds too; each prize told is of a round that
+  counts, at its last hole, and in free play no pay is told and none is made (`checked['free hole paid nothing']`).
   On golf each ball come to rest is held to the zones' lie (`lieProblems`, `checked['lie at rest']`, which a test holds above nothing),
   and the fly-in to every hole is held to `flyInProblems` every frame (`checked.flying` counts the frames it was).
   On a hole with a wood's lane it drives along the lane from the tee, slipped, and on a hole with land wholly in water it
@@ -245,7 +250,9 @@ today, and what the next features must hand it:
   it, which is the most a post may throw it; a ball at rest lies on the
   floor or the top of a box or a post; the strokes are a count within the
   hole's limit; the card has a score for each hole finished and no other,
-  each between one and the limit. And every knock the game tells of is of
+  each between one and the limit; and the career is a mode there is, its
+  records whole rounds, a counting round's record no better than its holes'
+  bests together, and the round kept the card in play (`careerProblems`). And every knock the game tells of is of
   the live ball, where it is, at least `KNOCK.least` hard, in a direction
   of unit length (`knockProblems`, which the fuzzer checks each one by).
   And the camera keeps to its limits: turned within a turn either way,
@@ -321,8 +328,8 @@ today, and what the next features must hand it:
   name's, and it moved the figure from 34.63 to 35.44).
 - **Leaks:** ten minutes of the autopilot playing round after round, on The
   Meadow and again on each golf course (`GOLF_COURSES` in `scripts/leaks.ts`: the six, under
-  the Links' ceilings but for the save's bytes, 9,200 since 14 October 2026 for eighty-one holes' bests (8,508 measured, held
-  to the byte by `test/leaks.test.ts`); `leaks:check` queues the seven, an hour and ten minutes, and `--on` narrows a run to one kind for a short look; a test holds that a hole
+  the Links' ceilings but for the save's bytes, 10,500 since 15 October 2026 for eighty-one holes' bests, the career's nine
+  course records and a round kept at its last hole (9,800 measured, held to the byte by `test/leaks.test.ts`); `leaks:check` queues the seven, an hour and ten minutes, and `--on` narrows a run to one kind for a short look; a test holds that a hole
   with a lane is collectable, so `laneOf`'s cache keeps nothing alive, and one each that `zonesOf`'s and `pondOf`'s tables are weak; the
   arena's reused ground weights are emptied at 256, held by a test, and nothing of the new caches is kept for a game's life, so
   nothing was added to `scripts/leaks.ts`). The card is emptied each round and
@@ -1206,8 +1213,28 @@ minigolf: true }`, read through `oceanFor`) is the one switch: `waterBed` and `s
   stopped on a blue screen as it loaded and a hole begun in a round was never drawn; `smoke/progress.spec.ts` plays it). The save
   (`progress.ts`) holds coins, gems, the items owned, the kit worn and each hole's best with the kit it was made with; an id the shop does
   not sell is dropped and a slot is read only if owned, so a save from before the three aisles loads with its coins, gems and bests and
-  no items. `Game` pays into it when a hole is done (golf too), and buys, equips (`equip`, `unequip(aisle)`) from it. Every save shape is
-  in `test/saves/`. Chance comes from `random.ts`, handed in.
+  no items. `Game` pays into it when a hole is done (golf too; never in free play, see the career), and buys, equips (`equip`,
+  `unequip(aisle)`) from it. Every save shape is in `test/saves/`. Chance comes from `random.ts`, handed in.
+- **The career** (15 October 2026; `src/career.ts`, a leaf). The save has a `mode`, `career` (the default, and what every save
+  from before it loads as, since every round was paid) or `free`; `records`, each course's best round in the career by its name
+  (strokes, par, the kit worn, the day, `when`, which `Game` is told by its `today` option and is '' without one); and `round`,
+  the career round under way (`SavedRound`: the course's name, the next hole from nought, the card, the retake spent and whether
+  a hole was picked up). A round counts (`Game.counting`) when it is of a named course (`Game.of`, a `RoundOf`: the name and the
+  course's `purse`, `Course.purse`, 1 for minigolf and 1.2 to 2 on golf by how hard the pace player finds it), played in the career,
+  and not a rehearsal's; `playCourse(holes, of)` names a round, `adopt(of)` names the untouched first tee the page already has,
+  and holes with no `of` (a test's, the title's, and any round `startAt` jumps into) pay their holes as ever and keep nothing.
+  A counting round is kept after each hole done, and at its last pays `prizeOf` (`PRIZE`: 20 times the purse, 10 a stroke under
+  par, 25 for a record) on top of the hole's pay, told by `roundPaid(coins, record)` after `paid` and before `finished`; a record
+  is a round with no hole picked up, under the one held (`isRecord`). `newRound`, and a course's card, give up a round kept;
+  `resume(holes, of)` goes on with it from its next hole's tee, its card and retake as they were, and refuses (and lets go) one
+  of another course or with no hole left. In free play (`setMode`, which leaves the round in play no course's) nothing is paid,
+  no best or record kept, no round kept and no piggy bank spent. On the start screen the mode is one cycle button on the
+  heading's line (`#playMode`, "Career mode" or "Free play"; on a phone it stands alone there, the words hidden), a card's
+  first pill says its record ("Record 31") where its count of holes stood, and the card of the round kept says "On hole 4" and
+  goes on with it when pressed (`Hud.setCareer`): there is no Continue button and no row of its own, since a phone 360 wide under
+  the title had 7 pixels to spare. The card at the end has a Best column and says the prize, a new record as a sticker, or "Free
+  play: nothing won". `careerProblems` holds it in `checkInvariants`. A reload keeps the round between holes and not where a
+  ball lies part way round one, so that hole is begun again from its tee.
 - `src/physics.ts` is the game's side of artshape-physics, and nothing else
   imports the package directly. A change a package needs goes in that repo,
   with a version bump here, as v0.4.1 was for a ball put to sleep in the
@@ -1324,6 +1351,9 @@ colour and size, the spread's half axes, where a tree knocks it and what it come
 from what the last frame placed; and `map()`, the hole's map over the course: its size and where the ball, the cup and the
 landing of the shot being aimed are on it. `state()` has the shape and the spin chosen, the hole's `wind` (x, y, speed), its `greens` speed and its name (`greenSpeed`: `fast`,
 `medium`, `slow` or null) and `arrows`, how many stand over its green;
+`career()` says the mode, the records, the round kept, the course the round in play is of and whether it counts;
+`playMode(mode)` presses the start screen's mode button until it shows that mode, and `continueRound()` presses the card of the
+round kept (false with none);
 `app()` says the service worker's registration (`worker`: `none`, `registering`, `ready` or `failed`), whether the browser
 offers to install (`offered`) and whether the page runs standalone, and `install()` presses the Install button's action (false
 with no offer to take). `motions()` has `wind` (the arrow's turn in degrees and its text, read back from the page), `controls` (the two buttons as drawn),
@@ -1406,7 +1436,9 @@ each step, and a gate handed what it needs in the same change:
   `touches` in `smoke/game.ts` now wait for the panels to land (`landed`), and `pullDown` says what was under the finger
   when a drag aims nothing. One miss in about 420 runs since the switch moved was seen once and not caught again, so its
   cause is not proven; the next one names itself.
-- The course a player is on, in the save: a reload opens the start screen.
+- The ball part way round a hole, in the save: a reload goes on with a career round from the tee of the hole it was on
+  (and a round of free play is not kept at all). And a career round kept cannot be begun again on its own course from the
+  start screen, since that card is the way to go on with it: it is given up by choosing another course, or played out.
 - Steps a ball meets as ledges. v0.8.0's `stepEdges` bounces a ball off a
   step's top edge and lets it climb a riser only with speed; tried on the
   game, Up and Over's median went from 2 to 4 and four tests failed, so it
@@ -1415,8 +1447,6 @@ each step, and a gate handed what it needs in the same change:
   Mill Race has no sand and no post yet.
 - Pars that are what a player takes: see the pace gate, above. The
   autopilot would need a player's timing, measured against real play.
-- Where in the round a player is, in the save: a reload starts the round
-  again, which is also why the fuzzer starts each seed part way round.
 - Ball upgrades: the physics has bounce and roll by kind of body.
 - Turning the camera by hand (the right mouse button, the keys, a two-finger twist, or the Look switch that was removed
   on 6 October 2026): the camera turns to the aim and to near the flag, and the overhead view is for looking. The view is not saved.
