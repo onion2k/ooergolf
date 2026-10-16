@@ -45,6 +45,7 @@
     --flag-deep: #b81f19;
     --sun: #ffcf33;
     --sun-hover: #ffda5c;
+    --sun-tint: #ffeeb8;
     --sun-deep: #d99a00;
     --sun-ink: #5a3b00;
     --leaf: #4cd070;
@@ -1246,6 +1247,157 @@
     }
   }
 
+  /*
+   * The tournament (15 October 2026, mock 1, 2a and 3 of a sheet the user chose from). On the start screen in the career a
+   * tab shows its tour's next event in place of the picker's course: a line over the name, Par, Entry and Purse as the tiles,
+   * the order of merit beside the card on a desk and under it on a phone, and Enter and Practise for Play, with the arrows and
+   * the dots away since a season chooses its course. The leaderboard is the hole's panel's foot, so a phone's drawer carries
+   * it; and the card at an event's end says the field and the season under the scores. A child of a panel marked hidden is
+   * away whatever display its own rule gives it (Play again's is a block).
+   */
+  .panel [hidden] {
+    display: none !important;
+  }
+  #start[data-event] #picker {
+    grid-template-columns: minmax(0, 1fr) 236px;
+    align-items: start;
+  }
+  #start[data-event] #courseCard {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  #start[data-event] #coursePrev,
+  #start[data-event] #courseNext,
+  #start[data-event] #courseDots {
+    display: none;
+  }
+  #start[data-event] #courseHead {
+    grid-template-areas: 'event event' 'name name' 'stats meta';
+  }
+  #courseEvent {
+    grid-area: event;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  #courseBadge[data-kind='event'] {
+    padding: 2px 0;
+    font-size: 13px;
+  }
+  #merit {
+    grid-column: 2;
+    grid-row: 1;
+    display: grid;
+    gap: 4px;
+    text-align: left;
+  }
+  #merit > small:first-child,
+  #boardHead {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+  #merit table,
+  #board table,
+  #cardResults table {
+    width: 100%;
+    border-collapse: collapse;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  #merit td,
+  #board td {
+    padding: 3px 6px;
+    border-top: 2px solid var(--mist);
+  }
+  #merit td:last-child,
+  #board td:last-child {
+    text-align: right;
+  }
+  #merit tr.you td,
+  #board tr.you td,
+  #cardResults tr.you td {
+    background: var(--sun-tint);
+  }
+  #meritLine,
+  #boardCut {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--ink-soft);
+  }
+  #enterEvent {
+    min-height: 48px;
+    padding: 0 34px;
+    font-size: 18px;
+  }
+  #enterEvent:disabled {
+    color: var(--ink-soft);
+    background: var(--mist);
+    box-shadow: 0 4px 0 var(--mist-deep);
+    cursor: default;
+  }
+  #enterNote {
+    flex-basis: 100%;
+    font-size: 13px;
+    font-weight: 800;
+    color: var(--ink-soft);
+  }
+  #board {
+    grid-column: 1 / -1;
+    grid-row: 20;
+    display: grid;
+    gap: 3px;
+    min-width: 200px;
+    margin-top: 8px;
+    padding-top: 6px;
+    font-size: 14px;
+    border-top: 2px solid var(--mist);
+  }
+  #cardResults {
+    margin-top: 12px;
+  }
+  #meritMove,
+  #seasonLine {
+    margin: 10px 0 0;
+    font-weight: 800;
+    text-align: center;
+  }
+  #seasonLine {
+    color: var(--title);
+  }
+  #nextEvent {
+    display: block;
+    width: 100%;
+    min-height: 52px;
+    margin-top: 16px;
+    font-size: 19px;
+  }
+  @media (max-width: 600px) {
+    /* a phone's event: the order of merit under the card, small, so the card, the table and Enter fit without scrolling */
+    #start[data-event] #picker {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    #start[data-event] #courseHead {
+      grid-template-areas: 'event' 'name' 'stats' 'meta';
+    }
+    #merit {
+      grid-column: 1;
+      grid-row: 2;
+      gap: 2px;
+      font-size: 13px;
+    }
+    #merit td {
+      padding: 1px 6px;
+    }
+    #enterEvent {
+      padding: 0 20px;
+      font-size: 16px;
+    }
+  }
+
   /* ---- the corners at the bottom: how to putt, and the frame's cost ---- */
 
   #help,
@@ -1972,6 +2124,14 @@
   ></small>
   <small id="greens" hidden></small>
   <small id="putt" hidden></small>
+  <!-- in a tournament, how the field stands: the top three, you and the paid places' cut, thru the holes finished -->
+  <div id="board" hidden>
+    <small id="boardHead"></small>
+    <table>
+      <tbody id="boardRows"></tbody>
+    </table>
+    <small id="boardCut"></small>
+  </div>
 </div>
 <div class="panel" id="toast" hidden></div>
 <div class="panel" id="card" hidden>
@@ -1995,7 +2155,23 @@
     </tfoot>
   </table>
   <p id="cardPrize" hidden></p>
+  <!-- at an event's end: where the field finished, and what it did to the order of merit and the season -->
+  <div id="cardResults" hidden>
+    <table>
+      <thead>
+        <tr>
+          <th>Pos</th>
+          <th>Player</th>
+          <th>Total</th>
+        </tr>
+      </thead>
+      <tbody id="resultRows"></tbody>
+    </table>
+    <p id="meritMove"></p>
+    <p id="seasonLine" hidden></p>
+  </div>
   <button id="again">Play again</button>
+  <button id="nextEvent" hidden>Next event</button>
   <div class="pair">
     <button id="cardCourses" class="quiet">Courses</button>
     <button id="cardShop" class="quiet">Visit the shop</button>
@@ -2056,6 +2232,7 @@
     <button id="coursePrev" class="arrow" type="button" aria-label="Previous course"></button>
     <div id="courseCard">
       <div id="courseHead" aria-live="polite">
+        <small id="courseEvent" hidden></small>
         <b id="courseName"></b>
         <div id="courseStats"></div>
         <div id="courseMeta"><span id="coursePips" role="img"></span><span id="courseBadge"></span></div>
@@ -2065,10 +2242,21 @@
     </div>
     <button id="courseNext" class="arrow" type="button" aria-label="Next course"></button>
     <div id="courseDots" aria-hidden="true"></div>
+    <!-- in the career, the tour's order of merit beside the event: the top four and you -->
+    <div id="merit" hidden>
+      <small>Order of merit</small>
+      <table>
+        <tbody id="meritRows"></tbody>
+      </table>
+      <small id="meritLine"></small>
+    </div>
   </div>
   <div id="startFoot">
     <button id="playCourse" type="button">Play course</button>
+    <button id="enterEvent" type="button" hidden>Enter</button>
+    <button id="practise" type="button" class="quiet" hidden>Practise</button>
     <button id="playMode" type="button" class="quiet">Career mode</button>
+    <small id="enterNote" hidden></small>
   </div>
 </div>
 <div class="panel" id="stats" hidden></div>

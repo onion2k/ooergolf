@@ -13,6 +13,8 @@
  * that is not here does not compile.
  */
 import type { WorkerState } from './install';
+import type { Board, EventCard, Results } from './hud';
+import type { Tour } from './season';
 import type { Antialias } from 'artshape-render/game/renderer';
 import { KIND_NAME, TILE, type Layout } from './arena';
 import { Autopilot, type Plan } from './autopilot';
@@ -234,6 +236,12 @@ export interface GameApi {
   playMode(mode: PlayMode): void;
   /** The card of the career round kept pressed on the start screen, which goes on with it: false when there is none. */
   continueRound(): boolean;
+  /**
+   * The tournament's screens handed fixed figures, as the page will hand them the season's: each tour's event card on the
+   * start screen, the leaderboard in the hole's panel, and the card at an event's end over the current course's holes. Only
+   * what is given is drawn, so a test can hold the drawing apart from what fills it.
+   */
+  tournamentHud(view: TournamentView): void;
   /** A new round, as the card's button asks for. */
   newRound(): void;
   /** An item bought, as the shop's button does; whether it was. */
@@ -479,7 +487,15 @@ export interface DebugHost {
   /** The start screen's career buttons pressed, as a click on each. */
   playMode(mode: PlayMode): void;
   continueRound(): boolean;
+  tournamentHud(view: TournamentView): void;
   events: string[];
+}
+
+/** What `tournamentHud` hands the hud: each part drawn only where it is given, and null to put it away. */
+export interface TournamentView {
+  events?: Partial<Record<Tour, EventCard>> | null;
+  board?: Board | null;
+  results?: Results | null;
 }
 
 /**
@@ -629,6 +645,7 @@ export function createApi(host: DebugHost): GameApi {
     }),
     playMode: (mode) => host.playMode(mode),
     continueRound: () => host.continueRound(),
+    tournamentHud: (view) => host.tournamentHud(view),
     newRound: () => game.newRound(),
     buy: (id) => game.buy(id),
     equip: (id) => game.equip(id),

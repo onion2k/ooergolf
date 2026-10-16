@@ -1769,6 +1769,17 @@ async function main() {
       play.click();
       return true;
     },
+    tournamentHud: (view) => {
+      if (view.events !== undefined) hud.setEvents(view.events);
+      if (view.board !== undefined) hud.setBoard(view.board);
+      if (view.results !== undefined)
+        hud.finished(
+          game.course,
+          game.course.map((h) => h.par),
+          { bests: [], prize: view.results?.prize ?? null, record: false, free: false },
+          view.results,
+        );
+    },
     chooseCourse: (name) => {
       // as a player does: the course's tab pressed, the next arrow pressed until the course is in view, and Play pressed
       const course = pickable.find((c) => c.name === name);

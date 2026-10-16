@@ -20,6 +20,17 @@ import { swatchOf } from './swatch';
 import { SCORE_KINDS, againstPar, scoreKind, scoreName } from './score';
 import type { PlayMode } from './career';
 import type { Kind, Picker } from './picker';
+import type { Grade, Tour } from './season';
+import {
+  cutLine,
+  eventHeader,
+  meritMove,
+  placeText,
+  promotionLine,
+  seasonLine,
+  stickerText,
+  toParText,
+} from './eventwords';
 
 /** Each kind of word the callout over the course says, which the stylesheet colours: a score's kind, the water, or out of bounds. */
 export const CALLOUTS = [...SCORE_KINDS, 'splash', 'out'] as const;
@@ -52,6 +63,83 @@ export interface HudHandlers {
   mode(mode: PlayMode): void;
   /** The card of the career round kept pressed on the start screen: the round gone on with. */
   resume(): void;
+  /** Enter pressed on a tour's event card: the fee paid and the event begun. Optional until the page is wired to the season. */
+  enter?(tour: Tour): void;
+  /** Practise pressed on a tour's event card: its course played for nothing. */
+  practise?(tour: Tour): void;
+  /** Next event pressed on the card at an event's end: back to the start screen and the season's next event. */
+  next?(): void;
+}
+
+/** A row of an order of merit, a leaderboard or a result: a place, shared or not, a name, and whether it is the player. */
+interface Row {
+  place: number;
+  tied: boolean;
+  name: string;
+  you: boolean;
+}
+
+/**
+ * A tour's next event, as its card on the start screen shows it in the career: the grade and the event's place in the
+ * season, the course, what it costs and pays, the coins there are to pay with, and the order of merit (the top four and you).
+ */
+export interface EventCard {
+  tour: Tour;
+  grade: Grade;
+  /** The event's place in the season, from one. */
+  event: number;
+  events: number;
+  course: string;
+  par: number;
+  fee: number;
+  pot: number;
+  /** How many places are paid. */
+  paid: number;
+  coins: number;
+  merit: (Row & { points: number })[];
+  /** How many of the order of merit go up at the season's end. */
+  promoted: number;
+}
+
+/** How the field stands as the player goes round an event: thru how many holes, the top three and you, and the cut. */
+export interface Board {
+  thru: number;
+  rows: (Row & { toPar: number })[];
+  /** The last paid place's score against par. */
+  cut: number;
+  /** How many of the field are behind the player. */
+  behind: number;
+}
+
+/** What an event came to, on the card at its end: the place and prize, the field's top four and you, and the season. */
+export interface Results {
+  course: string;
+  place: number;
+  tied: boolean;
+  prize: number;
+  rows: (Row & { total: number })[];
+  meritFrom: number;
+  meritTo: number;
+  seasonOver: boolean;
+  promotedTo: Grade | null;
+  title: boolean;
+}
+
+/** The tour a tab of the picker holds the events of. */
+const tourOf = (kind: Kind): Tour => (kind === 'golf' ? 'golf' : 'mini');
+
+/** A table's rows drawn: each a row of cells of the words given, the player's marked so the stylesheet can pick it out. */
+function rowsOf(rows: readonly { you: boolean; cells: string[] }[]): HTMLTableRowElement[] {
+  return rows.map((r) => {
+    const tr = document.createElement('tr');
+    if (r.you) tr.className = 'you';
+    for (const text of r.cells) {
+      const td = document.createElement('td');
+      td.textContent = text;
+      tr.append(td);
+    }
+    return tr;
+  });
 }
 
 /**
@@ -217,6 +305,30 @@ export class Hud {
   private readonly courseStrip = document.getElementById('courseStrip')!;
   private readonly courseDots = document.getElementById('courseDots')!;
   private readonly playButton = document.getElementById('playCourse') as HTMLButtonElement;
+  /** The tournament's parts of the start screen: the line over the event's name, the order of merit, Enter and Practise. */
+  private readonly courseEvent = document.getElementById('courseEvent')!;
+  private readonly merit = document.getElementById('merit')!;
+  private readonly meritRows = document.getElementById('meritRows')!;
+  private readonly meritLine = document.getElementById('meritLine')!;
+  private readonly enterButton = document.getElementById('enterEvent') as HTMLButtonElement;
+  private readonly practiseButton = document.getElementById('practise') as HTMLButtonElement;
+  private readonly enterNote = document.getElementById('enterNote')!;
+  /** Each tour's next event, as the start screen shows it on that tour's tab; none in free play. */
+  private events: Partial<Record<Tour, EventCard>> | null = null;
+  /** The leaderboard in the hole's panel, and what it last drew, so the page may say it every frame and it is written only when it changes. */
+  private readonly board = document.getElementById('board')!;
+  private readonly boardHead = document.getElementById('boardHead')!;
+  private readonly boardRows = document.getElementById('boardRows')!;
+  private readonly boardCut = document.getElementById('boardCut')!;
+  private boardDrawn = '';
+  /** The card's heading, and what it says of an event at its end. */
+  private readonly cardHeading = this.card.querySelector('h2')!;
+  private readonly cardResults = document.getElementById('cardResults')!;
+  private readonly resultRows = document.getElementById('resultRows')!;
+  private readonly meritMoved = document.getElementById('meritMove')!;
+  private readonly seasonWords = document.getElementById('seasonLine')!;
+  private readonly againButton = document.getElementById('again')!;
+  private readonly nextButton = document.getElementById('nextEvent')!;
   /** The picker the start screen draws, handed in with `showStart`; none until then. */
   private picker: Picker | null = null;
   private readonly help = document.getElementById('help')!;
@@ -279,6 +391,15 @@ export class Hud {
     private readonly catalogue: readonly Item[],
   ) {
     document.getElementById('again')!.addEventListener('click', () => handlers.again());
+    this.nextButton.addEventListener('click', () => handlers.next?.());
+    this.enterButton.addEventListener('click', () => {
+      const card = this.eventShown();
+      if (card) handlers.enter?.(card.tour);
+    });
+    this.practiseButton.addEventListener('click', () => {
+      const card = this.eventShown();
+      if (card) handlers.practise?.(card.tour);
+    });
     document.getElementById('cardCourses')!.addEventListener('click', () => handlers.courses());
     this.installButton.addEventListener('click', () => handlers.install());
     this.modeButton.addEventListener('click', () => handlers.mode(this.modeShown === 'career' ? 'free' : 'career'));
@@ -726,9 +847,9 @@ export class Hud {
     return true;
   }
 
-  /** An arrow pressed: the next course of the tab, or the one before. */
+  /** An arrow pressed: the next course of the tab, or the one before; nothing while the tab shows an event, whose course is the season's. */
   private stepCourse(by: number): void {
-    if (!this.picker) return;
+    if (!this.picker || this.eventShown()) return;
     this.picker.step(by);
     this.drawPicker();
   }
@@ -737,6 +858,9 @@ export class Hud {
   private drawPicker(): void {
     const picker = this.picker;
     if (!picker) return;
+    // a tab with an event shows the event's course, which the season chose and the arrows cannot step from
+    const event = this.eventShown();
+    if (event && picker.shown().name !== event.course && picker.has(event.course)) picker.show(event.course);
     const shown = picker.shown();
     for (const kind of ['golf', 'minigolf'] as const) {
       const tab = this.kindTabs[kind];
@@ -819,6 +943,107 @@ export class Hud {
     );
     // the six colours go round the tab's courses, so a course keeps the colour its card had
     this.courseCard.dataset.colour = String(shown.index % 6);
+    this.drawEvent(event?.course === shown.name ? event : null);
+  }
+
+  /** The tour's event a tab shows, in the career: none in free play, or for a tour with no event to show. */
+  private eventShown(): EventCard | null {
+    if (!this.picker || !this.events) return null;
+    return this.events[tourOf(this.picker.kind)] ?? null;
+  }
+
+  /**
+   * The picker as an event's card, or as itself: in an event, the line over the course's name, its par, entry and purse as
+   * the tiles, what the event is in place of the pips and the badge, the order of merit beside it, and Enter and Practise in
+   * place of Play, with the arrows and the dots away (`data-event` on the screen, which the stylesheet reads). Without one,
+   * every part of it is put back as the picker drew it.
+   */
+  private drawEvent(card: EventCard | null): void {
+    const on = card !== null;
+    if (on) this.start.dataset.event = '';
+    else delete this.start.dataset.event;
+    this.courseEvent.hidden = !on;
+    this.merit.hidden = !on;
+    this.enterButton.hidden = !on;
+    this.practiseButton.hidden = !on;
+    this.playButton.hidden = on;
+    this.coursePips.hidden = on;
+    if (!card) {
+      this.enterNote.hidden = true;
+      return;
+    }
+    this.courseEvent.textContent = eventHeader(card.grade, card.event, card.events);
+    const stats: [string, string][] = [
+      ['Par', String(card.par)],
+      ['Entry', String(card.fee)],
+      ['Purse', String(card.pot)],
+    ];
+    this.courseStats.replaceChildren(
+      ...stats.map(([word, figure]) => {
+        const tile = document.createElement('span');
+        const label = document.createElement('i');
+        label.textContent = word;
+        tile.append(label, figure);
+        return tile;
+      }),
+    );
+    this.courseBadge.textContent = `12 in the field · top ${card.paid} paid · one go`;
+    this.courseBadge.dataset.kind = 'event';
+    this.meritRows.replaceChildren(
+      ...rowsOf(card.merit.map((r) => ({ you: r.you, cells: [placeText(r.place, r.tied), r.name, String(r.points)] }))),
+    );
+    this.meritLine.textContent = promotionLine(card.grade, card.promoted, card.events);
+    const short = card.coins < card.fee;
+    this.enterButton.textContent = `Enter · ${card.fee}`;
+    this.enterButton.disabled = short;
+    this.enterButton.setAttribute(
+      'aria-label',
+      short
+        ? `Enter ${card.course} for ${card.fee} coins: you have ${card.coins}`
+        : `Enter ${card.course} for ${card.fee} coins`,
+    );
+    this.enterNote.hidden = !short;
+    this.enterNote.textContent = `You need ${card.fee} coins`;
+    this.practiseButton.setAttribute('aria-label', `Practise ${card.course} for nothing`);
+  }
+
+  /**
+   * Each tour's next event, in the career, which its tab shows in place of the picker's course (mock 1 of 15 October
+   * 2026); or none, in free play, and the picker is exactly as it was.
+   */
+  setEvents(cards: Partial<Record<Tour, EventCard>> | null): void {
+    this.events = cards;
+    this.drawPicker();
+  }
+
+  /**
+   * The leaderboard in the hole's panel while an event is played (mock 2a): thru how many holes, the top three and you, and
+   * the cut; on a phone it is in the drawer with the rest of the hole's words. None away from an event. Written only when
+   * it changes, so the page may say it every frame.
+   */
+  setBoard(board: Board | null): void {
+    const key = board ? JSON.stringify(board) : '';
+    if (key === this.boardDrawn) return;
+    this.boardDrawn = key;
+    this.board.hidden = !board;
+    if (!board) return;
+    this.boardHead.textContent = `Leaderboard · thru ${board.thru}`;
+    this.boardRows.replaceChildren(
+      ...rowsOf(
+        board.rows.map((r) => ({ you: r.you, cells: [placeText(r.place, r.tied), r.name, toParText(r.toPar)] })),
+      ),
+    );
+    this.boardCut.textContent = cutLine(board.cut, board.behind);
+  }
+
+  /** The leaderboard as it was last drawn, read back for the tests: its head, rows and foot, or null while it is away. */
+  boardShown(): { head: string; rows: string[][]; cut: string } | null {
+    if (this.board.hidden) return null;
+    return {
+      head: this.boardHead.textContent,
+      rows: Array.from(this.boardRows.querySelectorAll('tr'), (tr) => Array.from(tr.cells, (td) => td.textContent)),
+      cut: this.boardCut.textContent,
+    };
   }
 
   /**
@@ -1057,6 +1282,7 @@ export class Hud {
     holes: readonly { name: string; par: number }[],
     card: readonly number[],
     career: CardCareer = { bests: [], prize: null, record: false, free: false },
+    results: Results | null = null,
   ) {
     this.toast.hidden = true;
     this.rows.replaceChildren(
@@ -1084,9 +1310,18 @@ export class Hud {
       par = holes.reduce((a, h) => a + h.par, 0);
     this.total.textContent = `${strokes} (${againstPar(strokes, par)})`;
     // what the round won: its prize, a new record's word as a sticker, or free play's nothing
-    this.prize.hidden = !career.free && career.prize === null;
-    this.prize.dataset.record = String(career.record);
-    if (career.free) this.prize.textContent = 'Free play: nothing won';
+    this.prize.hidden = !career.free && career.prize === null && !results;
+    this.prize.dataset.record = String(career.record || results !== null);
+    this.drawResults(results);
+    if (results) {
+      // an event's sticker is its place and what it won (its share and any record's bonus, which the prize says in all)
+      this.prize.textContent = stickerText(results.place, results.tied, career.prize ?? results.prize);
+      if (career.record) {
+        const record = document.createElement('span');
+        record.textContent = 'New course record!';
+        this.prize.append(record);
+      }
+    } else if (career.free) this.prize.textContent = 'Free play: nothing won';
     else {
       this.prize.textContent = `Prize ${career.prize} coins`;
       if (career.record) {
@@ -1096,5 +1331,26 @@ export class Hud {
       }
     }
     this.card.hidden = false;
+  }
+
+  /**
+   * The card's part for an event (mock 3), or the card as it always was: the course as its heading, the field's top four and
+   * you, how the order of merit moved and what the season's end meant, and Next event in place of Play again.
+   */
+  private drawResults(results: Results | null): void {
+    this.cardHeading.textContent = results ? results.course : 'The card';
+    this.cardResults.hidden = !results;
+    this.againButton.hidden = results !== null;
+    this.nextButton.hidden = results === null;
+    if (!results) return;
+    this.resultRows.replaceChildren(
+      ...rowsOf(
+        results.rows.map((r) => ({ you: r.you, cells: [placeText(r.place, r.tied), r.name, String(r.total)] })),
+      ),
+    );
+    this.meritMoved.textContent = meritMove(results.meritFrom, results.meritTo);
+    const line = seasonLine(results.seasonOver, results.promotedTo, results.title);
+    this.seasonWords.hidden = line === '';
+    this.seasonWords.textContent = line;
   }
 }
