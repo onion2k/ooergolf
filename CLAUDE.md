@@ -1265,6 +1265,11 @@ minigolf: true }`, read through `oceanFor`) is the one switch: `waterBed` and `s
   drawer), and the card at an event's end shows the place and prize, the field's top four and you, the order of merit's move and a
   season's end, with Next event (`finished`'s `Results`; two columns on a desk). The words are `src/eventwords.ts`. Under the title
   a phone has no room for the strip of holes, the line about the field or the order of merit's fourth row, which go there.
+  The mode is a switch named Career mode (`#playMode`, `role="switch"`, `aria-checked`), the word Career beside a track that is
+  on in the career and off in free play, on the tabs' row at the right (16 October 2026: a cycle button at the foot left it
+  unclear whether its words said the mode or what a press would choose). Under 381 pixels wide the tabs read Golf and Mini so
+  the switch keeps its word on their row, and under the title on a phone the round Install button stands at the panel's top
+  left, above them.
   `careerProblems` holds the season in `checkInvariants`. A reload keeps the round between holes and not where a ball lies part
   way round one, so that hole is begun again from its tee.
 - `src/physics.ts` is the game's side of artshape-physics, and nothing else
@@ -1388,7 +1393,7 @@ landing of the shot being aimed are on it. `state()` has the shape and the spin 
 drawn; `enter(tour)` and `practise(tour)` press that tour's tab and its event card's button (false where it is not to be pressed);
 `tournamentHud({ events, board, results })` hands the hud fixed figures for a test of the drawing alone; `chooseCourse` puts the
 career's event cards away before it steps the picker, a shortcut no player has;
-`playMode(mode)` presses the start screen's mode button until it shows that mode, and `continueRound()` presses the card of the
+`playMode(mode)` presses the start screen's Career switch until it is in that mode, and `continueRound()` presses the card of the
 round kept (false with none);
 `app()` says the service worker's registration (`worker`: `none`, `registering`, `ready` or `failed`), whether the browser
 offers to install (`offered`) and whether the page runs standalone, and `install()` presses the Install button's action (false

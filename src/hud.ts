@@ -1110,14 +1110,9 @@ export class Hud {
     this.career = career;
     this.modeShown = career.mode;
     const free = career.mode === 'free';
-    this.modeButton.textContent = free ? 'Free play' : 'Career mode';
+    // a switch, named Career mode, on in the career and off in free play: its state is what it says, never what a press would do
+    this.modeButton.setAttribute('aria-checked', String(!free));
     this.modeButton.dataset.mode = career.mode;
-    this.modeButton.setAttribute(
-      'aria-label',
-      free
-        ? 'Free play: nothing won or kept. Press for the career'
-        : 'Career mode: rounds pay and set records. Press for free play',
-    );
     this.startWords.textContent = free ? 'Choose a course to play for nothing' : 'Choose a course';
     const round = free ? null : career.round;
     this.going = round?.course ?? '';

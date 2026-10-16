@@ -632,7 +632,7 @@ test('an event: Continue after a reload goes on from the kept hole, the board fo
   await expect(page.locator('#courseName')).toHaveText('The Meadow');
   await expect(page.locator('#courseEvent')).toHaveText('Club tour · Event 1 of 3');
   await expect(page.locator('#enterEvent')).toHaveText('Continue · hole 9');
-  await expect(page.locator('#playMode')).toHaveText('Career mode');
+  await expect(page.locator('#playMode'), 'the career switch on').toHaveAttribute('aria-checked', 'true');
   // Continue, pressed by a real pointer: no fee is asked again
   await page.locator('#enterEvent').click();
   const resumed = await page.evaluate(() => window.game!.state());
@@ -696,7 +696,7 @@ test('free play, chosen on the start screen, shows no event, pays nothing and ke
   await page.locator('#playMode').click();
   await expect(page.locator('#enterEvent'), 'no event in free play').toBeHidden();
   await expect(page.locator('#playCourse')).toBeVisible();
-  await expect(page.locator('#playMode')).toHaveText('Free play');
+  await expect(page.locator('#playMode'), 'the career switch off').toHaveAttribute('aria-checked', 'false');
   expect((await page.evaluate(() => window.game!.career())).mode).toBe('free');
   await page.evaluate(() => window.game!.chooseCourse('The Meadow'));
   const coins = (await page.evaluate(() => window.game!.state())).coins;
