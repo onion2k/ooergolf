@@ -79,7 +79,9 @@ describe('the fuzzer', () => {
     // enter events, practise and give them up, on the careerer's own stream (which the main stream does not read), which change the
     // coins the monkey has to shop with and so what it buys and plays on with: with those buttons left out it is 3335, and 17 and 3 are
     // 3095 and 2699 either way.
-    expect([one.drawn, two.drawn, golf.drawn], "draws from the monkey's main stream").toEqual([3095, 3095, 2699]);
+    // Seed 17's moved from 3095 to 3202 on 16 October 2026 when the banks came to be smoothed along their run (`BANKS.smooth`):
+    // it plays courses that roll, where a ball comes to rest on other ground; 26 and 3 did not move.
+    expect([one.drawn, two.drawn, golf.drawn], "draws from the monkey's main stream").toEqual([3095, 3202, 2699]);
     // a reload went on with the event round kept, as the start screen's Continue does: a check that never ran passes in silence
     expect(one.checked['event gone on with'], 'event rounds gone on with after a reload').toBeGreaterThan(0);
     // the framing rule was asked of the camera, on golf and on minigolf, a good many times: a check that never ran passes in silence

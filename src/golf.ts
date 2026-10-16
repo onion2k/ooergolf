@@ -146,9 +146,13 @@ export interface GolfSpec {
  * bank may slope, and the steepest the ground with its banks may, in yards a tile. The user chose six on 9 October 2026,
  * from a mock; eighteen is as long as six yards take to read as a bank and not as a hill, and a bank over a longer run
  * (twenty-five) read flat. The limits are under the physics' 1.5 a tile, so what the physics takes of the ground it takes
- * of the banks, and a bank is no steeper than 0.43 to the camera, which looks down at about 0.65.
+ * of the banks, and a bank is no steeper than 0.43 to the camera, which looks down at about 0.65. And how many times the bank
+ * is averaged with its neighbours before it is eased (`smooth`): the distance it is raised by is counted in whole tiles from
+ * a fairway's edge that steps a tile at a time, so unsmoothed a bank rose in shelves a yard high wherever the edge stepped,
+ * which the tint's bend drew as bands across the rough (16 October 2026); six passes take the bend along a bank's run at the
+ * ninetieth percentile from 0.36 to 0.16 yards a tile on The Links, and four or twelve are 0.17 and 0.13.
  */
-export const BANKS = { height: 6, width: 18, dry: 8, steepest: 1.3, ceiling: 1.45 };
+export const BANKS = { height: 6, width: 18, dry: 8, steepest: 1.3, ceiling: 1.45, smooth: 6 };
 
 /** How high `heighten` may go, and the shelf: its radius in tiles and how far in yards from the tee and the cup it may lie. */
 export const HEIGHTEN = { most: 2.5 };
@@ -589,6 +593,37 @@ function distanceTo(from: Uint8Array, cols: number, rows: number): Float32Array 
 }
 
 /**
+ * A bank (`b`, a height a tile) averaged with its eight neighbours `passes` times, where it rises at all: the ground a ball is
+ * played from, the sand, the water and the dry ground round it stay at nought and are what the rest is averaged toward, so a
+ * bank still starts from nought at its foot and only its shelves along the run are taken out.
+ */
+function smoothed(b: Float64Array, keep: Uint8Array, wet: Uint8Array, cols: number, rows: number, passes: number) {
+  const next = new Float64Array(b.length);
+  for (let p = 0; p < passes; p++) {
+    for (let r = 0; r < rows; r++)
+      for (let c = 0; c < cols; c++) {
+        const t = r * cols + c;
+        if (keep[t] || wet[t] || b[t] === 0) {
+          next[t] = b[t];
+          continue;
+        }
+        let sum = 0,
+          count = 0;
+        for (let dr = -1; dr <= 1; dr++)
+          for (let dc = -1; dc <= 1; dc++) {
+            const rr = r + dr,
+              cc = c + dc;
+            if (rr < 0 || cc < 0 || rr >= rows || cc >= cols) continue;
+            sum += b[rr * cols + cc];
+            count++;
+          }
+        next[t] = sum / count;
+      }
+    b.set(next);
+  }
+}
+
+/**
  * The ground with banks: the rough, and what lies beyond it, raised with the distance from the nearest tile a ball is played
  * from (fairway, green, first cut, tee) by a smoothstep to `BANKS.height`, and not at all on water, within `BANKS.dry` tiles
  * of it, or on sand and the ground a ball is played from. The bank is eased to those at `BANKS.steepest` a tile and the whole
@@ -614,6 +649,7 @@ function banked(ground: Float32Array, kinds: string[][], cols: number, rows: num
   for (let t = 0; t < b.length; t++)
     b[t] =
       keep[t] || wet[t] || fromWet[t] <= BANKS.dry ? 0 : BANKS.height * smoothstep(0, BANKS.width, fromPlay[t] * TILE);
+  smoothed(b, keep, wet, cols, rows, BANKS.smooth);
   lowerToLimit(b, cols, rows, BANKS.steepest, []);
   const total = Float64Array.from(ground, (v, t) => v + b[t]);
   lowerToLimit(total, cols, rows, BANKS.ceiling, []);

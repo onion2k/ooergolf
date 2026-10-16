@@ -61,16 +61,18 @@ function figures(layout: Layout, h: Float32Array) {
 // Written from d3e50ec's `golfHole` and `noiseGround`, before `heighten` was added. OLD_HOLES were written again on 9 October 2026
 // for the rolling land (the long swell and the banks, which the hole's terrain has and a ground made directly does not): with
 // `rolling: false` on The Links' specs (a scratch edit, reverted) the nine old hashes return to the digit.
+// OLD_HOLES written again on 16 October 2026 when the banks came to be smoothed along their run (`BANKS.smooth`; with
+// `smooth: 0` the old nine return); OLD_DIRECT, which has no banks, did not move.
 const OLD_HOLES: Record<string, string> = {
-  'The Opener': 'abb6a430',
-  'Water Carry': 'd7de94a8',
-  'Long Bend': '9384fff3',
-  'Tight Left': '6007868d',
-  'Island Green': 'e48418a',
-  'Rushing Brook': '438a91c3',
-  'The Big Dogleg': '57203ee3',
-  'The Straight Mile': 'df73e666',
-  'Home Stretch': 'de362ad7',
+  'The Opener': 'fddd04ce',
+  'Water Carry': 'e46e8e33',
+  'Long Bend': '66f175c2',
+  'Tight Left': 'abe60ecb',
+  'Island Green': 'be7d81c8',
+  'Rushing Brook': 'b742fd0d',
+  'The Big Dogleg': '34cfaa83',
+  'The Straight Mile': '4714d3b6',
+  'Home Stretch': 'dca06907',
 };
 const OLD_DIRECT: Record<string, string> = {
   'The Opener': 'af014d17',

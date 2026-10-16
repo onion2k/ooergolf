@@ -35,7 +35,7 @@
   },
   "dependencies": {
     "artshape-physics": "github:onion2k/artshape-physics#v0.8.0",
-    "artshape-render": "github:onion2k/artshape-render#v0.28.0",
+    "artshape-render": "github:onion2k/artshape-render#18f4a26b2736460214303b0bc6b9ad673e1b0159",
     "earcut": "^3.2.3"
   },
   "devDependencies": {

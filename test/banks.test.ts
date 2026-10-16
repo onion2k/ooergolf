@@ -179,6 +179,54 @@ describe('rolling land: the banks', () => {
     }
   });
 
+  it('rises in one smooth bank along its run, with no shelves where the fairway’s edge steps a tile, on every course', () => {
+    // the bank alone is the rolled hole's ground less the same hole's made without rolling (which also takes away the long
+    // swell, smooth at this scale); read at each tile where it rises, it should bend little along the line it runs, the level
+    // line across its slope. Counted from a fairway's edge in whole tiles, it rose in shelves a yard high wherever the edge
+    // stepped, which the tint's bend drew as bands across the rough (16 October 2026): at the ninetieth percentile 0.31 to 0.57
+    // yards a tile by course, and 0.14 to 0.28 smoothed
+    const bent = new Map<string, number[]>();
+    for (const { key, spec, hole } of HOLES) {
+      const flat = was(spec).terrain as Float32Array,
+        rolled = hole.terrain as Float32Array;
+      const rows = hole.map.length,
+        cols = rolled.length / rows;
+      const bank = (c: number, r: number) => {
+        const c0 = Math.floor(c),
+          r0 = Math.floor(r),
+          fx = c - c0,
+          fy = r - r0;
+        const at = (i: number, j: number) => rolled[j * cols + i] - flat[j * cols + i];
+        return (
+          at(c0, r0) * (1 - fx) * (1 - fy) +
+          at(c0 + 1, r0) * fx * (1 - fy) +
+          at(c0, r0 + 1) * (1 - fx) * fy +
+          at(c0 + 1, r0 + 1) * fx * fy
+        );
+      };
+      const course = key.split('/')[0];
+      const out = bent.get(course) ?? [];
+      bent.set(course, out);
+      for (let r = 2; r < rows - 2; r++)
+        for (let c = 2; c < cols - 2; c++) {
+          const gx = (bank(c + 1, r) - bank(c - 1, r)) / 2,
+            gy = (bank(c, r + 1) - bank(c, r - 1)) / 2;
+          const g = Math.hypot(gx, gy);
+          if (g < 0.1) continue;
+          const tx = -gy / g,
+            ty = gx / g;
+          out.push(Math.abs(bank(c + tx, r + ty) + bank(c - tx, r - ty) - 2 * bank(c, r)));
+        }
+    }
+    for (const [course, all] of bent) {
+      all.sort((a, b) => a - b);
+      expect(
+        all[Math.floor(0.9 * (all.length - 1))],
+        `${course}: the bend along a bank's run, ninetieth percentile`,
+      ).toBeLessThanOrEqual(0.3);
+    }
+  });
+
   it('keeps every step within what the physics takes, every green’s contour as the spec says, and the ground one the physics accepts', () => {
     for (const { key, spec, hole, layout: l } of HOLES) {
       let steepest = 0;

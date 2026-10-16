@@ -504,8 +504,8 @@ angle, roll)` is how far the putter's hardest putt rolls along an angle before t
   on the rough as a raised green: the rough lies `ROUGH_DEPTH` below the
   grass, under the bottom of the cup, so the cup is seen into, and the rail
   comes down to meet it. The look is `LOOK.md`'s clean toy, toon daylight
-  on artshape-render v0.28.0 (0.23.0 brought the surface that flows, which the ponds
-  use; 0.24.0 and 0.25.0 particles blown by a wash of air, which the game does not yet use; 0.26.0 the ground texture; 0.27.0 open water, which a golf pond wears; 0.27.1 its sky no longer repeats: the sheet is bent by a slow warp and the swell is weaker; 0.28.0 a sky gradient, the sun's shadow fitted to the view, a soft shadow edge and open water in shadow, each only when asked), in `src/look.ts`, shared by the game and the
+  on artshape-render v0.45.0 (0.23.0 brought the surface that flows, which the ponds
+  use; 0.24.0 and 0.25.0 particles blown by a wash of air, which the game does not yet use; 0.26.0 the ground texture; 0.27.0 open water, which a golf pond wears; 0.27.1 its sky no longer repeats: the sheet is bent by a slow warp and the swell is weaker; 0.28.0 a sky gradient, the sun's shadow fitted to the view, a soft shadow edge and open water in shadow, each only when asked; 0.29.0 to 0.44.0 nothing the game asks for, so they draw its frame as 0.28.0 did, the scene to the pixel on SwiftShader at The Straight Mile's tee; 0.45.0 the frame's dither), in `src/look.ts`, shared by the game and the
   showcase: edges drawn at four samples a pixel (the post pass one rung
   down the ladder, and none on the last), the toon bands eased at their
   edges, a deep sea-green shade, a warm rim, the sky's light from above
@@ -518,7 +518,10 @@ angle, roll)` is how far the putter's hardest putt rolls along an angle before t
   what is smooth, the sky in a clear coat, one smooth ramp of light, shade
   toward the shade colour in a crease) and its soft tone, the renderer's screen-space
   occlusion where things meet, no film grain, and a haze so thin it only
-  pales the far rough. The colours are named in `src/models/palette.ts`,
+  pales the far rough; and a dither of a step of the screen's eight bits (`POST.dither`, 1; 16 October 2026), since the light
+  along a long fairway changes by a level or two over a hundred pixels and more, and rounded with nothing between it was drawn
+  as flat bands across the fairway's stripes, which a player saw on a phone on The Straight Mile; it is the same at a pixel
+  every frame, so a picture is the same every run, and moves a pixel by a level at most (`test/dither.test.ts`). The colours are named in `src/models/palette.ts`,
   the green, rough and rail among them, so the scene and the showcase are
   one green; the mown ground (green, fairway stripes, putting green, first cut, tee) wears a turf texture, made at boot by
   `src/turfTexture.ts` (256 square, tileable, mid-grey on average, from seed 1) and handed to the renderer's `setGroundTexture` in
@@ -952,8 +955,14 @@ minigolf: true }`, read through `oceanFor`) is the one switch: `waterBed` and `s
   flattened every hill; the walls are cut to the limit after), and **banks** (`banked`, `BANKS` in `golf.ts`): after every
   hazard is placed, the rough and the ground past it rise by a smoothstep of the distance from the nearest tile a ball is
   played from (fairway, green, cut, tee) to 6 yd over about 18 yd (`BANKS.height`, `width`; not within `BANKS.dry` tiles of
-  water, nor on sand), eased at 1.3 a tile and the whole held under 1.45, so the fairway lies in a gentle valley as the title
-  picture's does and a ball in the rough is carried back toward it. Placed from the ground as it was (`plain`, the hollows), so a
+  water, nor on sand), averaged with its neighbours six times (`BANKS.smooth`), eased at 1.3 a tile and the whole held under 1.45,
+  so the fairway lies in a gentle valley as the title picture's does and a ball in the rough is carried back toward it. The
+  smoothing came on 16 October 2026 from a player's screenshot of banding across the rough of The Straight Mile: counted in whole
+  tiles from a fairway's edge that steps a tile at a time, a bank rose in shelves a yard high wherever the edge stepped, and the
+  tint's bend drew each as a dark and a light band; `test/banks.test.ts` holds the bend along a bank's run under 0.3 yards a tile
+  at the ninetieth percentile on every course that rolls (0.31 to 0.57 before, 0.14 to 0.28 after). It felled 40 fewer trees on
+  the five courses that roll and moved their pace within tolerance (The Links 30.25 to 29.88, The Heath 30.19 to 29.63, The Woods
+  37.44 to 37.5, The Isles 50.06 to 50.94, The Old Course 45 to 44.06; the baseline not written). Placed from the ground as it was (`plain`, the hollows), so a
   hole keeps its water, sand, trees, out of bounds, tee and cup tile for tile, and its seed and par. Chosen by the user on 9
   October 2026 from a mock (banks 6, the swell at 0.8, stripes). Relief over the playable tiles (`test/banks.test.ts` holds at
   least 8 yd): The Links 9.4 to 14.4 yd (was 4 to 9) and The Isles 13.6 to 25 (was 2.5 to 6); the share of rough that drains

@@ -95,6 +95,16 @@ export const TOY = {
 } as const;
 
 /**
+ * The post chain: a bright day, so no darkened corners, which against a pale sky read as a grey haze; no film grain; the
+ * colours shown straight with a shoulder, so a lit plastic keeps its hue and its roundness where the clamp held a channel
+ * flat at one; and a dither of a step of the screen's eight bits, the renderer's own since v0.45.0. Without the dither a
+ * long fairway in a gentle light, whose light changes by less than a step over a hundred pixels, was drawn as flat bands a
+ * step or two apart across its stripes, which a player saw on a phone on The Straight Mile (16 October 2026). It is the same
+ * at a pixel every frame, so a picture is the same every run and a still frame does not shimmer.
+ */
+export const POST = { vignette: 0, grain: 0, tone: 'soft', dither: 1 } as const;
+
+/**
  * Has the renderer compile the build that draws a surface that flows, now, and not the first time a hole with water is
  * begun: it compiles when it is first handed a group with a flow kind and until it is in such a group is drawn as the
  * still speckle, so a picture of a water hole taken after a hole change would be of the speckle on some runs and the
@@ -163,9 +173,7 @@ export async function daylight(renderer: GameRenderer, ctx: Gpu): Promise<void> 
     steps: 16,
     cones: 0,
   };
-  // a bright day: no darkened corners, which against a pale sky read as a grey haze; and the colours shown straight
-  // with a shoulder, so a lit plastic keeps its hue and its roundness where the clamp held a channel flat at one
-  renderer.post = { ...renderer.post, vignette: 0, grain: 0, tone: 'soft' };
+  renderer.post = { ...renderer.post, ...POST };
   const env = bakeEnvironment(ctx, 'daylight', { size: 128, mips: 6 });
   renderer.setEnvironment(env.specular, env.brdf, env.mips);
   await turfed(renderer);
