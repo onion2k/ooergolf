@@ -18,6 +18,8 @@ export interface LevelSpec {
   /** The wind, in miles an hour, and the greens' speed: the hole's own, calm and normal where not said. */
   wind?: number;
   greens?: number;
+  /** How many tiles of rough either side of the fairway: 9 where not said. */
+  rough?: number;
 }
 
 /**
@@ -28,7 +30,7 @@ export interface LevelSpec {
  */
 export function levelHole(spec: LevelSpec): HoleDef {
   const FAIRWAY = 13,
-    ROUGH = 9,
+    ROUGH = spec.rough ?? 9,
     GREEN = 5.5,
     BEHIND = 3,
     BEYOND = 9;
@@ -78,3 +80,25 @@ export const FLAT = {
   road: levelHole({ name: 'Level road', par: 5, length: 600, greens: 12.5 }),
 };
 export const FLAT_HOLES: readonly HoleDef[] = Object.values(FLAT);
+
+/**
+ * Level par fours for the caddie, wide in the rough so a shaped drive stays inside the rail: a pond on the right of the line
+ * where a driver comes down, which a straight drive and a fade find and a draw does not (`pondRight`), and a pond too wide
+ * for any shape of driver, which only a shorter club stays short of (`pondAcross`).
+ */
+export const CADDIE_HOLES = {
+  pondRight: levelHole({
+    name: 'Caddie pond right',
+    par: 4,
+    length: 420,
+    rough: 20,
+    pond: { along: 240, across: 20, radius: 40 },
+  }),
+  pondAcross: levelHole({
+    name: 'Caddie pond across',
+    par: 4,
+    length: 420,
+    rough: 20,
+    pond: { along: 250, across: 0, radius: 60 },
+  }),
+};

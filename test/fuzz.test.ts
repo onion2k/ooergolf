@@ -94,6 +94,8 @@ describe('the fuzzer', () => {
     expect(titled['course chosen mid-drop'], 'courses chosen while the letters dropped').toBeGreaterThan(0);
     // the sky is seen by a fly-in and by no other view, and the rule was asked of frames that saw it: a check that never ran passes in silence
     expect(titled['sky seen'], 'frames that saw the sky, held to its rule').toBeGreaterThan(30);
+    // and the caddie was heard, and gave tips, which were held to their rules: a check that never ran passes in silence
+    expect(golf.checked['caddie heard'], 'the caddie heard out').toBeGreaterThan(0);
     expect(one.failure, JSON.stringify(one.failure)).toBe(null);
     expect(two.failure, JSON.stringify(two.failure)).toBe(null);
     expect(golf.failure, JSON.stringify(golf.failure)).toBe(null);
@@ -117,6 +119,8 @@ describe('the fuzzer', () => {
       'equip',
       'face the flag',
       'fly to an island',
+      // the caddie heard out on a golf hole, and its tip taken by its button
+      'hear the caddie',
       'line up a putt',
       'look from overhead',
       'play again',
@@ -130,6 +134,7 @@ describe('the fuzzer', () => {
       'shoot as aimed',
       'shoot well',
       'shoot while rolling',
+      "take the caddie's tip",
       'try on',
       'unequip',
       'wait',

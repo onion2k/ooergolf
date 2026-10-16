@@ -48,7 +48,8 @@ export const WATCH: Partial<Record<string, { ceiling: number; steady?: boolean }
   // a round kept at its last hole, measured the same way at 9,800 bytes, held to the byte; 10,500 is that and about six
   // holes more. Later that day the season of each tour, at the longest grade with a full season less one event played in
   // two-figure scores, and the event round kept with its tour: 10,164 bytes, held to the byte; the ceiling raised to 10,800 on
-  // 16 October 2026 at the user's word, which is that and about six holes more again)
+  // 16 October 2026 at the user's word, which is that and about six holes more again. The caddie's two counts, held to its
+  // limit of three, add 30: 10,194, held to the byte, under the same ceiling)
   'save bytes': { ceiling: 10_800 },
   // emptied at every new round: never more than a score a hole
   'card scores': { ceiling: COURSE.length },

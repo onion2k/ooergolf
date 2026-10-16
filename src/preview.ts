@@ -180,8 +180,14 @@ export class Previewer {
     return this.rehearsal.world.live;
   }
 
-  /** `game` is the game played, of which a rehearsal is made and kept: it is never changed. */
-  constructor(game: Game) {
+  /**
+   * `game` is the game played, of which a rehearsal is made and kept: it is never changed. `rest` false leaves the rest out
+   * whatever the kit asks, for a previewer that wants only where a shot first comes down (the caddie's), at a flight's cost.
+   */
+  constructor(
+    game: Game,
+    private readonly options: { rest?: boolean } = {},
+  ) {
     const events: GameEvents = {
       landed: (x, y, _speed, first) => {
         if (!first || this.told.landed) return;
@@ -248,7 +254,7 @@ export class Previewer {
     }
     this.finish(this.result, layout, from, club, angle, power);
     // the rest follows the ball on from its first landing, only where the kit asks for it: the flight above is what it was
-    if (this.rehearsal.kit.rest) this.carryOn(p, from);
+    if (this.rehearsal.kit.rest && this.options.rest !== false) this.carryOn(p, from);
     return p;
   }
 

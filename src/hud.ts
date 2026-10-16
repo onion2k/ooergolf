@@ -57,6 +57,11 @@ export interface HudHandlers {
   shape(value: number): void;
   /** The spin button pressed: the next spin in its cycle, from minus one (backspin) to one (topspin). */
   spin(value: number): void;
+  /**
+   * The caddie's buttons: its tip's button (`try`, the club and shape it says put in hand), the ✕ (`close`, the tip put away
+   * for this shot) and the bag's Caddie button (`ask`, the tip said whether or not the caddie has gone quiet).
+   */
+  caddie?(action: 'try' | 'close' | 'ask'): void;
   /** The Install button pressed on the start screen: the browser's offer to install the page as an app, taken. */
   install(): void;
   /** Career or Free play chosen on the start screen. */
@@ -350,6 +355,10 @@ export class Hud {
   private readonly shaping = document.getElementById('bagShaping')!;
   private readonly shapeButton = document.getElementById('shapeButton')!;
   private readonly spinButton = document.getElementById('spinButton')!;
+  private readonly caddiePanel = document.getElementById('caddie')!;
+  private readonly caddieText = document.getElementById('caddieText')!;
+  private readonly caddieTry = document.getElementById('caddieTry')!;
+  private readonly caddieAsk = document.getElementById('caddieAsk')!;
   private readonly mapPanel = document.getElementById('holePanel')!;
   private readonly mapCanvas = document.getElementById('holeMap') as HTMLCanvasElement;
   /** The map's drawing context, made when a golf hole first has a map and not at boot, which is every course's. */
@@ -491,6 +500,50 @@ export class Hud {
     this.shapeButton.addEventListener('click', () => handlers.shape(this.next(SHAPES, this.shapeShown)));
     this.spinButton.addEventListener('click', () => handlers.spin(this.next(SPINS, this.spinShown)));
     this.setShaping(0, 0, true);
+    this.caddieTry.addEventListener('click', () => handlers.caddie?.('try'));
+    document.getElementById('caddieClose')!.addEventListener('click', () => handlers.caddie?.('close'));
+    this.caddieAsk.addEventListener('click', () => handlers.caddie?.('ask'));
+  }
+
+  /**
+   * The caddie's tip over the bag: its words and its button's, or the words alone (an answer with nothing to press), or none
+   * to put it away. Written only when it changes, so the page may say it every frame.
+   */
+  setTip(text: string | null, button: string | null = null) {
+    const hidden = text === null;
+    if (this.caddiePanel.hidden !== hidden) this.caddiePanel.hidden = hidden;
+    if (hidden) return;
+    if (this.caddieText.textContent !== text) this.caddieText.textContent = text;
+    const tryHidden = button === null;
+    if (this.caddieTry.hidden !== tryHidden) this.caddieTry.hidden = tryHidden;
+    if (button !== null && this.caddieTry.textContent !== button) this.caddieTry.textContent = button;
+  }
+
+  /** One of the caddie's buttons clicked, for the test API: false where it is not shown to be pressed. */
+  pressCaddie(action: 'try' | 'close' | 'ask'): boolean {
+    const button =
+      action === 'try' ? this.caddieTry : action === 'ask' ? this.caddieAsk : document.getElementById('caddieClose')!;
+    const shown =
+      !this.bag.hidden &&
+      (action === 'ask' ? !this.shaping.hidden && !this.caddieAsk.hidden : !this.caddiePanel.hidden && !button.hidden);
+    if (!shown) return false;
+    (button as HTMLButtonElement).click();
+    return true;
+  }
+
+  /** The tip put out of the way while a drag is held, and back when it is let go or taken back. */
+  setTipHeld(held: boolean) {
+    if (this.caddiePanel.hasAttribute('data-held') !== held) this.caddiePanel.toggleAttribute('data-held', held);
+  }
+
+  /** The tip as drawn, for the test API: its words, its button's (null with none) and whether a drag holds it out of the way; null when it is away. */
+  tipShown(): { text: string; button: string | null; held: boolean } | null {
+    if (this.caddiePanel.hidden || this.bag.hidden) return null;
+    return {
+      text: this.caddieText.textContent,
+      button: this.caddieTry.hidden ? null : this.caddieTry.textContent,
+      held: this.caddiePanel.hasAttribute('data-held'),
+    };
   }
 
   /**
@@ -607,7 +660,7 @@ export class Hud {
     this.bagList = clubs ?? [];
     this.setOverhead(this.mode === 'overhead');
     // a golf hole's shaping is both buttons or none; a hole of minigolf says which it shows, with `setPuttShaping`
-    this.shapeButton.hidden = this.spinButton.hidden = false;
+    this.shapeButton.hidden = this.spinButton.hidden = this.caddieAsk.hidden = false;
     this.puttShown = -1;
     if (!clubs) {
       this.bag.hidden = true;
@@ -641,6 +694,9 @@ export class Hud {
     this.puttShown = shown;
     this.shapeButton.hidden = !shape;
     this.spinButton.hidden = !spin;
+    // the caddie is golf's: a putt on minigolf has no club to choose
+    this.caddieAsk.hidden = true;
+    this.caddiePanel.hidden = true;
     this.shaping.hidden = !shown;
     this.bagInfo.textContent = shown ? 'Putter' : '';
     this.bag.hidden = !shown || this.startUp;

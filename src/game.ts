@@ -239,6 +239,8 @@ export class Game {
    * What the shot in the air was struck with, latched at the strike so that choosing the next shape while it flies
    * changes nothing of it: how fast its heading turns, in radians a second (a fade is positive), and its spin.
    */
+  /** The shape the last stroke was struck with, which `shape` has been put back from by the time the stroke is told of. */
+  struckShape = 0;
   private flightRate = 0;
   private flightSpin = 0;
   /** How many times as strong the wedge made the spin of the shot in the air, latched with it. */
@@ -908,7 +910,8 @@ export class Game {
       this.knockSpin = puttSpinFactor(this.spin, kit);
       this.spinPending = this.knockSpin !== 1;
     }
-    // chosen for this shot, and so used up by it
+    // chosen for this shot, and so used up by it; what it was is kept for whoever is told of the stroke (the caddie's count)
+    this.struckShape = this.shape;
     this.shape = this.spin = 0;
     this.strokes++;
     this.moving = true;
