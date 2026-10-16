@@ -33,6 +33,11 @@ import { frameCost } from './frame-cost';
 import { COURSES, type Course } from './course';
 import { dayOf, recordText, type RoundOf } from './career';
 import { seasonContext } from './tours';
+import { closedIfFull, eventField, eventsIn, nextEvent, seasonMerit, type SeasonContext } from './tournament';
+import { PRIZE, PROMOTED, TOURS, YOU, standings, type Tour } from './season';
+import type { TourSeason } from './career';
+import type { Board, EventCard, Results } from './hud';
+import type { Placement } from './game';
 import { Picker, type PickerCourse } from './picker';
 import type { CoursePreview } from './previews';
 import previewData from './previews.json';
@@ -328,9 +333,114 @@ async function main() {
   const openStart = (wait: boolean) => {
     picker.setBests((game ?? { progress }).progress.save.best);
     hud.showStart(picker, wait, careerWords());
+    hud.setEvents(eventCards());
   };
   /** A course as the career knows a round of it: its name and its purse. */
   const roundOf = (c: Course): RoundOf => ({ name: c.name, purse: c.purse });
+  /** The season's courses, rivals and their scores: one for the page, handed to the game and read here for the screens. */
+  const season: SeasonContext = seasonContext();
+  /** A course's par, from the field table, so a golf course need not be made to say it. */
+  const parOf = (course: string, holes = Infinity) =>
+    season.table[course].slice(0, holes).reduce((a, h) => a + h.par, 0);
+  /** The first `n` of a table's rows, and the player's after them if theirs is not among them. */
+  const topAndYou = <T extends { name: string }>(rows: readonly T[], n: number): T[] => {
+    const top = rows.slice(0, n);
+    const you = rows.find((r) => r.name === YOU);
+    return you && !top.includes(you) ? [...top, you] : top;
+  };
+  /** The player's place in an order of merit, or nought where they have none yet. */
+  const meritPlace = (tour: Tour, tourSeason: TourSeason) =>
+    seasonMerit(season, tour, tourSeason).find((m) => m.name === YOU)?.place ?? 0;
+  /** Each tour's next event, as its tab on the start screen shows it in the career; none in free play. */
+  const eventCards = (): Partial<Record<Tour, EventCard>> | null => {
+    const save = progress.save;
+    if (save.mode !== 'career') return null;
+    const cards: Partial<Record<Tour, EventCard>> = {};
+    for (const tour of TOURS) {
+      const tourSeason = closedIfFull(season, tour, save.season[tour]);
+      const next = nextEvent(season, tour, tourSeason);
+      cards[tour] = {
+        tour,
+        grade: tourSeason.grade,
+        event: next.index + 1,
+        events: eventsIn(season, tour),
+        course: next.course.name,
+        par: parOf(next.course.name),
+        fee: next.fee,
+        pot: next.pot,
+        paid: PRIZE.shares.length,
+        coins: save.coins,
+        merit: topAndYou(seasonMerit(season, tour, tourSeason), 4).map((m) => ({
+          place: m.place,
+          tied: m.tied,
+          name: m.name,
+          points: m.points,
+          you: m.name === YOU,
+        })),
+        promoted: PROMOTED,
+        kept: save.round?.tour === tour ? save.round.hole + 1 : null,
+      };
+    }
+    return cards;
+  };
+  /** The career's words and each tour's event drawn on the start screen, from the save as it stands. */
+  const drawCareer = () => {
+    hud.setCareer(careerWords());
+    hud.setEvents(eventCards());
+  };
+  /**
+   * The season of the event in play, as it stood when its holes began: the order of merit and the field are worked out from
+   * it while the event is played and at its end, after the game has moved the season on.
+   */
+  let eventSeason: TourSeason | null = null;
+  /** Where the last event finished was placed, kept from its `placed` until the card is drawn. */
+  let lastPlaced: { result: Placement; tour: Tour; index: number; card: number[]; before: TourSeason } | null = null;
+  /** How the field stands in the event in play, thru the holes finished: none away from an event. */
+  const boardNow = (): Board | null => {
+    if (!game?.event || !eventSeason) return null;
+    const { tour, index } = game.event;
+    const thru = game.card.length;
+    const placed = standings(eventField(season, tour, eventSeason, index, game.card), thru);
+    const par = parOf(season.tours[tour][index].name, thru);
+    const you = placed.find((p) => p.name === YOU)!;
+    const cut = placed[Math.min(PRIZE.shares.length, placed.length) - 1];
+    return {
+      thru,
+      rows: topAndYou(placed, 3).map((p) => ({
+        place: p.place,
+        tied: p.tied,
+        name: p.name,
+        toPar: p.total - par,
+        you: p.name === YOU,
+      })),
+      cut: cut.total - par,
+      behind: placed.filter((p) => p.total > you.total).length,
+    };
+  };
+  /** What an event came to, for the card at its end: the field, the place and the season, from where it was placed. */
+  const resultsOf = (course: string): Results | null => {
+    if (!lastPlaced) return null;
+    const { result, tour, index, card, before } = lastPlaced;
+    const placed = eventField(season, tour, before, index, card);
+    return {
+      course,
+      place: result.place,
+      tied: result.tied,
+      prize: result.prize,
+      rows: topAndYou(placed, 4).map((p) => ({
+        place: p.place,
+        tied: p.tied,
+        name: p.name,
+        total: p.total,
+        you: p.name === YOU,
+      })),
+      meritFrom: meritPlace(tour, before),
+      meritTo: meritPlace(tour, { ...before, played: [...before.played, card] }),
+      seasonOver: result.seasonOver,
+      promotedTo: result.promotedTo,
+      title: result.title,
+    };
+  };
   /** What the start screen says of the career, from the save as it stands. */
   const careerWords = () => {
     const save = progress.save;
@@ -383,12 +493,31 @@ async function main() {
         if (!game || !course) return;
         endTitle();
         if (game.resume(course.holes, roundOf(course))) playing(course.name);
-        else hud.setCareer(careerWords());
+        else drawCareer();
       },
       // Career or Free play, chosen on the start screen: the words over the cards say what it means
       mode(mode) {
         game?.setMode(mode);
-        hud.setCareer(careerWords());
+        drawCareer();
+      },
+      // Enter on a tour's event card: its fee paid and its first tee, or the screen drawn again where it was refused
+      enter(tour) {
+        if (!game) return;
+        endTitle();
+        if (game.enter(tour)) playing(game.of!.name);
+        else drawCareer();
+      },
+      // Practise on a tour's event card: the event's course played for nothing, the season left as it was
+      practise(tour) {
+        if (!game) return;
+        const next = nextEvent(season, tour, closedIfFull(season, tour, progress.save.season[tour]));
+        endTitle();
+        game.practise(next.course.holes, { name: next.course.name, purse: next.course.purse });
+        playing(next.course.name);
+      },
+      // Next event, on the card at an event's end: the start screen, where the season's next event waits
+      next() {
+        this.courses();
       },
       courses() {
         choosing = true;
@@ -694,6 +823,9 @@ async function main() {
       // a hole begun in play is made in one go; only the boot's first, under the title, is made a step at a time
       const steps = starting(index, par);
       while (!steps.next().done);
+      // an event's season is unchanged until its last hole, so it is kept as each hole begins, which a reload's hole does too
+      eventSeason = game?.event ? structuredClone(progress.save.season[game.event.tour]) : null;
+      hud.setBoard(boardNow());
     },
     struck(power, x, y) {
       // one stroke in five has the camera follow the ball, and the rest hold the view where it stood
@@ -756,6 +888,7 @@ async function main() {
     // in the cup: confetti out of it, the flag waggling and its gold flashing, from the moment it dropped
     holed(strokes, par) {
       hud.done(strokes, par, false);
+      hud.setBoard(boardNow());
       if (!game) return;
       scene.holedAt = game.t;
       // the confetti cup throws more, for longer, in the rainbow's colours
@@ -775,17 +908,36 @@ async function main() {
         fireworks.step = 0;
       }
     },
-    pickedUp: (strokes, par) => hud.done(strokes, par, true),
+    pickedUp: (strokes, par) => {
+      hud.done(strokes, par, true);
+      hud.setBoard(boardNow());
+    },
     finished: () => {
       if (!game) return;
       const best = progress.save.best;
-      hud.finished(game.course, game.card, {
-        bests: game.course.map((h) => (Object.hasOwn(best, h.name) ? best[h.name].strokes : null)),
-        prize: prized ? prized.coins : null,
-        record: prized?.record ?? false,
-        free: progress.save.mode === 'free' && game.of !== null,
-      });
+      hud.finished(
+        game.course,
+        game.card,
+        {
+          bests: game.course.map((h) => (Object.hasOwn(best, h.name) ? best[h.name].strokes : null)),
+          prize: prized ? prized.coins : null,
+          record: prized?.record ?? false,
+          free: progress.save.mode === 'free' && game.of !== null,
+        },
+        resultsOf(game.of?.name ?? courseName),
+      );
       prized = null;
+      lastPlaced = null;
+    },
+    placed: (result) => {
+      if (!game?.event || !eventSeason) return;
+      lastPlaced = {
+        result,
+        tour: game.event.tour,
+        index: game.event.index,
+        card: [...game.card],
+        before: eventSeason,
+      };
     },
     roundPaid: (coins, record) => {
       prized = { coins, record };
@@ -896,7 +1048,7 @@ async function main() {
     // the day a course record is made, in the player's own time
     today: () => dayOf(new Date()),
     // the courses, rivals and scores an event is made of, so the game can be entered in one: the page's buttons for it come later
-    season: seasonContext(),
+    season,
     // the title is drawn over a hole of its own, which nothing is played on
     ...(wantTitle ? { course: [titleHole()] } : {}),
   });
@@ -1551,6 +1703,7 @@ async function main() {
         used: played.mulliganUsed,
         phase: played.phase,
         choosing,
+        event: played.event !== null,
       }),
     );
     rig.place(cam, played.t);
@@ -1769,6 +1922,22 @@ async function main() {
       play.click();
       return true;
     },
+    // a tour's event card's buttons, pressed as a player does: its tab, then the button, if it is there to be pressed
+    enter: (tour) => {
+      document.getElementById(tour === 'golf' ? 'tab-golf' : 'tab-minigolf')!.click();
+      const button = document.getElementById('enterEvent') as HTMLButtonElement;
+      if (button.hidden || button.disabled) return false;
+      button.click();
+      return true;
+    },
+    practise: (tour) => {
+      document.getElementById(tour === 'golf' ? 'tab-golf' : 'tab-minigolf')!.click();
+      const button = document.getElementById('practise') as HTMLButtonElement;
+      if (button.hidden) return false;
+      button.click();
+      return true;
+    },
+    board: () => hud.boardShown(),
     tournamentHud: (view) => {
       if (view.events !== undefined) hud.setEvents(view.events);
       if (view.board !== undefined) hud.setBoard(view.board);
@@ -1781,9 +1950,12 @@ async function main() {
         );
     },
     chooseCourse: (name) => {
-      // as a player does: the course's tab pressed, the next arrow pressed until the course is in view, and Play pressed
+      // as a player does: the course's tab pressed, the next arrow pressed until the course is in view, and Play pressed. In
+      // the career the tabs show the season's events, which no arrow steps from; a test that wants a course of its own has the
+      // events put away first, a shortcut no player has, and its round pays its holes and keeps nothing (`enter` is the event's way)
       const course = pickable.find((c) => c.name === name);
       if (!course) throw new Error(`no course called ${name} on the start screen`);
+      hud.setEvents(null);
       (document.getElementById(course.golf ? 'tab-golf' : 'tab-minigolf') as HTMLButtonElement).click();
       const next = document.getElementById('courseNext') as HTMLButtonElement;
       const shown = () => document.getElementById('courseName')!.textContent;

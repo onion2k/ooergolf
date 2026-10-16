@@ -15,9 +15,11 @@ export interface RetakeState {
   phase: string;
   /** Whether the start screen is up over the course. */
   choosing: boolean;
+  /** Whether the round is an event of the season, which refuses a retake: one go means one go. */
+  event: boolean;
 }
 
 /** Whether the Retake button is shown. */
 export function retakeShown(s: RetakeState): boolean {
-  return s.held && s.strokes >= 1 && !s.used && s.phase === 'play' && !s.choosing;
+  return s.held && s.strokes >= 1 && !s.used && s.phase === 'play' && !s.choosing && !s.event;
 }

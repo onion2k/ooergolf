@@ -142,13 +142,16 @@ test('a drag too short to mean anything is no shot, and no stroke', async ({ pag
   expect(problems).toEqual([]);
 });
 
+/** A save with nothing in it yet, as the game writes it: both tours of the season at the club grade, with nothing played. */
+const FRESH_SAVE =
+  '{"coins":0,"gems":0,"owned":[],"kit":{"club":"","ball":"","accessory":""},"best":{},"mode":"career","records":{},"round":null,' +
+  '"season":{"golf":{"grade":"club","begun":0,"played":[],"titles":0},"mini":{"grade":"club","begun":0,"played":[],"titles":0}}}';
+
 test('writes its save, and boots again from it', async ({ page }) => {
   const problems = watch(page);
   await start(page);
   const written = await page.evaluate(() => window.game!.save());
-  expect(written).toBe(
-    '{"coins":0,"gems":0,"owned":[],"kit":{"club":"","ball":"","accessory":""},"best":{},"mode":"career","records":{},"round":null}',
-  );
+  expect(written).toBe(FRESH_SAVE);
   expect(await page.evaluate(() => localStorage.getItem('ooergolf-save-v1'))).toBe(written);
   await page.reload();
   await expect.poll(() => page.evaluate(() => window.game?.ready ?? false), { timeout: 60_000 }).toBe(true);
@@ -159,9 +162,7 @@ test('writes its save, and boots again from it', async ({ page }) => {
 test("boots from the stub's save, which has a bank the game no longer knows", async ({ page }) => {
   const problems = watch(page);
   await start(page, { save: { bank: 7, banked: 7 } });
-  expect(await page.evaluate(() => window.game!.save())).toBe(
-    '{"coins":0,"gems":0,"owned":[],"kit":{"club":"","ball":"","accessory":""},"best":{},"mode":"career","records":{},"round":null}',
-  );
+  expect(await page.evaluate(() => window.game!.save())).toBe(FRESH_SAVE);
   expect(await page.evaluate(() => window.game!.invariants())).toEqual([]);
   expect(problems).toEqual([]);
 });
@@ -197,7 +198,8 @@ test.describe('the start screen', () => {
     page,
   }) => {
     const problems = watch(page);
-    await start(page, { seed: 1, paused: true, screen: true });
+    // in free play, whose start screen is the picker; in the career it is the season's events
+    await start(page, { seed: 1, paused: true, screen: true, save: { mode: 'free' } });
     await expect(page.locator('#start')).toBeVisible();
     // the picker opens on proper golf (the game leans to proper golf, 14 October 2026) at the easiest course, and steps
     // through the six and then the three of minigolf in the order they stand, each with its holes, par and, on golf, yards as

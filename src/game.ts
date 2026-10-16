@@ -295,7 +295,7 @@ export class Game {
   private retaken = false;
   /** Whether a hole of this round was picked up, which keeps it from being a record: cleared by each round. */
   private pickedUp = false;
-  /** Whether this round is a practice round, which pays nothing and keeps nothing as free play does, and leaves the mode as it was. */
+  /** Whether this round is a practice round, which pays its holes and keeps nothing of the season's, and leaves the mode as it was. */
   private practice = false;
   /** The piggy bank's id if one was worn when this hole began, which is the hole it pays double for; '' otherwise. */
   private piggy = '';
@@ -672,9 +672,10 @@ export class Game {
   }
 
   /**
-   * A practice round of `holes`, named by `of`: played as free play is, paying nothing, keeping no best, record or round
-   * and using up no piggy bank, but without changing the mode, so the career is still the career after it. An event round kept
-   * is left as it is, to go on with. Retakes are as in any round, since nothing is at stake.
+   * A practice round of `holes`, named by `of`: each hole paid and its best kept, as any paid hole is (the piggy bank too), so a
+   * player short of an event's fee can earn it (16 October 2026, the user's choice); but no prize, record or round is kept and
+   * the season is not touched, and the mode is left as it was. An event round kept is left as it is, to go on with. Retakes
+   * are as in any round, since nothing is at stake.
    */
   practise(holes: readonly HoleDef[], of: RoundOf | null = null) {
     this.course = holes;
@@ -1290,7 +1291,7 @@ export class Game {
   /**
    * The hole finished, scored and told of, paid for, its best kept with the
    * kit worn, and the save written; the next begins in a moment. In free play
-   * nothing is paid, kept or used up (nor in practice); and in an event the
+   * nothing is paid, kept or used up (practice pays its holes); and in an event the
    * round is kept to go on with, or, at its last hole, placed in the field and
    * paid its share of the pot.
    */
@@ -1303,7 +1304,7 @@ export class Game {
     this.events[how]?.(score, this.def.par);
     if (how === 'pickedUp') this.pickedUp = true;
     const save = this.progress.save;
-    if ((save.mode === 'free' || this.practice) && !this.rehearsing) return;
+    if (save.mode === 'free' && !this.rehearsing) return;
     const pay = paid(score, this.def.par, how === 'pickedUp', this.kit.underParPay);
     // the piggy bank doubles the coins of the hole it was worn for, if it is finished, and is used up by it
     const spent = this.piggy;

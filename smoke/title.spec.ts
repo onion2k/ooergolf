@@ -23,9 +23,12 @@ const framesTo = (t: number) => Math.ceil((t + DROP.lead) * 60);
 const title = (page: Page) => page.evaluate(() => window.game!.title());
 
 /** The page opened as a player opens it, paused, with the title's clock at its start. */
-async function open(page: Page, seed = 1) {
-  await start(page, { title: true, paused: true, seed, screen: true });
+async function open(page: Page, seed = 1, save?: Record<string, unknown>) {
+  await start(page, { title: true, paused: true, seed, screen: true, ...(save ? { save } : {}) });
 }
+
+/** Free play, whose start screen is the picker with its arrows and Play; in the career it is each tour's event card. */
+const FREE = { mode: 'free' };
 
 /** Frames stepped, the title's clock with them. */
 const step = (page: Page, frames: number) => page.evaluate((n) => window.game!.step(n), frames);
@@ -213,7 +216,7 @@ test.describe('the picker fits the screen under the title', () => {
       test('the tabs, the course in view, the arrows, Play and the Install button, whole and without scrolling, on every course', async ({
         page,
       }) => {
-        await open(page);
+        await open(page, 1, FREE);
         await step(page, framesTo(1.7));
         await expect(page.locator('#start')).toBeVisible();
         await offerInstall(page);
@@ -253,13 +256,63 @@ test.describe('the picker fits the screen under the title', () => {
           }
         }
       });
+
+      test("in the career each tour's event card, its order of merit, Enter, Practise and the mode button, whole and without scrolling", async ({
+        page,
+      }) => {
+        // a player into a season: the golf tour at the county grade a few events in, short of its fee, with an order of merit to
+        // show, and the mini tour's first event at the club grade, entered for nothing
+        await open(page, 1, {
+          coins: 5,
+          season: { golf: { grade: 'county', begun: 1, played: [[4, 4, 4, 4, 4, 4, 4, 4, 4], null], titles: 0 } },
+        });
+        await step(page, framesTo(1.7));
+        await expect(page.locator('#start')).toBeVisible();
+        await offerInstall(page);
+        await landed(page);
+        const screen = { x0: 0, y0: 0, x1: width, y1: height };
+        for (const tab of ['tab-golf', 'tab-minigolf'] as const) {
+          await page.locator(`#${tab}`).click();
+          const r = await page.evaluate(() => {
+            const box = (id: string) => {
+              const b = document.getElementById(id)!.getBoundingClientRect();
+              return { x0: b.left, y0: b.top, x1: b.right, y1: b.bottom };
+            };
+            const panel = document.getElementById('start')!;
+            return {
+              scrolls: panel.scrollHeight > panel.clientHeight,
+              height: { content: panel.scrollHeight, room: panel.clientHeight },
+              panel: box('start'),
+              parts: {
+                tabs: box('startTabs'),
+                name: box('courseName'),
+                strip: box('courseStrip'),
+                merit: box('merit'),
+                enter: box('enterEvent'),
+                practise: box('practise'),
+                mode: box('playMode'),
+              },
+              enter: document.getElementById('enterEvent')!.textContent,
+            };
+          });
+          const what = `${tab} on ${where}`;
+          expect(r.scrolls, `no scrolling at ${what}: ${r.height.content} of content in ${r.height.room}`).toBe(false);
+          // the strip of holes is away under the title on a phone, where there is no room for it beside the order of merit
+          for (const [part, b] of Object.entries(r.parts))
+            if (b.y1 > b.y0)
+              expect(inside(b, r.panel) && inside(b, screen), `${part} whole on the screen at ${what}`).toBe(true);
+          for (const part of ['enter', 'practise', 'mode'] as const)
+            expect(thumb(r.parts[part]), `${part} a thumb high at ${what}`).toBe(true);
+          expect(r.enter).toBe(tab === 'tab-golf' ? 'Need 38 coins' : 'Enter · free');
+        }
+      });
     });
   }
 
   test('on a phone on its side the panel may scroll, and the picker is whole across it', async ({ page }) => {
     await page.setViewportSize({ width: 844, height: 390 });
     await page.reload();
-    await open(page);
+    await open(page, 1, FREE);
     await step(page, framesTo(1.7));
     await landed(page);
     const r = await startBoxes(page);

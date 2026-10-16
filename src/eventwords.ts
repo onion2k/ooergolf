@@ -40,11 +40,13 @@ export function eventHeader(grade: Grade, event: number, events: number): string
   return `${gradeName(grade)} tour · Event ${event} of ${events}`;
 }
 
-/** What the season is played for, under the order of merit: the grade above, or the title at the top. */
-export function promotionLine(grade: Grade, promoted: number, events: number): string {
+/**
+ * What the season is played for, under the order of merit: the grade above, or the title at the top. The season's length is
+ * on the line over the event's name, so this is one line on the narrowest phone.
+ */
+export function promotionLine(grade: Grade, promoted: number): string {
   const up = GRADES[GRADES.indexOf(grade) + 1] as Grade | undefined;
-  const what = up ? `go up to the ${gradeName(up)} tour` : 'are champions';
-  return `Top ${promoted} after ${events} events ${what}`;
+  return `Top ${promoted} ${up ? `go up to the ${gradeName(up)} tour` : 'are champions'}`;
 }
 
 /** The leaderboard's foot: where the last paid place stands against par, and how many of the field are behind you. */
@@ -52,8 +54,9 @@ export function cutLine(cut: number, behind: number): string {
   return `cut ${toParText(cut)} · ${behind > 0 ? behind : 'none'} behind you`;
 }
 
-/** How the order of merit moved with an event: from one place to another, or not at all. */
+/** How the order of merit moved with an event: from one place to another, or not at all; from nought, a season's first, it only says where. */
 export function meritMove(from: number, to: number): string {
+  if (from === 0) return `Order of merit: ${ordinal(to)}`;
   return from === to
     ? `Order of merit: ${ordinal(to)}, as before`
     : `Order of merit: ${ordinal(from)} → ${ordinal(to)}`;

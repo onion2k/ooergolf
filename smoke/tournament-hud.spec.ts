@@ -34,6 +34,7 @@ const golf = (coins: number): EventCard => ({
     { place: 4, tied: false, name: 'Bunker Hill', points: 12, you: false },
   ],
   promoted: 3,
+  kept: null,
 });
 const mini: EventCard = {
   ...golf(500),
@@ -107,7 +108,8 @@ for (const [where, device] of [
     test("the event card stands in for the picker's course, Enter is refused short of coins, and no event is the picker as it was", async ({
       page,
     }) => {
-      await start(page, { seed: 3, paused: true, screen: true });
+      // in free play, so the screen is the picker before the fixed events are handed it
+      await start(page, { seed: 3, paused: true, screen: true, save: { mode: 'free' } });
       const before = await page.evaluate(() => document.getElementById('start')!.innerText);
       await page.evaluate((cards) => window.game!.tournamentHud({ events: cards }), { golf: golf(140), mini });
       await expect(page.locator('#courseName')).toHaveText('The Heath');
@@ -119,7 +121,7 @@ for (const [where, device] of [
       await expect(page.locator('#playCourse')).toBeHidden();
       await expect(page.locator('#courseNext')).toBeHidden();
       await expect(page.locator('#merit tr.you')).toHaveText(/T2\s*You\s*18/);
-      await expect(page.locator('#meritLine')).toHaveText('Top 3 after 6 events go up to the County tour');
+      await expect(page.locator('#meritLine')).toHaveText('Top 3 go up to the County tour');
       expect(await faults(page, 'event card')).toEqual([]);
       expect(await scrolls(page), 'the start screen scrolls').toBe(false);
       await shot(page, `${where}-event`);
@@ -131,7 +133,7 @@ for (const [where, device] of [
       // short of coins: Enter refused, and said why
       await page.evaluate((cards) => window.game!.tournamentHud({ events: cards }), { golf: golf(20) });
       await expect(page.locator('#enterEvent')).toBeDisabled();
-      await expect(page.locator('#enterNote')).toHaveText('You need 33 coins');
+      await expect(page.locator('#enterEvent')).toHaveText('Need 33 coins');
       expect(await faults(page, 'event card short')).toEqual([]);
       expect(await scrolls(page), 'the start screen scrolls short of coins').toBe(false);
       await shot(page, `${where}-event-short`);

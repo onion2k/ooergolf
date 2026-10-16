@@ -20,7 +20,7 @@ import { KIND_NAME, TILE, type Layout } from './arena';
 import { Autopilot, type Plan } from './autopilot';
 import { BAG, carryOf } from './bag';
 import type { HoleDef } from './course';
-import type { CourseRecord, PlayMode, RoundOf, SavedRound } from './career';
+import type { CourseRecord, PlayMode, RoundOf, SavedRound, TourSeason } from './career';
 import { greenArrows, speedName } from './green';
 import type { Game } from './game';
 import { checkInvariants } from './invariants';
@@ -242,6 +242,12 @@ export interface GameApi {
    * what is given is drawn, so a test can hold the drawing apart from what fills it.
    */
   tournamentHud(view: TournamentView): void;
+  /** The season as the save has it, the event in play and whether the round is practice, and the leaderboard as drawn. */
+  season(): SeasonReport;
+  /** Enter, or Continue, pressed on a tour's event card, its tab pressed first as a player does: false where it is not to be pressed. */
+  enter(tour: Tour): boolean;
+  /** Practise pressed on a tour's event card, its tab pressed first: false where it is not up. */
+  practise(tour: Tour): boolean;
   /** A new round, as the card's button asks for. */
   newRound(): void;
   /** An item bought, as the shop's button does; whether it was. */
@@ -480,6 +486,7 @@ export interface DebugHost {
   /** The course being played, and whether the start screen is up; and a course chosen, as the screen does it. */
   course(): string;
   choosing(): boolean;
+  /** A course chosen on the start screen; in the career the season's event cards are put away first (see the page's comment). */
   chooseCourse(name: string): void;
   title(): TitleReport;
   app(): AppReport;
@@ -488,7 +495,18 @@ export interface DebugHost {
   playMode(mode: PlayMode): void;
   continueRound(): boolean;
   tournamentHud(view: TournamentView): void;
+  enter(tour: Tour): boolean;
+  practise(tour: Tour): boolean;
+  board(): { head: string; rows: string[][]; cut: string } | null;
   events: string[];
+}
+
+/** What `season()` reads: each tour's season as the save has it, the event in play, practice, and the leaderboard drawn. */
+export interface SeasonReport {
+  season: Record<Tour, TourSeason>;
+  event: { tour: Tour; index: number } | null;
+  practising: boolean;
+  board: { head: string; rows: string[][]; cut: string } | null;
 }
 
 /** What `tournamentHud` hands the hud: each part drawn only where it is given, and null to put it away. */
@@ -646,6 +664,14 @@ export function createApi(host: DebugHost): GameApi {
     playMode: (mode) => host.playMode(mode),
     continueRound: () => host.continueRound(),
     tournamentHud: (view) => host.tournamentHud(view),
+    season: () => ({
+      season: structuredClone(progress.save.season),
+      event: game.event && { ...game.event },
+      practising: game.practising,
+      board: host.board(),
+    }),
+    enter: (tour) => host.enter(tour),
+    practise: (tour) => host.practise(tour),
     newRound: () => game.newRound(),
     buy: (id) => game.buy(id),
     equip: (id) => game.equip(id),

@@ -38,14 +38,22 @@ export const PRIZE = { entry: 25, shares: [0.5, 0.3, 0.2], record: 25 } as const
 /** The name the player goes by in a field and in the order of merit: a rival's name is never this, so the two are never confused. */
 export const YOU = 'You';
 
-/** The fee for a course of the given purse, in whole coins. */
-export function entryFee(purse: number): number {
+/** A course's stake: the fee a player pays to enter an event on it above the club grade, in whole coins, which the pot is made of. */
+export function stakeOf(purse: number): number {
   return Math.round(PRIZE.entry * purse);
 }
 
-/** Every entrant pays the fee, so the pot is a fee for each place in the field. */
-export function potOf(fee: number): number {
-  return fee * FIELD_SIZE;
+/**
+ * The fee to enter an event: the course's stake, and nothing at the club grade (16 October 2026, the user's choice), so a new
+ * player with no coins can start the career at once. The stakes begin a grade up.
+ */
+export function entryFee(purse: number, grade: Grade): number {
+  return grade === 'club' ? 0 : stakeOf(purse);
+}
+
+/** The pot: a stake for each place in the field, which the club grade plays for too, though its players paid nothing in. */
+export function potOf(stake: number): number {
+  return stake * FIELD_SIZE;
 }
 
 /** Order-of-merit points by place, first to last. */

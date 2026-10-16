@@ -99,6 +99,8 @@ export interface EventCard {
   merit: (Row & { points: number })[];
   /** How many of the order of merit go up at the season's end. */
   promoted: number;
+  /** The hole (from one) the event's round kept goes on from, which Enter becomes Continue for; none when none is kept. */
+  kept: number | null;
 }
 
 /** How the field stands as the player goes round an event: thru how many holes, the top three and you, and the cut. */
@@ -312,7 +314,6 @@ export class Hud {
   private readonly meritLine = document.getElementById('meritLine')!;
   private readonly enterButton = document.getElementById('enterEvent') as HTMLButtonElement;
   private readonly practiseButton = document.getElementById('practise') as HTMLButtonElement;
-  private readonly enterNote = document.getElementById('enterNote')!;
   /** Each tour's next event, as the start screen shows it on that tour's tab; none in free play. */
   private events: Partial<Record<Tour, EventCard>> | null = null;
   /** The leaderboard in the hole's panel, and what it last drew, so the page may say it every frame and it is written only when it changes. */
@@ -394,7 +395,10 @@ export class Hud {
     this.nextButton.addEventListener('click', () => handlers.next?.());
     this.enterButton.addEventListener('click', () => {
       const card = this.eventShown();
-      if (card) handlers.enter?.(card.tour);
+      if (!card) return;
+      // the event's round kept is gone on with, and its fee is not asked again
+      if (card.kept !== null) handlers.resume();
+      else handlers.enter?.(card.tour);
     });
     this.practiseButton.addEventListener('click', () => {
       const card = this.eventShown();
@@ -968,10 +972,7 @@ export class Hud {
     this.practiseButton.hidden = !on;
     this.playButton.hidden = on;
     this.coursePips.hidden = on;
-    if (!card) {
-      this.enterNote.hidden = true;
-      return;
-    }
+    if (!card) return;
     this.courseEvent.textContent = eventHeader(card.grade, card.event, card.events);
     const stats: [string, string][] = [
       ['Par', String(card.par)],
@@ -992,18 +993,29 @@ export class Hud {
     this.meritRows.replaceChildren(
       ...rowsOf(card.merit.map((r) => ({ you: r.you, cells: [placeText(r.place, r.tied), r.name, String(r.points)] }))),
     );
-    this.meritLine.textContent = promotionLine(card.grade, card.promoted, card.events);
-    const short = card.coins < card.fee;
-    this.enterButton.textContent = `Enter · ${card.fee}`;
+    this.meritLine.textContent = promotionLine(card.grade, card.promoted);
+    const short = card.kept === null && card.coins < card.fee;
+    // a fee the coins do not cover is said on the button itself, refused, so the screen takes no more height for it (it fits
+    // under the title's word on a desk and a phone); a club event's fee is nothing, which the button says too
+    this.enterButton.textContent =
+      card.kept !== null
+        ? `Continue · hole ${card.kept}`
+        : short
+          ? `Need ${card.fee} coins`
+          : card.fee === 0
+            ? 'Enter · free'
+            : `Enter · ${card.fee}`;
     this.enterButton.disabled = short;
     this.enterButton.setAttribute(
       'aria-label',
-      short
-        ? `Enter ${card.course} for ${card.fee} coins: you have ${card.coins}`
-        : `Enter ${card.course} for ${card.fee} coins`,
+      card.kept !== null
+        ? `Continue ${card.course} from hole ${card.kept}`
+        : short
+          ? `Enter ${card.course} for ${card.fee} coins: you have ${card.coins}`
+          : card.fee === 0
+            ? `Enter ${card.course} for nothing`
+            : `Enter ${card.course} for ${card.fee} coins`,
     );
-    this.enterNote.hidden = !short;
-    this.enterNote.textContent = `You need ${card.fee} coins`;
     this.practiseButton.setAttribute('aria-label', `Practise ${card.course} for nothing`);
   }
 

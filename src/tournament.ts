@@ -16,6 +16,7 @@ import type { FieldTable } from './field';
 import type { Rival } from './rivals';
 import {
   entryFee,
+  stakeOf,
   fieldOf,
   meritOf,
   nextGrade,
@@ -52,7 +53,10 @@ export interface NextEvent {
   course: EventCourse;
   grade: Grade;
   seed: number;
+  /** The entry fee, which is nothing at the club grade. */
   fee: number;
+  /** The pot the event is played for: twelve of the course's stake, at every grade. */
+  pot: number;
 }
 
 /**
@@ -83,7 +87,8 @@ export function nextEvent(ctx: SeasonContext, tour: Tour, season: TourSeason): N
     course,
     grade: season.grade,
     seed: seasonSeed(season.begun, tour, season.grade),
-    fee: entryFee(course.purse),
+    fee: entryFee(course.purse, season.grade),
+    pot: potOf(stakeOf(course.purse)),
   };
 }
 
@@ -179,9 +184,9 @@ export interface Finished {
  * place's points, and the season moved on, or closed if it was the last.
  */
 export function finishEvent(ctx: SeasonContext, tour: Tour, season: TourSeason, card: readonly number[]): Finished {
-  const { index, fee } = nextEvent(ctx, tour, season);
+  const { index, pot } = nextEvent(ctx, tour, season);
   const field = eventField(ctx, tour, season, index, card);
-  const prizes = prizesFor(field, potOf(fee));
+  const prizes = prizesFor(field, pot);
   const at = field.findIndex((p) => p.name === YOU);
   const me = field[at];
   const played = { ...season, played: [...season.played, [...card]] };

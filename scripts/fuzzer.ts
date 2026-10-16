@@ -31,7 +31,7 @@ import { AISLES, ITEMS, paid } from '../src/items';
 import { retakeShown } from '../src/retake';
 import { COURSES, type Course, type HoleDef } from '../src/course';
 import type { RoundOf } from '../src/career';
-import { POINTS, FIELD_SIZE, GRADES, PRIZE, TOURS, entryFee, potOf, type Tour } from '../src/season';
+import { POINTS, FIELD_SIZE, GRADES, PRIZE, TOURS, entryFee, potOf, stakeOf, type Tour } from '../src/season';
 import { seasonContext } from '../src/tours';
 import type { SeasonContext } from '../src/tournament';
 import { contextOf } from '../test/season-context';
@@ -258,8 +258,8 @@ export function fuzz(
             entries++;
           }
           if (name === 'placed') lately.placed = args[0] as unknown as Placement;
-          if ((name === 'paid' || name === 'spent') && (playing?.progress.save.mode === 'free' || playing?.practising))
-            told.push(`${playing.practising ? 'practice' : 'free play'} was told it was ${name}`);
+          if ((name === 'paid' || name === 'spent') && playing?.progress.save.mode === 'free')
+            told.push(`free play was told it was ${name}`);
           if (name === 'holed' || name === 'pickedUp')
             lately.finished = { holed: name === 'holed', score: args[0], par: args[1] };
           if (name === 'started' && playing && directing) {
@@ -351,13 +351,15 @@ export function fuzz(
 
   try {
     // a new player, or, on odd seeds, one come back with coins and gems enough for the shop
-    // (and every fifth seed a collector, with the price of the whole shop, so that all forty-five items are bought and played on)
+    // (and every fifth seed a collector, with the price of the whole shop, so that all forty-five items are bought and played on);
+    // each on the golf tour's county grade, where an event has a fee, and the mini tour's club grade, which is entered for nothing,
+    // so the monkey meets both
+    const county = { golf: { grade: 'county', begun: 0, played: [], titles: 0 } };
     let store = memoryStore(
-      seed % 5 === 0
-        ? JSON.stringify({ coins: 12000, gems: 16 })
-        : seed % 2
-          ? JSON.stringify({ coins: 700, gems: 6 })
-          : null,
+      JSON.stringify({
+        ...(seed % 5 === 0 ? { coins: 12000, gems: 16 } : seed % 2 ? { coins: 700, gems: 6 } : {}),
+        season: county,
+      }),
     );
     let game = new Game(new Progress(store), events, { random: chance(seed), course, season });
     playing = game;
@@ -488,7 +490,7 @@ export function fuzz(
     const windfall = (tour: Tour) => {
       const save = game.progress.save;
       const next = season.tours[tour][Math.min(save.season[tour].played.length, season.tours[tour].length - 1)];
-      const cost = entryFee(next.purse);
+      const cost = entryFee(next.purse, save.season[tour].grade);
       if (save.coins >= cost || careerer() >= 0.5) return;
       save.coins += 2 * cost;
       game.persist();
@@ -512,7 +514,7 @@ export function fuzz(
       }
       if (mode !== 'career') told.push(`an event was entered in ${mode}`);
       if (entries !== 1) told.push(`${entries} entries were told for the one fee`);
-      if (game.of === null || fee !== entryFee(game.of.purse) || coins - save.coins !== fee)
+      if (game.of === null || fee !== entryFee(game.of.purse, save.season[tour].grade) || coins - save.coins !== fee)
         told.push(`a fee of ${fee} was told and ${coins - save.coins} taken`);
       const kept = save.round;
       if (!kept || kept.tour !== tour || kept.hole !== 0 || kept.card.length !== 0 || kept.course !== game.of?.name)
@@ -1387,8 +1389,9 @@ export function fuzz(
       // (and in free play nothing at all: no pay, no penny spent; a career round's last hole pays its prize on top)
       if (finished) {
         const free = game.progress.save.mode === 'free';
-        // practice, like free play, pays and keeps nothing and uses nothing up, and leaves the round kept and the seasons as they were
-        const unpaid = free || game.practising;
+        // practice pays its holes as any paid hole, so a player short of a fee can earn it, and like free play it leaves the
+        // round kept and the seasons as they were
+        const unpaid = free;
         const pay = unpaid
           ? { coins: 0, gems: 0 }
           : paid(finished.score, finished.par, !finished.holed, game.kit.underParPay);
@@ -1396,8 +1399,11 @@ export function fuzz(
         const save = game.progress.save;
         const coins = pay.coins * (double ? 2 : 1) + prize;
         if (free) count(checked, 'free hole paid nothing');
-        else if (unpaid) count(checked, 'practice paid nothing');
-        if (unpaid && (JSON.stringify(save.round) !== was.round || JSON.stringify(save.season) !== was.season))
+        else if (game.practising) count(checked, 'practice paid its hole');
+        if (
+          (free || game.practising) &&
+          (JSON.stringify(save.round) !== was.round || JSON.stringify(save.season) !== was.season)
+        )
           throw new Error(`a hole done in ${free ? 'free play' : 'practice'} changed the round kept or the season`);
         if (save.coins - was.coins !== coins || save.gems - was.gems !== pay.gems)
           throw new Error(
@@ -1431,7 +1437,7 @@ export function fuzz(
       if (!event || !game.of) return void told.push('a place was told for a round that is no event');
       const before = (JSON.parse(was.season) as typeof save.season)[event.tour];
       const now = save.season[event.tour];
-      const pot = potOf(entryFee(game.of.purse));
+      const pot = potOf(stakeOf(game.of.purse));
       const bad: string[] = [];
       if (!(Number.isInteger(p.place) && p.place >= 1 && p.place <= FIELD_SIZE)) bad.push(`place ${p.place}`);
       if (!Number.isInteger(p.prize) || p.prize < 0 || p.prize > pot)
@@ -1476,15 +1482,15 @@ export function fuzz(
      */
     const retaker = seeded(seed * 43 + 11);
     const retake = () => {
-      // the button is refused in an event, where a stroke counts against the field; `retakeShown` does not know of one yet
-      const shown =
-        retakeShown({
-          held: game.kit.retake,
-          strokes: game.strokes,
-          used: game.mulliganUsed,
-          phase: game.phase,
-          choosing: false,
-        }) && game.event === null;
+      // the button is away in an event, where a stroke counts against the field, as the page has it
+      const shown = retakeShown({
+        held: game.kit.retake,
+        strokes: game.strokes,
+        used: game.mulliganUsed,
+        phase: game.phase,
+        choosing: false,
+        event: game.event !== null,
+      });
       const was = snapshot();
       const [t, used] = [game.t, game.mulliganUsed];
       const lie = { ...game.lie };

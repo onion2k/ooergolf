@@ -14,7 +14,9 @@ import {
   meritOf,
   placeOfName,
   pointsFor,
+  potOf,
   seasonSeed,
+  stakeOf,
   standings,
   type Grade,
 } from '../src/season';
@@ -75,7 +77,11 @@ describe('the next event', () => {
     expect(next.course.name).toBe(REAL.tours.golf[2].name);
     expect(next.grade).toBe('county');
     expect(next.seed).toBe(seasonSeed(2, 'golf', 'county'));
-    expect(next.fee).toBe(entryFee(REAL.tours.golf[2].purse));
+    expect(next.fee).toBe(entryFee(REAL.tours.golf[2].purse, 'county'));
+    expect(next.pot).toBe(potOf(stakeOf(REAL.tours.golf[2].purse)));
+    // the club grade is entered for nothing, and plays for the same pot
+    const club = nextEvent(REAL, 'golf', season({ grade: 'club', played: [null, [1]] }));
+    expect([club.fee, club.pot]).toEqual([0, next.pot]);
     // a withdrawal is played, so the event after it is next
     expect(nextEvent(REAL, 'mini', season({ played: [null] })).course.name).toBe(REAL.tours.mini[1].name);
   });
@@ -233,7 +239,7 @@ describe('an event finished', () => {
   it('places the player, pays their share of the pot, and moves the season on by a card', () => {
     const s = season();
     const done = finishEvent(REAL, 'mini', s, cardOf(meadow, 14));
-    const fee = entryFee(REAL.tours.mini[0].purse);
+    const fee = stakeOf(REAL.tours.mini[0].purse);
     expect(done.place).toBe(1);
     expect(done.tied).toBe(false);
     expect(done.prize).toBe(Math.floor(0.5 * fee * FIELD_SIZE));

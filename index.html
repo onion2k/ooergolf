@@ -1339,12 +1339,6 @@
     box-shadow: 0 4px 0 var(--mist-deep);
     cursor: default;
   }
-  #enterNote {
-    flex-basis: 100%;
-    font-size: 13px;
-    font-weight: 800;
-    color: var(--ink-soft);
-  }
   #board {
     grid-column: 1 / -1;
     grid-row: 20;
@@ -1382,6 +1376,18 @@
     }
     #start[data-event] #courseHead {
       grid-template-areas: 'event' 'name' 'stats' 'meta';
+    }
+    /* under the title a phone gives the panel 0.6 of its height, which the event, its order of merit and its buttons fill: the
+       strip of holes and the line about the field go, since the event's name, par and fee are what is chosen on */
+    html[data-title] #start[data-event] #courseStrip,
+    html[data-title] #start[data-event] #courseBadge {
+      display: none;
+    }
+    html[data-title] #start[data-event] #courseHead {
+      padding-bottom: 10px;
+    }
+    html[data-title] #meritRows tr:nth-child(4):not(.you) {
+      display: none;
     }
     #merit {
       grid-column: 1;
@@ -2256,7 +2262,6 @@
     <button id="enterEvent" type="button" hidden>Enter</button>
     <button id="practise" type="button" class="quiet" hidden>Practise</button>
     <button id="playMode" type="button" class="quiet">Career mode</button>
-    <small id="enterNote" hidden></small>
   </div>
 </div>
 <div class="panel" id="stats" hidden></div>

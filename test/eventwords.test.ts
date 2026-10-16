@@ -57,9 +57,9 @@ describe("a tournament's words", () => {
   });
 
   it('says what the season is played for: going up a grade, or the title at the top', () => {
-    expect(promotionLine('club', 3, 6)).toBe('Top 3 after 6 events go up to the County tour');
-    expect(promotionLine('county', 3, 3)).toBe('Top 3 after 3 events go up to the Championship tour');
-    expect(promotionLine('championship', 3, 6)).toBe('Top 3 after 6 events are champions');
+    expect(promotionLine('club', 3)).toBe('Top 3 go up to the County tour');
+    expect(promotionLine('county', 3)).toBe('Top 3 go up to the Championship tour');
+    expect(promotionLine('championship', 3)).toBe('Top 3 are champions');
   });
 
   it("says where the leaderboard's cut is and how many are behind you", () => {
@@ -71,6 +71,7 @@ describe("a tournament's words", () => {
   it('says the order of merit moved, or held', () => {
     expect(meritMove(3, 2)).toBe('Order of merit: 3rd → 2nd');
     expect(meritMove(5, 5)).toBe('Order of merit: 5th, as before');
+    expect(meritMove(0, 4), 'the first event of a season, before which there was no order').toBe('Order of merit: 4th');
   });
 
   it("says a season's end: up a grade, the title, or another go at the same grade", () => {

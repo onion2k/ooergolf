@@ -612,30 +612,39 @@ test('the round finished to the card, and begun again from its button', async ({
   expect(problems).toEqual([]);
 });
 
-test('a career round: Continue after a reload goes on from the kept hole, and the last hole pays a prize and sets a record', async ({
+test('an event: Continue after a reload goes on from the kept hole, the board follows the field, the last hole places the player, and Enter goes on to the next', async ({
   page,
 }) => {
   const problems = watch(page);
-  // a round of The Meadow kept at its last hole, the eight before it scored two each, as a reload finds it
+  // the mini tour's first event, The Meadow, kept at its last hole with the eight before it scored two each, as a reload finds it
   const card = [2, 2, 2, 2, 2, 2, 2, 2];
   await start(page, {
     seed: 1,
     paused: true,
     screen: true,
-    save: { coins: 10, round: { course: 'The Meadow', hole: 8, card, retaken: false, pickedUp: false } },
+    save: {
+      coins: 10,
+      round: { tour: 'mini', course: 'The Meadow', hole: 8, card, retaken: false, pickedUp: false },
+    },
   });
-  // the picker opens on the course of the round kept, its badge the hole to go on from and its Play Continue
+  // the mini tab is the tour's event, The Meadow, its Enter Continue from the hole kept
+  await page.locator('#tab-minigolf').click();
   await expect(page.locator('#courseName')).toHaveText('The Meadow');
-  await expect(page.locator('#courseBadge')).toHaveText('On hole 9');
-  await expect(page.locator('#playCourse')).toHaveText('Continue');
+  await expect(page.locator('#courseEvent')).toHaveText('Club tour · Event 1 of 3');
+  await expect(page.locator('#enterEvent')).toHaveText('Continue · hole 9');
   await expect(page.locator('#playMode')).toHaveText('Career mode');
-  // Continue, pressed by a real pointer
-  await page.locator('#playCourse').click();
+  // Continue, pressed by a real pointer: no fee is asked again
+  await page.locator('#enterEvent').click();
   const resumed = await page.evaluate(() => window.game!.state());
   expect(resumed.choosing).toBe(false);
   expect(resumed.hole).toBe(8);
   expect(resumed.card).toEqual(card);
-  expect((await page.evaluate(() => window.game!.career())).of?.name).toBe('The Meadow');
+  expect(resumed.coins).toBe(10);
+  expect((await page.evaluate(() => window.game!.season())).event).toEqual({ tour: 'mini', index: 0 });
+  // the board is the field thru the eight holes kept: sixteen strokes against their par of 22
+  const board = (await page.evaluate(() => window.game!.season())).board;
+  expect(board?.head).toBe('Leaderboard · thru 8');
+  expect(board?.rows.some((r) => r[1] === 'You' && r[2] === '−6')).toBe(true);
   // the last hole played out as the autopilot would
   for (let stroke = 1; stroke <= 12; stroke++) {
     await page.evaluate(() => {
@@ -643,7 +652,7 @@ test('a career round: Continue after a reload goes on from the kept hole, and th
       if (shot) window.game!.shoot(shot.angle, shot.power);
     });
     for (let f = 0; f < 12 * 60; f += 20) {
-      await play(page, 20, `stroke ${stroke} of the kept round's last hole`);
+      await play(page, 20, `stroke ${stroke} of the kept event's last hole`);
       const { phase, ready } = await page.evaluate(() => window.game!.state());
       if (phase !== 'play' || ready) break;
     }
@@ -652,22 +661,41 @@ test('a career round: Continue after a reload goes on from the kept hole, and th
   await play(page, 150, 'after the last hole');
   const over = await page.evaluate(() => window.game!.state());
   expect(over.phase).toBe('over');
-  const career = await page.evaluate(() => window.game!.career());
-  expect(career.round, 'the round kept is let go').toBeNull();
-  const total = over.card.reduce((a, b) => a + b, 0);
-  const holed = over.card[8] < 9;
-  if (holed) expect(career.records['The Meadow']).toMatchObject({ strokes: total, par: 26 });
-  // the card says the prize, and a record as a sticker; the coins took the hole's pay and the prize
+  const after = await page.evaluate(() => window.game!.season());
+  expect(after.season.mini.played, "the card is the season's first event").toEqual([over.card]);
+  expect((await page.evaluate(() => window.game!.career())).round, 'the round kept is let go').toBeNull();
+  // the card says the place, the field with you in it, and the order of merit; Next event for Play again
+  await expect(page.locator('#card h2')).toHaveText('The Meadow');
   await expect(page.locator('#cardPrize')).toBeVisible();
-  await expect(page.locator('#cardPrize')).toContainText('Prize');
-  if (holed) await expect(page.locator('#cardPrize')).toContainText('New course record!');
-  expect(over.coins).toBeGreaterThan(10 + 20);
-  // each hole's best is on the card beside its score, and the round was the first finished, so the last hole has one
-  await expect(page.locator('#cardRows tr').last().locator('td').nth(3)).toHaveText(holed ? String(over.card[8]) : '–');
+  await expect(page.locator('#cardResults tr.you')).toContainText('You');
+  await expect(page.locator('#meritMove')).toHaveText(/^Order of merit: \d+(st|nd|rd|th)$/);
+  await expect(page.locator('#again')).toBeHidden();
+  await page.locator('#nextEvent').click();
+  // the start screen, the mini tab's next event, which at the club grade is entered for nothing
+  await page.locator('#tab-minigolf').click();
+  await expect(page.locator('#courseEvent')).toHaveText('Club tour · Event 2 of 3');
+  const purse = (await page.evaluate(() => window.game!.state())).coins;
+  await expect(page.locator('#enterEvent')).toHaveText('Enter · free');
+  await page.locator('#enterEvent').click();
+  const entered = await page.evaluate(() => window.game!.state());
+  expect(entered.coins, 'no fee at the club grade').toBe(purse);
+  expect(entered.choosing).toBe(false);
+  expect((await page.evaluate(() => window.game!.season())).event).toEqual({ tour: 'mini', index: 1 });
+  expect((await page.evaluate(() => window.game!.career())).round?.hole, 'kept from its first tee').toBe(0);
 
-  // free play, chosen on the start screen by a real click, pays nothing and keeps nothing
-  await page.locator('#cardCourses').click();
+  expect(await page.evaluate(() => window.game!.invariants())).toEqual([]);
+  expect(problems).toEqual([]);
+});
+
+test('free play, chosen on the start screen, shows no event, pays nothing and keeps nothing, and a reload keeps it', async ({
+  page,
+}) => {
+  const problems = watch(page);
+  await start(page, { seed: 1, paused: true, screen: true, save: { coins: 10 } });
+  await expect(page.locator('#enterEvent')).toBeVisible();
   await page.locator('#playMode').click();
+  await expect(page.locator('#enterEvent'), 'no event in free play').toBeHidden();
+  await expect(page.locator('#playCourse')).toBeVisible();
   await expect(page.locator('#playMode')).toHaveText('Free play');
   expect((await page.evaluate(() => window.game!.career())).mode).toBe('free');
   await page.evaluate(() => window.game!.chooseCourse('The Meadow'));
@@ -2482,7 +2510,8 @@ test.describe('the flag button', () => {
  */
 test('a course is chosen from over the title with a real pointer, and played', async ({ page }) => {
   const problems = watch(page);
-  await start(page, { title: true, paused: true, seed: 1, screen: true });
+  // in free play, whose start screen is the picker; in the career it is the season's events
+  await start(page, { title: true, paused: true, seed: 1, screen: true, save: { mode: 'free' } });
   await play(page, 120, 'the letters dropping');
   expect(await page.evaluate(() => window.game!.title().landed)).toBe(true);
   await expect(page.locator('#start')).toBeVisible();

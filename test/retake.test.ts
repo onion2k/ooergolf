@@ -6,7 +6,7 @@ import { retakeShown } from '../src/retake';
 import { seeded } from '../src/random';
 import { DT, FLAT_HOLES } from './helpers';
 
-const ready = { held: true, strokes: 1, used: false, phase: 'play', choosing: false } as const;
+const ready = { held: true, strokes: 1, used: false, phase: 'play', choosing: false, event: false } as const;
 
 describe('when the retake button is shown', () => {
   it('is shown with the kit asking for it, a stroke taken, the retake unused and the hole in play', () => {
@@ -21,6 +21,7 @@ describe('when the retake button is shown', () => {
     expect(retakeShown({ ...ready, phase: 'done' }), 'holed').toBe(false);
     expect(retakeShown({ ...ready, phase: 'over' }), 'the card').toBe(false);
     expect(retakeShown({ ...ready, choosing: true }), 'under the start screen').toBe(false);
+    expect(retakeShown({ ...ready, event: true }), 'in an event, which refuses it').toBe(false);
   });
 
   it('agrees with the game: with nothing worn it is never shown, and pressing it does nothing', () => {
@@ -32,6 +33,7 @@ describe('when the retake button is shown', () => {
         used: g.mulliganUsed,
         phase: g.phase,
         choosing: false,
+        event: g.event !== null,
       });
     expect(shown()).toBe(false);
     g.shoot(Math.PI / 2, 0.4);

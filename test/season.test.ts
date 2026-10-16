@@ -22,6 +22,7 @@ import {
   placeOfName,
   pointsFor,
   potOf,
+  stakeOf,
   prizesFor,
   promoted,
   rivalCard,
@@ -207,12 +208,19 @@ describe('prizes', () => {
     }
   });
 
-  it('has an entry fee that scales with the purse, and a pot of twelve fees', () => {
+  it('has a stake that scales with the purse, a pot of twelve stakes, and a fee of the stake above the club grade', () => {
     expect(PRIZE.shares.reduce((a, b) => a + b, 0)).toBeCloseTo(1, 10);
-    expect(entryFee(1)).toBe(25);
-    expect(entryFee(1.6)).toBe(40);
-    expect(entryFee(1.2)).toBe(30);
+    expect(stakeOf(1)).toBe(25);
+    expect(stakeOf(1.6)).toBe(40);
+    expect(stakeOf(1.2)).toBe(30);
     expect(potOf(25)).toBe(25 * FIELD_SIZE);
+    expect(entryFee(1.2, 'county')).toBe(30);
+    expect(entryFee(1.2, 'championship')).toBe(30);
+  });
+
+  it('lets a player into the club grade for nothing, so a new player can start, and still plays for the same pot', () => {
+    expect(entryFee(1, 'club')).toBe(0);
+    expect(entryFee(2, 'club')).toBe(0);
   });
 });
 

@@ -40,7 +40,8 @@ for (const [where, device] of [
       page,
     }) => {
       const problems = watch(page);
-      await start(page, { seed: 11, paused: true, screen: true });
+      // in free play, whose start screen is the picker; in the career it is the season's events
+      await start(page, { seed: 11, paused: true, screen: true, save: { mode: 'free' } });
       const shown = () => page.locator('#courseName').textContent();
       const colour = () => page.locator('#courseCard').getAttribute('data-colour');
       expect(await shown()).toBe('The Links');
@@ -106,7 +107,12 @@ for (const [where, device] of [
       ];
       const kit = { club: '', ball: '', accessory: '' };
       const best = Object.fromEntries(meadow.map((name, k) => [name, { strokes: 2 + (k % 2), kit }]));
-      await start(page, { seed: 11, paused: true, screen: true, save: { coins: 0, gems: 0, owned: [], kit, best } });
+      await start(page, {
+        seed: 11,
+        paused: true,
+        screen: true,
+        save: { coins: 0, gems: 0, owned: [], kit, best, mode: 'free' },
+      });
       await expect(page.locator('#courseBadge')).toHaveText('Not yet played');
       await page.locator('#tab-minigolf').click();
       await expect(page.locator('#courseBadge')).toHaveText('Best 22');

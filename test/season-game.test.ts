@@ -21,6 +21,12 @@ const NOTHING = { club: '', ball: '', accessory: '' };
 const FEE = { a: 30, b: 38, c: 25 };
 
 /** A game with a small season, its save in a store the test keeps (1000 coins unless given a save), and every event told. */
+/** A save at the county grade on both tours, where an event has a fee (the club grade is entered for nothing). */
+const atCounty = (save: Record<string, unknown> = { coins: 1000 }) => {
+  const county = { grade: 'county', begun: 0, played: [], titles: 0 };
+  return JSON.stringify({ ...save, season: { golf: county, mini: county } });
+};
+
 function season(json: string | null = JSON.stringify({ coins: 1000 }), withSeason = true) {
   const store = memoryStore(json);
   const calls: [string, unknown[]][] = [];
@@ -64,8 +70,21 @@ function loseEvent(g: Game) {
 }
 
 describe('entering an event', () => {
+  it('costs nothing at the club grade, so a player with no coins can start the career, and plays for the same pot', () => {
+    const club = { grade: 'club', begun: 0, played: [], titles: 0 };
+    const { game, calls } = season(JSON.stringify({ coins: 0, season: { golf: club, mini: club } }));
+    expect(game.enter('golf')).toBe(true);
+    expect(game.progress.save.coins).toBe(0);
+    expect(told(calls, 'entered')).toEqual([['entered', [0]]]);
+    winEvent(game);
+    const [won] = placement(calls);
+    expect(won.place).toBe(1);
+    expect(won.prize, 'half of twelve stakes, though none was paid in').toBe(Math.floor(FEE.a * 12 * 0.5));
+    expect(checkInvariants(game)).toEqual([]);
+  });
+
   it('takes the fee once, tells entered, and keeps the round at its first hole', () => {
-    const { game, store, calls } = season();
+    const { game, store, calls } = season(atCounty());
     expect(game.enter('golf')).toBe(true);
     const save = game.progress.save;
     expect(save.coins).toBe(1000 - FEE.a);
@@ -113,20 +132,20 @@ describe('entering an event', () => {
     expect(bare.game.progress.save.coins).toBe(1000);
     const odd = season();
     expect(odd.game.enter('senior' as never)).toBe(false);
-    const poor = season(JSON.stringify({ coins: FEE.a - 1 }));
+    const poor = season(atCounty({ coins: FEE.a - 1 }));
     expect(poor.game.enter('golf')).toBe(false);
     expect(poor.game.progress.save.coins).toBe(FEE.a - 1);
     expect(poor.game.progress.save.round).toBeNull();
     expect(poor.game.event).toBeNull();
     for (const c of [free, bare, odd, poor]) expect(told(c.calls, 'entered'), 'not told').toEqual([]);
     // the fee is enough at its price, to the coin
-    const exact = season(JSON.stringify({ coins: FEE.a }));
+    const exact = season(atCounty({ coins: FEE.a }));
     expect(exact.game.enter('golf')).toBe(true);
     expect(exact.game.progress.save.coins).toBe(0);
   });
 
   it('leaves a round kept where it was when the entry is refused for coins', () => {
-    const { game, store } = season();
+    const { game, store } = season(atCounty());
     game.enter('mini');
     game.progress.save.coins = FEE.c - 1;
     game.persist();
@@ -136,7 +155,7 @@ describe('entering an event', () => {
     expect(game.enter('mini')).toBe(false);
     expect([store.json, JSON.stringify(game.progress.save)]).toEqual(before);
     expect(game.progress.save.round).not.toBeNull();
-    expect(game.progress.save.season.mini).toEqual({ grade: 'club', begun: 0, played: [], titles: 0 });
+    expect(game.progress.save.season.mini).toEqual({ grade: 'county', begun: 0, played: [], titles: 0 });
     expect(game.counting).toBe(true);
   });
 
@@ -153,7 +172,7 @@ describe('entering an event', () => {
 
 describe('going on with an event after a reload', () => {
   it('goes on before the first hole is done, from its tee, with the fee still spent', () => {
-    const first = season();
+    const first = season(atCounty());
     first.game.enter('golf');
     const { game, calls } = season(first.store.json);
     expect(game.progress.save.coins).toBe(1000 - FEE.a);
@@ -309,9 +328,9 @@ describe('the end of a season', () => {
 });
 
 describe('giving up an event', () => {
-  /** The game with an event entered on the golf tour, 1000 coins less its fee. */
+  /** The game with an event entered on the golf tour at the county grade, 1000 coins less its fee. */
   function entered() {
-    const c = season();
+    const c = season(atCounty());
     c.game.enter('golf');
     return c;
   }
@@ -367,7 +386,7 @@ describe('giving up an event', () => {
     const { game } = entered();
     game.enter('golf');
     game.newRound();
-    expect(game.progress.save.season.golf).toEqual({ grade: 'club', begun: 1, played: [], titles: 0 });
+    expect(game.progress.save.season.golf).toEqual({ grade: 'county', begun: 1, played: [], titles: 0 });
     expect(game.progress.save.coins).toBe(1000 - FEE.a - FEE.b);
     expect(careerProblems(game)).toEqual([]);
   });
@@ -395,22 +414,27 @@ describe('giving up an event', () => {
 });
 
 describe('practice', () => {
-  it('pays, keeps and spends nothing, the piggy bank too, and leaves the mode as it was', () => {
-    const { game, calls } = season(
-      JSON.stringify({ coins: 500, owned: ['piggy'], kit: { accessory: 'piggy' }, mode: 'career' }),
-    );
-    const before = JSON.stringify(game.progress.save);
+  it('pays its holes and keeps their bests, as any paid hole does, so a player short of a fee can earn it; and no prize, record, round or season', () => {
+    const { game, calls } = season(JSON.stringify({ coins: 0, mode: 'career' }));
+    const { season: seasons, records, round } = structuredClone(game.progress.save);
     game.practise(SMALL_C.holes, roundOfEvent(SMALL_C));
     expect(game.practising).toBe(true);
     expect(game.progress.save.mode).toBe('career');
+    let owed = 0;
     for (let h = 0; h < 3; h++) {
+      owed += paid(1, SMALL_C.holes[h].par, false, game.kit.underParPay).coins;
       holeInOne(game);
       next(game);
     }
     expect(game.phase).toBe('over');
-    expect(JSON.stringify(game.progress.save), 'the save is as it was').toBe(before);
-    expect(game.progress.save.owned).toContain('piggy');
-    expect(told(calls, 'paid', 'spent', 'roundPaid', 'placed', 'entered')).toEqual([]);
+    expect(game.progress.save.coins, 'each hole paid as a hole in one').toBe(owed);
+    expect(owed).toBeGreaterThan(0);
+    for (const h of SMALL_C.holes) expect(game.progress.save.best[h.name].strokes).toBe(1);
+    expect(game.progress.save.season, 'the season untouched').toEqual(seasons);
+    expect(game.progress.save.records, 'no record').toEqual(records);
+    expect(game.progress.save.round, 'no round kept').toEqual(round);
+    expect(told(calls, 'roundPaid', 'placed', 'entered')).toEqual([]);
+    expect(told(calls, 'paid').length).toBe(3);
     expect(game.counting).toBe(false);
     expect(checkInvariants(game)).toEqual([]);
   });

@@ -164,17 +164,19 @@ describe('the fuzzer', () => {
     const total: Record<string, number> = {};
     const did: Record<string, number> = {};
     const hole = FLAT_HOLES.slice(0, 1);
-    for (const seed of [3, 4, 7, 12, 17, 19, 20]) {
+    // seed 24 is a player with no coins on the golf tour's county grade given no windfall, so an entry is refused for its fee (since
+    // 16 October 2026, when the club grade became free, the seven before it never were)
+    for (const seed of [3, 4, 7, 12, 17, 19, 20, 24]) {
       const r = fuzz(seed, 6000, hole, { name: 'Fuzz pitch', purse: 1.2 });
       expect(r.failure, `seed ${seed}: ${JSON.stringify(r.failure)}`).toBe(null);
       for (const [k, n] of Object.entries(r.checked)) total[k] = (total[k] ?? 0) + n;
       for (const [k, n] of Object.entries(r.done)) did[k] = (did[k] ?? 0) + n;
     }
-    // each check ran, and was not passed in silence: an event played to its end and placed, a practice hole paid nothing, an event
+    // each check ran, and was not passed in silence: an event played to its end and placed, a practice hole paid, an event
     // round gone on with after a reload, an event given up for a course, and entries made and refused
     for (const check of [
       'event placed',
-      'practice paid nothing',
+      'practice paid its hole',
       'event gone on with',
       'event given up',
       'event entered',
