@@ -47,9 +47,9 @@ export const WATCH: Partial<Record<string, { ceiling: number; steady?: boolean }
   // course fails the test before it fails the gate. 15 October 2026: the career's record of each of the nine courses and
   // a round kept at its last hole, measured the same way at 9,800 bytes, held to the byte; 10,500 is that and about six
   // holes more. Later that day the season of each tour, at the longest grade with a full season less one event played in
-  // two-figure scores, and the event round kept with its tour: 10,164 bytes, held to the byte, which leaves 336 under the
-  // ceiling, about three holes)
-  'save bytes': { ceiling: 10_500 },
+  // two-figure scores, and the event round kept with its tour: 10,164 bytes, held to the byte; the ceiling raised to 10,800 on
+  // 16 October 2026 at the user's word, which is that and about six holes more again)
+  'save bytes': { ceiling: 10_800 },
   // emptied at every new round: never more than a score a hole
   'card scores': { ceiling: COURSE.length },
   // the bodies in the rehearsal a golf hole's shots are previewed in: the ball, however many shots are tried, and the

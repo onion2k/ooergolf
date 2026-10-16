@@ -1355,6 +1355,9 @@ export class Hud {
   private drawResults(results: Results | null): void {
     this.cardHeading.textContent = results ? results.course : 'The card';
     this.cardResults.hidden = !results;
+    // the card is laid out wider on a desk while it shows an event's field beside its scores (`data-results`)
+    if (results) this.card.dataset.results = '';
+    else delete this.card.dataset.results;
     this.againButton.hidden = results !== null;
     this.nextButton.hidden = results === null;
     if (!results) return;

@@ -1374,6 +1374,40 @@
     margin-top: 16px;
     font-size: 19px;
   }
+  /* on a desk the card at an event's end is two columns, the scores and beside them the place, the field and the order of
+     merit, with its buttons across the foot, since one column of both is taller than a desk's screen (the user's choice of
+     16 October 2026); a phone keeps one column, which fits */
+  @media (min-width: 601px) and (min-height: 501px) {
+    #card[data-results] {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      grid-template-areas: 'head head' 'scores prize' 'scores results' 'next next' 'pair pair';
+      grid-template-rows: auto auto 1fr auto auto;
+      column-gap: 24px;
+      align-content: start;
+      width: min(760px, calc(100vw / var(--ui, 1) - 32px));
+    }
+    #card[data-results] > h2 {
+      grid-area: head;
+    }
+    #card[data-results] > table {
+      grid-area: scores;
+      align-self: start;
+    }
+    #card[data-results] > #cardPrize {
+      grid-area: prize;
+      align-self: start;
+    }
+    #card[data-results] > #cardResults {
+      grid-area: results;
+    }
+    #card[data-results] > #nextEvent {
+      grid-area: next;
+    }
+    #card[data-results] > .pair {
+      grid-area: pair;
+    }
+  }
   @media (max-width: 600px) {
     /* a phone's event: the order of merit under the card, small, so the card, the table and Enter fit without scrolling */
     #start[data-event] #picker {

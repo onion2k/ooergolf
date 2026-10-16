@@ -52,9 +52,18 @@ async function offerInstall(page: Page) {
   await expect(page.locator('#install')).toBeVisible();
 }
 
-/** The corner that counts the milliseconds a frame takes is different every run, and says nothing about the look. */
+/**
+ * The corner that counts the milliseconds a frame takes is different every run, and says nothing about the look; and the
+ * start screen's strip of holes is pictures fetched as a course is shown, which under a loaded machine were seen not yet drawn
+ * when a picture was taken (16 October 2026, the phone's start screen with the Install button), so they are waited for.
+ */
 async function hideStats(page: Page) {
   await page.locator('#stats').evaluate((el: HTMLElement) => (el.hidden = true));
+  await page.waitForFunction(() =>
+    Array.from(document.querySelectorAll<HTMLImageElement>('#courseStrip img')).every(
+      (i) => i.complete && i.naturalWidth > 0,
+    ),
+  );
 }
 
 /**
@@ -1582,6 +1591,7 @@ test.describe('what it looks like', () => {
     test('the start screen, on its side', async ({ page }) => {
       const problems = watch(page);
       await start(page, { seed: 11, paused: true, screen: true });
+      await hideStats(page);
       await expect(page).toHaveScreenshot('landscape-start.png', TOLERANCE);
       expect(problems).toEqual([]);
     });
