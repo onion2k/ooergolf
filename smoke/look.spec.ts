@@ -135,6 +135,54 @@ async function fromAbove(page: Page) {
 }
 
 /** The whole round played by the autopilot's shots, to the card. */
+/**
+ * A career a few events in: the golf tour at the county grade two events into its season, with a record on two courses, and
+ * the mini tour's second event, The Pinball Shed, kept at its fourth hole.
+ */
+const CAREER = {
+  coins: 120,
+  records: {
+    'The Links': { strokes: 31, par: 36, kit: { club: '', ball: '', accessory: '' }, when: '2026-10-15' },
+    'The Old Course': { strokes: 44, par: 37, kit: { club: '', ball: '', accessory: '' }, when: '2026-10-15' },
+  },
+  season: {
+    golf: {
+      grade: 'county',
+      begun: 1,
+      played: [
+        [4, 4, 3, 5, 4, 4, 5, 4, 4],
+        [5, 4, 4, 5, 4, 3, 4, 5, 4],
+      ],
+      titles: 0,
+    },
+    mini: { grade: 'club', begun: 0, played: [[2, 3, 2, 3, 3, 3, 3, 3, 4]], titles: 0 },
+  },
+  round: { tour: 'mini', course: 'The Pinball Shed', hole: 3, card: [3, 2, 4], retaken: false, pickedUp: false },
+};
+
+/**
+ * The mini tour's first event, The Meadow, kept at its last hole with the eight before it holed in one: to be finished and
+ * placed, high enough that the picture shows a place in the money.
+ */
+const EVENT_END = {
+  coins: 40,
+  round: {
+    tour: 'mini',
+    course: 'The Meadow',
+    hole: 8,
+    card: [1, 1, 1, 1, 1, 1, 1, 1],
+    retaken: false,
+    pickedUp: false,
+  },
+};
+
+/** The event kept gone on with, as its card's Continue does, and its hole drawn. */
+async function goOn(page: Page) {
+  await page.locator('#tab-minigolf').click();
+  await page.locator('#enterEvent').click();
+  await page.evaluate(() => window.game!.step(60));
+}
+
 async function playRound(page: Page) {
   await page.evaluate(() => {
     const g = window.game!;
@@ -657,17 +705,18 @@ test.describe('what it looks like', () => {
     expect(problems).toEqual([]);
   });
 
-  /** A career a few rounds in: a record on two courses of golf, and a round of The Pinball Shed kept at its fourth hole. */
-  const CAREER = {
-    coins: 120,
-    records: {
-      'The Links': { strokes: 31, par: 36, kit: { club: '', ball: '', accessory: '' }, when: '2026-10-15' },
-      'The Old Course': { strokes: 44, par: 37, kit: { club: '', ball: '', accessory: '' }, when: '2026-10-15' },
-    },
-    round: { course: 'The Pinball Shed', hole: 3, card: [3, 2, 4], retaken: false, pickedUp: false },
-  };
+  test('the start screen in free play: the picker, a course of the tab in view, its arrows and Play', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true, screen: true, save: { mode: 'free' } });
+    await page.evaluate(() => window.game!.step(1));
+    await hideStats(page);
+    await expect(page).toHaveScreenshot('start-free.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
 
-  test('the start screen in a career: the picker open on the round kept, its hole as the first pill and Play as Continue', async ({
+  test('the start screen in a career: the tab of the event kept, Enter as Continue from its hole, and the order of merit', async ({
     page,
   }) => {
     const problems = watch(page);
@@ -675,6 +724,29 @@ test.describe('what it looks like', () => {
     await page.evaluate(() => window.game!.step(1));
     await hideStats(page);
     await expect(page).toHaveScreenshot('start-career.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
+  test('an event gone on with: the leaderboard at the foot of the hole panel, thru the holes kept', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true, screen: true, save: CAREER });
+    await goOn(page);
+    await hideStats(page);
+    await expect(page).toHaveScreenshot('event-board.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
+  test("an event's end: the card with the place and prize, the field, and the order of merit, and Next event", async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true, screen: true, save: EVENT_END });
+    await goOn(page);
+    await playRound(page);
+    await hideStats(page);
+    await expect(page).toHaveScreenshot('event-results.png', TOLERANCE);
     expect(problems).toEqual([]);
   });
 
@@ -1339,12 +1411,33 @@ test.describe('what it looks like', () => {
       expect(problems).toEqual([]);
     });
 
-    test('the start screen in a career, on a phone: the round kept, and the mode beside Continue', async ({ page }) => {
+    test('the start screen in a career, on a phone: the event kept, its order of merit, and the mode beside Continue', async ({
+      page,
+    }) => {
       const problems = watch(page);
       await start(page, { seed: 11, paused: true, screen: true, save: CAREER });
       await page.evaluate(() => window.game!.step(1));
       await hideStats(page);
       await expect(page).toHaveScreenshot('phone-start-career.png', TOLERANCE);
+      expect(problems).toEqual([]);
+    });
+
+    test('an event gone on with, on a phone: the leaderboard in the drawer with the hole', async ({ page }) => {
+      const problems = watch(page);
+      await start(page, { seed: 11, paused: true, screen: true, save: CAREER });
+      await goOn(page);
+      await hideStats(page);
+      await openDrawer(page);
+      await expect(page).toHaveScreenshot('phone-event-board.png', TOLERANCE);
+      expect(problems).toEqual([]);
+    });
+
+    test("an event's end, on a phone: the card with the place, the field and the order of merit", async ({ page }) => {
+      const problems = watch(page);
+      await start(page, { seed: 11, paused: true, screen: true, save: EVENT_END });
+      await goOn(page);
+      await playRound(page);
+      await expect(page).toHaveScreenshot('phone-event-results.png', TOLERANCE);
       expect(problems).toEqual([]);
     });
 

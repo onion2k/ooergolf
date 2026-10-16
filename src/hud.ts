@@ -976,7 +976,7 @@ export class Hud {
     this.courseEvent.textContent = eventHeader(card.grade, card.event, card.events);
     const stats: [string, string][] = [
       ['Par', String(card.par)],
-      ['Entry', String(card.fee)],
+      ['Entry', card.fee === 0 ? 'Free' : String(card.fee)],
       ['Purse', String(card.pot)],
     ];
     this.courseStats.replaceChildren(
@@ -990,8 +990,11 @@ export class Hud {
     );
     this.courseBadge.textContent = `12 in the field · top ${card.paid} paid · one go`;
     this.courseBadge.dataset.kind = 'event';
+    // a season with nothing played has no order yet, which is said rather than left as an empty table
     this.meritRows.replaceChildren(
-      ...rowsOf(card.merit.map((r) => ({ you: r.you, cells: [placeText(r.place, r.tied), r.name, String(r.points)] }))),
+      ...(card.merit.length
+        ? rowsOf(card.merit.map((r) => ({ you: r.you, cells: [placeText(r.place, r.tied), r.name, String(r.points)] })))
+        : rowsOf([{ you: false, cells: ['No events played yet'] }])),
     );
     this.meritLine.textContent = promotionLine(card.grade, card.promoted);
     const short = card.kept === null && card.coins < card.fee;

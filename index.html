@@ -1317,6 +1317,11 @@
   #board td:last-child {
     text-align: right;
   }
+  /* the words a season with nothing played has in place of its order, a row of one cell */
+  #merit td:only-child {
+    text-align: left;
+    color: var(--ink-soft);
+  }
   #merit tr.you td,
   #board tr.you td,
   #cardResults tr.you td {
