@@ -504,8 +504,8 @@ angle, roll)` is how far the putter's hardest putt rolls along an angle before t
   on the rough as a raised green: the rough lies `ROUGH_DEPTH` below the
   grass, under the bottom of the cup, so the cup is seen into, and the rail
   comes down to meet it. The look is `LOOK.md`'s clean toy, toon daylight
-  on artshape-render v0.28.0 (0.23.0 brought the surface that flows, which the ponds
-  use; 0.24.0 and 0.25.0 particles blown by a wash of air, which the game does not yet use; 0.26.0 the ground texture; 0.27.0 open water, which a golf pond wears; 0.27.1 its sky no longer repeats: the sheet is bent by a slow warp and the swell is weaker; 0.28.0 a sky gradient, the sun's shadow fitted to the view, a soft shadow edge and open water in shadow, each only when asked), in `src/look.ts`, shared by the game and the
+  on artshape-render v0.45.0 (0.23.0 brought the surface that flows, which the ponds
+  use; 0.24.0 and 0.25.0 particles blown by a wash of air, which the game does not yet use; 0.26.0 the ground texture; 0.27.0 open water, which a golf pond wears; 0.27.1 its sky no longer repeats: the sheet is bent by a slow warp and the swell is weaker; 0.28.0 a sky gradient, the sun's shadow fitted to the view, a soft shadow edge and open water in shadow, each only when asked; 0.29.0 to 0.44.0 nothing the game asks for, so they draw its frame as 0.28.0 did, the scene to the pixel on SwiftShader at The Straight Mile's tee; 0.45.0 the frame's dither), in `src/look.ts`, shared by the game and the
   showcase: edges drawn at four samples a pixel (the post pass one rung
   down the ladder, and none on the last), the toon bands eased at their
   edges, a deep sea-green shade, a warm rim, the sky's light from above
@@ -518,7 +518,10 @@ angle, roll)` is how far the putter's hardest putt rolls along an angle before t
   what is smooth, the sky in a clear coat, one smooth ramp of light, shade
   toward the shade colour in a crease) and its soft tone, the renderer's screen-space
   occlusion where things meet, no film grain, and a haze so thin it only
-  pales the far rough. The colours are named in `src/models/palette.ts`,
+  pales the far rough; and a dither of a step of the screen's eight bits (`POST.dither`, 1; 16 October 2026), since the light
+  along a long fairway changes by a level or two over a hundred pixels and more, and rounded with nothing between it was drawn
+  as flat bands across the fairway's stripes, which a player saw on a phone on The Straight Mile; it is the same at a pixel
+  every frame, so a picture is the same every run, and moves a pixel by a level at most (`test/dither.test.ts`). The colours are named in `src/models/palette.ts`,
   the green, rough and rail among them, so the scene and the showcase are
   one green; the mown ground (green, fairway stripes, putting green, first cut, tee) wears a turf texture, made at boot by
   `src/turfTexture.ts` (256 square, tileable, mid-grey on average, from seed 1) and handed to the renderer's `setGroundTexture` in
