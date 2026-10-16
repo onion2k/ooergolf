@@ -84,22 +84,24 @@ export const BEFORE: Record<string, string> = {
   'The Pinball Shed/11': 'fa53edaa',
   'The Waterworks/3': '51299ab1',
   'The Waterworks/11': 'a42d8d4a',
-  'The Links/3': '678a7437',
-  'The Links/11': '05f14cf8',
+  'The Links/3': '90870cb6',
+  'The Links/11': '515e67bf',
   'The Fells/3': 'cde29d08',
   'The Fells/11': '54fdeeaf',
-  'The Isles/3': '37206db4',
-  'The Isles/11': '784b0387',
+  'The Isles/3': '307ee88d',
+  'The Isles/11': '1b9580db',
   // the three courses of 14 October 2026, hashed as they landed (7d41e7d): the six above did not move by a digit. Later that
   // day every course of golf but The Isles' seed 3 moved when a crown became the ball's radius round the solid cone (a rounded
   // rim, no cylinder under the base) and trees on steep banks were felled: a ball that passed just under and outside a rim
   // is no longer knocked, and the rounds go on differently from there. The minigolf courses did not move.
-  'The Heath/3': '8c79028d',
-  'The Heath/11': '032ba4cc',
-  'The Woods/3': '14980748',
-  'The Woods/11': 'dac48c28',
-  'The Old Course/3': '0e98adb4',
-  'The Old Course/11': '3402a1e9',
+  // On 16 October 2026 the ten of the five courses that roll moved when the banks came to be smoothed along their run
+  // (`BANKS.smooth`): the ball rests and runs on other ground. The Fells and the minigolf courses did not move.
+  'The Heath/3': '8c464401',
+  'The Heath/11': '8e2b5acc',
+  'The Woods/3': '47107836',
+  'The Woods/11': '43d7f46e',
+  'The Old Course/3': '9e08d130',
+  'The Old Course/11': '0d1e0070',
 };
 
 describe('a game with no kit is the game as it was', () => {

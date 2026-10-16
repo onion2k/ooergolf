@@ -955,8 +955,14 @@ minigolf: true }`, read through `oceanFor`) is the one switch: `waterBed` and `s
   flattened every hill; the walls are cut to the limit after), and **banks** (`banked`, `BANKS` in `golf.ts`): after every
   hazard is placed, the rough and the ground past it rise by a smoothstep of the distance from the nearest tile a ball is
   played from (fairway, green, cut, tee) to 6 yd over about 18 yd (`BANKS.height`, `width`; not within `BANKS.dry` tiles of
-  water, nor on sand), eased at 1.3 a tile and the whole held under 1.45, so the fairway lies in a gentle valley as the title
-  picture's does and a ball in the rough is carried back toward it. Placed from the ground as it was (`plain`, the hollows), so a
+  water, nor on sand), averaged with its neighbours six times (`BANKS.smooth`), eased at 1.3 a tile and the whole held under 1.45,
+  so the fairway lies in a gentle valley as the title picture's does and a ball in the rough is carried back toward it. The
+  smoothing came on 16 October 2026 from a player's screenshot of banding across the rough of The Straight Mile: counted in whole
+  tiles from a fairway's edge that steps a tile at a time, a bank rose in shelves a yard high wherever the edge stepped, and the
+  tint's bend drew each as a dark and a light band; `test/banks.test.ts` holds the bend along a bank's run under 0.3 yards a tile
+  at the ninetieth percentile on every course that rolls (0.31 to 0.57 before, 0.14 to 0.28 after). It felled 40 fewer trees on
+  the five courses that roll and moved their pace within tolerance (The Links 30.25 to 29.88, The Heath 30.19 to 29.63, The Woods
+  37.44 to 37.5, The Isles 50.06 to 50.94, The Old Course 45 to 44.06; the baseline not written). Placed from the ground as it was (`plain`, the hollows), so a
   hole keeps its water, sand, trees, out of bounds, tee and cup tile for tile, and its seed and par. Chosen by the user on 9
   October 2026 from a mock (banks 6, the swell at 0.8, stripes). Relief over the playable tiles (`test/banks.test.ts` holds at
   least 8 yd): The Links 9.4 to 14.4 yd (was 4 to 9) and The Isles 13.6 to 25 (was 2.5 to 6); the share of rough that drains

@@ -210,16 +210,18 @@ describe('The Links', () => {
     // line and two lengths), so theirs are the hills of the new spec; The Big Dogleg's and Home Stretch's are exactly as they were
     // Written again on 9 October 2026 for the rolling land (the long swell and the banks reach past thirty-four tiles of the cup):
     // with `rolling: false` on The Links' specs (a scratch edit, reverted) the nine hashes of 1 October return to the digit.
+    // Written again on 16 October 2026 when the banks came to be smoothed along their run (`BANKS.smooth`; with `smooth: 0` the
+    // nine of 9 October return).
     const WAS: Record<string, number> = {
-      'The Opener': 3006717903,
-      'Water Carry': 4193590940,
-      'Long Bend': 322379668,
-      'Tight Left': 1749427881,
-      'Island Green': 1729190522,
-      'Rushing Brook': 592970011,
-      'The Big Dogleg': 3783719098,
-      'The Straight Mile': 3760790947,
-      'Home Stretch': 739101156,
+      'The Opener': 2894157082,
+      'Water Carry': 2097361427,
+      'Long Bend': 2522638546,
+      'Tight Left': 2670577464,
+      'Island Green': 2617274671,
+      'Rushing Brook': 3615068257,
+      'The Big Dogleg': 3730101085,
+      'The Straight Mile': 2419151585,
+      'Home Stretch': 144613986,
     };
     for (const h of holes) {
       const l = layoutOf(h.map, h.terrain);

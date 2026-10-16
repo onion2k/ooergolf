@@ -197,11 +197,12 @@ function snapshot(l: ReturnType<typeof layoutOf>): { distance: string; waypoints
 const LINKS_ROUTES: Record<string, { distance: string; waypoints: string }> = {
   'The Opener': { distance: '19bfae55', waypoints: 'a9368855' },
   // five written again on 14 October 2026 when a tree or two on a bank of each was felled (`felled` in `golf.ts`): a trunk
-  // gone opens the tiles round it to the route
-  'Water Carry': { distance: 'd35bb8cf', waypoints: 'd21ebebd' },
-  'Long Bend': { distance: '6f890f6f', waypoints: '16019f65' },
-  'Tight Left': { distance: 'ff8c74e', waypoints: '86b4c44' },
-  'Island Green': { distance: 'cf143d85', waypoints: '11153729' },
+  // gone opens the tiles round it to the route; four of them again on 16 October 2026 when the banks were smoothed along their
+  // run (`BANKS.smooth`) and felled other trees
+  'Water Carry': { distance: 'fc4fd9e1', waypoints: 'c6f7ddfa' },
+  'Long Bend': { distance: '3dc3d5ad', waypoints: 'c442768f' },
+  'Tight Left': { distance: '9d3ad082', waypoints: '563bb38' },
+  'Island Green': { distance: '388717a0', waypoints: 'd23af5e8' },
   'Rushing Brook': { distance: '36a60e0', waypoints: 'a327c847' },
   'The Big Dogleg': { distance: '4f317d9f', waypoints: 'b6708fd0' },
   'The Straight Mile': { distance: '439f1d30', waypoints: '5d2677f6' },
