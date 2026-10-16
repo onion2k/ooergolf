@@ -5,6 +5,7 @@
  * game properly, and that the thing which decides what is growing says so
  * when it is, and holds its tongue when it is not.
  */
+import { CADDIE } from '../src/caddie';
 import { runInNewContext } from 'node:vm';
 import { setFlagsFromString } from 'node:v8';
 import { describe, expect, it } from 'vitest';
@@ -63,12 +64,15 @@ describe('what must stay bounded', () => {
         played: Array.from({ length: events }, () => Array.from({ length: 9 }, () => 10)),
         titles: 999,
       };
+    // and the caddie's tips taken at their limit, past which they are not counted
+    progress.save.caddie = { club: CADDIE.taken, shape: CADDIE.taken };
     expect(ITEMS.length, 'the forty-five').toBe(45);
     expect(holes.length, 'a hole of each, nine courses of nine').toBe(81);
     const bytes = JSON.stringify(progress.save).length;
     // held to the byte, so a longer id, a new hole or a new field in a best is seen and the ceiling thought about again
-    // (15 October 2026: 9,800 before the seasons, 10,164 with a season less one event played on both tours and an event round kept)
-    expect(bytes, `${bytes} bytes for ${holes.length} holes`).toBe(10_164);
+    // (15 October 2026: 9,800 before the seasons, 10,164 with a season less one event played on both tours and an event round kept;
+    // 16 October 2026: 10,194 with the caddie's two counts)
+    expect(bytes, `${bytes} bytes for ${holes.length} holes`).toBe(10_194);
     expect(bytes, 'under the ceiling').toBeLessThan(WATCH['save bytes']!.ceiling);
     expect(WATCH['save bytes']!.ceiling, 'with room for about six holes more and no more').toBeLessThan(bytes * 1.15);
   });

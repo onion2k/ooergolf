@@ -1533,6 +1533,48 @@
    * while a drag is held it says how to take it back, in the sun's yellow as the best score's word is, so that it is seen: a second
    * finger, or letting go where it was pressed. A phone has no help at all the rest of the time, and shows this one beside the switch.
    */
+  /*
+   * the caddie's tip: a panel of paper edged in the sun's yellow at the bottom left, above the help, with its words and what to
+   * press. Not over the bag: the ball rests just above the bag on every screen, and a tip over it would hide the ball it is
+   * about. Put away while a drag is held, when the shot is the thing to see (`data-held`); the help says how to take the drag
+   * back in its place on a phone
+   */
+  #caddie {
+    --edge: var(--sun);
+    --lip: var(--sun-deep);
+    position: fixed;
+    left: calc(16px + env(safe-area-inset-left, 0px));
+    bottom: calc(16px + 44px + env(safe-area-inset-bottom, 0px));
+    max-width: 300px;
+    padding: 8px 10px;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.3;
+    text-align: center;
+    transform-origin: bottom left;
+  }
+  #caddie:not([hidden]) {
+    display: block;
+    pointer-events: auto;
+  }
+  #caddie[data-held] {
+    display: none;
+  }
+  #caddieText {
+    margin: 0 0 6px;
+  }
+  #caddieActions {
+    display: flex;
+    justify-content: center;
+    gap: 4px;
+  }
+  #caddieTry[hidden] {
+    display: none;
+  }
+  #caddie #caddieClose {
+    min-width: 44px;
+    padding: 0;
+  }
   #help[data-aiming] {
     --edge: var(--paper);
     --lip: var(--sun-deep);
@@ -1656,6 +1698,47 @@
       line-height: 1.25;
       text-align: center;
     }
+    /*
+     * the caddie's tip where that help is (the two are never up at once): at the left just above the bag, narrower than half the
+     * screen so the ball, which rests in the middle across, and the aim, which runs up from it, are clear of it
+     */
+    #caddie {
+      bottom: calc(16px + 130px + 8px + env(safe-area-inset-bottom, 0px));
+      max-width: calc(50vw / var(--ui, 1) - 30px);
+      padding: 6px 8px;
+      font-size: 13px;
+    }
+    /*
+     * so narrow a tip has no room for its button and the ✕ side by side: the ✕ stands on its top right corner, a thumb across,
+     * and the button has the width, its words on two lines if a club's name is long
+     */
+    #caddieText {
+      padding-right: 16px;
+    }
+    #caddie #caddieClose {
+      position: absolute;
+      top: -16px;
+      right: -16px;
+      width: 44px;
+      min-height: 44px;
+      border-radius: 50%;
+    }
+    #caddieTry {
+      flex: 1;
+      padding: 0 8px;
+      font-size: 13px;
+      line-height: 1.1;
+    }
+  }
+  /*
+   * on the narrowest phones the bag's row of shape, spin and the caddie is three words across the width of eight clubs, so its
+   * words are a size smaller and closer to their edges, or the shape's is cut short
+   */
+  @media (max-width: 380px) {
+    #bag #bagShaping button {
+      padding: 0 5px;
+      font-size: 12px;
+    }
   }
 
   /*
@@ -1695,7 +1778,7 @@
    */
   #bagShaping {
     align-self: stretch;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 1fr auto;
     gap: 3px;
   }
   #bagShaping:not([hidden]) {
@@ -1999,6 +2082,18 @@
       min-width: 0;
       min-height: 36px;
       font-size: 13px;
+    }
+    /*
+     * on a phone sideways the tip is at the top beside the chip, where the help is while a drag is held, since the bottom left
+     * is the map's
+     */
+    #caddie {
+      top: calc(16px + 64px + 10px + env(safe-area-inset-top, 0px));
+      bottom: auto;
+      left: calc(16px + 56px + env(safe-area-inset-left, 0px));
+      max-width: 260px;
+      font-size: 13px;
+      transform-origin: top left;
     }
     #card,
     #shop,
@@ -2396,6 +2491,7 @@
   <div id="bagShaping" role="group" aria-label="Shape and spin" hidden>
     <button id="shapeButton" type="button" data-shape="0"></button>
     <button id="spinButton" type="button" data-spin="0"></button>
+    <button id="caddieAsk" type="button" class="quiet" aria-label="Ask the caddie">Caddie</button>
   </div>
   <div id="bagClubs"></div>
 </div>
@@ -2422,6 +2518,13 @@
   </button>
 </div>
 <div class="panel" id="help" hidden>drag back and let go to putt</div>
+<div class="panel" id="caddie" role="status" aria-label="The caddie" hidden>
+  <p id="caddieText"></p>
+  <div id="caddieActions">
+    <button id="caddieTry" type="button"></button
+    ><button id="caddieClose" type="button" class="quiet" aria-label="Dismiss the caddie's tip">✕</button>
+  </div>
+</div>
 <div id="boot">
   <div id="bootBar" role="progressbar" aria-label="Loading" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
     <i></i>

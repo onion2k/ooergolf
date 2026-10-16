@@ -15,6 +15,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { PNG } from 'pngjs';
 import { TILE, layoutOf } from '../src/arena';
+import type { HoleDef } from '../src/course';
 import { facing } from '../src/camera';
 import { breakOf } from '../src/green';
 import { links } from '../src/links';
@@ -23,7 +24,7 @@ import { puttText } from '../src/readout';
 import { DRAG } from '../src/shot';
 import { scoreName } from '../src/score';
 import { LIE } from '../src/surfaces';
-import { FLAT } from '../test/level';
+import { CADDIE_HOLES, FLAT } from '../test/level';
 import { wideHole } from '../test/wide-hole';
 import { smallHole } from './bighole';
 import { BUDGET } from './budget';
@@ -1578,7 +1579,7 @@ function windHole(name: string, wind: number) {
 }
 
 /** A hole of the test's own begun and the camera settled on its tee. */
-async function onHole(page: Page, hole: ReturnType<typeof windHole>) {
+async function onHole(page: Page, hole: ReturnType<typeof windHole> | HoleDef) {
   await page.evaluate((h) => {
     const g = window.game!;
     g.playCourse([h]);
@@ -1589,6 +1590,83 @@ async function onHole(page: Page, hole: ReturnType<typeof windHole>) {
 
 /** A button of the bag's pressed as a click on the element presses it, which a drag held on the course is not let go by. */
 const press = (page: Page, selector: string) => page.locator(selector).evaluate((el: HTMLElement) => el.click());
+
+test.describe('the caddie', () => {
+  test('a tip pops over the bag when a drive would find the water, is out of the way while a drag is held, puts its draw in hand by its button, counts the stroke that took it, and is asked for and put away by its buttons', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true, screen: true });
+    await page.evaluate(() => {
+      window.game!.chooseCourse('The Meadow');
+      window.game!.step(60);
+    });
+    await onHole(page, CADDIE_HOLES.pondRight);
+    const bubble = page.locator('#caddie');
+    await expect(bubble).toBeVisible();
+    await expect(page.locator('#caddieText')).toHaveText(
+      /^Driver finds the water at \d+ yd\. A draw bends it clear\.$/,
+    );
+    await expect(page.locator('#caddieTry')).toHaveText('Try a draw');
+    const said = await page.evaluate(() => window.game!.caddie());
+    expect(said.offered).toEqual({ kind: 'shape', club: 'driver', shape: -1 });
+    expect(said.looking.done).toBe(true);
+    // a drag held puts it out of the way, and it is back when the drag is taken back where it began
+    const ball = await page.evaluate(() => {
+      const b = window.game!.ball();
+      return window.game!.project(b.x, b.y, b.z);
+    });
+    await drag(page, ball, { x: ball.x, y: ball.y + 120 }, { hold: true });
+    await page.evaluate(() => window.game!.step(2));
+    await expect(bubble).toBeHidden();
+    expect((await page.evaluate(() => window.game!.caddie())).said?.held).toBe(true);
+    await page.mouse.move(ball.x, ball.y, { steps: 6 });
+    await page.mouse.up();
+    await page.evaluate(() => window.game!.step(2));
+    expect((await page.evaluate(() => window.game!.state())).strokes).toBe(0);
+    await expect(bubble).toBeVisible();
+    // its button puts the draw in hand, as the shape button would, and the tip is said no more
+    await page.locator('#caddieTry').click();
+    await page.evaluate(() => window.game!.step(10));
+    expect(
+      await page.evaluate(() => ({ club: window.game!.state().inHand, shape: window.game!.state().shape })),
+    ).toEqual({
+      club: 'driver',
+      shape: -1,
+    });
+    await expect(page.locator('#shapeButton')).toHaveText('Shape: Draw');
+    await expect(bubble).toBeHidden();
+    // the stroke struck with it took it, and is counted in the save
+    await page.evaluate(() => {
+      window.game!.shoot(Math.PI / 2, 1);
+      window.game!.step(900);
+    });
+    expect((await page.evaluate(() => window.game!.caddie())).taken).toEqual({ club: 0, shape: 1 });
+    // asked for from where the ball now lies it says something, a tip or that the club is fine, and its ✕ puts it away
+    expect(await page.evaluate(() => window.game!.caddiePress('ask'))).toBe(true);
+    await page.evaluate(() => window.game!.step(10));
+    await expect(bubble).toBeVisible();
+    await expect(page.locator('#caddieText')).not.toBeEmpty();
+    await page.locator('#caddieClose').click();
+    await page.evaluate(() => window.game!.step(2));
+    await expect(bubble).toBeHidden();
+    expect(problems).toEqual([]);
+  });
+
+  test('is nowhere on a hole of minigolf, under the start screen, or with no tip to give', async ({ page }) => {
+    await start(page, { seed: 11, paused: true, screen: true });
+    await expect(page.locator('#caddie')).toBeHidden();
+    await page.evaluate(() => {
+      window.game!.chooseCourse('The Meadow');
+      window.game!.step(60);
+    });
+    await expect(page.locator('#caddie')).toBeHidden();
+    await expect(page.locator('#caddieAsk')).toBeHidden();
+    await onHole(page, FLAT.long);
+    await expect(page.locator('#caddieAsk')).toBeVisible();
+    await expect(page.locator('#caddie')).toBeHidden();
+  });
+});
 
 test.describe('shape, spin and wind', () => {
   test('the shape and spin buttons each cycle through their three by a real click, are there for a lofted club on a golf hole and nowhere else, and are put back when a shot is struck', async ({

@@ -81,6 +81,7 @@ import { roll } from './roll';
 import { fieldOf, flattenFor, grassOptionsOf, windOf } from './turf';
 import { AIM_REACH, Scene, boxOf, sunFitOf } from './scene';
 import { carryFrom } from './flight';
+import { CADDIE, CaddieTalk } from './caddie';
 import { clearings } from './scenery';
 import { FIREWORK_STEPS, cupBurst, fireworkAt, fireworkEmits, splash, strikePuff } from './bursts';
 import { Input } from './input';
@@ -560,6 +561,18 @@ async function main() {
         game?.setSpin(value);
         if (game) hud.setShaping(game.shape, game.spin);
       },
+      // the caddie's buttons: its tip put in hand (and the bag and the buttons say so), put away, or asked for
+      caddie(action) {
+        if (!game) return;
+        if (action === 'ask') talk.ask();
+        else if (action === 'close') talk.close();
+        else if (talk.take(game)) {
+          hud.setClub(game.inHand.id);
+          hud.setShaping(game.shape, game.spin);
+          director.reaim();
+        }
+        hud.setTip(talk.said.text, talk.said.button);
+      },
       // the Install button: the browser's offer taken (the button is only shown while there is one)
       install() {
         offer.prompt();
@@ -630,6 +643,8 @@ async function main() {
   let aspect = 1.6;
   /** The previews of this golf hole's shots, worked out in a rehearsal of it: none on a hole of minigolf. */
   let previewer: Previewer | null = null;
+  /** The caddie: when it speaks and what it says, with a caddie of each golf hole made as the hole is, and none on minigolf. */
+  const talk = new CaddieTalk();
   /** Whether the hole being played is a hole of minigolf whose ground leans, which shows its break as golf's green does: the arrows, the putt's roll and the break in words. */
   let leans = false;
   /** Whether the putt on this hole of minigolf is shown as the roll it makes, to where it rests: the ground leans, or the rangefinder is worn. */
@@ -770,6 +785,8 @@ async function main() {
       leans = slopes;
       rolls = slopes || (!layout.golf && game.kit.rest);
       previewer = rehearsal;
+      talk.hole(layout.golf ? game : null);
+      hud.setTip(null);
       // the fireworks of the hole before are over with it
       fireworks.step = FIREWORK_STEPS;
       previewed.club = '';
@@ -831,6 +848,12 @@ async function main() {
       // one stroke in five has the camera follow the ball, and the rest hold the view where it stood
       director.struck();
       hud.setStrokes(game?.strokes ?? 0);
+      // a stroke that took the caddie's tip for it is counted, so it goes quiet on that kind once it has been taken enough
+      if (game) {
+        const took = talk.struck(game.inHand.id, game.struckShape);
+        if (took) progress.tookTip(took, CADDIE.taken);
+        hud.setTip(null);
+      }
       // the game puts the shape and the spin back to straight and flat as a shot is struck, and the buttons say so
       if (game) hud.setShaping(game.shape, game.spin);
       // sand from a ball that lay in a bunker, and grass from any other
@@ -1656,6 +1679,11 @@ async function main() {
     // the start screen has no shot
     director.aiming(choosing ? null : input.aim);
     director.frame(dt, parked);
+    // the caddie looks at a ball come to rest a preview a frame, and says its tip when the look is done; nothing under the
+    // start screen or the title, and nothing over a drag held, when the shot is the thing to see
+    talk.frame(played, progress.save.caddie, choosing || titled !== null);
+    hud.setTip(talk.said.text, talk.said.button);
+    hud.setTipHeld(input.holding);
     const { world, ball } = played;
     if (!world.alive[ball]) return;
     // the ball seen to roll, as far as it went this frame
@@ -1821,6 +1849,13 @@ async function main() {
     orbit: (turn, tilt) => rig.orbit(turn, tilt),
     overhead: (on) => setOverhead(on ?? !rig.overhead),
     faceFlag,
+    caddie: () => ({
+      said: hud.tipShown(),
+      offered: talk.offered ? { kind: talk.offered.kind, club: talk.offered.club, shape: talk.offered.shape } : null,
+      looking: talk.looking,
+      taken: { ...progress.save.caddie },
+    }),
+    caddiePress: (action) => hud.pressCaddie(action),
     shopTab: (aisle) => hud.pressTab(aisle),
     measureFrame,
     judge,

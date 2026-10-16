@@ -52,6 +52,7 @@ import {
   planProblems,
   bankProblems,
   previewProblems,
+  caddieProblems,
   rollProblems,
   titleProblems,
   viewProblems,
@@ -64,6 +65,7 @@ import { LINKS_SPECS } from '../src/links';
 import { onBank } from '../src/slopes';
 import { flipperYaw } from '../src/obstacles';
 import { Previewer } from '../src/preview';
+import { CADDIE, CaddieTalk } from '../src/caddie';
 import { BAG, PUTTER, type BagClub } from '../src/bag';
 import { bankOf, makeBank } from '../src/bank';
 import { carryFrom } from '../src/flight';
@@ -1102,6 +1104,80 @@ export function fuzz(
       did('face the flag');
     };
     /**
+     * A player hearing the caddie out on a golf hole, with the ball at rest and no drag held: the look run to its end a preview
+     * a frame, as the page runs it, asked for now and then, its tip held to `caddieProblems`, its button pressed (the club and
+     * shape it names put in hand, exactly) and put away. On a chance of its own, and whatever its button puts in hand is put
+     * back as it was, so the monkey's stream and the run play on as they would have; the game and its chance are not touched.
+     */
+    const caddier = seeded(seed * 73 + 19);
+    const talk = new CaddieTalk();
+    let talkOf: { game: Game | null; hole: number; course: readonly HoleDef[] | null } = {
+      game: null,
+      hole: -1,
+      course: null,
+    };
+    const hearCaddie = () => {
+      if (!game.layout.golf || !game.ready || game.phase !== 'play' || input.aim !== null) return;
+      if (talkOf.game !== game || talkOf.hole !== game.hole || talkOf.course !== game.course) {
+        talk.hole(game);
+        talkOf = { game, hole: game.hole, course: game.course };
+      }
+      const { world, ball } = game;
+      const digest = () =>
+        JSON.stringify([
+          game.t,
+          game.strokes,
+          world.x[ball],
+          world.y[ball],
+          world.z[ball],
+          game.inHand.id,
+          game.shape,
+          game.spin,
+          world.live,
+        ]);
+      const before = digest(),
+        drawn = draws;
+      const inHand = { club: game.inHand.id, shape: game.shape };
+      const taken = game.progress.save.caddie;
+      let frames = 0;
+      do {
+        talk.frame(game, taken);
+        frames++;
+      } while (!talk.looking.done && frames < 3 * CADDIE.previews);
+      if (!talk.looking.done || talk.looking.previews > CADDIE.previews)
+        told.push(`the caddie's look took ${frames} frames and ${talk.looking.previews} previews`);
+      const asked = caddier() < 0.3;
+      if (asked) talk.ask();
+      talk.frame(game, taken);
+      const caddie = talk.own;
+      const tip = caddie?.tip ?? null;
+      if (caddie) for (const problem of caddieProblems(caddie, tip, inHand)) told.push(problem);
+      if (asked && talk.said.text === null) told.push('the caddie said nothing when it was asked');
+      if (talk.said.text !== null && tip === null && talk.said.button !== null)
+        told.push(`the caddie offered "${talk.said.button}" with no tip`);
+      if (digest() !== before) told.push('hearing the caddie changed the game');
+      if (draws !== drawn) told.push(`hearing the caddie drew ${draws - drawn} numbers of the game's chance`);
+      if (tip) count(checked, `caddie's ${tip.kind}`);
+      if (tip && talk.said.button !== null && caddier() < 0.5) {
+        if (!talk.take(game)) told.push("the caddie's button put nothing in hand");
+        else if (game.inHand.id !== tip.club || Math.sign(game.shape) !== tip.shape)
+          told.push(
+            `the caddie's button put the ${game.inHand.id} shaped ${game.shape} in hand, for a tip of the ${tip.club} shaped ${tip.shape}`,
+          );
+        game.pick(inHand.club);
+        game.setShape(inHand.shape);
+        did("take the caddie's tip");
+      }
+      if (caddier() < 0.2) {
+        talk.close();
+        talk.frame(game, taken);
+        if (talk.said.text !== null) told.push('the caddie spoke again for a shot it was put away for');
+      }
+      if (digest() !== before) told.push("the caddie's buttons left the game changed");
+      count(checked, 'caddie heard');
+      did('hear the caddie');
+    };
+    /**
      * A player pulling the ball back and thinking better of it: a drag held at any angle and power, which turns the camera
      * to look the way it aims, and then taken back (let go inside the dead zone, a second finger, or the browser taking the
      * pointer). Never a stroke. Done on a chance of its own, as the flag button is, so the monkey's stream is as it was and
@@ -1621,6 +1697,7 @@ export function fuzz(
       // the button is there whatever the ball is doing, so it is pressed while it rolls and between holes too
       shape();
       if (facer() < 0.008) face();
+      if (caddier() < 0.01) hearCaddie();
       if (aimer() < 0.01) aimAndTakeBack();
       if (bumped() < 0.03) bump();
       if (game.layout.kickers.length && striker() < 0.03) strike();

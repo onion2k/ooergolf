@@ -28,8 +28,10 @@ const NO_SEASON = {
   golf: { grade: 'club', begun: 0, played: [], titles: 0 },
   mini: { grade: 'club', begun: 0, played: [], titles: 0 },
 };
+/** What a save from before the caddie loads its tips taken as: none of either kind. */
+const NO_TIPS = { club: 0, shape: 0 };
 /** What a save from before the career loads its career as: counted in it, as every round was, with no record, no round and no season. */
-const CAREER = { mode: 'career', records: {}, round: null, season: NO_SEASON };
+const CAREER = { mode: 'career', records: {}, round: null, season: NO_SEASON, caddie: NO_TIPS };
 const FRESH = { coins: 0, gems: 0, owned: [], kit: NONE, best: {}, ...CAREER };
 
 /**
@@ -102,6 +104,7 @@ const KEPT: Record<string, Record<string, unknown>> = {
     // the round kept is from before there were events, so it has none to belong to and is let go; the season starts at the club grade
     season: NO_SEASON,
     round: null,
+    caddie: NO_TIPS,
   },
   // the seasons of 15 October 2026: both tours begun, the golf tour at the county grade with an event played and one withdrawn
   // from and an event round kept on its third event (The Fells), the mini tour at the championship with a title and an event played
@@ -124,6 +127,20 @@ const KEPT: Record<string, Record<string, unknown>> = {
       golf: { grade: 'county', begun: 2, played: [[4, 5, 3, 4, 4, 3, 5, 4, 4], null], titles: 0 },
       mini: { grade: 'championship', begun: 4, played: [[2, 3, 2, 3, 2, 3, 2, 3, 3]], titles: 1 },
     },
+    caddie: NO_TIPS,
+  },
+  // the caddie of 16 October 2026: two tips of a club taken and three of a shape, so shapes are said only when asked for
+  '09-caddie.json': {
+    coins: 120,
+    gems: 0,
+    owned: [],
+    kit: NONE,
+    best: { 'Heather Run': { strokes: 4, kit: NONE } },
+    mode: 'career',
+    records: {},
+    round: null,
+    season: NO_SEASON,
+    caddie: { club: 2, shape: 3 },
   },
 };
 
@@ -337,6 +354,22 @@ describe('saves from every shape the game has written', () => {
     // and none of it is an object at all
     for (const bad of [null, 'season', [1, 2], 7, { golf: 'county', mini: [1] }])
       expect(read(bad), JSON.stringify(bad)).toEqual(NO_SEASON);
+  });
+
+  it('reads the caddie’s tips taken only as counts, and none of a kind that is not one', () => {
+    const read = (caddie: unknown) => new Progress(memoryStore(JSON.stringify({ caddie }))).save.caddie;
+    expect(read({ club: 1, shape: 4 })).toEqual({ club: 1, shape: 4 });
+    expect(read({ club: -1, shape: 1.5 })).toEqual(NO_TIPS);
+    expect(read({ shape: 2, other: 9 })).toEqual({ club: 0, shape: 2 });
+    for (const bad of [null, 'tips', [1, 2], 7]) expect(read(bad), JSON.stringify(bad)).toEqual(NO_TIPS);
+    const progress = new Progress(memoryStore());
+    progress.tookTip('shape', 3);
+    progress.tookTip('shape', 3);
+    progress.tookTip('club', 3);
+    expect(progress.save.caddie).toEqual({ club: 1, shape: 2 });
+    // past the limit the count stands, so the save's bytes are bounded
+    for (let k = 0; k < 20; k++) progress.tookTip('shape', 3);
+    expect(progress.save.caddie.shape).toBe(3);
   });
 
   it('goes on with the event round kept in the seasons’ own save, and breaks no rule', () => {

@@ -233,6 +233,9 @@ today, and what the next features must hand it:
   county grade, where an event has a fee, and the mini tour at the club grade, which is free.
   On golf each ball come to rest is held to the zones' lie (`lieProblems`, `checked['lie at rest']`, which a test holds above nothing),
   and the fly-in to every hole is held to `flyInProblems` every frame (`checked.flying` counts the frames it was).
+  It hears the caddie out (`hear the caddie`, on a stream of its own, `caddier`): the look run a preview a frame as the page runs it,
+  asked for now and then, its tip held to `caddieProblems`, its button pressed (the club and shape in hand exactly as said) and put
+  back as it was, and put away; the game, its chance and its clock untouched (`checked['caddie heard']`).
   On a hole with a wood's lane it drives along the lane from the tee, slipped, and on a hole with land wholly in water it
   plays the shortest club that carries to the middle of it from wherever the ball lies (each on a chance of its own, so no
   other run changes, and both count in `done`).
@@ -268,7 +271,9 @@ today, and what the next features must hand it:
   than the club that struck it could send it and a fall from the highest
   ground make it, never at rest out of bounds or on water and never inside a tree's trunk
   or canopy; each landing told is of the live ball, where it is, and at
-  least `LANDING.least` hard (`landingProblems`). A preview is a flight from
+  least `LANDING.least` hard (`landingProblems`). And the caddie's tip is a lofted club of the bag and a shape of the three, not what is in hand, with words
+  and a button, and its shot tried again comes down clear where it said (`caddieProblems`, not in `checkInvariants`, since it needs
+  the caddie; called by the fuzzer). A preview is a flight from
   the ball to where it says it came down, in numbers, growing in length, no
   further than the club goes and a fall adds, with a spread that is a spread
   (`previewProblems`, which allow the longest tailwind's carry and need a heading); and the camera's distance is within the
@@ -331,7 +336,7 @@ today, and what the next features must hand it:
 - **Leaks:** ten minutes of the autopilot playing round after round, on The
   Meadow and again on each golf course (`GOLF_COURSES` in `scripts/leaks.ts`: the six, under
   the Links' ceilings but for the save's bytes, 10,800 since 16 October 2026 for eighty-one holes' bests, the career's nine
-  course records, both tours' seasons at their longest and an event kept (10,164 measured, held to the byte by `test/leaks.test.ts`); `leaks:check` queues the seven, an hour and ten minutes, and `--on` narrows a run to one kind for a short look; a test holds that a hole
+  course records, both tours' seasons at their longest, an event kept and the caddie's two counts at their limit (10,194 measured, held to the byte by `test/leaks.test.ts`); `leaks:check` queues the seven, an hour and ten minutes, and `--on` narrows a run to one kind for a short look; a test holds that a hole
   with a lane is collectable, so `laneOf`'s cache keeps nothing alive, and one each that `zonesOf`'s and `pondOf`'s tables are weak; the
   arena's reused ground weights are emptied at 256, held by a test, and nothing of the new caches is kept for a game's life, so
   nothing was added to `scripts/leaks.ts`). The card is emptied each round and
@@ -1057,6 +1062,31 @@ minigolf: true }`, read through `oceanFor`) is the one switch: `waterBed` and `s
   (driver 20.0 against 20.4 per cent). A ball that bounces on a side slope rests at a distance that is not a line of its
   power (a 5-iron at 160 yards across seven or ten degrees: 163 at 0.855 falling to 156 at 0.915, with steps of 8 and 18
   between neighbours), so the planner there finds the nearest it can (2 to 3 off) and not its tolerance.
+- **The caddie** (16 October 2026; `src/caddie.ts`): a word of advice when a golf ball comes to rest off the putting green, so a
+  player sees what the clubs and a draw or a fade are for. `Caddie` (one a golf hole, made with it as the previewer is, with a
+  `Previewer` of its own that leaves the rest out, `{ rest: false }`) asks what a player most likely does next, the club in hand
+  struck straight at full power along the line of play (`lookAlong`, the camera's own heading), and when that comes down in
+  trouble (`troubleOf`: water, out of bounds, sand, or a tree or the rail in the air) offers a **shape** of the same club that
+  comes down clear (the one nearest the cup), and failing that a **lay-up**, the first shorter club that does; and where the club
+  in hand carries `CADDIE.past` (25) yards past the pin, the club that **reaches** it, at the pin. Every tip is a preview, struck
+  true and tried, and must make `CADDIE.progress` of the distance (The Fells' Plunge had "a full 3-wood carries 26" before that
+  rule). It spends at most one preview a `step` and `CADDIE.previews` (6) a look, since the autopilot's planner, which would choose
+  better, costs 49 ms a shot on average and 233 at worst; a step is 2.2 ms at the median, 3.7 at the ninetieth percentile and 16 at
+  worst in Node (16 October 2026), as one preview of a drag is. Measured over four rounds of each golf course before it was built: a
+  driver along the line from the tee is in trouble on 8 of 36 tees of The Links, 20 of The Heath, 12 of The Fells, 8 of The Isles and
+  none of The Woods or The Old Course, and a shape saves about half the shots in trouble. `CaddieTalk` is when it speaks, for the
+  page and the fuzzer alike: a look begun when the ball comes to rest somewhere new or the club or shape in hand changes, a tip said
+  of its own accord once a shot (`voiced`), while the player has taken fewer than `CADDIE.taken` (3) of its kind (`speaks`), and
+  otherwise only when the bag's **Caddie** button asks (`ask`; with nothing to change it says the club is fine, `fineText`); its ✕
+  puts it away for the shot, and its button (`take`: "Try a draw", "Take the 5-iron") puts the club and shape in hand. A stroke
+  that took the tip, by its button or by choosing it, is counted (`tookTip`, read through `Game.struckShape`, the shape the stroke
+  was struck with, since `shape` is put back before the stroke is told of) in the save's `caddie` counts, held at the limit by
+  `Progress.tookTip(kind, most)` so the save is bounded. The tip is a panel of its own (`#caddie`) at the bottom left above the
+  help, and on a phone where the drag's help goes (the two are never up at once), never over the bag, since the ball rests just
+  above the bag on every screen; it is put away while a drag is held (`data-held`). It speaks in career events too (the user's
+  choice: it says only what trying the clubs in the preview would show). Not on minigolf, on the putting green or with the putter
+  in hand. Not done: spin (which needs the preview to the rest), the wind and the putt in words, and a tip for a shot the player
+  has aimed rather than the line of play.
 - `src/hud.ts` is the words over the course: the hole and strokes, the
   score's name when a hole is done, the card, the coins and gems, the
   shop, and the start screen, shown at boot and from the card's Courses button, which since 15 October 2026 is the
@@ -1397,6 +1427,8 @@ colour and size, the spread's half axes, where a tree knocks it and what it come
 from what the last frame placed; and `map()`, the hole's map over the course: its size and where the ball, the cup and the
 landing of the shot being aimed are on it. `state()` has the shape and the spin chosen, the hole's `wind` (x, y, speed), its `greens` speed and its name (`greenSpeed`: `fast`,
 `medium`, `slow` or null) and `arrows`, how many stand over its green;
+`caddie()` says what the caddie's panel says (its words, its button's, and whether a drag holds it out of the way), the tip
+offered for this shot, the look under way and the tips taken, and `caddiePress('try' | 'close' | 'ask')` clicks its buttons;
 `career()` says the mode, the records, the round kept, the course the round in play is of and whether it counts;
 `season()` says each tour's season as the save has it, the event in play, whether the round is practice, and the leaderboard as
 drawn; `enter(tour)` and `practise(tour)` press that tour's tab and its event card's button (false where it is not to be pressed);

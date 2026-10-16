@@ -232,6 +232,10 @@ export interface GameApi {
   install(): boolean;
   /** The career as the save has it, and the round in play as the career knows it: see `CareerReport`. */
   career(): CareerReport;
+  /** The caddie as the last frame left it: see `CaddieReport`. */
+  caddie(): CaddieReport;
+  /** One of the caddie's buttons pressed, as a click on it: its tip's (`try`), its ✕ (`close`) or the bag's Caddie (`ask`). False where it is not shown. */
+  caddiePress(action: 'try' | 'close' | 'ask'): boolean;
   /** Career mode or Free play chosen on the start screen, as clicks on its button (none if it shows that already). */
   playMode(mode: PlayMode): void;
   /** The card of the career round kept pressed on the start screen, which goes on with it: false when there is none. */
@@ -444,6 +448,18 @@ export interface GrassDrawn {
 }
 
 /** What the page gives the API that is not the game's: time, the camera and the renderer. */
+/**
+ * The caddie as the last frame left it: what the bubble over the bag says (its words, its button's, and whether a drag held
+ * puts it out of the way; null when it is away), the tip said for this shot (kept when it is put away or taken), the look
+ * under way (the previews it has spent, and whether it is done), and the tips of each kind the save has counted as taken.
+ */
+export interface CaddieReport {
+  said: { text: string; button: string | null; held: boolean } | null;
+  offered: { kind: 'club' | 'shape'; club: string; shape: number } | null;
+  looking: { previews: number; done: boolean };
+  taken: { club: number; shape: number };
+}
+
 export interface DebugHost {
   game: Game;
   ready(): boolean;
@@ -491,6 +507,8 @@ export interface DebugHost {
   title(): TitleReport;
   app(): AppReport;
   install(): boolean;
+  caddie(): CaddieReport;
+  caddiePress(action: 'try' | 'close' | 'ask'): boolean;
   /** The start screen's career buttons pressed, as a click on each. */
   playMode(mode: PlayMode): void;
   continueRound(): boolean;
@@ -654,6 +672,8 @@ export function createApi(host: DebugHost): GameApi {
     title: () => host.title(),
     app: () => host.app(),
     install: () => host.install(),
+    caddie: () => host.caddie(),
+    caddiePress: (action) => host.caddiePress(action),
     career: () => ({
       mode: progress.save.mode,
       records: structuredClone(progress.save.records),

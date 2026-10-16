@@ -69,6 +69,7 @@ import { PLAY_MODES } from './career';
 import { GRADES, TOURS } from './season';
 import { holeCount, nextEvent } from './tournament';
 import type { Preview } from './preview';
+import { troubleOf, type Caddie, type Tip } from './caddie';
 import type { Bank } from './bank';
 import { GREEN, READER, breakOf, greenArrows, leansOnMinigolf, readerArrows, type Arrow, type Break } from './green';
 import { GREENS, LANDING, LIE, SURFACES, rollScale } from './surfaces';
@@ -807,6 +808,36 @@ export function planProblems(game: Game, plan: Plan): string[] {
   if (plan.expect && !(Number.isFinite(plan.expect.x) && Number.isFinite(plan.expect.y)))
     out.push(`the plan expects the ball at ${plan.expect.x},${plan.expect.y}`);
   return out;
+}
+
+/**
+ * The caddie's tip, when it has one: a lofted club of the bag and a shape of a draw, straight or a fade, something other than
+ * what is in hand, with words and a button, and its own shot, tried again from where the ball lies, coming down clear where
+ * the tip said it does, to the digit, since a preview is the game's physics struck true and spends no chance.
+ */
+export function caddieProblems(caddie: Caddie, tip: Tip | null, inHand: { club: string; shape: number }): string[] {
+  if (!tip) return [];
+  const problems: string[] = [];
+  const club = BAG.find((c) => c.id === tip.club);
+  if (!club || !(club.loft > 0))
+    problems.push(`the caddie's tip names ${tip.club}, which is not a lofted club of the bag`);
+  if (tip.shape !== -1 && tip.shape !== 0 && tip.shape !== 1)
+    problems.push(`the caddie's tip has a shape of ${tip.shape}`);
+  if (tip.club === inHand.club && tip.shape === Math.sign(inHand.shape))
+    problems.push(`the caddie's tip is what is in hand already: the ${tip.club}, shaped ${tip.shape}`);
+  if (!tip.text || !tip.button)
+    problems.push(`the caddie's tip has no words or no button: "${tip.text}", "${tip.button}"`);
+  if (!(tip.carry > 0) || !Number.isFinite(tip.angle))
+    problems.push(`the caddie's tip carries ${tip.carry} along ${tip.angle}`);
+  const again = caddie.retry(tip);
+  const trouble = troubleOf(again);
+  if (trouble)
+    problems.push(
+      `the caddie's tip, the ${tip.club} shaped ${tip.shape}, tried again comes down in trouble: ${trouble}`,
+    );
+  if (Math.abs(again.carry - tip.carry) > 1e-6)
+    problems.push(`the caddie's tip said it carries ${tip.carry}, and tried again it carries ${again.carry}`);
+  return problems;
 }
 
 /**
