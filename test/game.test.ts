@@ -170,6 +170,10 @@ describe('the game', () => {
       mode: 'career',
       records: {},
       round: null,
+      season: {
+        golf: { grade: 'club', begun: 0, played: [], titles: 0 },
+        mini: { grade: 'club', begun: 0, played: [], titles: 0 },
+      },
     });
   });
 });

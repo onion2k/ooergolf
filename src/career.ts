@@ -1,12 +1,14 @@
 /**
- * The career: what a round of a named course is worth, besides its holes. A round played to its card pays a prize, its
- * best is kept as the course's record, and a round under way is kept so a reload can go on with it. None of it is for a
- * round of free play, which earns nothing and keeps nothing, so that a player may try a course without spending a
- * record on it; nor for a round of holes that are not a course's (a test's own, the title's), which have no name.
+ * The career: a season of tournaments on each tour. A round counts only as an event, entered for a fee and placed against
+ * the computer rivals when its last hole is done (`season.ts` and `tournament.ts` say what that is worth); the best of such
+ * rounds is kept as the course's record, and a round under way is kept so a reload can go on with it. None of it is for a
+ * round of free play or of practice, which earns nothing and keeps nothing, so that a player may try a course without
+ * spending a record on it; nor for a round of holes that are not an event's (a test's own, the title's).
  *
  * A leaf: handed numbers and the save's own shapes, it reads no game and no content.
  */
 import type { KitSlots } from './items';
+import type { Grade, Tour } from './season';
 
 /** How the rounds a player plays count: in the career, which pays and keeps records, or as free play, which does neither. */
 export type PlayMode = 'career' | 'free';
@@ -22,11 +24,13 @@ export interface CourseRecord {
 }
 
 /**
- * A career round under way: the course by its name, the hole to play next (from nought), the card so far, whether its
- * retake is spent, and whether a hole of it was picked up (which a score at the limit does not say: a ball may drop on
- * the last stroke allowed).
+ * An event round under way: the tour it is on, the course by its name, the hole to play next (from nought, and nought from
+ * the moment the fee is paid, so a reload before the first hole is done does not lose it), the card so far, whether its
+ * retake is spent (never, in an event, where there is none), and whether a hole of it was picked up (which a score at the
+ * limit does not say: a ball may drop on the last stroke allowed).
  */
 export interface SavedRound {
+  tour: Tour;
   course: string;
   hole: number;
   card: number[];
@@ -34,24 +38,27 @@ export interface SavedRound {
   pickedUp: boolean;
 }
 
-/** The course a round is played on, as the career needs it: its name, and how many times the plain prize it pays. */
+/** The course a round is played on, as the career needs it: its name, and its purse, the number the entry fee is made from. */
 export interface RoundOf {
   name: string;
   purse: number;
 }
 
 /**
- * The prize for a round, in coins. `base` times the course's purse for finishing it, `underPar` for each stroke of the
- * round under par, and `record` for a new course record. Sized so a career round pays about two fifths again on top of
- * its holes' pay (the pace player's round of The Meadow pays 92 coins by its holes and 134 with the prize; The Links 74
- * and 104; The Old Course, over par, 45 and 85): the shop's forty-five items, about 8,000 coins, take about seventy
- * rounds where they took a hundred.
+ * One tour's season as the save keeps it: the grade it is played at, how many seasons have been begun (which a season's
+ * seed is made from), the events played so far this season, each as the player's card or null where they withdrew, and the
+ * titles won at the championship.
  */
-export const PRIZE = { base: 20, underPar: 10, record: 25 };
+export interface TourSeason {
+  grade: Grade;
+  begun: number;
+  played: (number[] | null)[];
+  titles: number;
+}
 
-/** What a round finished pays: a round with a hole picked up still pays for finishing, and never a record. */
-export function prizeOf(strokes: number, par: number, purse: number, record: boolean): number {
-  return Math.round(PRIZE.base * purse) + Math.max(0, par - strokes) * PRIZE.underPar + (record ? PRIZE.record : 0);
+/** A tour's season before anything is played: the lowest grade, no season begun, no event played, no title. */
+export function freshTourSeason(): TourSeason {
+  return { grade: 'club', begun: 0, played: [], titles: 0 };
 }
 
 /** Whether a round of `strokes`, with or without a hole picked up, is a new record over `held` (none for a course never finished). */

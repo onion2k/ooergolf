@@ -66,6 +66,8 @@ import { CUP } from './course';
 import { AISLES, CEILINGS, FIRST_STROKE_MOST, itemById, kitOf, type Kit } from './items';
 import { LIMIT_OVER_PAR, fastest, type Game } from './game';
 import { PLAY_MODES } from './career';
+import { GRADES, TOURS } from './season';
+import { holeCount, nextEvent } from './tournament';
 import type { Preview } from './preview';
 import type { Bank } from './bank';
 import { GREEN, READER, breakOf, greenArrows, leansOnMinigolf, readerArrows, type Arrow, type Break } from './green';
@@ -600,9 +602,10 @@ export function checkInvariants(game: Game): string[] {
 /**
  * What is wrong with the career as the save keeps it: the mode is one there is, each course's record is a round of
  * whole strokes against a par, and a round of the career's own course is a record no better than its holes' bests
- * together (a record is a round with every hole holed in the career, and each of those set a best). The round kept,
- * while a career round of a course is played, is that round: its card the game's, its next hole the one after it,
- * and none at all at its first tee and once its last hole is done.
+ * together (a record is a round with every hole holed in the career, and each of those set a best). Each tour's season is
+ * at a grade there is, with fewer events played than it has, each a withdrawal or a card as long as its course. The round
+ * kept, while an event is played, is that round: the tour's next event, its card the game's, its next hole the one after
+ * it, there from the moment the fee is paid, and none at all once its last hole is done.
  */
 export function careerProblems(game: Game): string[] {
   const out: string[] = [];
@@ -611,6 +614,23 @@ export function careerProblems(game: Game): string[] {
   for (const [name, r] of Object.entries(save.records))
     if (!(Number.isInteger(r.strokes) && r.strokes >= 1 && Number.isInteger(r.par) && r.par >= 1))
       out.push(`${name}'s record is ${r.strokes} for par ${r.par}`);
+  const ctx = game.season;
+  for (const tour of TOURS) {
+    const season = save.season[tour];
+    if (!GRADES.includes(season.grade)) out.push(`the ${tour} tour is at the grade ${String(season.grade)}`);
+    if (ctx === null) continue;
+    const events = ctx.tours[tour];
+    if (season.played.length >= events.length)
+      out.push(
+        `the ${tour} season has played ${season.played.length} of its ${events.length} events and is not closed`,
+      );
+    season.played.forEach((card, k) => {
+      if (card !== null && events[k] && card.length !== holeCount(ctx, events[k]))
+        out.push(
+          `the ${tour} season's event ${k + 1} was played to a card of ${card.length} holes, not ${holeCount(ctx, events[k])}`,
+        );
+    });
+  }
   const of = game.of;
   if (!of || !game.counting) return out;
   const { course, card } = game;
@@ -623,7 +643,7 @@ export function careerProblems(game: Game): string[] {
   }
   const round = save.round;
   if (round === null) {
-    if (card.length !== 0 && card.length !== course.length)
+    if (card.length !== course.length)
       out.push(`no round is kept, with ${card.length} of ${course.length} holes of ${of.name} finished`);
   } else {
     if (round.course !== of.name) out.push(`the round kept is of ${round.course}, and ${of.name} is played`);
@@ -635,6 +655,23 @@ export function careerProblems(game: Game): string[] {
       out.push(
         `the round kept is ${round.card.join(',')} to hole ${round.hole + 1}, and the card is ${card.join(',')}`,
       );
+    // an event is the next of its tour's season, which is where the round's fee went
+    const event = game.event;
+    if (event === null) out.push('a round counts and is no event');
+    else {
+      if (round.tour !== event.tour)
+        out.push(`the round kept is on the ${round.tour} tour, and the ${event.tour} is played`);
+      const season = save.season[round.tour];
+      if (ctx !== null && GRADES.includes(season.grade) && season.played.length < ctx.tours[round.tour].length) {
+        const next = nextEvent(ctx, round.tour, season);
+        if (round.course !== next.course.name)
+          out.push(
+            `the round kept is of ${round.course}, and the ${round.tour} season's next event is ${next.course.name}`,
+          );
+        if (event.index !== next.index)
+          out.push(`the round is event ${event.index + 1} and the ${round.tour} season is on event ${next.index + 1}`);
+      }
+    }
   }
   return out;
 }

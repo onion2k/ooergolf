@@ -2,7 +2,7 @@
  * What the player has done, and where it is kept: the coins and gems, the
  * items owned and the kit worn (one thing from each aisle), and the best score on
  * each hole with the kit it was made with; and the career's: whether rounds count in it or are free play, each course's
- * record, and the career round under way. In the browser's storage or, for the game run without a page, anywhere.
+ * record, the season each tour is on, and the event round under way. In the browser's storage or, for the game run without a page, anywhere.
  *
  * Old saves must still load. A field a save does not have takes its default,
  * a value that is not what it should be is taken as missing, and a field the
@@ -10,7 +10,15 @@
  * written is in `test/saves/`.
  */
 import { AISLES, emptySlots, itemById, type KitSlots } from './items';
-import { PLAY_MODES, type CourseRecord, type PlayMode, type SavedRound } from './career';
+import {
+  PLAY_MODES,
+  freshTourSeason,
+  type CourseRecord,
+  type PlayMode,
+  type SavedRound,
+  type TourSeason,
+} from './career';
+import { GRADES, TOURS, type Grade, type Tour } from './season';
 
 export interface Best {
   strokes: number;
@@ -31,8 +39,10 @@ export interface Save {
   mode: PlayMode;
   /** Each course's best round in the career, by the course's name. */
   records: Record<string, CourseRecord>;
-  /** The career round under way, which a reload offers to go on with; null for none. */
+  /** The event round under way, which a reload offers to go on with; null for none. */
   round: SavedRound | null;
+  /** The season each tour is on: its grade, the seasons begun, the events played so far and the titles won. */
+  season: Record<Tour, TourSeason>;
 }
 
 /** Where the save is kept. */
@@ -96,6 +106,7 @@ const fresh = (): Save => ({
   mode: 'career',
   records: {},
   round: null,
+  season: { golf: freshTourSeason(), mini: freshTourSeason() },
 });
 
 /** A kit from a save, slot by slot: an id of the slot's own aisle that the shop sells, and '' for anything else. */
@@ -161,19 +172,46 @@ function read(json: string | null): Save {
       const when = typeof r.when === 'string' && /^\d{4}-\d\d-\d\d$/.test(r.when) ? r.when : '';
       save.records[course] = { strokes, par, kit: kitFrom(r.kit), when };
     }
-  // a round is kept only whole: a card of one score a hole played, each a stroke or more, and the next hole after them;
-  // whether its course has that many holes is the game's to say when it goes on with it
+  // each tour's season is read field by field, so what is not what it should be is its default and nothing else is lost: a
+  // grade the game does not know is the lowest, a count that is not a count is nought, and the events played are kept only if
+  // every one is a whole card or a withdrawal (a card with a nought in it is no card), since a list with one dropped would put
+  // the rest at the wrong events. A tour the game does not know is not read; how many events a season has is the game's to say.
+  if (isMap(from.season))
+    for (const tour of TOURS) {
+      const t = from.season[tour];
+      if (!isMap(t)) continue;
+      const season = save.season[tour];
+      if (GRADES.includes(t.grade as Grade)) season.grade = t.grade as Grade;
+      season.begun = count(t.begun, season.begun);
+      season.titles = count(t.titles, season.titles);
+      if (Array.isArray(t.played)) {
+        const played = t.played.map((card): number[] | null | undefined => {
+          if (card === null) return null;
+          if (!Array.isArray(card) || card.length < 1) return undefined;
+          const scores = card.map((s) => count(s, 0));
+          return scores.every((s) => s >= 1) ? scores : undefined;
+        });
+        if (played.every((card) => card !== undefined)) season.played = played;
+      }
+    }
+  // a round is kept only whole: a card of one score a hole played, each a stroke or more, and the next hole after them
+  // (nought, from the moment the fee is paid); whether its course is the tour's next event and has that many holes is the
+  // game's to say when it goes on with it. A round with no tour is from before there were events, which it has none to
+  // belong to, and is let go.
   if (isMap(from.round)) {
-    const { course, hole, card, retaken, pickedUp } = from.round;
+    const { tour, course, hole, card, retaken, pickedUp } = from.round;
     const scores = Array.isArray(card) ? card.map((s) => count(s, 0)) : [];
     if (
+      TOURS.includes(tour as Tour) &&
       typeof course === 'string' &&
       course !== '' &&
-      count(hole, 0) >= 1 &&
+      typeof hole === 'number' &&
+      count(hole, -1) >= 0 &&
       scores.length === hole &&
       scores.every((s) => s >= 1)
     )
       save.round = {
+        tour: tour as Tour,
         course,
         hole,
         card: scores,

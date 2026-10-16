@@ -44,17 +44,31 @@ describe('what must stay bounded', () => {
       progress.save.records[c.name] = { strokes: 99, par: 45, kit: { ...kit }, when: '2026-10-15' };
     const longest = COURSES.map((c) => c.name).sort((a, b) => b.length - a.length)[0];
     progress.save.round = {
+      tour: 'golf',
       course: longest,
       hole: 8,
       card: Array.from({ length: 8 }, () => 10),
       retaken: true,
       pickedUp: false,
     };
+    // and the season at its most: the longest grade on both tours, a season less one event played on each of them with a
+    // score of two figures on every hole (a golf event and a mini event have nine holes each), and the counts of three figures
+    for (const [tour, events] of [
+      ['golf', 5],
+      ['mini', 2],
+    ] as const)
+      progress.save.season[tour] = {
+        grade: 'championship',
+        begun: 999,
+        played: Array.from({ length: events }, () => Array.from({ length: 9 }, () => 10)),
+        titles: 999,
+      };
     expect(ITEMS.length, 'the forty-five').toBe(45);
     expect(holes.length, 'a hole of each, nine courses of nine').toBe(81);
     const bytes = JSON.stringify(progress.save).length;
     // held to the byte, so a longer id, a new hole or a new field in a best is seen and the ceiling thought about again
-    expect(bytes, `${bytes} bytes for ${holes.length} holes`).toBe(9_800);
+    // (15 October 2026: 9,800 before the seasons, 10,164 with a season less one event played on both tours and an event round kept)
+    expect(bytes, `${bytes} bytes for ${holes.length} holes`).toBe(10_164);
     expect(bytes, 'under the ceiling').toBeLessThan(WATCH['save bytes']!.ceiling);
     expect(WATCH['save bytes']!.ceiling, 'with room for about six holes more and no more').toBeLessThan(bytes * 1.15);
   });

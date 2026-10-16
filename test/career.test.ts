@@ -1,26 +1,28 @@
 /**
- * The career: a round of a named course pays a prize as its last hole is done, its best is the course's record, and the
- * round under way is kept so a reload goes on with it; free play pays nothing and keeps nothing. Played on a course of
- * the test's own (three practice greens, each holed in one or picked up), named as a course is.
+ * The career: a round of an event pays its place in the field as its last hole is done, its best is the course's record, and
+ * the round under way is kept so a reload goes on with it; free play and practice pay nothing and keep nothing, and a round
+ * of a course that is no event counts for nothing but its holes. Played on a small season of the test's own (courses of three
+ * practice greens, each holed in one or picked up), whose events are entered as a player enters them.
  */
 import { describe, expect, it } from 'vitest';
-import { powerFor } from '../src/arena';
-import { PRIZE, dayOf, isRecord, prizeOf, recordText, type RoundOf } from '../src/career';
-import { COURSES, type HoleDef } from '../src/course';
-import { CLEAR_OF_CUP, Game, type GameEvents } from '../src/game';
+import { dayOf, isRecord, recordText } from '../src/career';
+import { COURSES } from '../src/course';
+import { Game, type GameEvents } from '../src/game';
 import { careerProblems, checkInvariants } from '../src/invariants';
 import { PAY, paid } from '../src/items';
 import { Progress, memoryStore } from '../src/progress';
 import { seeded } from '../src/random';
-import { DT, GREEN } from './helpers';
+import { PRIZE } from '../src/season';
+import { GREEN } from './helpers';
+import { holeInOne, next, pickUp } from './rounds';
+import { SMALL, SMALL_A, SMALL_B, SMALL_C, SMALL_PAR, roundOfEvent } from './small-season';
 
-const NORTH = Math.PI / 2;
-const HOLES: HoleDef[] = ['One', 'Two', 'Three'].map((n) => ({ ...GREEN, name: `Career ${n}` }));
-const OF: RoundOf = { name: 'The Practice', purse: 1.5 };
-const PAR = HOLES.length * GREEN.par;
+const NOTHING = { club: '', ball: '', accessory: '' };
+/** The events' holes' pay when each is holed in one. */
+const HOLE_PAY = paid(1, GREEN.par, false).coins;
 
 /** A game with its save in a store the test keeps, and every event told with all its arguments. */
-function career(json: string | null = null, today = '2026-10-15') {
+function career(json: string | null = JSON.stringify({ coins: 500 }), today = '2026-10-15') {
   const store = memoryStore(json);
   const calls: [string, unknown[]][] = [];
   const events: GameEvents = new Proxy(
@@ -32,46 +34,21 @@ function career(json: string | null = null, today = '2026-10-15') {
           calls.push([name, args]),
     },
   );
-  const game = new Game(new Progress(store), events, { random: seeded(3), course: HOLES, today: () => today });
+  const game = new Game(new Progress(store), events, {
+    random: seeded(3),
+    course: SMALL_C.holes,
+    today: () => today,
+    season: SMALL,
+  });
   return { game, store, calls };
 }
 
-/** The hole in play holed in one. */
-function holeInOne(g: Game) {
-  const { cup } = g.layout;
-  g.place(cup.x, cup.y - CLEAR_OF_CUP - 0.1);
-  g.shoot(NORTH, powerFor(8, g.hardest));
-  for (let f = 0; f < 60 * 12 && g.phase === 'play'; f++) g.step(DT);
-  expect(g.phase).not.toBe('play');
-}
+/** The told events of the given names, in the order told. */
+const told = (calls: [string, unknown[]][], ...names: string[]) => calls.filter(([n]) => names.includes(n));
 
-/** The hole in play picked up: tapped about at the tee until the limit is reached. */
-function pickUp(g: Game) {
-  for (let s = 0; s < 20 && g.phase === 'play'; s++) {
-    g.place(g.layout.tee.x, g.layout.tee.y);
-    g.shoot(s % 2 ? 0 : Math.PI, 0.05);
-    for (let f = 0; f < 60 * 40 && !(f > 2 && g.ready) && playing(g); f++) g.step(DT);
-  }
-  expect(g.phase).not.toBe('play');
-}
-
-/** Whether a hole is in play, read afresh: a stroke may end it. */
-const playing = (g: Game) => g.phase === 'play';
-
-/** The game moved on to the next hole, or to the end of the round. */
-function next(g: Game) {
-  for (let f = 0; f < 60 * 3 && g.phase === 'done'; f++) g.step(DT);
-}
-
-describe('the prize', () => {
-  it('pays the base times the purse, for each stroke under par, and for a record', () => {
-    expect(prizeOf(30, 36, 1.2, false)).toBe(Math.round(PRIZE.base * 1.2) + 6 * PRIZE.underPar);
-    expect(prizeOf(40, 36, 2, true)).toBe(PRIZE.base * 2 + PRIZE.record);
-    expect(prizeOf(36, 36, 1, false)).toBe(PRIZE.base);
-  });
-
+describe('the record and the purse', () => {
   it('is a record only for a round with every hole holed, and better than the one held', () => {
-    const held = { strokes: 30, par: 36, kit: { club: '', ball: '', accessory: '' }, when: '' };
+    const held = { strokes: 30, par: 36, kit: NOTHING, when: '' };
     expect(isRecord(40, false, undefined)).toBe(true);
     expect(isRecord(29, false, held)).toBe(true);
     expect(isRecord(30, false, held)).toBe(false);
@@ -80,9 +57,7 @@ describe('the prize', () => {
 
   it('says a record as a card has room for, and a day as the record keeps it', () => {
     expect(recordText(undefined)).toBe('');
-    expect(recordText({ strokes: 31, par: 36, kit: { club: '', ball: '', accessory: '' }, when: '' })).toBe(
-      'Record 31',
-    );
+    expect(recordText({ strokes: 31, par: 36, kit: NOTHING, when: '' })).toBe('Record 31');
     expect(dayOf(new Date(2026, 0, 5))).toBe('2026-01-05');
   });
 
@@ -94,74 +69,84 @@ describe('the prize', () => {
   });
 });
 
-describe('a career round', () => {
-  it('pays its prize at the last hole, keeps its record with the kit and the day, and says so once', () => {
+/** The mini tour's one event, entered and played with every hole holed in one; the game, its store and what it told. */
+function wonMini(json?: string | null) {
+  const c = career(json);
+  expect(c.game.enter('mini')).toBe(true);
+  for (let h = 0; h < SMALL_C.holes.length; h++) {
+    holeInOne(c.game);
+    next(c.game);
+  }
+  return c;
+}
+
+describe('an event round', () => {
+  it('pays its place at the last hole, keeps its record with the kit and the day, and says so once', () => {
     const { game, calls } = career();
-    game.playCourse(HOLES, OF);
+    expect(game.enter('mini')).toBe(true);
     const coins = game.progress.save.coins;
-    for (let h = 0; h < HOLES.length; h++) {
+    for (let h = 0; h < SMALL_C.holes.length; h++) {
       holeInOne(game);
       next(game);
     }
     expect(game.phase).toBe('over');
-    const prize = prizeOf(3, PAR, OF.purse, true);
-    const told = calls.filter(([n]) => n === 'roundPaid');
-    expect(told).toEqual([['roundPaid', [prize, true]]]);
+    // a pot of twelve fees of 25 coins, half of it to the winner, and the record's bonus on top
+    const prize = 150 + PRIZE.record;
+    expect(told(calls, 'roundPaid')).toEqual([['roundPaid', [prize, true]]]);
     // the holes paid as ever, and the round on top of them
-    expect(game.progress.save.coins - coins).toBe(3 * paid(1, GREEN.par, false).coins + prize);
-    expect(game.progress.save.records[OF.name]).toEqual({
+    expect(game.progress.save.coins - coins).toBe(3 * HOLE_PAY + prize);
+    expect(game.progress.save.records[SMALL_C.name]).toEqual({
       strokes: 3,
-      par: PAR,
-      kit: { club: '', ball: '', accessory: '' },
+      par: SMALL_PAR,
+      kit: NOTHING,
       when: '2026-10-15',
     });
-    // told after the last hole's pay, and before the round is over
-    const order = calls.map(([n]) => n).filter((n) => ['paid', 'roundPaid', 'finished'].includes(n));
-    expect(order.slice(-3)).toEqual(['paid', 'roundPaid', 'finished']);
+    // told after the last hole's pay, then the place, and before the round is over
+    const order = calls.map(([n]) => n).filter((n) => ['paid', 'roundPaid', 'placed', 'finished'].includes(n));
+    expect(order.slice(-4)).toEqual(['paid', 'roundPaid', 'placed', 'finished']);
     expect(game.progress.save.round).toBeNull();
     expect(checkInvariants(game)).toEqual([]);
   });
 
   it('keeps the record when a round does no better, and pays no record bonus for it', () => {
-    const { game, calls } = career();
-    game.playCourse(HOLES, OF);
-    for (let h = 0; h < HOLES.length; h++) {
+    const { game, calls } = wonMini();
+    // the next season, a grade up: a round no better than 3 is the same record, and its win is the share of the pot alone
+    expect(game.enter('mini')).toBe(true);
+    for (let h = 0; h < 3; h++) {
       holeInOne(game);
       next(game);
     }
-    game.newRound();
-    holeInOne(game);
-    next(game);
+    const [first, second] = told(calls, 'roundPaid');
+    expect(first[1]).toEqual([175, true]);
+    expect(second[1]).toEqual([150, false]);
+    expect(game.progress.save.records[SMALL_C.name].strokes).toBe(3);
+  });
+
+  it('sets no record with a hole picked up, and pays nothing for a place outside the top three', () => {
+    // a county season, whose rivals score 9, 12 and 15 on the three holes
+    const { game, calls } = career(
+      JSON.stringify({ coins: 500, season: { mini: { grade: 'county', begun: 0, played: [], titles: 0 } } }),
+    );
+    game.enter('mini');
     pickUp(game);
     next(game);
     holeInOne(game);
     next(game);
-    const told = calls.filter(([n]) => n === 'roundPaid');
-    expect(told.length).toBe(2);
-    expect(told[1][1]).toEqual([prizeOf(game.total, PAR, OF.purse, false), false]);
-    expect(game.progress.save.records[OF.name].strokes).toBe(3);
-  });
-
-  it('sets no record with a hole picked up, though it is the first round finished', () => {
-    const { game, calls } = career();
-    game.playCourse(HOLES, OF);
-    pickUp(game);
-    next(game);
     holeInOne(game);
     next(game);
-    holeInOne(game);
-    next(game);
-    expect(calls.filter(([n]) => n === 'roundPaid')).toEqual([
-      ['roundPaid', [prizeOf(game.total, PAR, 1.5, false), false]],
-    ]);
-    expect(game.progress.save.records[OF.name]).toBeUndefined();
+    // 10 strokes against rivals of 9, 12 and 15: fifth, which is paid nothing
+    expect(told(calls, 'roundPaid')).toEqual([['roundPaid', [0, false]]]);
+    expect(game.progress.save.records[SMALL_C.name]).toBeUndefined();
+    expect(told(calls, 'placed')[0][1][0]).toMatchObject({ place: 5, prize: 0, points: 10, record: false });
   });
 
-  it('keeps the round under way after each hole, and gives it up for a new round', () => {
+  it('keeps the round under way from the moment it is entered and after each hole, and gives it up for a new round', () => {
     const { game, store } = career();
-    game.playCourse(HOLES, OF);
+    game.enter('mini');
+    const round = { tour: 'mini', course: SMALL_C.name, hole: 0, card: [], retaken: false, pickedUp: false };
+    expect(game.progress.save.round).toEqual(round);
     holeInOne(game);
-    expect(game.progress.save.round).toEqual({ course: OF.name, hole: 1, card: [1], retaken: false, pickedUp: false });
+    expect(game.progress.save.round).toEqual({ ...round, hole: 1, card: [1] });
     expect(new Progress(memoryStore(store.json)).save.round, 'written to the store').toEqual(game.progress.save.round);
     next(game);
     game.newRound();
@@ -171,50 +156,79 @@ describe('a career round', () => {
 
   it('goes on after a reload from the hole after the last finished, with its card, and pays as one round', () => {
     const first = career();
-    first.game.playCourse(HOLES, OF);
+    first.game.enter('mini');
     holeInOne(first.game);
     next(first.game);
     pickUp(first.game);
     // a reload, here between holes
     const { game, calls } = career(first.store.json);
-    expect(game.resume(HOLES, OF)).toBe(true);
+    expect(game.resume(SMALL_C.holes, roundOfEvent(SMALL_C))).toBe(true);
     expect(game.hole).toBe(2);
     expect(game.card).toEqual(first.game.card);
     expect(game.strokes).toBe(0);
+    expect(game.event).toEqual({ tour: 'mini', index: 0 });
     holeInOne(game);
     next(game);
     expect(game.phase).toBe('over');
     // the hole picked up before the reload still keeps it from being a record
-    expect(calls.filter(([n]) => n === 'roundPaid')).toEqual([
-      ['roundPaid', [prizeOf(game.total, PAR, 1.5, false), false]],
-    ]);
+    expect(told(calls, 'roundPaid').map(([, a]) => a[1])).toEqual([false]);
     expect(checkInvariants(game)).toEqual([]);
   });
 
-  it('refuses to go on with a round of another course, or with no hole left, and lets it go', () => {
-    const { game, store } = career(
-      JSON.stringify({ round: { course: OF.name, hole: 3, card: [1, 1, 1], retaken: false, pickedUp: false } }),
+  it('refuses to go on with a round of another course, or with no hole left, or not the next event, and lets it go', () => {
+    const round = (over: object) =>
+      JSON.stringify({
+        coins: 500,
+        round: { tour: 'mini', course: SMALL_C.name, hole: 1, card: [1], retaken: false, pickedUp: false, ...over },
+      });
+    const refused = (json: string, holes = SMALL_C.holes, of = roundOfEvent(SMALL_C)) => {
+      const c = career(json);
+      expect(c.game.progress.save.round).not.toBeNull();
+      expect(c.game.resume(holes, of)).toBe(false);
+      expect(c.game.progress.save.round).toBeNull();
+      expect(new Progress(memoryStore(c.store.json)).save.round, 'let go in the store').toBeNull();
+    };
+    refused(round({ hole: 3, card: [1, 1, 1] }));
+    refused(round({ course: 'Elsewhere' }));
+    // the golf tour's next event is its first, whatever course the round says
+    refused(round({ tour: 'golf', course: 'Small Heath' }), SMALL_B.holes, roundOfEvent(SMALL_B));
+    // and a tour whose season has no event left has none for a round to be
+    refused(
+      JSON.stringify({
+        coins: 500,
+        season: { mini: { grade: 'club', begun: 0, played: [null], titles: 0 } },
+        round: { tour: 'mini', course: SMALL_C.name, hole: 1, card: [1], retaken: false, pickedUp: false },
+      }),
     );
-    expect(game.progress.save.round).not.toBeNull();
-    expect(game.resume(HOLES, OF), 'no hole left to play').toBe(false);
-    expect(game.progress.save.round).toBeNull();
-    expect(new Progress(memoryStore(store.json)).save.round).toBeNull();
-    const other = career(JSON.stringify({ round: { course: 'Elsewhere', hole: 1, card: [2], retaken: false } }));
-    expect(other.game.resume(HOLES, OF)).toBe(false);
-    expect(other.game.progress.save.round).toBeNull();
   });
 
   it('keeps nothing for holes that are no course’s, and pays their holes as ever', () => {
     const { game, calls } = career();
-    game.playCourse(HOLES);
-    for (let h = 0; h < HOLES.length; h++) {
+    game.playCourse(SMALL_C.holes);
+    for (let h = 0; h < 3; h++) {
       holeInOne(game);
       expect(game.progress.save.round).toBeNull();
       next(game);
     }
-    expect(calls.filter(([n]) => n === 'roundPaid')).toEqual([]);
+    expect(told(calls, 'roundPaid', 'placed', 'entered')).toEqual([]);
     expect(game.progress.save.records).toEqual({});
-    expect(game.progress.save.coins).toBe(3 * (PAY.finish + 2 * PAY.underPar));
+    expect(game.progress.save.coins).toBe(500 + 3 * (PAY.finish + 2 * PAY.underPar));
+  });
+
+  it('counts a round of a course that is no event for nothing but its holes: no place, no record, no round kept', () => {
+    const { game, calls } = career();
+    game.playCourse(SMALL_C.holes, roundOfEvent(SMALL_C));
+    expect(game.counting).toBe(false);
+    for (let h = 0; h < 3; h++) {
+      holeInOne(game);
+      expect(game.progress.save.round).toBeNull();
+      next(game);
+    }
+    expect(game.phase).toBe('over');
+    expect(told(calls, 'roundPaid', 'placed')).toEqual([]);
+    expect(game.progress.save.records).toEqual({});
+    expect(game.progress.save.coins).toBe(500 + 3 * HOLE_PAY);
+    expect(game.progress.save.season.mini.played).toEqual([]);
   });
 });
 
@@ -224,8 +238,9 @@ describe('free play', () => {
       JSON.stringify({ mode: 'free', coins: 500, owned: ['piggy'], kit: { accessory: 'piggy' } }),
     );
     expect(game.progress.save.mode).toBe('free');
-    game.playCourse(HOLES, OF);
-    for (let h = 0; h < HOLES.length; h++) {
+    expect(game.enter('mini'), 'there is nothing at stake in free play, so no event to enter').toBe(false);
+    game.playCourse(SMALL_C.holes, roundOfEvent(SMALL_C));
+    for (let h = 0; h < 3; h++) {
       holeInOne(game);
       expect(game.progress.save.round).toBeNull();
       next(game);
@@ -236,83 +251,112 @@ describe('free play', () => {
     expect(game.progress.save.best).toEqual({});
     expect(game.progress.save.records).toEqual({});
     expect(game.progress.save.owned).toContain('piggy');
-    expect(calls.filter(([n]) => n === 'roundPaid' || n === 'paid' || n === 'spent')).toEqual([]);
+    expect(told(calls, 'roundPaid', 'paid', 'spent', 'placed', 'entered')).toEqual([]);
   });
 
-  it('leaves the career round kept as it was, and does not go on with it', () => {
-    const json = JSON.stringify({
-      mode: 'free',
-      round: { course: OF.name, hole: 1, card: [2], retaken: false, pickedUp: false },
-    });
-    const { game } = career(json);
-    expect(game.resume(HOLES, OF)).toBe(false);
-    game.playCourse(HOLES, OF);
+  it('leaves the event round kept as it was, and does not go on with it', () => {
+    const kept = { tour: 'mini', course: SMALL_C.name, hole: 1, card: [2], retaken: false, pickedUp: false };
+    const { game } = career(JSON.stringify({ mode: 'free', round: kept }));
+    expect(game.resume(SMALL_C.holes, roundOfEvent(SMALL_C))).toBe(false);
+    game.playCourse(SMALL_C.holes, roundOfEvent(SMALL_C));
     holeInOne(game);
     next(game);
-    expect(game.progress.save.round).toEqual({ course: OF.name, hole: 1, card: [2], retaken: false, pickedUp: false });
+    expect(game.progress.save.round).toEqual(kept);
+    expect(game.progress.save.season.mini.played, 'and not a withdrawal').toEqual([]);
   });
 });
 
 describe('the rule of the career', () => {
   it('holds the round kept to the card, and a record to the holes’ bests', () => {
     const { game } = career();
-    game.playCourse(HOLES, OF);
+    game.enter('mini');
     holeInOne(game);
     expect(careerProblems(game)).toEqual([]);
-    game.progress.save.round!.card[0] = 2;
+    const save = game.progress.save;
+    save.round!.card[0] = 2;
     expect(careerProblems(game).join()).toMatch(/the round kept is 2 to hole 2, and the card is 1/);
-    game.progress.save.round = null;
+    save.round = null;
     expect(careerProblems(game).join()).toMatch(/no round is kept, with 1 of 3 holes/);
-    game.progress.save.round = { course: 'Elsewhere', hole: 1, card: [1], retaken: false, pickedUp: false };
+    save.round = { tour: 'mini', course: 'Elsewhere', hole: 1, card: [1], retaken: false, pickedUp: false };
     expect(careerProblems(game).join()).toMatch(/the round kept is of Elsewhere/);
-    game.progress.save.round = { course: OF.name, hole: 1, card: [1], retaken: false, pickedUp: false };
-    for (const h of HOLES) game.progress.save.best[h.name] = { strokes: 2, kit: { club: '', ball: '', accessory: '' } };
-    game.progress.save.records[OF.name] = {
-      strokes: 5,
-      par: PAR,
-      kit: { club: '', ball: '', accessory: '' },
-      when: '',
-    };
+    save.round = { tour: 'mini', course: SMALL_C.name, hole: 1, card: [1], retaken: false, pickedUp: false };
+    for (const h of SMALL_C.holes) save.best[h.name] = { strokes: 2, kit: NOTHING };
+    save.records[SMALL_C.name] = { strokes: 5, par: SMALL_PAR, kit: NOTHING, when: '' };
     expect(careerProblems(game).join()).toMatch(/record of 5 beats its holes' bests, 6/);
     // a mode there is not, whatever is played
-    (game.progress.save as { mode: string }).mode = 'ranked';
+    (save as { mode: string }).mode = 'ranked';
     expect(careerProblems(game).join()).toMatch(/the mode is ranked/);
+  });
+
+  it('holds a round to its tour and to the season’s next event, and a season to its grade and its events', () => {
+    const { game } = career();
+    game.enter('golf');
+    const save = game.progress.save;
+    expect(careerProblems(game)).toEqual([]);
+    save.round!.tour = 'mini';
+    expect(careerProblems(game).join()).toMatch(/the round kept is on the mini tour, and the golf is played/);
+    save.round!.tour = 'golf';
+    save.round!.course = SMALL_A.name;
+    game.event!.index = 1;
+    expect(careerProblems(game).join()).toMatch(/the round is event 2 and the golf season is on event 1/);
+    game.event!.index = 0;
+    save.season.golf.played = [null];
+    expect(careerProblems(game).join()).toMatch(
+      /the round kept is of Small Links, and the golf season's next event is Small Heath/,
+    );
+    save.season.golf.played = [[1, 2]];
+    expect(careerProblems(game).join()).toMatch(/event 1 was played to a card of 2 holes, not 3/);
+    save.season.golf.played = [null, null];
+    expect(careerProblems(game).join()).toMatch(/the golf season has played 2 of its 2 events and is not closed/);
+    save.season.golf.played = [];
+    (save.season.golf as { grade: string }).grade = 'junior';
+    expect(careerProblems(game).join()).toMatch(/the golf tour is at the grade junior/);
+    (save.season.golf as { grade: string }).grade = 'club';
+    expect(careerProblems(game)).toEqual([]);
   });
 
   it('asks nothing of a round in free play, or of holes that are no course’s', () => {
     const { game } = career();
-    game.playCourse(HOLES);
+    game.playCourse(SMALL_C.holes);
     holeInOne(game);
-    game.progress.save.round = { course: 'Elsewhere', hole: 1, card: [4], retaken: false, pickedUp: false };
+    game.progress.save.round = {
+      tour: 'mini',
+      course: 'Elsewhere',
+      hole: 1,
+      card: [4],
+      retaken: false,
+      pickedUp: false,
+    };
     expect(careerProblems(game)).toEqual([]);
-    game.playCourse(HOLES, OF);
+    game.enter('mini');
     game.setMode('free');
     expect(game.of, 'the round is no course’s once the mode changes').toBeNull();
+    expect(game.event).toBeNull();
     expect(careerProblems(game)).toEqual([]);
   });
 
   it('names an untouched first tee as a course’s, and refuses once a stroke is taken', () => {
-    const { game } = career(
-      JSON.stringify({ round: { course: 'Elsewhere', hole: 1, card: [4], retaken: false, pickedUp: false } }),
-    );
-    expect(game.adopt(OF)).toBe(true);
-    expect(game.of).toEqual(OF);
+    const kept = { tour: 'mini', course: 'Elsewhere', hole: 1, card: [4], retaken: false, pickedUp: false };
+    const { game } = career(JSON.stringify({ coins: 500, round: kept }));
+    expect(game.adopt(roundOfEvent(SMALL_C))).toBe(true);
+    expect(game.of).toEqual(roundOfEvent(SMALL_C));
     expect(game.progress.save.round, 'the round kept is given up for a new one').toBeNull();
-    game.shoot(NORTH, 0.1);
-    expect(game.adopt(OF)).toBe(false);
+    game.shoot(Math.PI / 2, 0.1);
+    expect(game.adopt(roundOfEvent(SMALL_C))).toBe(false);
   });
 });
 
 describe('a round begun part way round by a test', () => {
-  it('is no career round: no prize, no record, no round kept', () => {
+  it('is no event: no place, no record, no round kept', () => {
     const { game, calls } = career();
-    game.playCourse(HOLES, OF);
+    game.enter('mini');
     game.startAt(2);
     expect(game.of).toBeNull();
+    expect(game.event).toBeNull();
     holeInOne(game);
     next(game);
     expect(game.phase).toBe('over');
-    expect(calls.filter(([n]) => n === 'roundPaid')).toEqual([]);
+    expect(told(calls, 'roundPaid', 'placed')).toEqual([]);
     expect(game.progress.save.records).toEqual({});
     expect(checkInvariants(game)).toEqual([]);
   });

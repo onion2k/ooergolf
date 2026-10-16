@@ -74,9 +74,14 @@ describe('the fuzzer', () => {
     // Seed 26's moved from 3335 to 3549 on 15 October 2026 with the career: a course chosen is a named round, whose last hole
     // pays a prize (the monkey has other coins to shop with) and which a reload goes on with; shown by choosing the courses
     // unnamed in a scratch edit, which gives 3335 again. 17 and 3 did not move.
-    expect([one.drawn, two.drawn, golf.drawn], "draws from the monkey's main stream").toEqual([3549, 3095, 2699]);
-    // a reload went on with the career round kept, as the start screen's Continue does: a check that never ran passes in silence
-    expect(one.checked['round gone on with'], 'career rounds gone on with after a reload').toBeGreaterThan(0);
+    // Seed 26's moved from 3549 to 3095 on 15 October 2026 with the seasons, in two steps that a scratch edit shows: a course chosen no
+    // longer pays a prize (only an event does), which moves it to 3335, the figure it had before the career; and the career's buttons now
+    // enter events, practise and give them up, on the careerer's own stream (which the main stream does not read), which change the
+    // coins the monkey has to shop with and so what it buys and plays on with: with those buttons left out it is 3335, and 17 and 3 are
+    // 3095 and 2699 either way.
+    expect([one.drawn, two.drawn, golf.drawn], "draws from the monkey's main stream").toEqual([3095, 3095, 2699]);
+    // a reload went on with the event round kept, as the start screen's Continue does: a check that never ran passes in silence
+    expect(one.checked['event gone on with'], 'event rounds gone on with after a reload').toBeGreaterThan(0);
     // the framing rule was asked of the camera, on golf and on minigolf, a good many times: a check that never ran passes in silence
     expect(one.framed + two.framed, 'times the framing was checked').toBeGreaterThan(300);
     expect(golf.framed, 'times it was checked on level golf').toBeGreaterThan(30);
@@ -131,7 +136,12 @@ describe('the fuzzer', () => {
     // did on 14 October 2026, and then did not once trees on the banks were felled): it is held by the courses' own fuzz tests
     expect(
       Object.keys(r.done)
-        .filter((a) => a !== 'drive the lane')
+        // nor a kicker struck, done only where a seed's rounds reach a hole of The Pinball Shed's (seed 26's now do, and did not
+        // before the seasons moved its rounds: the kicker's own tests and run hold it), nor the events entered, practised and given up,
+        // which the course of one hole below plays often enough to hold
+        .filter(
+          (a) => !['drive the lane', 'strike a kicker', 'enter an event', 'give up an event', 'practise'].includes(a),
+        )
         .sort(),
       'every action there is, and no other',
     ).toEqual(actions);
@@ -141,12 +151,39 @@ describe('the fuzzer', () => {
         r.done['shoot well'] +
         r.done['shoot as aimed'] +
         r.done['fly to an island'] +
-        (r.done['drive the lane'] ?? 0),
+        (r.done['drive the lane'] ?? 0) +
+        (r.done['strike a kicker'] ?? 0),
     );
     expect(r.happened.stopped, 'and come to rest').toBeGreaterThan(0);
     expect(r.happened.holed, 'holed out').toBeGreaterThan(0);
     expect(r.happened.finished, 'round the whole course').toBeGreaterThan(0);
     expect(r.happened.knocked, 'knocked off the rail and the rest, each knock told as a knock is').toBeGreaterThan(0);
+  });
+
+  it('enters events, places the player, practises and gives events up, on a course of one hole where a round is soon over', () => {
+    const total: Record<string, number> = {};
+    const did: Record<string, number> = {};
+    const hole = FLAT_HOLES.slice(0, 1);
+    for (const seed of [3, 4, 7, 12, 17, 19, 20]) {
+      const r = fuzz(seed, 6000, hole, { name: 'Fuzz pitch', purse: 1.2 });
+      expect(r.failure, `seed ${seed}: ${JSON.stringify(r.failure)}`).toBe(null);
+      for (const [k, n] of Object.entries(r.checked)) total[k] = (total[k] ?? 0) + n;
+      for (const [k, n] of Object.entries(r.done)) did[k] = (did[k] ?? 0) + n;
+    }
+    // each check ran, and was not passed in silence: an event played to its end and placed, a practice hole paid nothing, an event
+    // round gone on with after a reload, an event given up for a course, and entries made and refused
+    for (const check of [
+      'event placed',
+      'practice paid nothing',
+      'event gone on with',
+      'event given up',
+      'event entered',
+      'event refused',
+      'event refused in free play',
+    ])
+      expect(total[check], check).toBeGreaterThan(0);
+    for (const action of ['enter an event', 'practise', 'give up an event'])
+      expect(did[action], action).toBeGreaterThan(0);
   });
 
   it('plays level golf holes at random from start to finish, every seed clean, every club struck, every landing told as one is', () => {

@@ -31,7 +31,11 @@ import { AISLES, ITEMS, paid } from '../src/items';
 import { retakeShown } from '../src/retake';
 import { COURSES, type Course, type HoleDef } from '../src/course';
 import type { RoundOf } from '../src/career';
-import { Game, type GameEvents } from '../src/game';
+import { POINTS, FIELD_SIZE, GRADES, PRIZE, TOURS, entryFee, potOf, type Tour } from '../src/season';
+import { seasonContext } from '../src/tours';
+import type { SeasonContext } from '../src/tournament';
+import { contextOf } from '../test/season-context';
+import { Game, type GameEvents, type Placement } from '../src/game';
 import { Input } from '../src/input';
 import {
   arrowProblems,
@@ -170,7 +174,23 @@ const letters = (): readonly TitlePiece[] => (lettering ??= titleLetters(titleTr
  * the others by choosing them, as a player does; given `course` it plays that one throughout, at the start, after a
  * reload and whenever it chooses, so a course of its own gets the whole of a run and not a share of it.
  */
-export function fuzz(seed: number, frames: number, course?: readonly HoleDef[], named?: RoundOf): FuzzResult {
+export function fuzz(
+  seed: number,
+  frames: number,
+  course?: readonly HoleDef[],
+  named?: RoundOf,
+  given?: SeasonContext,
+): FuzzResult {
+  // a run on a course of its own plays that course's events: two on the golf tour and one on the mini, so a season is over in a
+  // round or two, and the table of rivals' scores is made for it; a run among the courses of the game plays the game's
+  const season =
+    given ??
+    (course
+      ? (() => {
+          const event = { name: named?.name ?? 'Fuzz course', purse: named?.purse ?? 1, holes: course };
+          return contextOf({ golf: [event, event], mini: [event] });
+        })()
+      : seasonContext());
   // the monkey's own chance, apart from the game's, so what it decides does not shift what the game does
   const monkey = seeded(seed * 7 + 1);
   /** How many numbers the monkey has drawn from its own stream, which a test holds to a figure so a stray draw is seen. */
@@ -184,8 +204,8 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[], 
   const checked: Record<string, number> = {};
   /**
    * What the game told since the last step, for the rules an item adds: a ball lost, the waders told of, a hole finished
-   * (with its score and its par), the penny spent, and the coins a career round's prize paid. Read and emptied by
-   * `afterwards`.
+   * (with its score and its par), the penny spent, and the coins an event's prize paid, and the place it was told with.
+   * Read and emptied by `afterwards`.
    */
   const lately = {
     lost: 0,
@@ -193,7 +213,11 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[], 
     finished: null as null | { holed: boolean; par: number; score: number },
     spent: 0,
     prize: 0,
+    placed: null as null | Placement,
   };
+  /** The fee told by the last `entered`, and how many entries have been told since the monkey last looked. */
+  let fee = 0;
+  let entries = 0;
   /** The piggy bank's id if one was worn as the hole being played began, which is the hole it pays double for; '' if none. */
   let piggyOnHole = '';
   /** The game being played, once there is one, and what was wrong with a knock as it was told, for the next check. */
@@ -216,19 +240,26 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[], 
           if (name === 'splash' || name === 'outOfBounds') lately.lost++;
           if (name === 'waded') lately.waded++;
           if (name === 'spent') lately.spent++;
-          // a prize is a career round's, of a named course, told as its last hole is done; and free play is told of no pay
+          // a prize is an event round's, told as its last hole is done (and nought for a place outside the money); and free
+          // play and practice are told of no pay
           if (name === 'roundPaid' && playing) {
             lately.prize += args[0];
             count(checked, 'round paid');
             if (
               !playing.counting ||
               playing.hole !== playing.course.length - 1 ||
-              !(Number.isInteger(args[0]) && args[0] > 0)
+              !(Number.isInteger(args[0]) && args[0] >= 0)
             )
               told.push(`a prize of ${args[0]} was paid on hole ${playing.hole + 1} of a round that does not count`);
           }
-          if ((name === 'paid' || name === 'spent') && playing?.progress.save.mode === 'free')
-            told.push(`free play was told it was ${name}`);
+          // an entry is told once for each fee taken; the place is held to its rules when the hole is checked, with the save as it was
+          if (name === 'entered') {
+            fee = args[0];
+            entries++;
+          }
+          if (name === 'placed') lately.placed = args[0] as unknown as Placement;
+          if ((name === 'paid' || name === 'spent') && (playing?.progress.save.mode === 'free' || playing?.practising))
+            told.push(`${playing.practising ? 'practice' : 'free play'} was told it was ${name}`);
           if (name === 'holed' || name === 'pickedUp')
             lately.finished = { holed: name === 'holed', score: args[0], par: args[1] };
           if (name === 'started' && playing && directing) {
@@ -328,7 +359,7 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[], 
           ? JSON.stringify({ coins: 700, gems: 6 })
           : null,
     );
-    let game = new Game(new Progress(store), events, { random: chance(seed), course });
+    let game = new Game(new Progress(store), events, { random: chance(seed), course, season });
     playing = game;
     // a player part way round, on a hole of the seed's: every hole is played, where a monkey starting from the first
     // and reloading now and then would seldom get to the last
@@ -402,37 +433,153 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[], 
       did('read the break');
     };
     /**
-     * The start screen's Continue, for the career round the save keeps: its course (the run's own, named, or the one the
-     * save names) gone on with from its next hole, its card as it was kept. Draws no chance, and does nothing in free play
-     * or with no round kept.
+     * The start screen's Continue, for the event round the save keeps: its course (found among the season's events by the
+     * name the save gives it) gone on with from its next hole, its card as it was kept. Draws no chance, and does nothing in
+     * free play or with no round kept.
      */
     const goOn = () => {
       const kept = game.progress.save.round;
       if (!kept || game.progress.save.mode !== 'career') return;
       const card = [...kept.card];
-      let of: RoundOf | null = null,
-        holes: readonly HoleDef[] | null = null;
-      if (course) {
-        if (named?.name === kept.course) [of, holes] = [named, course];
-      } else {
-        const found = COURSES.find((c) => c.name === kept.course);
-        if (found) [of, holes] = [roundOf(found), found.holes];
-      }
-      // a round of a course this run does not play (none is kept so: a run alone on a course plays only it)
-      if (!of || !holes) return;
-      if (!game.resume(holes, of)) return;
+      const found = season.tours[kept.tour].find((c) => c.name === kept.course);
+      // a round of a course the season does not have (none is kept so)
+      if (!found) return;
+      const next = game.progress.save.season[kept.tour].played.length;
+      if (!game.resume(found.holes, { name: found.name, purse: found.purse })) return;
       if (game.card.join() !== card.join() || game.hole !== card.length || game.strokes !== 0)
         told.push(`the round kept, ${card.join(',')}, went on as ${game.card.join(',')} on hole ${game.hole + 1}`);
-      count(checked, 'round gone on with');
+      if (game.event?.tour !== kept.tour || game.event.index !== next)
+        told.push(`the round kept on ${kept.tour} event ${next + 1} went on as ${JSON.stringify(game.event)}`);
+      count(checked, 'event gone on with');
       did('continue');
     };
-    /** The career's buttons on the start screen, pressed on a chance of their own: Career or Free play, and Continue. */
+    /**
+     * A round given up for a new one, held to what giving up is: where a round was kept in the career, the event is played as a
+     * withdrawal (a null for its card, or the season closed if it was the last) and the fee is not refunded; where none was, or
+     * the round is not a course's or the mode is free play, the save is as it was.
+     */
+    const givingUp = (act: () => void, what: string) => {
+      const save = game.progress.save;
+      const [coins, round, seasons, mode] = [save.coins, save.round, JSON.stringify(save.season), save.mode];
+      act();
+      const now = JSON.stringify(save.season);
+      if (mode === 'career' && round !== null && game.of !== null) {
+        if (save.round !== null) told.push(`${what} left the round kept on the ${round.tour} tour`);
+        const before = (JSON.parse(seasons) as typeof save.season)[round.tour];
+        const after = save.season[round.tour];
+        const closed = after.begun === before.begun + 1 && after.played.length === 0;
+        if (
+          !closed &&
+          (after.played.length !== before.played.length + 1 || after.played[before.played.length] !== null)
+        )
+          told.push(
+            `${what} did not record a withdrawal: ${JSON.stringify(before.played)} became ${JSON.stringify(after.played)}`,
+          );
+        if (save.coins !== coins) told.push(`${what} moved the coins, ${coins} to ${save.coins}`);
+        count(checked, 'event given up');
+      } else if (save.round !== round || (round !== null && now !== seasons))
+        told.push(`${what} touched the round kept or the season, with ${mode} or no round to give up`);
+    };
+    /**
+     * The coins the save has, a fee short or not: now and then the monkey is given enough to enter an event, since the coins it
+     * earns by play alone seldom come to a fee while the shop is also taking them. A windfall of two fees on its own stream, so
+     * no other run changes; the coins counted from here are what the save then holds.
+     */
+    const windfall = (tour: Tour) => {
+      const save = game.progress.save;
+      const next = season.tours[tour][Math.min(save.season[tour].played.length, season.tours[tour].length - 1)];
+      const cost = entryFee(next.purse);
+      if (save.coins >= cost || careerer() >= 0.5) return;
+      save.coins += 2 * cost;
+      game.persist();
+    };
+    /** The start screen's Enter button for an event of a tour, pressed and held to what entering is. */
+    const enterEvent = (chain = true) => {
+      const tour = TOURS[Math.floor(careerer() * TOURS.length)];
+      const save = game.progress.save;
+      windfall(tour);
+      const [coins, round, seasons, mode] = [save.coins, save.round, JSON.stringify(save.season), save.mode];
+      entries = 0;
+      const was = { golf: { ...save.season.golf }, mini: { ...save.season.mini } };
+      const entered = game.enter(tour);
+      if (!entered) {
+        if (entries) told.push(`an entry was refused and told of`);
+        if (save.coins !== coins || save.round !== round || JSON.stringify(save.season) !== seasons)
+          told.push('an entry was refused and changed the save');
+        if (mode === 'free') count(checked, 'event refused in free play');
+        else count(checked, 'event refused');
+        return;
+      }
+      if (mode !== 'career') told.push(`an event was entered in ${mode}`);
+      if (entries !== 1) told.push(`${entries} entries were told for the one fee`);
+      if (game.of === null || fee !== entryFee(game.of.purse) || coins - save.coins !== fee)
+        told.push(`a fee of ${fee} was told and ${coins - save.coins} taken`);
+      const kept = save.round;
+      if (!kept || kept.tour !== tour || kept.hole !== 0 || kept.card.length !== 0 || kept.course !== game.of?.name)
+        told.push(`an event was entered and the round kept is ${JSON.stringify(kept)}`);
+      if (game.hole !== 0 || game.strokes !== 0 || game.card.length !== 0 || game.event?.tour !== tour)
+        told.push(`an event was entered and the game is on hole ${game.hole + 1} with ${game.strokes} strokes`);
+      // a round kept before was given up for it: one more played on its tour, and the fee not refunded
+      if (round !== null) {
+        const [b, a] = [was[round.tour], save.season[round.tour]];
+        const closed = a.begun === b.begun + 1;
+        if (!closed && a.played.length !== b.played.length + 1)
+          told.push(`an entry gave up the round on ${round.tour} and its season played ${a.played.length}`);
+      }
+      count(checked, 'event entered');
+      did('enter an event', tour);
+      // and, now and then, a change of mind before a stroke is struck: another course chosen, or another event entered
+      if (chain) {
+        const mind = careerer();
+        if (mind < 0.25) giveUpForCourse();
+        else if (mind < 0.4) enterEvent(false);
+      }
+    };
+    /** The start screen's Practise button: a course played for nothing, with the career still the career after it. */
+    const practiseCourse = () => {
+      const picked = COURSES[Math.floor(careerer() * COURSES.length)];
+      const save = game.progress.save;
+      const [coins, gems, round, seasons, mode, records, best] = [
+        save.coins,
+        save.gems,
+        JSON.stringify(save.round),
+        JSON.stringify(save.season),
+        save.mode,
+        JSON.stringify(save.records),
+        JSON.stringify(save.best),
+      ];
+      if (course) game.practise(course, named ?? null);
+      else game.practise(picked.holes, roundOf(picked));
+      if (!game.practising || game.counting || game.event !== null) told.push('a practice round counts');
+      if (
+        save.mode !== mode ||
+        save.coins !== coins ||
+        save.gems !== gems ||
+        JSON.stringify(save.round) !== round ||
+        JSON.stringify(save.season) !== seasons ||
+        JSON.stringify(save.records) !== records ||
+        JSON.stringify(save.best) !== best
+      )
+        told.push('beginning a practice round changed the save');
+      did('practise', picked.name);
+    };
+    /** A course chosen where an event was entered, which gives the event up. */
+    const giveUpForCourse = () => {
+      const picked = COURSES[Math.floor(careerer() * COURSES.length)];
+      givingUp(() => {
+        if (course) game.playCourse(course, named ?? null);
+        else game.playCourse(picked.holes, roundOf(picked));
+      }, 'choosing another course');
+      did('give up an event', picked.name);
+    };
+    /** The career's buttons on the start screen, pressed on a chance of their own: Career or Free play, Continue, Enter, Practise, and a course chosen in place of an event. */
     const careerer = seeded(seed * 71 + 29);
     const career = () => {
       const atStart = game.phase === 'play' && game.hole === 0 && game.strokes === 0 && game.card.length === 0;
       if (game.phase !== 'over' && !atStart) return;
       const save = game.progress.save;
-      if (careerer() < 0.5) {
+      const roll = careerer();
+      if (roll < 0.2) {
         // a mode changed leaves the round no course's, so the page begins one as a course is chosen: the course stood behind
         // the screen, chosen again as its card would
         const of = game.of;
@@ -440,10 +587,14 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[], 
         const coins = save.coins;
         game.setMode(mode);
         if (game.of !== null && game.of !== of) told.push('a mode changed and the round was still named');
-        if (of && atStart) game.adopt(of);
+        if (game.event !== null) told.push('a mode changed and the round was still an event');
+        if (of && atStart) givingUp(() => game.adopt(of), 'naming the first tee');
         if (save.coins !== coins) told.push(`choosing ${mode} changed the coins`);
         did('choose career or free play', mode);
-      } else goOn();
+      } else if (roll < 0.4) goOn();
+      else if (roll < 0.7) enterEvent();
+      else if (roll < 0.85) practiseCourse();
+      else giveUpForCourse();
     };
     /** Everything a player can make happen, each as often as it is weighted. */
     const actions: [number, () => void][] = [
@@ -705,8 +856,10 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[], 
           }
           if (!scene.landed) count(checked, 'course chosen mid-drop');
           // a course's card names it, so a round of it counts in the career; a test's holes are no course's
-          if (course) game.playCourse(course, named ?? null);
-          else game.playCourse(picked.holes, roundOf(picked));
+          givingUp(() => {
+            if (course) game.playCourse(course, named ?? null);
+            else game.playCourse(picked.holes, roundOf(picked));
+          }, 'choosing a course');
           did('choose a course');
         },
       ],
@@ -717,7 +870,7 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[], 
           game.persist();
           const kept = JSON.stringify(game.progress.save);
           store = memoryStore(store.json);
-          game = new Game(new Progress(store), events, { random: chance(seed + frame), course });
+          game = new Game(new Progress(store), events, { random: chance(seed + frame), course, season });
           playing = game;
           // the start screen offers Continue for a career round kept, and the monkey takes it: the round goes on from the hole
           // after the last it finished, its card as it was
@@ -1197,6 +1350,9 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[], 
       coins: game.progress.save.coins,
       gems: game.progress.save.gems,
       owned: [...game.progress.save.owned],
+      // the round kept and the seasons as they stood, as they were written: what a hole done in free play or practice must leave, and the season a place is held to
+      round: JSON.stringify(game.progress.save.round),
+      season: JSON.stringify(game.progress.save.season),
       slots: { ...game.slots },
       waders: game.kit.freeLoss,
       waded: game.wadersUsed,
@@ -1207,9 +1363,10 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[], 
     const quiet = () => {
       lately.lost = lately.waded = lately.spent = lately.prize = 0;
       lately.finished = null;
+      lately.placed = null;
     };
     const afterwards = (was: ReturnType<typeof snapshot>) => {
-      const { lost, waded, spent, finished, prize } = lately;
+      const { lost, waded, spent, finished, prize, placed } = lately;
       quiet();
       if (game !== was.game || was.phase !== 'play') return;
       // the waders: the first ball lost to water or out of bounds on a hole costs no stroke, and the second costs one
@@ -1230,13 +1387,18 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[], 
       // (and in free play nothing at all: no pay, no penny spent; a career round's last hole pays its prize on top)
       if (finished) {
         const free = game.progress.save.mode === 'free';
-        const pay = free
+        // practice, like free play, pays and keeps nothing and uses nothing up, and leaves the round kept and the seasons as they were
+        const unpaid = free || game.practising;
+        const pay = unpaid
           ? { coins: 0, gems: 0 }
           : paid(finished.score, finished.par, !finished.holed, game.kit.underParPay);
-        const double = !free && finished.holed && was.penny;
+        const double = !unpaid && finished.holed && was.penny;
         const save = game.progress.save;
         const coins = pay.coins * (double ? 2 : 1) + prize;
         if (free) count(checked, 'free hole paid nothing');
+        else if (unpaid) count(checked, 'practice paid nothing');
+        if (unpaid && (JSON.stringify(save.round) !== was.round || JSON.stringify(save.season) !== was.season))
+          throw new Error(`a hole done in ${free ? 'free play' : 'practice'} changed the round kept or the season`);
         if (save.coins - was.coins !== coins || save.gems - was.gems !== pay.gems)
           throw new Error(
             `a hole ${finished.holed ? 'holed' : 'picked up'} in ${finished.score} on a par of ${finished.par}, with ${was.penny ? 'the penny' : 'no penny'}, paid ${save.coins - was.coins} coins and ${save.gems - was.gems} gems, not ${coins} and ${pay.gems}`,
@@ -1255,6 +1417,56 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[], 
           }
         }
       }
+      if (placed) placement(placed, was, prize);
+    };
+    /**
+     * An event played to its end, held to what the place told is: a place from first to last of the field, a prize that is no more
+     * than the pot and is nought outside the first three, the points of the place, the pay told as the prize and the record's
+     * bonus, the card added to the season or the season closed, and the grade it went to. Counted, since a check that never ran
+     * passes in silence.
+     */
+    const placement = (p: Placement, was: ReturnType<typeof snapshot>, paidOut: number) => {
+      const save = game.progress.save;
+      const event = game.event;
+      if (!event || !game.of) return void told.push('a place was told for a round that is no event');
+      const before = (JSON.parse(was.season) as typeof save.season)[event.tour];
+      const now = save.season[event.tour];
+      const pot = potOf(entryFee(game.of.purse));
+      const bad: string[] = [];
+      if (!(Number.isInteger(p.place) && p.place >= 1 && p.place <= FIELD_SIZE)) bad.push(`place ${p.place}`);
+      if (!Number.isInteger(p.prize) || p.prize < 0 || p.prize > pot)
+        bad.push(`a prize of ${p.prize} from a pot of ${pot}`);
+      if (p.place > PRIZE.shares.length && p.prize !== 0) bad.push(`a prize of ${p.prize} for place ${p.place}`);
+      if (p.points !== POINTS[p.place - 1]) bad.push(`${p.points} points for place ${p.place}`);
+      if (typeof p.tied !== 'boolean') bad.push('a tie that is not told yes or no');
+      if (paidOut !== p.prize + (p.record ? PRIZE.record : 0))
+        bad.push(`${paidOut} paid for a prize of ${p.prize}${p.record ? ' and a record' : ''}`);
+      if (p.seasonOver) {
+        if (now.played.length !== 0 || now.begun !== before.begun + 1) bad.push('a season over and not closed');
+        if (p.promotedTo !== null && p.title) bad.push('both promoted and a title');
+        if (
+          p.promotedTo !== null &&
+          (now.grade !== p.promotedTo || GRADES.indexOf(p.promotedTo) !== GRADES.indexOf(before.grade) + 1)
+        )
+          bad.push(`promoted to ${p.promotedTo} from ${before.grade} and the grade is ${now.grade}`);
+        if (
+          p.title &&
+          (now.titles !== before.titles + 1 || now.grade !== 'championship' || before.grade !== 'championship')
+        )
+          bad.push(`a title at ${before.grade} with ${now.titles} titles`);
+        if (p.promotedTo === null && !p.title && (now.grade !== before.grade || now.titles !== before.titles))
+          bad.push('the grade moved and nothing was told');
+      } else {
+        if (
+          now.played.length !== before.played.length + 1 ||
+          now.played[before.played.length]?.join() !== game.card.join()
+        )
+          bad.push(`the card ${game.card.join(',')} not added to the season's ${before.played.length} events`);
+        if (p.promotedTo !== null || p.title || now.begun !== before.begun || now.grade !== before.grade)
+          bad.push('a season not over was moved on');
+      }
+      if (bad.length) told.push(`an event was placed with ${bad.join('; ')}`);
+      count(checked, 'event placed');
     };
     /**
      * A player pressing the Retake button: the same call the page's button makes, asked as the page asks (it is there when
@@ -1264,13 +1476,15 @@ export function fuzz(seed: number, frames: number, course?: readonly HoleDef[], 
      */
     const retaker = seeded(seed * 43 + 11);
     const retake = () => {
-      const shown = retakeShown({
-        held: game.kit.retake,
-        strokes: game.strokes,
-        used: game.mulliganUsed,
-        phase: game.phase,
-        choosing: false,
-      });
+      // the button is refused in an event, where a stroke counts against the field; `retakeShown` does not know of one yet
+      const shown =
+        retakeShown({
+          held: game.kit.retake,
+          strokes: game.strokes,
+          used: game.mulliganUsed,
+          phase: game.phase,
+          choosing: false,
+        }) && game.event === null;
       const was = snapshot();
       const [t, used] = [game.t, game.mulliganUsed];
       const lie = { ...game.lie };

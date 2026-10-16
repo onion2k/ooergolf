@@ -46,7 +46,9 @@ export const WATCH: Partial<Record<string, { ceiling: number; steady?: boolean }
   // joining, measured the same way at 8,508 bytes, held to the byte; 9,200 is that and about six holes more, so a tenth
   // course fails the test before it fails the gate. 15 October 2026: the career's record of each of the nine courses and
   // a round kept at its last hole, measured the same way at 9,800 bytes, held to the byte; 10,500 is that and about six
-  // holes more)
+  // holes more. Later that day the season of each tour, at the longest grade with a full season less one event played in
+  // two-figure scores, and the event round kept with its tour: 10,164 bytes, held to the byte, which leaves 336 under the
+  // ceiling, about three holes)
   'save bytes': { ceiling: 10_500 },
   // emptied at every new round: never more than a score a hole
   'card scores': { ceiling: COURSE.length },

@@ -29,8 +29,14 @@ export function nextGrade(grade: Grade): Grade {
 /** The entrants in an event: the player and eleven rivals. */
 export const FIELD_SIZE = 12;
 
-/** The entry fee is `entry` coins a point of the course's purse, and the pot is paid to the first places in `shares`. */
-export const PRIZE = { entry: 25, shares: [0.5, 0.3, 0.2] } as const;
+/**
+ * The entry fee is `entry` coins a point of the course's purse, the pot is paid to the first places in `shares`, and a new
+ * course record is worth `record` coins on top (it was the career's own before there were events, and is kept as it was).
+ */
+export const PRIZE = { entry: 25, shares: [0.5, 0.3, 0.2], record: 25 } as const;
+
+/** The name the player goes by in a field and in the order of merit: a rival's name is never this, so the two are never confused. */
+export const YOU = 'You';
 
 /** The fee for a course of the given purse, in whole coins. */
 export function entryFee(purse: number): number {

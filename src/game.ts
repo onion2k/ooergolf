@@ -41,12 +41,14 @@ import {
 } from './arena';
 import { BAG, PUTTER, bagClub, boosted, isWedge, strikeFactor, tuned, type BagClub } from './bag';
 import { AISLES, NO_KIT, itemById, kitOf, paid, type Aisle, type Kit, type KitSlots } from './items';
-import { PLAY_MODES, isRecord, prizeOf, type PlayMode, type RoundOf } from './career';
+import { PLAY_MODES, isRecord, type PlayMode, type RoundOf } from './career';
 import { COURSE, CUP, type HoleDef } from './course';
 import { chipLoft, puttAngle, strike } from './flight';
 import { Obstacles } from './obstacles';
 import { PHYSICS, THE_CUP, makeWorld, type Cup, type World } from './physics';
 import { Progress, memoryStore } from './progress';
+import { PRIZE, TOURS, type Grade, type Tour } from './season';
+import { eventsIn, finishEvent, nextEvent, withdrawn, closedIfFull, type SeasonContext } from './tournament';
 import type { Random } from './random';
 import { PUTT_SHAPE, bendRate, curveRate, puttSpinFactor, spunKeep, windDirection, windPush } from './shaping';
 import { LANDING, LIE, SURFACES, groundRoll, rollScale } from './surfaces';
@@ -90,14 +92,36 @@ export interface GameEvents {
   /** What a hole done paid into the save. */
   paid?(coins: number, gems: number): void;
   /**
-   * A career round of a named course played to its last hole: the prize it paid into the save, and whether it is the
-   * course's new record. Told as the last hole is done, after its `paid`, and before `finished`.
+   * An event round played to its last hole: everything it paid into the save, the player's share of the pot and the course
+   * record's bonus if there was one (nought for a round outside the places, which still happened), and whether it is the
+   * course's new record. Told as the last hole is done, after its `paid`, then `placed`, and before `finished`.
    */
   roundPaid?(coins: number, record: boolean): void;
+  /** The entry fee taken for an event entered, once for each fee: the round begun is at its first hole, kept from now. */
+  entered?(fee: number): void;
+  /** An event played to its end: where the player was placed and what it came to. Told after `roundPaid`. */
+  placed?(result: Placement): void;
   /** An item bought, for what it cost. */
   bought?(coins: number, gems: number): void;
   /** An item put on (its id), or a slot emptied (''). */
   equipped?(id: string): void;
+}
+
+/** What an event came to for the player, as the game tells it when the last hole is done. */
+export interface Placement {
+  /** From 1 to the size of the field, shared with whoever tied (`tied`). */
+  place: number;
+  tied: boolean;
+  /** The player's share of the pot: the places' prize and not the course record's bonus. */
+  prize: number;
+  /** The order-of-merit points the place won. */
+  points: number;
+  /** Whether the round is the course's new record, which pays its bonus on top. */
+  record: boolean;
+  /** Whether this was the season's last event, which closed it; the grade the player went up to if they did, and whether they won a title at the championship. */
+  seasonOver: boolean;
+  promotedTo: Grade | null;
+  title: boolean;
 }
 
 export interface GameOptions {
@@ -115,6 +139,8 @@ export interface GameOptions {
   posed?: () => number;
   /** The day a course record is made on, as YYYY-MM-DD: '' unless told, so a game run without a page is the same every run. */
   today?: () => string;
+  /** The courses, rivals and scores a season is made from. Without it no event can be entered, and the game is as it was before there were events. */
+  season?: SeasonContext;
 }
 
 /** Where a round is: a hole in play, a hole done and the next about to begin, or the round over. */
@@ -180,6 +206,12 @@ export class Game {
    * test's own, the title's, a rehearsal's), which pay their holes as ever and keep no record and no round.
    */
   of: RoundOf | null = null;
+  /**
+   * The event this round is, its tour and its place in the tour's season (from nought): null for any round that is not
+   * one, which pays its holes and keeps nothing. Set by `enter`, and by `resume` for the round kept, and let go by every
+   * other way a round begins.
+   */
+  event: { tour: Tour; index: number } | null = null;
   phase: Phase = 'play';
   /** Game time, in seconds. */
   t = 0;
@@ -252,6 +284,8 @@ export class Game {
   private readonly opened: (() => boolean) | undefined;
   private readonly posed: (() => number) | undefined;
   private readonly today: () => string;
+  /** The season's courses, rivals and scores, or null for a game that has none (a rehearsal, a test of the ball). */
+  readonly season: SeasonContext | null;
   /** The slots the kit was last worked out for, and what it came to: worked out when the slots change and not each frame. */
   private readonly kitFor: KitSlots = { club: '', ball: '', accessory: '' };
   private worn: Kit = NO_KIT;
@@ -261,6 +295,8 @@ export class Game {
   private retaken = false;
   /** Whether a hole of this round was picked up, which keeps it from being a record: cleared by each round. */
   private pickedUp = false;
+  /** Whether this round is a practice round, which pays nothing and keeps nothing as free play does, and leaves the mode as it was. */
+  private practice = false;
   /** The piggy bank's id if one was worn when this hole began, which is the hole it pays double for; '' otherwise. */
   private piggy = '';
 
@@ -276,6 +312,7 @@ export class Game {
     this.opened = options.opening;
     this.posed = options.posed;
     this.today = options.today ?? (() => '');
+    this.season = options.season ?? null;
     this.begin(0);
   }
 
@@ -594,22 +631,39 @@ export class Game {
     this.events.started?.(index, this.def.par);
   }
 
-  /** A new round from the first hole, the card cleared: a career round under way of this course is given up for it. */
+  /** A new round from the first hole, the card cleared: an event round kept is given up for it, as `giveUp` has it. */
   newRound() {
     this.card.length = 0;
     this.retaken = false;
     this.pickedUp = false;
-    if (this.counting && this.progress.save.round) {
-      this.progress.save.round = null;
-      this.persist();
-    }
+    this.practice = false;
+    this.giveUp();
+    this.event = null;
     this.begin(0);
   }
 
   /**
-   * A round of `holes` from the first: a course's, named by `of` so the career pays its prize and keeps its record and
-   * the round under way; or a test's own, to play or look at a hole that is not on a course, such as one that slopes
-   * before the physics can roll on it, or the title's, which have none.
+   * The event round the save keeps, given up: the event is played as a withdrawal (a null for its card, and the season closed
+   * if it was the last), the fee stays spent, and nothing is refunded. Only in the career and for a round named as a course's
+   * (a test's holes and the title's, which have no name, leave the round alone, and so does free play, which leaves it to go on with in the
+   * career). Every way a round begins that is not going on with the kept one calls this.
+   */
+  private giveUp() {
+    const save = this.progress.save;
+    const round = save.round;
+    if (round === null || save.mode !== 'career' || this.rehearsing || this.of === null) return;
+    save.round = null;
+    // a season is only there to be moved on if the game has a context; a round kept with none to name its events is simply let go
+    if (this.season !== null && Object.hasOwn(save.season, round.tour))
+      save.season[round.tour] = withdrawn(this.season, round.tour, save.season[round.tour]);
+    this.persist();
+  }
+
+  /**
+   * A round of `holes` from the first, for the holes that are not an event's: a test's own, to play or look at a hole that is
+   * not on a course, such as one that slopes before the physics can roll on it, or the title's, which have none; or a course's,
+   * named by `of`, which pays its holes as any round does and counts for nothing else. An event is begun by `enter`. A round
+   * kept is given up for it, if it is named.
    */
   playCourse(holes: readonly HoleDef[], of: RoundOf | null = null) {
     this.course = holes;
@@ -618,22 +672,96 @@ export class Game {
   }
 
   /**
-   * The career round the save keeps, gone on with: its course's `holes`, named by `of`, from the hole after the last it
-   * finished, with its card and its retake as they were. A ball part way round a hole is not kept, so that hole is
-   * begun again from its tee. Refused, and the round let go, for one that is not of this course or has no hole left
-   * to play on it (a course with fewer holes than it once had); and refused in free play, which goes on with nothing.
+   * A practice round of `holes`, named by `of`: played as free play is, paying nothing, keeping no best, record or round
+   * and using up no piggy bank, but without changing the mode, so the career is still the career after it. An event round kept
+   * is left as it is, to go on with. Retakes are as in any round, since nothing is at stake.
+   */
+  practise(holes: readonly HoleDef[], of: RoundOf | null = null) {
+    this.course = holes;
+    this.of = of;
+    this.event = null;
+    this.card.length = 0;
+    this.retaken = false;
+    this.pickedUp = false;
+    this.practice = true;
+    this.begin(0);
+  }
+
+  /** Whether this round is a practice round. */
+  get practising(): boolean {
+    return this.practice;
+  }
+
+  /**
+   * An event entered on `tour`: the next of its season. Takes the entry fee, once, and begins and keeps the round at its first
+   * hole, so that a reload before a hole is done goes on with it and the fee is not lost; tells `entered`. A round kept is
+   * given up first (withdrawn, the fee stays spent), and a season that has played all its events is closed first, so the event
+   * entered is always one of a season that has one left. Refused, with nothing changed, in free play (where nothing is at
+   * stake), without a season's context, for a tour there is not, and when the coins do not cover the fee, which is worked out
+   * for the season as it would then stand. Whether it was entered.
+   */
+  enter(tour: Tour): boolean {
+    const save = this.progress.save;
+    const ctx = this.season;
+    if (ctx === null || save.mode !== 'career' || this.rehearsing || !TOURS.includes(tour)) return false;
+    // the seasons as they would stand once any round kept is given up, and this one's closed if it is full: only the entry that
+    // follows is allowed to change the save, since a refused entry must leave the kept round, and the fee, where they were
+    const seasons = { golf: save.season.golf, mini: save.season.mini };
+    const kept = save.round;
+    if (kept !== null && Object.hasOwn(seasons, kept.tour))
+      seasons[kept.tour] = withdrawn(ctx, kept.tour, seasons[kept.tour]);
+    seasons[tour] = closedIfFull(ctx, tour, seasons[tour]);
+    const next = nextEvent(ctx, tour, seasons[tour]);
+    if (save.coins < next.fee) return false;
+    save.season.golf = seasons.golf;
+    save.season.mini = seasons.mini;
+    save.coins -= next.fee;
+    save.round = { tour, course: next.course.name, hole: 0, card: [], retaken: false, pickedUp: false };
+    this.course = next.course.holes;
+    this.of = { name: next.course.name, purse: next.course.purse };
+    this.event = { tour, index: next.index };
+    this.practice = false;
+    this.card.length = 0;
+    this.retaken = false;
+    this.pickedUp = false;
+    this.persist();
+    this.events.entered?.(next.fee);
+    this.begin(0);
+    return true;
+  }
+
+  /**
+   * The event round the save keeps, gone on with: its course's `holes`, named by `of`, from the hole after the last it
+   * finished (the first, if none is), with its card as it was kept. A ball part way round a hole is not kept, so that hole is
+   * begun again from its tee. Refused, and the round let go, for one that is not the next event of its tour's season, of
+   * another course, or with no hole left to play on it (a course with fewer holes than it once had); refused with nothing let
+   * go in free play, which goes on with nothing, and in a game with no season to say what its events are.
    */
   resume(holes: readonly HoleDef[], of: RoundOf): boolean {
     const save = this.progress.save;
     const round = save.round;
-    if (!round || save.mode !== 'career') return false;
-    if (round.course !== of.name || round.hole >= holes.length || round.card.length !== round.hole) {
+    const ctx = this.season;
+    if (!round || save.mode !== 'career' || ctx === null) return false;
+    const season = save.season[round.tour] as (typeof save.season)[Tour] | undefined;
+    const next =
+      season !== undefined && season.played.length < eventsIn(ctx, round.tour)
+        ? nextEvent(ctx, round.tour, season)
+        : null;
+    if (
+      next === null ||
+      round.course !== of.name ||
+      next.course.name !== of.name ||
+      round.hole >= holes.length ||
+      round.card.length !== round.hole
+    ) {
       save.round = null;
       this.persist();
       return false;
     }
     this.course = holes;
     this.of = of;
+    this.event = { tour: round.tour, index: next.index };
+    this.practice = false;
     this.card.length = 0;
     this.card.push(...round.card);
     this.retaken = round.retaken;
@@ -644,44 +772,48 @@ export class Game {
 
   /**
    * The round at its first tee, untouched, named as a round of `of` without beginning its hole again (the page's course
-   * already set up behind the start screen): a career round kept of any course is given up for it, as for any new round.
+   * already set up behind the start screen): an event round kept is given up for it, as for any new round. It is no event.
    * Refused once a stroke is taken or a hole finished.
    */
   adopt(of: RoundOf): boolean {
     if (this.hole !== 0 || this.strokes !== 0 || this.card.length || this.phase !== 'play') return false;
     this.of = of;
-    if (this.counting && this.progress.save.round) {
-      this.progress.save.round = null;
-      this.persist();
-    }
+    this.event = null;
+    this.practice = false;
+    this.giveUp();
     return true;
   }
 
   /**
    * Whether rounds count in the career or are free play, chosen on the start screen, and the save written. The round
    * under way is no course's after it (the page begins another as a course is chosen), so a round is never half one
-   * and half the other; the career round kept is left as it is, to go on with in the career.
+   * and half the other; the event round kept is left as it is, to go on with in the career.
    */
   setMode(mode: PlayMode) {
     if (!PLAY_MODES.includes(mode)) return;
-    if (mode !== this.progress.save.mode) this.of = null;
+    if (mode !== this.progress.save.mode) {
+      this.of = null;
+      this.event = null;
+    }
     this.progress.save.mode = mode;
     this.persist();
   }
 
-  /** Whether this round counts in the career: a course's, played in the career, and not a rehearsal's. */
+  /** Whether this round counts in the career: an event's, played in the career, and not a rehearsal's. */
   get counting(): boolean {
-    return this.of !== null && !this.rehearsing && this.progress.save.mode === 'career';
+    return this.event !== null && this.of !== null && !this.rehearsing && this.progress.save.mode === 'career';
   }
 
   /**
    * A round come to hole `index`, as if the holes before it had each been
    * played in par: a state a player reaches, for a test or the fuzzer to
-   * start from without playing up to it, and so no career round.
+   * start from without playing up to it, and so no event.
    */
   startAt(index: number) {
-    // holes not played are no career's: the round is no course's, so it pays no prize and keeps no record or round
+    // holes not played are no career's: the round is no course's, so it is no event, and keeps no record or round
     this.of = null;
+    this.event = null;
+    this.practice = false;
     this.card.length = 0;
     this.retaken = false;
     this.pickedUp = false;
@@ -865,13 +997,10 @@ export class Game {
    * they left it, and no chance is drawn. Whether it did anything.
    */
   mulligan(): boolean {
-    if (this.retaken || this.phase !== 'play' || this.strokes < 1 || !this.kit.retake) return false;
+    // there is none in an event, where the stroke counts against the field
+    if (this.event !== null || this.retaken || this.phase !== 'play' || this.strokes < 1 || !this.kit.retake)
+      return false;
     this.retaken = true;
-    // a career round kept is kept with its retake spent, so a reload does not give it again
-    if (this.counting && this.progress.save.round) {
-      this.progress.save.round.retaken = true;
-      this.persist();
-    }
     this.strokes--;
     this.moving = false;
     this.firstLanding = false;
@@ -1161,9 +1290,9 @@ export class Game {
   /**
    * The hole finished, scored and told of, paid for, its best kept with the
    * kit worn, and the save written; the next begins in a moment. In free play
-   * nothing is paid, kept or used up; and in a career round of a course the
-   * round is kept to go on with, or, at its last hole, paid its prize and
-   * held to the course's record.
+   * nothing is paid, kept or used up (nor in practice); and in an event the
+   * round is kept to go on with, or, at its last hole, placed in the field and
+   * paid its share of the pot.
    */
   private done(how: 'holed' | 'pickedUp') {
     const score = how === 'holed' ? this.strokes : this.limit;
@@ -1174,7 +1303,7 @@ export class Game {
     this.events[how]?.(score, this.def.par);
     if (how === 'pickedUp') this.pickedUp = true;
     const save = this.progress.save;
-    if (save.mode === 'free' && !this.rehearsing) return;
+    if ((save.mode === 'free' || this.practice) && !this.rehearsing) return;
     const pay = paid(score, this.def.par, how === 'pickedUp', this.kit.underParPay);
     // the piggy bank doubles the coins of the hole it was worn for, if it is finished, and is used up by it
     const spent = this.piggy;
@@ -1195,18 +1324,24 @@ export class Game {
     this.persist();
     if (spend) this.events.spent?.(spent);
     this.events.paid?.(pay.coins, pay.gems);
-    if (prize) this.events.roundPaid?.(prize.coins, prize.record);
+    if (prize) {
+      this.events.roundPaid?.(prize.coins, prize.placement.record);
+      this.events.placed?.(prize.placement);
+    }
   }
 
   /**
-   * A career round's part of a hole done, before the save is written: the round kept with this hole on its card, or, if
-   * it was the last, let go, paid its prize and held to the course's record, which is what it says it paid.
+   * An event round's part of a hole done, before the save is written: the round kept with this hole on its card, or, if it
+   * was the last, let go, the player placed in the field and paid their share of the pot (and the course record's bonus,
+   * if the round is a record), the card added to the season, and the season closed if that was its last event.
    */
-  private closeRound(): { coins: number; record: boolean } | null {
+  private closeRound(): { coins: number; placement: Placement } | null {
     const save = this.progress.save;
     const of = this.of!;
+    const { tour } = this.event!;
     if (this.hole + 1 < this.course.length) {
       save.round = {
+        tour,
         course: of.name,
         hole: this.hole + 1,
         card: [...this.card],
@@ -1221,9 +1356,23 @@ export class Game {
     const held = Object.hasOwn(save.records, of.name) ? save.records[of.name] : undefined;
     const record = isRecord(strokes, this.pickedUp, held);
     if (record) save.records[of.name] = { strokes, par, kit: { ...save.kit }, when: this.today() };
-    const coins = prizeOf(strokes, par, of.purse, record);
+    const done = finishEvent(this.season!, tour, save.season[tour], this.card);
+    save.season[tour] = done.season;
+    const coins = done.prize + (record ? PRIZE.record : 0);
     save.coins += coins;
-    return { coins, record };
+    return {
+      coins,
+      placement: {
+        place: done.place,
+        tied: done.tied,
+        prize: done.prize,
+        points: done.points,
+        record,
+        seasonOver: done.seasonOver,
+        promotedTo: done.promotedTo,
+        title: done.title,
+      },
+    };
   }
 
   /** An item bought, if it is sold, not owned, and can be paid for; the save written. */

@@ -7,11 +7,13 @@
  */
 import { readFileSync, readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { COURSES } from '../src/course';
 import { Game } from '../src/game';
 import { ITEMS } from '../src/items';
 import { checkInvariants } from '../src/invariants';
 import { Progress, memoryStore } from '../src/progress';
 import { seeded } from '../src/random';
+import { seasonContext } from '../src/tours';
 
 const DIR = new URL('saves/', import.meta.url);
 const files = readdirSync(DIR)
@@ -21,8 +23,13 @@ const read = (file: string) => readFileSync(new URL(file, DIR), 'utf8');
 
 /** A save with nothing in it yet, as every field's default makes it. */
 const NONE = { club: '', ball: '', accessory: '' };
-/** What a save from before the career loads its career as: counted in it, as every round was, with no record and no round. */
-const CAREER = { mode: 'career', records: {}, round: null };
+/** What a save from before the seasons loads its season as: both tours at the club grade, no season begun, no event played, no title. */
+const NO_SEASON = {
+  golf: { grade: 'club', begun: 0, played: [], titles: 0 },
+  mini: { grade: 'club', begun: 0, played: [], titles: 0 },
+};
+/** What a save from before the career loads its career as: counted in it, as every round was, with no record, no round and no season. */
+const CAREER = { mode: 'career', records: {}, round: null, season: NO_SEASON };
 const FRESH = { coins: 0, gems: 0, owned: [], kit: NONE, best: {}, ...CAREER };
 
 /**
@@ -76,7 +83,8 @@ const KEPT: Record<string, Record<string, unknown>> = {
       'The Spectacles': { strokes: 6, kit: NONE },
     },
   },
-  // the career of 15 October 2026: free play chosen, a record on two courses and a round of The Heath two holes in
+  // the career of 15 October 2026: free play chosen, a record on two courses and a round of The Heath two holes in (it loads as no round now:
+  // a round with no tour is from before there were events)
   '07-career.json': {
     coins: 340,
     gems: 1,
@@ -91,7 +99,31 @@ const KEPT: Record<string, Record<string, unknown>> = {
       'The Meadow': { strokes: 19, par: 26, kit: NONE, when: '2026-10-15' },
       'The Heath': { strokes: 31, par: 32, kit: { club: 'mallet', ball: '', accessory: '' }, when: '2026-10-15' },
     },
-    round: { course: 'The Heath', hole: 2, card: [3, 4], retaken: false, pickedUp: false },
+    // the round kept is from before there were events, so it has none to belong to and is let go; the season starts at the club grade
+    season: NO_SEASON,
+    round: null,
+  },
+  // the seasons of 15 October 2026: both tours begun, the golf tour at the county grade with an event played and one withdrawn
+  // from and an event round kept on its third event (The Fells), the mini tour at the championship with a title and an event played
+  '08-season.json': {
+    coins: 410,
+    gems: 2,
+    owned: ['mallet'],
+    kit: { club: 'mallet', ball: '', accessory: '' },
+    best: {
+      Straight: { strokes: 1, kit: NONE },
+      'Heather Run': { strokes: 3, kit: { club: 'mallet', ball: '', accessory: '' } },
+    },
+    mode: 'career',
+    records: {
+      'The Links': { strokes: 33, par: 36, kit: { club: 'mallet', ball: '', accessory: '' }, when: '2026-10-15' },
+      'The Meadow': { strokes: 19, par: 26, kit: NONE, when: '2026-10-15' },
+    },
+    round: { tour: 'golf', course: 'The Fells', hole: 2, card: [5, 4], retaken: false, pickedUp: false },
+    season: {
+      golf: { grade: 'county', begun: 2, played: [[4, 5, 3, 4, 4, 3, 5, 4, 4], null], titles: 0 },
+      mini: { grade: 'championship', begun: 4, played: [[2, 3, 2, 3, 2, 3, 2, 3, 3]], titles: 1 },
+    },
   },
 };
 
@@ -227,7 +259,7 @@ describe('saves from every shape the game has written', () => {
             Nought: { strokes: 0, par: 36 },
             Odd: 'thirty',
           },
-          round: { course: 'The Links', hole: 2, card: [4] },
+          round: { tour: 'golf', course: 'The Links', hole: 2, card: [4] },
         }),
       ),
     ).save;
@@ -236,12 +268,85 @@ describe('saves from every shape the game has written', () => {
     expect(save.records).toEqual({ Good: { strokes: 30, par: 36, kit: { ...NONE, club: 'mallet' }, when: '' } });
     expect(save.round, 'a card short of its holes').toBeNull();
     for (const round of [
-      { course: '', hole: 1, card: [3] },
-      { course: 'The Links', hole: 0, card: [] },
-      { course: 'The Links', hole: 1, card: [0] },
+      { tour: 'golf', course: '', hole: 1, card: [3] },
+      { tour: 'golf', course: 'The Links', hole: 1, card: [] },
+      { tour: 'golf', course: 'The Links', hole: 1, card: [0] },
+      { tour: 'golf', course: 'The Links', hole: -1, card: [] },
+      { tour: 'golf', course: 'The Links', hole: 0.5, card: [] },
+      // from before there were events, or of a tour there is not
+      { course: 'The Links', hole: 1, card: [3] },
+      { tour: 'senior', course: 'The Links', hole: 1, card: [3] },
       'The Links',
     ])
       expect(new Progress(memoryStore(JSON.stringify({ round }))).save.round, JSON.stringify(round)).toBeNull();
+  });
+
+  it('keeps a round at its first hole, kept from the moment the fee is paid, and one part way round', () => {
+    const at = (hole: number, card: number[]) =>
+      new Progress(memoryStore(JSON.stringify({ round: { tour: 'mini', course: 'The Meadow', hole, card } }))).save
+        .round;
+    expect(at(0, [])).toEqual({
+      tour: 'mini',
+      course: 'The Meadow',
+      hole: 0,
+      card: [],
+      retaken: false,
+      pickedUp: false,
+    });
+    expect(at(2, [3, 4])).toMatchObject({ tour: 'mini', hole: 2, card: [3, 4] });
+  });
+
+  it('reads a season only as it should be: a known grade, counts that are counts, whole cards, and the tours there are', () => {
+    const read = (season: unknown) => new Progress(memoryStore(JSON.stringify({ season }))).save.season;
+    const card = [3, 4, 3];
+    // a whole season is read as it is, a tour the game has not is not, and a tour left out is a fresh one
+    expect(
+      read({
+        golf: { grade: 'county', begun: 3, played: [card, null], titles: 2 },
+        senior: { grade: 'club', begun: 1, played: [], titles: 0 },
+      }),
+    ).toEqual({ golf: { grade: 'county', begun: 3, played: [card, null], titles: 2 }, mini: NO_SEASON.mini });
+    // what is not what it should be takes its own default and nothing else is lost
+    expect(read({ golf: { grade: 'junior', begun: 2, played: [], titles: 1 } }).golf).toEqual({
+      grade: 'club',
+      begun: 2,
+      played: [],
+      titles: 1,
+    });
+    for (const begun of [-1, 1.5, '3', null, [] as unknown])
+      expect(read({ mini: { grade: 'county', begun, titles: 4 } }).mini, JSON.stringify(begun)).toEqual({
+        grade: 'county',
+        begun: 0,
+        played: [],
+        titles: 4,
+      });
+    expect(read({ mini: { grade: 'county', begun: 1, titles: -2 } }).mini.titles).toBe(0);
+    // a played list is kept only if every event in it is a whole card or a withdrawal, since one dropped would put the rest at the wrong events
+    for (const played of [
+      [[3, 0, 3]],
+      [
+        [3, 4, 3],
+        [3, -1],
+      ],
+      [card, []],
+      [card, 'three'],
+      [card, [3, 1.5]],
+      'none',
+    ])
+      expect(read({ golf: { grade: 'county', begun: 1, played } }).golf.played, JSON.stringify(played)).toEqual([]);
+    // and none of it is an object at all
+    for (const bad of [null, 'season', [1, 2], 7, { golf: 'county', mini: [1] }])
+      expect(read(bad), JSON.stringify(bad)).toEqual(NO_SEASON);
+  });
+
+  it('goes on with the event round kept in the seasons’ own save, and breaks no rule', () => {
+    const season = seasonContext();
+    const game = new Game(new Progress(memoryStore(read('08-season.json'))), {}, { random: seeded(7), season });
+    const fells = COURSES.find((c) => c.name === 'The Fells')!;
+    expect(game.resume(fells.holes, { name: fells.name, purse: fells.purse })).toBe(true);
+    expect([game.hole, game.card, game.event]).toEqual([2, [5, 4], { tour: 'golf', index: 2 }]);
+    for (let f = 0; f < 300; f++) game.step(1 / 60);
+    expect(checkInvariants(game)).toEqual([]);
   });
 
   it('has the shape the game writes now: a new field means a new file here', () => {

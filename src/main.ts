@@ -32,6 +32,7 @@ import { holeFailureText, reasonOf } from './failure';
 import { frameCost } from './frame-cost';
 import { COURSES, type Course } from './course';
 import { dayOf, recordText, type RoundOf } from './career';
+import { seasonContext } from './tours';
 import { Picker, type PickerCourse } from './picker';
 import type { CoursePreview } from './previews';
 import previewData from './previews.json';
@@ -894,6 +895,8 @@ async function main() {
     ...(seed !== null ? { random: seeded(+seed) } : {}),
     // the day a course record is made, in the player's own time
     today: () => dayOf(new Date()),
+    // the courses, rivals and scores an event is made of, so the game can be entered in one: the page's buttons for it come later
+    season: seasonContext(),
     // the title is drawn over a hole of its own, which nothing is played on
     ...(wantTitle ? { course: [titleHole()] } : {}),
   });
