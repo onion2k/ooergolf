@@ -12,6 +12,8 @@
  * of one tree and a ball, never a game.
  */
 
+import { hypot } from './fixedmath';
+
 /** A tree's figures, in units, which are yards: the sizes of a tree a golf ball is played round, and what its canopy does to a ball. */
 export const TREE = {
   /** The trunk's radius: a post, met by the physics, which stands up to the canopy's base. */
@@ -68,8 +70,8 @@ export interface Hit {
  */
 function profile(c: Cone, p: V3): { d: number; out: number; up: number; rho: number } {
   const h = c.apex - c.base,
-    slant = Math.hypot(h, c.radius);
-  const rho = Math.hypot(p[0] - c.x, p[1] - c.y),
+    slant = hypot(h, c.radius);
+  const rho = hypot(p[0] - c.x, p[1] - c.y),
     z = p[2];
   // the side's outward normal, and how far the point is past the side's line (over nought outside it)
   const sideOut = h / slant,
@@ -89,7 +91,7 @@ function profile(c: Cone, p: V3): { d: number; out: number; up: number; rho: num
   const at: [number, number] = alongSide > slant ? [0, c.apex] : [c.radius, c.base];
   const dr = rho - at[0],
     dz = z - at[1],
-    d = Math.hypot(dr, dz);
+    d = hypot(dr, dz);
   return d > 1e-9 ? { d, out: dr / d, up: dz / d, rho } : { d: 0, out: sideOut, up: sideUp, rho };
 }
 

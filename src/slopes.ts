@@ -7,6 +7,7 @@
  */
 import { PHYSICS, TILE, slopeAt, terrainAt, tileAt, type Layout } from './arena';
 import { LIE, rollOf } from './surfaces';
+import { hypot } from './fixedmath';
 
 /** Whether tile `t` of the layout, of a lie that is not solid or out of bounds, is ground its lie holds a ball on, on greens that run at `greens` (the normal speed if left out). */
 export function holdsBall(l: Layout, t: number, greens?: number): boolean {
@@ -15,7 +16,7 @@ export function holdsBall(l: Layout, t: number, greens?: number): boolean {
     l.originX + ((t % l.cols) + 0.5) * TILE,
     l.originY + (Math.floor(t / l.cols) + 0.5) * TILE,
   );
-  const s = Math.hypot(sx, sy);
+  const s = hypot(sx, sy);
   return (
     s / Math.sqrt(1 + s * s) <= (0.97 * rollOf(l.lie[t] as Parameters<typeof rollOf>[0], greens)) / PHYSICS.gravity
   );

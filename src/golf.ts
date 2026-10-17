@@ -38,6 +38,7 @@ import { WIND } from './shaping';
 import { drainFault, holdsBall } from './slopes';
 import { GREENS, LIE } from './surfaces';
 import { TREE, insideCanopy, treeCone } from './trees';
+import { atan2, cos, hypot, sin } from './fixedmath';
 
 /** A pond: how far along the way of play it lies, which side of it (nought is across it, on the line) and how big, in tiles of radius. */
 export interface PondSpec {
@@ -233,7 +234,7 @@ export function restUnderCrown(layout: Layout, x: number, y: number): number {
   let deepest = 0;
   for (let dx = -reach; dx <= reach; dx += CROWN.step)
     for (let dy = -reach; dy <= reach; dy += CROWN.step) {
-      const rho = Math.hypot(dx, dy);
+      const rho = hypot(dx, dy);
       if (rho > reach || rho <= TREE.trunk + r) continue;
       const c = Math.floor((x + dx - layout.originX) / TILE),
         row = Math.floor((y + dy - layout.originY) / TILE);
@@ -453,7 +454,7 @@ function way(spec: GolfSpec): { points: Pt[]; total: number } {
   const f = spec.corner ?? 0.55;
   const t = (spec.bend * Math.PI) / 180;
   const corner: Pt = [0, f * L];
-  const cup: Pt = [corner[0] + Math.sin(t) * (1 - f) * L, corner[1] + Math.cos(t) * (1 - f) * L];
+  const cup: Pt = [corner[0] + sin(t) * (1 - f) * L, corner[1] + cos(t) * (1 - f) * L];
   return { points: [[0, 0], corner, cup], total: L };
 }
 
@@ -464,7 +465,7 @@ function way(spec: GolfSpec): { points: Pt[]; total: number } {
 function gapTarget(spec: GolfSpec): { along: number; s: number } | undefined {
   if (!spec.gap) return undefined;
   const c = (spec.corner ?? 0.55) * spec.length;
-  const k = c * Math.cos((spec.bend * Math.PI) / 180);
+  const k = c * cos((spec.bend * Math.PI) / 180);
   const root = k * k - (c * c - spec.gap.to * spec.gap.to);
   if (!(root >= 0)) return undefined;
   const along = -k + Math.sqrt(root);
@@ -480,10 +481,10 @@ function along(points: Pt[], p: Pt): { s: number; d: number; side: number } {
       [bx, by] = points[k + 1];
     const lx = bx - ax,
       ly = by - ay;
-    const len = Math.hypot(lx, ly);
+    const len = hypot(lx, ly);
     const u = ((p[0] - ax) * lx + (p[1] - ay) * ly) / (len * len);
     const t = Math.max(0, Math.min(1, u));
-    const d = Math.hypot(p[0] - (ax + lx * t), p[1] - (ay + ly * t));
+    const d = hypot(p[0] - (ax + lx * t), p[1] - (ay + ly * t));
     // which side of the way it is on, by the cross product: positive to the left of the way, negative to its right
     if (d < best.d) best = { s: run + len * t, d, side: Math.sign(lx * (p[1] - ay) - ly * (p[0] - ax)) };
     run += len;
@@ -505,7 +506,7 @@ function at(points: Pt[], s: number): { p: Pt; dir: Pt } {
   for (let k = 0; k + 1 < points.length; k++) {
     const [ax, ay] = points[k],
       [bx, by] = points[k + 1];
-    const len = Math.hypot(bx - ax, by - ay);
+    const len = hypot(bx - ax, by - ay);
     if (s <= run + len || k === points.length - 2) {
       const t = Math.max(0, Math.min(1, (s - run) / len));
       return { p: [ax + (bx - ax) * t, ay + (by - ay) * t], dir: [(bx - ax) / len, (by - ay) / len] };
@@ -708,8 +709,7 @@ export function golfHole(spec: GolfSpec): HoleDef {
     }
   // the green round the cup, and the tee's box, five across and three deep, with the tee in it
   for (let r = 0; r < rows; r++)
-    for (let c = 0; c < cols; c++)
-      if (grid[r][c] !== ' ' && Math.hypot(c - cup[0], r - cup[1]) <= GREEN) grid[r][c] = 'g';
+    for (let c = 0; c < cols; c++) if (grid[r][c] !== ' ' && hypot(c - cup[0], r - cup[1]) <= GREEN) grid[r][c] = 'g';
   for (let dr = -1; dr <= 1; dr++) for (let dc = -2; dc <= 2; dc++) grid[tee[1] + dr][tee[0] + dc] = 't';
   grid[tee[1]][tee[0]] = 'T';
   grid[cup[1]][cup[0]] = 'C';
@@ -784,8 +784,8 @@ export function golfHole(spec: GolfSpec): HoleDef {
             if (inMap(c0 + dc, r0 + dr) && grid[r0 + dr][c0 + dc] === '~') shore = true;
         if (!shore) continue;
         for (let a = 0; a < LAKE.rays; a++) {
-          const dx = Math.cos((a * 2 * Math.PI) / LAKE.rays),
-            dy = Math.sin((a * 2 * Math.PI) / LAKE.rays);
+          const dx = cos((a * 2 * Math.PI) / LAKE.rays),
+            dy = sin((a * 2 * Math.PI) / LAKE.rays);
           let run = 0,
             ashore = 0;
           for (let d = 1; d <= carry + 6; d++) {
@@ -836,9 +836,9 @@ export function golfHole(spec: GolfSpec): HoleDef {
     const span = Math.ceil(r0 * (1 + WOBBLE.two + WOBBLE.three));
     for (let r = Math.floor(cy) - span; r <= Math.ceil(cy) + span; r++)
       for (let c = Math.floor(cx) - span; c <= Math.ceil(cx) + span; c++) {
-        const a = Math.atan2(r - cy, c - cx);
-        const rim = r0 * (1 + WOBBLE.two * Math.sin(2 * a + p2) + WOBBLE.three * Math.sin(3 * a + p3));
-        if (Math.hypot(c - cx, r - cy) <= rim) tiles.push([c, r]);
+        const a = atan2(r - cy, c - cx);
+        const rim = r0 * (1 + WOBBLE.two * sin(2 * a + p2) + WOBBLE.three * sin(3 * a + p3));
+        if (hypot(c - cx, r - cy) <= rim) tiles.push([c, r]);
       }
     return tiles;
   };
@@ -849,9 +849,8 @@ export function golfHole(spec: GolfSpec): HoleDef {
     for (const [c, r] of tiles) {
       if (!inMap(c, r) || !kinds.includes(grid[r][c])) return false;
       // a hazard leaves a shelf as it is: its bed would be levelled at a height of its own across the landing
-      for (const [sc, sr] of shelfAt) if (Math.hypot(c - sc, r - sr) < SHELF.radius + 2) return false;
-      if (Math.hypot(c - tee[0], r - tee[1]) < KEEP.hazard || Math.hypot(c - cup[0], r - cup[1]) < KEEP.cup)
-        return false;
+      for (const [sc, sr] of shelfAt) if (hypot(c - sc, r - sr) < SHELF.radius + 2) return false;
+      if (hypot(c - tee[0], r - tee[1]) < KEEP.hazard || hypot(c - cup[0], r - cup[1]) < KEEP.cup) return false;
       for (let dc = -GAP; dc <= GAP; dc++)
         for (let dr = -GAP; dr <= GAP; dr++)
           if (inMap(c + dc, r + dr) && '~s^'.includes(grid[r + dr][c + dc])) return false;
@@ -876,7 +875,7 @@ export function golfHole(spec: GolfSpec): HoleDef {
     // a pond in a hollow, the ground there low already
     if (!lay(tiles, kind === 'pond' ? '~' : 's')) return false;
     // levelled as far as its farthest tile, and no farther, so its bed never reaches the next feature
-    const radius = Math.max(0.5, ...tiles.map(([c, r]) => Math.hypot(c - cx, r - cy)));
+    const radius = Math.max(0.5, ...tiles.map(([c, r]) => hypot(c - cx, r - cy)));
     flats.push({
       x: cx,
       y: cy,
@@ -897,7 +896,7 @@ export function golfHole(spec: GolfSpec): HoleDef {
   lakes.forEach((lake, n) => {
     const round = lake.at === 'green';
     const rim = (a: number, p2: number, p3: number) =>
-      1 + WOBBLE.two * Math.sin(2 * a + p2) + WOBBLE.three * Math.sin(3 * a + p3);
+      1 + WOBBLE.two * sin(2 * a + p2) + WOBBLE.three * sin(3 * a + p3);
     /** Whether a tile is rock, or has rock or the map's edge beside it: water is kept a tile off both. */
     const nearRock = (c: number, r: number) => {
       for (let dc = -1; dc <= 1; dc++)
@@ -915,7 +914,7 @@ export function golfHole(spec: GolfSpec): HoleDef {
           if (!inMap(c, r) || nearRock(c, r)) continue;
           const u = (c - cx) * dir[0] + (r - cy) * dir[1],
             v = -(c - cx) * dir[1] + (r - cy) * dir[0];
-          if (Math.hypot(u / ra, v / rc) <= rim(Math.atan2(v, u), p2, p3)) tiles.push([c, r]);
+          if (hypot(u / ra, v / rc) <= rim(atan2(v, u), p2, p3)) tiles.push([c, r]);
         }
       return tiles;
     };
@@ -931,11 +930,8 @@ export function golfHole(spec: GolfSpec): HoleDef {
           const span = Math.ceil(spec.radius * (1 + WOBBLE.two + WOBBLE.three)) + 1;
           for (let r = cup[1] - span; r <= cup[1] + span; r++)
             for (let c = cup[0] - span; c <= cup[0] + span; c++) {
-              const reach = Math.max(
-                GREEN + ISLAND_APRON,
-                spec.radius * rim(Math.atan2(r - cup[1], c - cup[0]), p2, p3),
-              );
-              if (inMap(c, r) && Math.hypot(c - cup[0], r - cup[1]) <= reach) tiles.push([c, r]);
+              const reach = Math.max(GREEN + ISLAND_APRON, spec.radius * rim(atan2(r - cup[1], c - cup[0]), p2, p3));
+              if (inMap(c, r) && hypot(c - cup[0], r - cup[1]) <= reach) tiles.push([c, r]);
             }
         } else {
           const [cx, cy] = lakeTiles[Math.floor(random() * lakeTiles.length)];
@@ -947,7 +943,7 @@ export function golfHole(spec: GolfSpec): HoleDef {
           if (!inMap(c, r) || mask[r * cols + c] !== 1) return false;
           for (let dc = -LAKE.water; dc <= LAKE.water; dc++)
             for (let dr = -LAKE.water; dr <= LAKE.water; dr++) {
-              if (Math.hypot(dc, dr) > LAKE.water) continue;
+              if (hypot(dc, dr) > LAKE.water) continue;
               const k = (r + dr) * cols + c + dc;
               if (!inMap(c + dc, r + dr) || (mask[k] !== 1 && !own.has(k))) return false;
             }
@@ -1039,7 +1035,7 @@ export function golfHole(spec: GolfSpec): HoleDef {
       const disc = Math.max(3, 0.5 * Math.min(best.ra, best.rc));
       const covering: { x: number; y: number }[] = [];
       for (const [c, r] of all)
-        if (!covering.some((d) => Math.hypot(c - d.x, r - d.y) <= disc)) covering.push({ x: c, y: r });
+        if (!covering.some((d) => hypot(c - d.x, r - d.y) <= disc)) covering.push({ x: c, y: r });
       for (const d of covering)
         flats.push({ x: d.x, y: d.y, r: disc, floor: true, blend: Math.max(2, LAKE_BLEND * swell) });
     }
@@ -1071,11 +1067,11 @@ export function golfHole(spec: GolfSpec): HoleDef {
   for (let n = 0; n < bunkers.green; n++) {
     let placed = false;
     for (let attempt = 0; attempt < TRIES && !placed; attempt++) {
-      const a = Math.atan2(-approach[1], -approach[0]) + (random() - 0.5) * Math.PI * 1.5;
+      const a = atan2(-approach[1], -approach[0]) + (random() - 0.5) * Math.PI * 1.5;
       // on an island the green's land is a ring a few tiles wide, so its bunkers are smaller
       const r0 = greenLake ? between(LAKE.bunker[0], 2, random) : between(2, 3.2, random);
       const dist = GREEN + r0 * 0.55;
-      placed = place('sand', cup[0] + Math.cos(a) * dist, cup[1] + Math.sin(a) * dist, r0, 'frg');
+      placed = place('sand', cup[0] + cos(a) * dist, cup[1] + sin(a) * dist, r0, 'frg');
     }
     if (!placed) throw fail('a greenside bunker', n, bunkers.green);
   }
@@ -1124,7 +1120,7 @@ export function golfHole(spec: GolfSpec): HoleDef {
     const lx = wayTo[0] - tee[0],
       ly = wayTo[1] - tee[1];
     const u = Math.max(0, Math.min(1, ((c - tee[0]) * lx + (r - tee[1]) * ly) / (lx * lx + ly * ly)));
-    return Math.hypot(c - tee[0] - lx * u, r - tee[1] - ly * u);
+    return hypot(c - tee[0] - lx * u, r - tee[1] - ly * u);
   };
 
   // the trees, in clusters in the rough, off the tee and the green and clear of one another's trunks
@@ -1135,8 +1131,8 @@ export function golfHole(spec: GolfSpec): HoleDef {
     const k = r * cols + c;
     // in the rough, not up against the fairway or out of bounds
     if (reach[k] < edge[k] + 1.5 || reach[k] > outer[k] - 1.5) return false;
-    if (Math.hypot(c - tee[0], r - tee[1]) < KEEP.tree || Math.hypot(c - cup[0], r - cup[1]) < KEEP.green) return false;
-    for (const [tc, tr] of placedTrees) if (Math.hypot(c - tc, r - tr) < KEEP.trees) return false;
+    if (hypot(c - tee[0], r - tee[1]) < KEEP.tree || hypot(c - cup[0], r - cup[1]) < KEEP.green) return false;
+    for (const [tc, tr] of placedTrees) if (hypot(c - tc, r - tr) < KEEP.trees) return false;
     for (let dc = -GAP; dc <= GAP; dc++)
       for (let dr = -GAP; dr <= GAP; dr++)
         if (inMap(c + dc, r + dr) && '~s'.includes(grid[r + dr][c + dc])) return false;
@@ -1148,14 +1144,14 @@ export function golfHole(spec: GolfSpec): HoleDef {
   let made: Lane | undefined;
   if (target && wayTo) {
     const lane: Pt = [wayTo[0] - tee[0], wayTo[1] - tee[1]];
-    const laneLength = Math.hypot(lane[0], lane[1]);
+    const laneLength = hypot(lane[0], lane[1]);
     const unit: Pt = [lane[0] / laneLength, lane[1] / laneLength];
     const room = (c: number, r: number) => {
       const w = along(points, world(c, r));
       return (
         w.side * spec.bend < 0 &&
         w.s <= target.s / TILE + WOOD.past / TILE &&
-        Math.hypot(c - tee[0], r - tee[1]) <= laneLength + WOOD.past / TILE
+        hypot(c - tee[0], r - tee[1]) <= laneLength + WOOD.past / TILE
       );
     };
     // the lane's edges first, so the planting round them leaves the lane the width asked
@@ -1250,8 +1246,8 @@ export function golfHole(spec: GolfSpec): HoleDef {
         const t = r * flat.cols + c;
         const lie = flat.lie[t];
         if (lie === LIE.tee || lie === LIE.green) only[t] = 1;
-        else if (Math.hypot(c - cup[0], r - cup[1]) <= GREEN + PLATE.full) only[t] = 1;
-        else if (shelfAt.some(([sc, sr]) => Math.hypot(c - sc, r - sr) <= SHELF.radius)) only[t] = 1;
+        else if (hypot(c - cup[0], r - cup[1]) <= GREEN + PLATE.full) only[t] = 1;
+        else if (shelfAt.some(([sc, sr]) => hypot(c - sc, r - sr) <= SHELF.radius)) only[t] = 1;
       }
   }
   const field =
@@ -1289,7 +1285,7 @@ export function golfHole(spec: GolfSpec): HoleDef {
     let lowest = 0;
     for (let r = 0; r < rows; r++)
       for (let c = 0; c < cols; c++)
-        if (Math.hypot(c - cup[0], r - cup[1]) <= GREEN + PLATE.full) lowest = Math.min(lowest, swells[r * cols + c]);
+        if (hypot(c - cup[0], r - cup[1]) <= GREEN + PLATE.full) lowest = Math.min(lowest, swells[r * cols + c]);
     const top = level + Math.max(0, -(level + lowest));
     const hills = steepestStep(ground, 0, 0, cols - 1, rows - 1);
     // a plate that is tilted stands high or low of the hills where it ends, so a short blend is a slope steeper than a ball
@@ -1304,7 +1300,7 @@ export function golfHole(spec: GolfSpec): HoleDef {
       for (let r = Math.max(0, cup[1] - reach); r <= Math.min(rows - 1, cup[1] + reach); r++)
         for (let c = Math.max(0, cup[0] - reach); c <= Math.min(cols - 1, cup[0] + reach); c++) {
           const t = r * cols + c;
-          const w = 1 - smoothstep(edge, edge + blend, Math.hypot(c - cup[0], r - cup[1]));
+          const w = 1 - smoothstep(edge, edge + blend, hypot(c - cup[0], r - cup[1]));
           out[t] = Math.max(0, ground[t] + (top + swells[t] - ground[t]) * w);
         }
       if (

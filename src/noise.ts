@@ -19,6 +19,7 @@
  * Arithmetic only: it is handed a layout and a spec, and writes nothing.
  */
 import { TILE, slopeAt, type Layout } from './arena';
+import { cos, cosSin, hypot, sin } from './fixedmath';
 
 /** A hash of a seed and a lattice point, 32 bits: every gradient's direction is read from it, so nothing has to remember a state. */
 function hash(seed: number, x: number, y: number): number {
@@ -37,9 +38,10 @@ const fade = (t: number) => t * t * t * (t * (t * 6 - 15) + 10);
  * time. The lattice is one unit across; the caller scales.
  */
 export function gradientNoise(seed: number): (x: number, y: number) => number {
+  const g = new Float64Array(2);
   const dot = (ix: number, iy: number, x: number, y: number) => {
-    const a = (hash(seed, ix, iy) / 4294967296) * Math.PI * 2;
-    return Math.cos(a) * (x - ix) + Math.sin(a) * (y - iy);
+    cosSin((hash(seed, ix, iy) / 4294967296) * Math.PI * 2, g);
+    return g[0] * (x - ix) + g[1] * (y - iy);
   };
   return (x, y) => {
     const ix = Math.floor(x),
@@ -192,7 +194,7 @@ export function noiseGround(
     const level = h[Math.round(cy) * cols + Math.round(cx)];
     for (let ty = 0; ty < rows; ty++)
       for (let tx = 0; tx < cols; tx++) {
-        const w = smoothstep(FLAT.inner, FLAT.outer, Math.hypot(tx - cx, ty - cy));
+        const w = smoothstep(FLAT.inner, FLAT.outer, hypot(tx - cx, ty - cy));
         h[ty * cols + tx] = level + (h[ty * cols + tx] - level) * w;
       }
   }
@@ -211,14 +213,13 @@ export function noiseGround(
     const outer = blend === undefined ? r + FLATS.outer : r + FLATS.inner + blend;
     for (let ty = 0; ty < rows; ty++)
       for (let tx = 0; tx < cols; tx++) {
-        const w = smoothstep(r + FLATS.inner, outer, Math.hypot(tx - x, ty - y));
+        const w = smoothstep(r + FLATS.inner, outer, hypot(tx - x, ty - y));
         h[ty * cols + tx] = levels[i] + (h[ty * cols + tx] - levels[i]) * w;
       }
   });
   flats.forEach(({ x, y, r }, i) => {
     for (let ty = 0; ty < rows; ty++)
-      for (let tx = 0; tx < cols; tx++)
-        if (Math.hypot(tx - x, ty - y) <= r + FLATS.inner) h[ty * cols + tx] = levels[i];
+      for (let tx = 0; tx < cols; tx++) if (hypot(tx - x, ty - y) <= r + FLATS.inner) h[ty * cols + tx] = levels[i];
   });
   // scaled so the steepest step between neighbours is the share asked for of the physics' limit, half a tile
   let steepest = 0,
@@ -231,7 +232,7 @@ export function noiseGround(
       const reach = blend === undefined ? r + FLATS.outer : r + FLATS.inner + blend;
       for (let ty = Math.max(0, Math.floor(y - reach)); ty <= Math.min(rows - 1, Math.ceil(y + reach)); ty++)
         for (let tx = Math.max(0, Math.floor(x - reach)); tx <= Math.min(cols - 1, Math.ceil(x + reach)); tx++)
-          if (Math.hypot(tx - x, ty - y) <= reach) wet[ty * cols + tx] = 1;
+          if (hypot(tx - x, ty - y) <= reach) wet[ty * cols + tx] = 1;
     }
   for (let ty = 0; ty < rows; ty++)
     for (let tx = 0; tx < cols; tx++) {
@@ -272,7 +273,7 @@ function levelGroups(
   const discs = [...plateaus, ...flats.map(({ x, y, r }) => [x, y, r + FLATS.inner] as const)];
   discs.forEach(([x, y, reach], i) => {
     for (let ty = 0; ty < rows; ty++)
-      for (let tx = 0; tx < cols; tx++) if (Math.hypot(tx - x, ty - y) <= reach) owner[ty * cols + tx] = i;
+      for (let tx = 0; tx < cols; tx++) if (hypot(tx - x, ty - y) <= reach) owner[ty * cols + tx] = i;
   });
   const groups: number[][] = discs.map(() => []);
   for (let t = 0; t < owner.length; t++) if (owner[t] >= 0) groups[owner[t]].push(t);
@@ -401,10 +402,10 @@ export function greenContour(layout: Layout, spec: ContourSpec): Float32Array {
     swale = gradientNoise(seed * 7 + 5);
   const [inner, outer] = CONTOUR.cup;
   const angle = tiltAngle(seed);
-  const [ux, uy] = [Math.cos(angle), Math.sin(angle)];
+  const [ux, uy] = [cos(angle), sin(angle)];
   for (let ty = 0; ty < rows; ty++)
     for (let tx = 0; tx < cols; tx++) {
-      const d = Math.hypot(tx - x, ty - y);
+      const d = hypot(tx - x, ty - y);
       if (d >= reach) continue;
       // a plane of slope one: a tile's width of rise a tile
       plane[ty * cols + tx] = TILE * ((tx - x) * ux + (ty - y) * uy) * (1 - smoothstep(reach - 2, reach, d));
@@ -429,7 +430,7 @@ export function greenContour(layout: Layout, spec: ContourSpec): Float32Array {
         layout.originX + ((t % cols) + 0.5) * TILE,
         layout.originY + (Math.floor(t / cols) + 0.5) * TILE,
       );
-      steepest = Math.max(steepest, Math.hypot(sx, sy));
+      steepest = Math.max(steepest, hypot(sx, sy));
     }
     return steepest;
   };
