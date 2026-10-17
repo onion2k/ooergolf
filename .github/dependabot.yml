@@ -1,0 +1,9 @@
+# Updates arrive as AGENTS.md says: Dependabot for security updates only, which are turned on in the repository's
+# settings (Advanced Security, Dependabot security updates), not here; versions by hand, monthly, a commit each. This file
+# is what stops version updates: a limit of nought open at once is none opened (guardrails/checks/dependencies.md).
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule: { interval: monthly }
+    open-pull-requests-limit: 0

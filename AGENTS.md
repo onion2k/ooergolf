@@ -54,8 +54,11 @@ green by moving its baseline.
     node scripts/make-icons.mjs     the app's icons from src/title_sq.png (when the picture or the crop changes)
     node scripts/trace-title.mjs    src/titletrace.json from src/title_sq.png (when the picture changes)
     CI                     none yet: every check runs on this machine only
-    audit                  none yet (see Gates for the threshold it is to hold)
-    updates                no bot yet; versions by hand, monthly, a commit each
+    npm run audit          the installed tree's advisories at the threshold under Gates; needs the network, so by hand until CI
+    npm run licences       every package that ships, its licence on the list under Gates (in check)
+    npm run unused         knip: a dependency nothing imports (in check)
+    npm ci                 the exact install from the lockfile, refused where it and package.json disagree
+    updates                Dependabot for security updates only (on in the repository's settings); versions by hand, monthly, a commit each
 
 `npm install` points git at `.githooks` (`prepare`). `--update` on `pace:check` or `bench`, `npm run perf:update` and
 `npm run look:update` write a baseline again (`look:update` leaves a picture within tolerance as it was;
@@ -221,8 +224,8 @@ Each of the kit's checks, as surveyed on 17 October 2026, and the order the miss
   push protection are on. The code reads no secret, so there is no `.env.example`.
 - **No code scanning, no structure check.** No tight coupling and "only `physics.ts` imports the
   package" are held by words and review, not by a tool.
-- **No dependency audit, licence check or unused-dependency check**; the threshold and licences above are not yet run.
-  `npm audit` finds four advisories in the dev dependencies (one high, two critical), none in what ships.
+- **The audit runs by hand** until CI runs it on every push and on a schedule. This machine's Node is 23.4, which
+  vitest 4 and knip run on but do not list; Node 24 is the supported one.
 - **No headers check** for https://golf.ooer.com/, which sends HSTS and nothing else of the five.
 - **The frame-cost smoke tests are not yet seen green together** since the pictures were written again on 17 October
   2026: eight failed under another session's load (load average 8 to 11) and passed when timed quiet. Run them on a quiet

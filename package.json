@@ -23,6 +23,9 @@
     "pace:check": "esbuild scripts/pace-check.ts --bundle --platform=node --format=esm --outfile=node_modules/.cache/scripts/pace.mjs --log-level=warning && node node_modules/.cache/scripts/pace.mjs --check",
     "seed-search": "esbuild scripts/seed-search.ts --bundle --platform=node --format=esm --outfile=node_modules/.cache/scripts/seed-search.mjs --log-level=warning && node node_modules/.cache/scripts/seed-search.mjs",
     "bench": "esbuild scripts/bench.ts --bundle --platform=node --format=esm --outfile=node_modules/.cache/scripts/bench.mjs --log-level=warning && node node_modules/.cache/scripts/bench.mjs",
+    "audit": "esbuild scripts/deps-check.ts --bundle --platform=node --format=esm --outfile=node_modules/.cache/scripts/deps.mjs --log-level=warning && node node_modules/.cache/scripts/deps.mjs audit",
+    "licences": "esbuild scripts/deps-check.ts --bundle --platform=node --format=esm --outfile=node_modules/.cache/scripts/deps.mjs --log-level=warning && node node_modules/.cache/scripts/deps.mjs licences",
+    "unused": "knip --dependencies",
     "smoke": "playwright test",
     "look": "playwright test smoke/look.spec.ts smoke/models.spec.ts",
     "look:update": "playwright test smoke/look.spec.ts smoke/models.spec.ts --update-snapshots",
@@ -30,7 +33,7 @@
     "perf": "playwright test smoke/perf.spec.ts",
     "perf:update": "PERF_UPDATE=1 playwright test smoke/perf.spec.ts",
     "check:quick": "sh scripts/quick-check.sh",
-    "check": "npm run --silent check:quick && vitest run --project slow --reporter dot --maxWorkers 50% && npm run --silent fuzz && npm run --silent determinism && npm run --silent leaks:check && npm run --silent pace:check && npm run --silent bench && npm run --silent smoke",
+    "check": "npm run --silent check:quick && vitest run --project slow --reporter dot --maxWorkers 50% && npm run --silent licences && npm run --silent unused && npm run --silent fuzz && npm run --silent determinism && npm run --silent leaks:check && npm run --silent pace:check && npm run --silent bench && npm run --silent smoke",
     "prepare": "git config core.hooksPath .githooks"
   },
   "dependencies": {

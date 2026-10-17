@@ -15,7 +15,7 @@ figure of cost below is an estimate and says so, except the quick check's, which
 | lint             | held             | Type-aware rules, and the project's own: no `Math.random` or `console` in `src/`, a reason on every disable; each seen failing (box 3).                                                                                                                                                                                                                                                                                           |
 | code scanning    | missing          | The repo is public, so CodeQL's default setup is free and needs no workflow; it is not on. Data from outside: the page's address (`?seed`, `?rung`, `?title`), the save in local storage.                                                                                                                                                                                                                                         |
 | structure        | missing          | "Only `physics.ts` imports artshape-physics", "`game.ts` knows nothing of the page" and "`main.ts` alone wires everything" are held by words alone.                                                                                                                                                                                                                                                                               |
-| dependencies     | partly           | The lockfile is committed and the two git dependencies are pinned to tags. No audit, licence or unused check, and no update bot. `npm audit` today: 4 advisories, 1 moderate, 1 high (`source-map-js` 1.2.1, under vite's postcss) and 2 critical (one is `tinypool` 1.1.1, under vitest), all in dev dependencies; none in what ships. What ships is MIT (both artshape packages) and ISC (earcut), all allowed.                 |
+| dependencies     | held             | Lockfile committed, `npm ci` exact; audit (no advisories), licences and unused, each seen failing (box 4); Dependabot for security only, to be turned on in settings. The audit runs by hand until CI.                                                                                                                                                                                                                            |
 | unit             | held             | 165 files, 2442 tests, seeded through `newGame(seed)`, with a 30 s timeout and its reason. The commits record mutation checks for new tests.                                                                                                                                                                                                                                                                                      |
 | test API         | held, needs work | `window.game` in `src/debug.ts`, typed, with the smoke tests compiled against it, driving a real pointer. The smoke tests run against the dev server (`playwright.config.ts`'s `webServer` is `vite`), not the built game; only `perf` and `pwa` build `dist`.                                                                                                                                                                    |
 | invariants       | held             | `checkInvariants` and the problems functions in `src/invariants.ts`, called by the fuzzer and by tests, each with tests that make it fire.                                                                                                                                                                                                                                                                                        |
@@ -67,12 +67,19 @@ what it adds to the full check, an estimate in every case.
       a game with no chance hand in `seeded(1)`. Seen failing on a planted file: `Math.random()`, `console.log`, a
       `eslint-disable-next-line` and a `/* eslint-disable */` with no reason, four errors; the same `Math.random()` in
       `scripts/` let through, so the rules reach `src/` alone.
-- [ ] **4. Dependencies.** First the four advisories, by moving vitest and vite (a commit of its own, held to the full
-      check, since a test runner's major is a change). Then `audit` (`npm audit --audit-level=high`), `licences`
-      (license-checker-rseidelsohn, production only, the allowed list in `AGENTS.md`) and `unused` (knip), each a new dev
-      dependency taken in on purpose, and Dependabot for security updates only. Proved by a hand-edited lockfile, an old
-      `source-map-js` pinned back, a GPL package added and an import removed. 10 to 20 s, in CI, since the audit needs the
-      network.
+- [x] **4. Dependencies.** Done 17 October 2026. The four advisories went first, each pin in a commit of its own:
+      vitest ^3.2.7 to ^4.1.11 (tinypool's two critical, @vitest/mocker's moderate; not 5, which does not run on this
+      machine's Node 23.4, and not 4.1.12, two days old; the lockfile written by npm 11.21.0 through npx, since npm 10.9.2
+      crashed on vitest 4's optional peers), and source-map-js 1.2.1 to 1.2.2 in the lockfile (high). `npm audit` finds
+      nothing. `npm run audit` and `npm run licences` are `scripts/deps-check.ts` over the judgements in `scripts/deps.ts`,
+      which have six tests in `test/deps.test.ts`, each seen failing a fault put in it; the licences are a short script and
+      not license-checker-rseidelsohn, whose version 5 asks for Node 24 and npm 11. `npm run unused` is knip 6.39.0 (taken
+      in on purpose: ISC, kept by its author and released this month). `.github/dependabot.yml` stops version updates. Seen
+      failing: `npm ci` on a lockfile behind package.json, "not in sync"; the lockfile from before source-map-js moved,
+      audited, "fails: source-map-js, high"; a GPL package that ships, "copyleft: GPL-3.0"; `left-pad` listed and not
+      imported, named by knip; the audit at `--registry http://127.0.0.1:9`, "no report", exit 1. Licences and unused are
+      in `npm run check` (under a second); the audit needs the network and waits for CI (box 9). Left to the user: turning on
+      Dependabot security updates in the repository's settings.
 - [ ] **5. Structure.** dependency-cruiser: the logic (`game`, `arena`, `invariants`, `autopilot`, `planner`, `golf`, and
       the rest `AGENTS.md`'s _Layout_ names) imports none of `main`, `scene`, `hud`, `ground`, `look` or artshape-render;
       only `physics.ts` imports artshape-physics; nothing in a circle. Proved by a planted import for each, and each
