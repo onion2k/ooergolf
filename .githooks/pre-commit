@@ -1,5 +1,16 @@
 #!/bin/sh
-# Everything quick before a commit: formatting, types, lint and the unit tests.
-# The gates take longer; run `npm run check` for those too.
-# Skip in an emergency with `git commit --no-verify`.
+# Everything quick before a commit: a secret scan of what is staged, then formatting, types, lint and the quick unit
+# tests. The gates take longer; run `npm run check` for those too.
+# Skip in an emergency with `git commit --no-verify`, and say so.
+
+# A secret is cheapest to stop before its commit exists: once pushed it is in every clone, whatever is done after
+# (guardrails/checks/secrets.md). gitleaks 8 is a program of its own, not an npm package, so a machine without it is
+# told how to get it rather than let through: a scan that cannot run passes in silence.
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo 'pre-commit: gitleaks is not installed, so what is staged cannot be scanned for secrets.' >&2
+  echo 'Install gitleaks 8 (brew install gitleaks, or https://github.com/gitleaks/gitleaks/releases) and commit again.' >&2
+  exit 1
+fi
+gitleaks git --pre-commit --redact --staged --verbose --no-banner --log-level warn || exit 1
+
 exec npm run --silent check:quick
