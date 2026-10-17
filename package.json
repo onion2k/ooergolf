@@ -29,8 +29,8 @@
     "look:metrics": "playwright test smoke/look-metrics.spec.ts",
     "perf": "playwright test smoke/perf.spec.ts",
     "perf:update": "PERF_UPDATE=1 playwright test smoke/perf.spec.ts",
-    "check:quick": "prettier --check . --log-level warn && npm run --silent typecheck && eslint . && vitest run --reporter dot",
-    "check": "npm run --silent check:quick && npm run --silent fuzz && npm run --silent determinism && npm run --silent leaks:check && npm run --silent pace:check && npm run --silent bench && npm run --silent smoke",
+    "check:quick": "sh scripts/quick-check.sh",
+    "check": "npm run --silent check:quick && vitest run --project slow --reporter dot --maxWorkers 50% && npm run --silent fuzz && npm run --silent determinism && npm run --silent leaks:check && npm run --silent pace:check && npm run --silent bench && npm run --silent smoke",
     "prepare": "git config core.hooksPath .githooks"
   },
   "dependencies": {
