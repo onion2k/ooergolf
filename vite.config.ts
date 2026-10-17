@@ -1,8 +1,9 @@
 import { build as bundle } from 'esbuild';
-import { readdirSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, relative } from 'node:path';
 import { defineConfig, type Plugin } from 'vite';
+import { headersFile, headersFor } from './scripts/headers';
 import { assetsToCache } from './src/offline';
 
 /**
@@ -52,8 +53,23 @@ function worker(): Plugin {
   };
 }
 
+/**
+ * What the served game tells the browser to refuse, written as the build closes: `dist/_headers`, which Netlify serves
+ * every response with, its policy hashing the built page's own inline stylesheet (`scripts/headers.ts` says the rest).
+ * A generated file, never edited, and not in `public/`, so the service worker does not keep it.
+ */
+function headers(): Plugin {
+  return {
+    name: 'ooergolf-headers',
+    apply: 'build',
+    closeBundle() {
+      writeFileSync('dist/_headers', headersFile(headersFor(readFileSync('dist/index.html', 'utf8'))));
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [worker()],
+  plugins: [worker(), headers()],
   server: {
     port,
     strictPort: true,

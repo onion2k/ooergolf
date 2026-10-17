@@ -57,6 +57,7 @@ green by moving its baseline.
     npm run audit          the installed tree's advisories at the threshold under Gates; needs the network, so by hand until CI
     npm run licences       every package that ships, its licence on the list under Gates (in check)
     npm run unused         knip: a dependency nothing imports (in check)
+    npm run headers:live   the deployed page's response held to the headers' rules (after a deploy; needs the network)
     npm ci                 the exact install from the lockfile, refused where it and package.json disagree
     updates                Dependabot for security updates only (on in the repository's settings); versions by hand, monthly, a commit each
 
@@ -230,7 +231,9 @@ Each of the kit's checks, as surveyed on 17 October 2026, and the order the miss
   review: lint holds only which side of the game and its picture a module is on.
 - **The audit runs by hand** until CI runs it on every push and on a schedule. This machine's Node is 23.4, which
   vitest 4 and knip run on but do not list; Node 24 is the supported one.
-- **No headers check** for https://golf.ooer.com/, which sends HSTS and nothing else of the five.
+- **The deployed headers are read by hand,** with `npm run headers:live` after a deploy, until CI does. The build writes
+  `dist/_headers` (`scripts/headers.ts`), and `smoke/headers.spec.ts` boots the built game under it; that Netlify serves
+  the file as written is seen only on the live site.
 - **The frame-cost smoke tests are not yet seen green together** since the pictures were written again on 17 October
   2026: eight failed under another session's load (load average 8 to 11) and passed when timed quiet. Run them on a quiet
   machine before trusting a frame figure.

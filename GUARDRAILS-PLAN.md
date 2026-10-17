@@ -25,7 +25,7 @@ figure of cost below is an estimate and says so, except the quick check's, which
 | bounded          | held             | `scripts/leaks.ts`, ceilings and the steady judgement (`grew`), each tested in `test/leaks.test.ts`.                                                                                                                                                                                                                                                                                                                              |
 | gates            | partly           | Budgets and baselines for perf, bench and pace. The pace and leaks judgements are unit-tested (`moved`, `grew`); the bench's and perf's judgements are written inline and are not. No record of the bench seen failing a physics made slower on purpose.                                                                                                                                                                          |
 | look             | held             | `smoke/look.spec.ts` against `smoke/screens/`, and `look:metrics` floors. This GPU's pictures alone.                                                                                                                                                                                                                                                                                                                              |
-| headers          | missing          | Netlify serves https://golf.ooer.com/ with `strict-transport-security` alone: no Content Security Policy, `frame-ancestors`, `X-Frame-Options`, `nosniff` or `Referrer-Policy`. No `public/_headers` or `netlify.toml`.                                                                                                                                                                                                           |
+| headers          | held             | `dist/_headers` written by the build; `smoke/headers.spec.ts` boots the built game under it; `npm run headers:live` reads the deployed page. Each seen failing (box 6).                                                                                                                                                                                                                                                           |
 | verification     | partly           | A run of nothing fails (Vitest and Playwright both refuse an empty run; the fuzzer counts). The full check runs on this machine alone, and the smoke tests against the dev server.                                                                                                                                                                                                                                                |
 | CI               | cannot apply yet | No workflows. It gains this check with its first.                                                                                                                                                                                                                                                                                                                                                                                 |
 | landing          | partly           | Both hooks, git pointed at them by `prepare`; `main` is unprotected, so a change goes straight to it. The kit's `commit-msg` refuses this project's summaries (no full stop, some over 100 characters) until `/commit` or the hook gives way. Four branches merged and left (`claude/festive-dubinsky-4571bc` here; `ccr-7967f86a-owq4mh`, `ccr-8ad9fef3-ii7t91`, `ccr-9356eed0-d2lcns` on the remote), and no script lists them. |
@@ -92,11 +92,20 @@ what it adds to the full check, an estimate in every case.
       `./models/palette`, `arena.ts` importing artshape-physics and `scene.ts` importing `./main`, each named by its rule; a
       type of the renderer let through; the cycle put back, named "arena.ts -> zones.ts -> arena.ts". Every name in
       `PICTURE` is a file. In the quick check, at no cost to see.
-- [ ] **6. Headers.** `public/_headers` for Netlify, with a CSP that lets the WebGPU page and its service worker run and
-      allows no `'unsafe-inline'` script, `frame-ancestors 'none'`, `X-Frame-Options`, `nosniff` and a `Referrer-Policy`;
-      and a test that reads them from a response. Vite's preview does not serve `_headers`, so the test reads the file
-      the build copies into `dist` and a second reads the live site after a deploy. Proved by `'unsafe-inline'` added
-      and `frame-ancestors` taken out. About 5 s.
+- [x] **6. Headers.** Built 17 October 2026; seen on the live site once deployed. The policy is said once, in
+      `scripts/headers.ts`, and the build writes it into `dist/_headers` (a plugin in `vite.config.ts`, as the service
+      worker is): `default-src`, `script-src`, `connect-src`, `worker-src` and `manifest-src` `'self'`, `style-src 'self'`
+      and the built page's one inline stylesheet by its hash (worked out each build), `img-src 'self' data:` for the
+      stylesheet's three SVG masks, `object-src 'none'`, `base-uri 'self'`, `form-action 'none'` and `frame-ancestors 'none'`;
+      with `X-Frame-Options: DENY`, `nosniff` and `Referrer-Policy: strict-origin-when-cross-origin`. HSTS is
+      Netlify's. What the page loads was read first: one module script of its own, the one stylesheet, no WebAssembly, no
+      evaluation, nothing from another origin, and the live page the build to the byte, nothing injected.
+      `test/headers.test.ts` holds the judgement (five tests); `smoke/headers.spec.ts` serves the built game with the
+      file's headers through Vite's preview and boots it under them, the title, a drive on The Links, the shop and the
+      service worker, failing on any refusal the browser reports. Seen failing: `'unsafe-inline'` in `script-src` and
+      `frame-ancestors` taken out, each "the page as served"; the build not writing the file, "ENOENT dist/_headers"; the
+      stylesheet's hash and `data:` images taken out, "refused by the policy". `npm run headers:live` against
+      https://golf.ooer.com/ before the deploy: "4 wrong", exit 1. About 7 s in the smoke run.
 - [ ] **7. The built game under test.** The smoke tests run against `dist` through Vite's preview, built first, as
       `perf` already does. Proved by a stale `dist` served and refused. 15 to 25 s for the build.
 - [ ] **8. The gates' judgements.** The bench's and perf's comparisons moved out into functions with unit tests over and

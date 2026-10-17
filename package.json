@@ -26,6 +26,7 @@
     "audit": "esbuild scripts/deps-check.ts --bundle --platform=node --format=esm --outfile=node_modules/.cache/scripts/deps.mjs --log-level=warning && node node_modules/.cache/scripts/deps.mjs audit",
     "licences": "esbuild scripts/deps-check.ts --bundle --platform=node --format=esm --outfile=node_modules/.cache/scripts/deps.mjs --log-level=warning && node node_modules/.cache/scripts/deps.mjs licences",
     "unused": "knip --dependencies",
+    "headers:live": "esbuild scripts/headers-check.ts --bundle --platform=node --format=esm --outfile=node_modules/.cache/scripts/headers.mjs --log-level=warning && node node_modules/.cache/scripts/headers.mjs",
     "smoke": "playwright test",
     "look": "playwright test smoke/look.spec.ts smoke/models.spec.ts",
     "look:update": "playwright test smoke/look.spec.ts smoke/models.spec.ts --update-snapshots",
