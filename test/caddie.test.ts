@@ -362,6 +362,10 @@ describe('when the caddie speaks', () => {
     expect(talk.said.button).toBe('Add top spin');
     expect(talk.take(game)).toBe(true);
     expect([game.inHand.id, game.shape, game.spin]).toEqual(['driver', 0, 1]);
+    // the spin in hand begins a new look, whose rolls take many frames: the tip taken is not left up while it runs
+    talk.frame(game, NONE);
+    expect(talk.looking.done, 'a look under way').toBe(false);
+    expect(talk.said.text, 'said the frame after its button').toBeNull();
     talkUntilDone(talk, game);
     expect(talk.said.text).toBeNull();
     expect(game.shoot(Math.PI / 2, 1)).toBe(true);

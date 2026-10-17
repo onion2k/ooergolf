@@ -682,7 +682,11 @@ export class CaddieTalk {
     this.say(null);
   }
 
-  /** The tip's button: its club, shape and spin put in hand, as the bag's buttons would. Whether there was a tip to take. */
+  /**
+   * The tip's button: its club, shape and spin put in hand, as the bag's buttons would, and the tip said no more. Whether
+   * there was a tip to take. What is in hand has changed, so a new look begins next frame, and `frame` says nothing while a
+   * look runs: put away here, the tip is gone at once, and not left up for the frames a look at spin takes.
+   */
   take(game: Game): boolean {
     const tip = this.offered;
     if (!tip || this.said.text === null || this.said.button === null) return false;
@@ -690,6 +694,7 @@ export class CaddieTalk {
     game.setShape(tip.shape);
     game.setSpin(tip.spin);
     this.asked = false;
+    this.say(null);
     return true;
   }
 
