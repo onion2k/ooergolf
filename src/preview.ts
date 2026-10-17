@@ -264,9 +264,24 @@ export class Previewer {
    * the flight has been read, so nothing of it moves, and it ends where the game itself puts the ball, being the game.
    */
   private carryOn(p: Preview, from: { x: number; y: number }) {
+    if (this.beginRest(p, from)) return;
+    while (!this.stepRest(GHOST_FRAMES));
+  }
+
+  /** The rest being worked out a slice at a time: the preview it is for, where the shot was struck from, and how far it has gone. */
+  private resting: Preview | null = null;
+  private readonly restFrom = { x: 0, y: 0 };
+  private restFrame = 0;
+
+  /**
+   * The rest of the last flight run (`result`), begun but not run: `stepRest` runs it a slice of frames at a time, so a caller with a
+   * frame to keep (the caddie) spreads a long roll over several, and it comes to the very rest `carryOn` does in one go, frame for
+   * frame. Whether it is done already: a ball lost or holed at its first landing has no rest past it. Nothing else may be run on
+   * this previewer until it is done.
+   */
+  beginRest(p: Preview, from: { x: number; y: number }): boolean {
     const r = p.rest;
-    const g = this.rehearsal;
-    const { world, ball, layout } = g;
+    this.resting = null;
     // a ball lost or holed at its first landing has no rest past it
     if (p.end !== 'landed' || !this.told.landed) {
       r.shown = true;
@@ -276,40 +291,59 @@ export class Previewer {
       r.carry = p.carry;
       r.lie = p.lie;
       r.settled = true;
-      return;
+      return true;
     }
-    const told = this.told;
-    const push = (x: number, y: number, z: number) => {
-      const k = r.n++;
-      r.points[k * 3] = x;
-      r.points[k * 3 + 1] = y;
-      r.points[k * 3 + 2] = z;
-      r.length[k] = k
-        ? r.length[k - 1] + Math.hypot(x - r.points[k * 3 - 3], y - r.points[k * 3 - 2], z - r.points[k * 3 - 1])
-        : 0;
-    };
     r.shown = true;
-    push(p.x, p.y, p.z);
+    r.n = 0;
+    this.pushRest(r, p.x, p.y, p.z);
+    this.resting = p;
+    this.restFrom.x = from.x;
+    this.restFrom.y = from.y;
+    this.restFrame = 0;
+    return false;
+  }
+
+  /** At most `frames` more frames of the rest begun by `beginRest`; whether it is done (or none was begun). */
+  stepRest(frames: number): boolean {
+    const p = this.resting;
+    if (!p) return true;
+    const r = p.rest;
+    const g = this.rehearsal;
+    const { world, ball } = g;
+    const told = this.told;
     let how: 'rest' | 'holed' | 'water' | 'out' = 'rest';
     let settled = false;
-    for (let f = 0; f < GHOST_FRAMES; f++) {
+    let over = false;
+    for (let k = 0; k < frames && this.restFrame < GHOST_FRAMES; k++) {
+      const f = this.restFrame++;
       g.step(FRAME);
       if (told.splash || told.out) {
         how = told.splash ? 'water' : 'out';
-        settled = true;
+        settled = over = true;
         break;
       }
       if (g.phase !== 'play') {
         how = 'holed';
-        settled = true;
+        settled = over = true;
         break;
       }
       if (g.ready) {
-        settled = true;
+        settled = over = true;
         break;
       }
-      if (f % GHOST_EVERY === GHOST_EVERY - 1) push(world.x[ball], world.y[ball], world.z[ball]);
+      if (f % GHOST_EVERY === GHOST_EVERY - 1) this.pushRest(r, world.x[ball], world.y[ball], world.z[ball]);
     }
+    if (!over && this.restFrame < GHOST_FRAMES) return false;
+    this.endRest(p, how, settled);
+    return true;
+  }
+
+  /** The rest finished: how it ended, where, and what ground it is on. */
+  private endRest(p: Preview, how: 'rest' | 'holed' | 'water' | 'out', settled: boolean) {
+    const r = p.rest;
+    const { world, ball, layout } = this.rehearsal;
+    const told = this.told;
+    this.resting = null;
     r.end = how;
     r.settled = settled;
     if (how === 'holed') [r.x, r.y] = [layout.cup.x, layout.cup.y];
@@ -319,9 +353,19 @@ export class Previewer {
     // the last point of the path is the rest itself, which the frame it was found in went a little past
     const last = r.n - 1;
     const gap = Math.hypot(r.x - r.points[last * 3], r.y - r.points[last * 3 + 1], z - r.points[last * 3 + 2]);
-    if (gap > 1e-6 && r.n < r.points.length / 3) push(r.x, r.y, z);
-    r.carry = Math.hypot(r.x - from.x, r.y - from.y);
+    if (gap > 1e-6 && r.n < r.points.length / 3) this.pushRest(r, r.x, r.y, z);
+    r.carry = Math.hypot(r.x - this.restFrom.x, r.y - this.restFrom.y);
     r.lie = lieAt(layout, r.x, r.y);
+  }
+
+  private pushRest(r: Rest, x: number, y: number, z: number) {
+    const k = r.n++;
+    r.points[k * 3] = x;
+    r.points[k * 3 + 1] = y;
+    r.points[k * 3 + 2] = z;
+    r.length[k] = k
+      ? r.length[k - 1] + Math.hypot(x - r.points[k * 3 - 3], y - r.points[k * 3 - 2], z - r.points[k * 3 - 1])
+      : 0;
   }
 
   /**

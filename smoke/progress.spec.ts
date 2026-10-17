@@ -1653,6 +1653,31 @@ test.describe('the caddie', () => {
     expect(problems).toEqual([]);
   });
 
+  test('offers top spin to a drive that comes up short on a long hole, and its button puts the spin in hand', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true, screen: true });
+    await page.evaluate(() => {
+      window.game!.chooseCourse('The Meadow');
+      window.game!.step(60);
+    });
+    // the look at spin runs its rolls to rest a slice a frame, so it is given the frames a long one takes
+    await onHole(page, FLAT.road);
+    await page.evaluate(() => window.game!.step(120));
+    await expect(page.locator('#caddie')).toBeVisible();
+    await expect(page.locator('#caddieText')).toHaveText(
+      /^Top spin runs the driver on to \d+ yd, \d+ yd from the pin\.$/,
+    );
+    await expect(page.locator('#caddieTry')).toHaveText('Add top spin');
+    await page.locator('#caddieTry').click();
+    await page.evaluate(() => window.game!.step(10));
+    expect((await page.evaluate(() => window.game!.state())).spin).toBe(1);
+    await expect(page.locator('#spinButton')).toHaveText('Spin: Top');
+    await expect(page.locator('#caddie')).toBeHidden();
+    expect(problems).toEqual([]);
+  });
+
   test('is nowhere on a hole of minigolf, under the start screen, or with no tip to give', async ({ page }) => {
     await start(page, { seed: 11, paused: true, screen: true });
     await expect(page.locator('#caddie')).toBeHidden();

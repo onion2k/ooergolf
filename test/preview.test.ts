@@ -13,7 +13,8 @@ import { Previewer } from '../src/preview';
 import { Scene } from '../src/scene';
 import { Progress, memoryStore } from '../src/progress';
 import { LIE } from '../src/surfaces';
-import { DT, field, golfGame } from './helpers';
+import { DT, field, golfGame, levelHole } from './helpers';
+import { GHOST_FRAMES } from '../src/preview';
 
 const LOFTED = BAG.filter((c) => c.loft > 0);
 const ROWS = 200,
@@ -508,6 +509,44 @@ describe('the roll of a putt as the scene draws it', () => {
       const [x, y, z] = [dots.matrices[k * 16 + 12], dots.matrices[k * 16 + 13], dots.matrices[k * 16 + 14]];
       expect(z - heightAt(game.layout, x, y), `dot ${k}`).toBeGreaterThan(0);
       expect(z - heightAt(game.layout, x, y), `dot ${k}`).toBeLessThan(0.6);
+    }
+  });
+});
+
+describe('the rest run a slice at a time', () => {
+  it('comes to the very rest the rest run in one go comes to, point for point, however thin the slices', () => {
+    const hole = levelHole({ name: 'Slices', par: 4, length: 330 });
+    for (const spin of [-1, 0, 1]) {
+      const { game } = golfGame(hole);
+      for (let f = 0; f < 600 && !game.ready; f++) game.step(DT);
+      const from = { x: game.world.x[game.ball], y: game.world.y[game.ball] };
+      const one = new Previewer(game);
+      let p = one.run(from, bagClub('7-iron'), NORTH, 1, 0, spin);
+      expect(one.beginRest(p, from)).toBe(false);
+      while (!one.stepRest(GHOST_FRAMES));
+      const whole = {
+        x: p.rest.x,
+        y: p.rest.y,
+        end: p.rest.end,
+        lie: p.rest.lie,
+        n: p.rest.n,
+        points: [...p.rest.points.slice(0, p.rest.n * 3)],
+      };
+      for (const slice of [1, 7, 60]) {
+        p = one.run(from, bagClub('7-iron'), NORTH, 1, 0, spin);
+        one.beginRest(p, from);
+        let slices = 0;
+        while (!one.stepRest(slice)) slices++;
+        expect(slices).toBeGreaterThan(0);
+        expect({
+          x: p.rest.x,
+          y: p.rest.y,
+          end: p.rest.end,
+          lie: p.rest.lie,
+          n: p.rest.n,
+          points: [...p.rest.points.slice(0, p.rest.n * 3)],
+        }).toEqual(whole);
+      }
     }
   });
 });

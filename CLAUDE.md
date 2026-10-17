@@ -234,8 +234,9 @@ today, and what the next features must hand it:
   On golf each ball come to rest is held to the zones' lie (`lieProblems`, `checked['lie at rest']`, which a test holds above nothing),
   and the fly-in to every hole is held to `flyInProblems` every frame (`checked.flying` counts the frames it was).
   It hears the caddie out (`hear the caddie`, on a stream of its own, `caddier`): the look run a preview a frame as the page runs it,
-  asked for now and then, its tip held to `caddieProblems`, its button pressed (the club and shape in hand exactly as said) and put
-  back as it was, and put away; the game, its chance and its clock untouched (`checked['caddie heard']`).
+  asked for now and then, its tip held to `caddieProblems`, its button pressed (the club, shape and spin in hand exactly as said) and
+  put back as it was, and put away; the game, its chance and its clock untouched (`checked['caddie heard']`, and each kind of tip and
+  each spin counted, `checked["caddie's back spin"]`).
   On a hole with a wood's lane it drives along the lane from the tee, slipped, and on a hole with land wholly in water it
   plays the shortest club that carries to the middle of it from wherever the ball lies (each on a chance of its own, so no
   other run changes, and both count in `done`).
@@ -271,8 +272,8 @@ today, and what the next features must hand it:
   than the club that struck it could send it and a fall from the highest
   ground make it, never at rest out of bounds or on water and never inside a tree's trunk
   or canopy; each landing told is of the live ball, where it is, and at
-  least `LANDING.least` hard (`landingProblems`). And the caddie's tip is a lofted club of the bag and a shape of the three, not what is in hand, with words
-  and a button, and its shot tried again comes down clear where it said (`caddieProblems`, not in `checkInvariants`, since it needs
+  least `LANDING.least` hard (`landingProblems`). And the caddie's tip is a lofted club of the bag, a shape and a spin of the three, not what is in hand, with words
+  and a button, and its shot tried again comes down clear where it said, and with a spin rests somewhere to play from (`caddieProblems`, not in `checkInvariants`, since it needs
   the caddie; called by the fuzzer). A preview is a flight from
   the ball to where it says it came down, in numbers, growing in length, no
   further than the club goes and a fall adds, with a spread that is a spread
@@ -336,7 +337,7 @@ today, and what the next features must hand it:
 - **Leaks:** ten minutes of the autopilot playing round after round, on The
   Meadow and again on each golf course (`GOLF_COURSES` in `scripts/leaks.ts`: the six, under
   the Links' ceilings but for the save's bytes, 10,800 since 16 October 2026 for eighty-one holes' bests, the career's nine
-  course records, both tours' seasons at their longest, an event kept and the caddie's two counts at their limit (10,194 measured, held to the byte by `test/leaks.test.ts`); `leaks:check` queues the seven, an hour and ten minutes, and `--on` narrows a run to one kind for a short look; a test holds that a hole
+  course records, both tours' seasons at their longest, an event kept and the caddie's three counts at their limit (10,203 measured, held to the byte by `test/leaks.test.ts`); `leaks:check` queues the seven, an hour and ten minutes, and `--on` narrows a run to one kind for a short look; a test holds that a hole
   with a lane is collectable, so `laneOf`'s cache keeps nothing alive, and one each that `zonesOf`'s and `pondOf`'s tables are weak; the
   arena's reused ground weights are emptied at 256, held by a test, and nothing of the new caches is kept for a game's life, so
   nothing was added to `scripts/leaks.ts`). The card is emptied each round and
@@ -1085,8 +1086,20 @@ minigolf: true }`, read through `oceanFor`) is the one switch: `waterBed` and `s
   help, and on a phone where the drag's help goes (the two are never up at once), never over the bag, since the ball rests just
   above the bag on every screen; it is put away while a drag is held (`data-held`). It speaks in career events too (the user's
   choice: it says only what trying the clubs in the preview would show). Not on minigolf, on the putting green or with the putter
-  in hand. Not done: spin (which needs the preview to the rest), the wind and the putt in words, and a tip for a shot the player
-  has aimed rather than the line of play.
+  in hand. **Spin** (17 October 2026): once the club and the shape are settled, the shot they came to (the tip's, or the club in
+  hand's where it came down clear) is struck flat, back and top and each carried on to where it rests, and `bestSpin` chooses:
+  back spin where a shot that lands on the green rolls off it and back spin holds it, and otherwise whichever of back and top comes
+  to a good rest (fairway, cut, green, tee or the cup) `CADDIE.nearer` (10) yards nearer the pin, or keeps out of the water, out of
+  bounds or sand that flat rolls into; added to the tip there is ("…with back spin") or a tip of its own, kind `spin` ("Add top
+  spin"), never the spin already in hand, and a tip whose flat roll ends in trouble that no spin saves is dropped. Measured before
+  it was built over two rounds of each golf course: an approach that lands on the green rolls off it about 85 per cent of the time
+  flat, and back spin holds it in about 70 per cent of those; top spin leaves a short shot five yards and more nearer on about a
+  third of approaches, mostly drives and lay-ups. A roll to rest is 4 ms on average and 52 at worst in one go, so the `Previewer`
+  runs it a slice at a time (`beginRest`, `stepRest`, which come to the very rest `carryOn` does, point for point, held by a test)
+  and the caddie runs `CADDIE.slice` (60) frames a step, never a flight and a slice in one: 1.0 ms a step at the median, 3.1 at the
+  ninety-ninth percentile and 15 at worst (a flight), about ten steps a look and 17 at most on the tees of every course. Spin has
+  its own count in the save (`caddie.spin`) and goes quiet as the others do, and `Game.struckSpin` is the spin a stroke was struck
+  with. Not done: the wind and the putt in words, and a tip for a shot the player has aimed rather than the line of play.
 - `src/hud.ts` is the words over the course: the hole and strokes, the
   score's name when a hole is done, the card, the coins and gems, the
   shop, and the start screen, shown at boot and from the card's Courses button, which since 15 October 2026 is the

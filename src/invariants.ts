@@ -811,11 +811,16 @@ export function planProblems(game: Game, plan: Plan): string[] {
 }
 
 /**
- * The caddie's tip, when it has one: a lofted club of the bag and a shape of a draw, straight or a fade, something other than
- * what is in hand, with words and a button, and its own shot, tried again from where the ball lies, coming down clear where
- * the tip said it does, to the digit, since a preview is the game's physics struck true and spends no chance.
+ * The caddie's tip, when it has one: a lofted club of the bag, a shape of a draw, straight or a fade and a spin of back, flat or
+ * top, something other than what is in hand (a tip of spin with a spin), with words and a button, and its own shot, tried again from where the ball lies, coming down clear where
+ * the tip said it does, to the digit, since a preview is the game's physics struck true and spends no chance; and a tip with a
+ * spin coming to rest somewhere to play from, out of the water, out of bounds and the sand.
  */
-export function caddieProblems(caddie: Caddie, tip: Tip | null, inHand: { club: string; shape: number }): string[] {
+export function caddieProblems(
+  caddie: Caddie,
+  tip: Tip | null,
+  inHand: { club: string; shape: number; spin: number },
+): string[] {
   if (!tip) return [];
   const problems: string[] = [];
   const club = BAG.find((c) => c.id === tip.club);
@@ -823,8 +828,12 @@ export function caddieProblems(caddie: Caddie, tip: Tip | null, inHand: { club: 
     problems.push(`the caddie's tip names ${tip.club}, which is not a lofted club of the bag`);
   if (tip.shape !== -1 && tip.shape !== 0 && tip.shape !== 1)
     problems.push(`the caddie's tip has a shape of ${tip.shape}`);
-  if (tip.club === inHand.club && tip.shape === Math.sign(inHand.shape))
-    problems.push(`the caddie's tip is what is in hand already: the ${tip.club}, shaped ${tip.shape}`);
+  if (tip.spin !== -1 && tip.spin !== 0 && tip.spin !== 1) problems.push(`the caddie's tip has a spin of ${tip.spin}`);
+  if (tip.club === inHand.club && tip.shape === Math.sign(inHand.shape) && tip.spin === Math.sign(inHand.spin))
+    problems.push(
+      `the caddie's tip is what is in hand already: the ${tip.club}, shaped ${tip.shape} and spun ${tip.spin}`,
+    );
+  if (tip.kind === 'spin' && tip.spin === 0) problems.push("the caddie's tip of spin has none");
   if (!tip.text || !tip.button)
     problems.push(`the caddie's tip has no words or no button: "${tip.text}", "${tip.button}"`);
   if (!(tip.carry > 0) || !Number.isFinite(tip.angle))
@@ -837,6 +846,12 @@ export function caddieProblems(caddie: Caddie, tip: Tip | null, inHand: { club: 
     );
   if (Math.abs(again.carry - tip.carry) > 1e-6)
     problems.push(`the caddie's tip said it carries ${tip.carry}, and tried again it carries ${again.carry}`);
+  // a spin is offered for where the ball rests, so its rest is held: somewhere to play from, and come to
+  const r = again.rest;
+  if (tip.spin !== 0 && !(r.shown && r.settled && (r.end === 'holed' || (r.end === 'rest' && r.lie !== LIE.sand))))
+    problems.push(
+      `the caddie's tip of ${tip.spin < 0 ? 'back' : 'top'} spin, tried again, rests ${r.shown ? `${r.end} on lie ${r.lie}${r.settled ? '' : ', still rolling'}` : 'nowhere'}`,
+    );
   return problems;
 }
 
