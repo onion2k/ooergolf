@@ -1,0 +1,1397 @@
+# Ooergolf: how it works
+
+The reference behind `AGENTS.md`: what each course is, what each gate holds today, how the code is laid out module by
+module, the test API in full, and what is not there yet. `AGENTS.md` says how the game is changed and points here; read
+the section for the area a change touches before changing it. A figure here is as of the date beside it, and the file a
+tool holds it in is the one to trust.
+
+## The courses
+
+What is in `src/` is a round of
+a course, chosen on a start screen: holes drawn as maps, each played from
+its tee to its cup with a drag pulled back and let go, scored against par,
+and the card at the end. Nine courses are here, on artshape-physics v0.8.0, three of minigolf and six of golf.
+The Meadow is nine holes of grass, rail, sand, water, raised grass, posts,
+sliding barriers, a windmill and a conveyor, with a green that lets a putt
+die, a rail and obstacles that bounce, posts that throw a ball back faster
+than it came, and a cup with a rim. The Pinball Shed is nine holes of banks and bounces, where the rail is a
+cushion, kickers throw, bumpers slide and a flipper is to be timed. The Waterworks is nine holes of water and timing,
+streams that carry a ball and never sink it, and barriers, a windmill and a bumper to time. All three are drawn by hand.
+(The Fair, a third course of nine holes with something that moves on each, went on 8 October 2026 as one course too
+many: its best five, Dodgems and Shooting Gallery to the Shed and Traffic, Ferris and The Big Wheel to the Waterworks,
+were shared between the other two, and nine holes went, Plinko and The Funnel, Turnstile, Whack-a-mole, Carousel and The
+Lift, Mill Pond, The Island Green and The Lock, each a repeat of another hole or a compromise. The Hills, The Downs and The Moors, courses of sloping ground with little
+or nothing on it, were scrapped on 3 October 2026 as dull and these three replaced them; four of The Hills stay as test
+holes in `test/hills.ts`, and the generator that made The Moors, `src/open.ts`, stays for the two test holes
+`smoke/bighole.ts` makes with it.)
+The Links is the first course of golf proper: nine holes at a yard a unit, each a tee, a fairway, rough
+and a green, played with a bag of eight clubs that loft the ball into the air, a par three to a par
+five, made by a generator on hills, with bunkers, water, trees and out of
+bounds, from the plan in `~/.claude/plans/ooergolf-proper-golf.md` (which is out of date in naming The Range; stage 6
+of six is built: a player sees where a shot lands, shapes it, spins it and plays it
+in the wind, and putts on greens with a first cut round them, a tilt and swells in them, a speed of their
+own, and arrows and words that show the break). The golf goes in
+a feature at a time, in the order `DESIGN.md` gives.
+The Fells and The Isles are the two hard courses of golf, built from `~/.claude/plans/ooergolf-two-hard-courses.md` on
+5 October 2026, each nine holes made by `golfHole` from specs, as The Links is, and each chosen on the start screen after it.
+**The Heath, The Woods and The Old Course** came on 14 October 2026 from `~/.claude/plans/fizzy-wandering-whisper.md` (the user
+asked for a fourth course, was offered three, and took all three), the same way: `src/heath.ts`, `src/woods.ts`, `src/old.ts`,
+each with its test (`test/heath.test.ts` and the rest) holding every count of its table on the holes as made. **The Heath** (par
+32: 3,4,3,4,4,3,4,3,4) is short and tight: par threes of 210 to 220 yards and fours of 300 to 320, fairways 8 or 9 tiles, every
+four a dogleg with a `gap` lane leaving a chip of 73 to 76 yards, 60 to 90 trees, winds 10 to 15, greens 11.5 to 13 and contour
+0.7 to 1; 30.19 strokes over the gate's sixteen seeds (0.20 a hole under par). **The Woods** (par 35: 3,4,5,4,3,4,5,4,3) is
+forest on every hole: `GolfSpec.woods` (below) on all nine, `trees` 0, five doglegs each with a lane, water across the line on
+every par three and a lake on the last, width 10, wind 8, greens 12.5, contour 0.8 to 0.9 (every hole at the hard edge of its
+table, since a looser draft played 35.6); 37.44 (0.27 over). **The Old Course** (par 37: 4,5,3,4,4,5,3,4,5) is the hardest: long
+holes (threes 240, fours 480, fives 600) that each have at least two of a lake with an island (four holes), a wood with a lane
+(three), running ground (`heighten` 2.2 with shelves, three), sand (86 bunkers) and a pond across the line; wind 15, greens 11.2,
+contour 1 on every hole; 45.00 (0.89 over, past The Isles' 0.56). Its lane test aims within 4 degrees of the lane for the cleanest
+line and asks a swing 10 degrees off to meet the wood, since at wind 15 a straight drive is blown into the wood on most seeds.
+The six courses of golf stand in `COURSES` easiest first by the pace figure (Links, Heath, Fells, Woods, Isles, Old Course),
+which is only what a player reads: the pace gate holds the three new courses to their own figures and not to a place in the
+order (`HARDER` is still the three it was, the user's choice on 14 October 2026).
+**The Fells** (`src/fells.ts`, par 37) is steep fell-side golf: every hole's hills are heightened 2.5 and cut to nine tenths
+of the physics' step, so a seventh to two fifths of a fairway is slope a ball runs down, with level shelves to land on; five
+holes are doglegs, four have a lake, and three have a lane through a wood that a driver struck true flies and one six degrees
+off does not. Its fifth hole is The Plunge (it was The Drop; its old name's wind bent the grass less than `test/turf.test.ts` asks).
+**The Isles** (`src/isles.ts`, par 45) is nine long holes round big lakes with islands, a par four to a par six (mean par five),
+fresh winds, fast turned greens, 83 bunkers, and one island green: its second hole, The Green Isle, is named so because The
+Links has an `Island Green` and a best score is kept by name. The holes' own comments say what each is for and why its seed.
+The Range, the first course of golf, was
+scrapped on 5 October 2026 at the user's word ("Delete the first one entirely"), in the commit whose summary is "The Range
+is scrapped" (`git log --grep "The Range is scrapped"`): its source, tests, pictures, pace figure and fuzz and leak runs are
+gone. Its holes' names are unknown to the game now, and a save that names one
+still loads (a best is kept by name, and an unknown name is carried). What the tests used it for, a golf hole with level
+ground, is `FLAT` and `levelHole` in `test/level.ts` (re-exported by `test/helpers.ts`).
+
+## Budgets and pace
+
+A budget is what the game may cost at all; a baseline is what it cost at
+the last commit, held both ways, so a step toward a budget is noticed as
+much as a step over it. The perf tolerances are the measured wobble of a
+headless boot and a GPU frame, and say so in the file.
+
+The pace gate holds the strokes a round of each course takes, the mean over
+sixteen seeds, each course held to its own figure, played by the autopilot with a player's slips: a few degrees of aim, a
+tenth of the power. A median was tried and jumps a whole stroke between
+sets of seeds; the mean held within 5%, so the tolerance of a fifth is four
+times its wobble. `npm run pace` prints each hole's median against its
+par. Par is each hole's intent, not what this player takes: it times its
+shots past what moves exactly, and holes the obstacle holes in one on the
+median even with the cup's rim. A player's timing slip was tried, and at
+0.6 s the mean rose to 17 while those holes stayed at one or two; the pars
+were kept at the retune on 28 September 2026.
+
+## What the gates hold now
+
+A gate that holds little looks like one that holds a lot. What each holds
+today, and what the next features must hand it:
+
+- **Unit tests, smoke, look, perf:** the real thing. They grow as any
+  feature's tests do.
+- **Look metrics:** a close view of the first hole's right-hand rail,
+  sampled at points on the green, the rough, the rail's sunlit top and its
+  shaded inner face; and The Volcano (a test hole) from its tee, sampled on each row at
+  the point of its green that takes the most sun and the one that takes the
+  least. `smoke/metrics.ts` reads them into five figures, each held to a
+  floor: the green's saturation, how much brighter the course is than the
+  rough, the sun against the shade, how much cooler the shade is, and the
+  shape, how much brighter a hill's sunward flank is than the one turned
+  from the sun, which reads one for a hill drawn as flat. The pictures are
+  written again whenever a change is meant; the floors stay, so a greyer or
+  flatter look is caught even then.
+- **Fuzz:** the monkey strikes the ball any way at any power, strikes it
+  well at the cup (the autopilot's shot, slipped), tries to strike it while
+  it rolls or between holes, waits, reloads, asks for another round when
+  one is over, chooses a course at the start or at the card, and looks
+  from overhead (`look from overhead`: the Overhead button, drags and pinches anywhere on the screen, the button
+  pressed back, nothing struck, and the view as it was to the digit once it is left); pulls the ball back and thinks better of it
+  (`aim and take back`, on a stream of its own, about one frame in a hundred when the ball is ready: a drag at any angle and power,
+  taken back by a release in the dead zone, a second finger or the browser taking the pointer, never a stroke, the aim held bit for
+  bit while the camera turns to it, the camera at the aim's heading within `TURN_TIME`, left there once the drag is taken back, and
+  the game, its clock and its chance untouched); and presses the flag button (`face the flag`: on its own stream, while the ball rolls and
+  between holes too, refused while a drag is held as the page refuses it and from overhead, where the button does nothing, and checked to
+  turn the camera to look directly at the cup, at the cup's own heading and at the Director's own heading
+  to a millionth of a radian, inside `TURN_TIME`, with the cup on the screen where it is in reach, touching nothing of the game, its
+  clock or its chance); every aim drag is said to be held from its press until it is let go or taken back (`input.holding`, which the page
+  says how to take back by while it is: a second finger or letting go where it was pressed), and every ball come to rest is held to where the
+  camera turns by itself (`lineProblems`, counted in `checked['line of play']`, and `checked['line off the flag']` for a dogleg's). The page's own `Director` runs in the fuzzer every frame, on a desk's screen (1280 by 800) on even seeds and a
+  phone's (400 by 860) on odd ones, and the framing rule is asked of the camera as it comes to rest; a test counts the numbers the
+  monkey draws from its main stream (`drawn`, which every new action must leave alone: seeds 26 and 17 finish a round only while it does)
+  and how often the rule was asked (`framed`, held above nothing, since a check that never ran passes in silence). It gets round every course. Each thing a
+  player can do is an action in `scripts/fuzzer.ts`. On a golf hole it also
+  chooses a club from the bag (and is refused one that is not in it) before
+  most of its shots, aims shots (a preview of any club at any angle and power,
+  which must hold `previewProblems` and leave the game, its chance and its
+  clock as they were) and takes some as aimed, which must come down within the
+  spread that was shown (where nothing in the air turns the flight), and sends
+  the camera to an aim view in its look from overhead; it chooses a shape and a spin before a stroke or an aim, and the game must
+  have put them back to nought after the stroke. it also reads the break (`breakOf` at the ball and at
+  three places on the hole, and the arrows: finite and where they should be, the game, its chance and its clock left as
+  they were) and, before an autopilot putt from a green, holds the putt to it (aimed the way the break says: `off`, counter-clockwise, and
+  `across`, positive to the right, cancel, and on the same side only when the break is clearly past the cup's reach, `MISSES`, 2
+  yards: the cup takes a ball within 1.45 of its line and one that curves from a little further).
+  On minigolf it also does what each of the newer kinds invites, each on a chance of its own so that every run
+  without that kind plays as it did: it strikes a moving bumper where the barrier is, strikes a kicker, strikes at
+  a flipper through every phase of its swing, and strikes onto a stream, where the ball must be carried and never told lost
+  (`lostOnStreamProblems`, checked as a loss is told).
+  The career's buttons are on a stream of their own (`careerer`): Career or Free play at a round's first tee or its end
+  (`choose career or free play`), entering an event of either tour (with a windfall of two fees now and then when short, on that
+  stream), practising, giving an event up by choosing a course, and going on with the event kept, which a reload also takes
+  (`checked['event gone on with']`); `entered` is told once a fee, a refused entry changes nothing, a place told is held to its
+  rules (`checked['event placed']`), practice pays its holes and touches no season (`checked['practice paid its hole']`), and in
+  free play no pay is told and none is made (`checked['free hole paid nothing']`). The fuzzer's saves start the golf tour at the
+  county grade, where an event has a fee, and the mini tour at the club grade, which is free.
+  On golf each ball come to rest is held to the zones' lie (`lieProblems`, `checked['lie at rest']`, which a test holds above nothing),
+  and the fly-in to every hole is held to `flyInProblems` every frame (`checked.flying` counts the frames it was).
+  It hears the caddie out (`hear the caddie`, on a stream of its own, `caddier`): the look run a preview a frame as the page runs it,
+  asked for now and then, its tip held to `caddieProblems`, its button pressed (the club, shape and spin in hand exactly as said) and
+  put back as it was, and put away; the game, its chance and its clock untouched (`checked['caddie heard']`, and each kind of tip and
+  each spin counted, `checked["caddie's back spin"]`).
+  On a hole with a wood's lane it drives along the lane from the tee, slipped, and on a hole with land wholly in water it
+  plays the shortest club that carries to the middle of it from wherever the ball lies (each on a chance of its own, so no
+  other run changes, and both count in `done`).
+  `npm run fuzz` plays every seed eight times, as a player who
+  chooses among the courses, on The Links alone (whose nine holes have winds of 4 to 12 miles an hour, which is the wind the
+  runs cover; a gale of 12, 18 and 6 in turn on level holes is played in `test/fuzz.test.ts` and not in the queue), on the contoured Links (`--on contoured`: its nine holes at contour 1 with greens at
+  12, 22, 12.96 and 14.4 by hole), and on each of The Heath, The Fells, The Woods, The Isles, The Old Course, The Pinball Shed and The Waterworks alone
+  (`--on heath`, `fells`, `woods`, `isles`, `old`, `shed`, `waterworks`), since a monkey
+  choosing among nine is on golf too seldom to hold it to anything and on a minigolf course's own kind not much oftener; each landing
+  the game tells of is checked as it is told (`landingProblems`). Two runs are for replays and are not in the queue:
+  `--on kickers`, `KICKER_HOLES` in `scripts/fuzzer.ts` (a kicker in the way of the cup, a pair facing each other, which
+  is the ceiling's hardest case, and a ring of four), and `--on stream`, `STREAM_HOLE` in `test/stream-hole.ts`.
+- **Invariants:** bodies are of a kind, are numbers and are out of the rock;
+  the world's count is right; the time is a time; the ball is there while a
+  hole is played, alone, never inside a post, and never faster along the
+  ground than half as fast again as the hardest shot of the club that struck
+  it, which is the most a post may throw it; a ball at rest lies on the
+  floor or the top of a box or a post; the strokes are a count within the
+  hole's limit; the card has a score for each hole finished and no other,
+  each between one and the limit; and the career is a mode there is, its
+  records whole rounds, a counting round's record no better than its holes'
+  bests together, and the round kept the card in play (`careerProblems`). And every knock the game tells of is of
+  the live ball, where it is, at least `KNOCK.least` hard, in a direction
+  of unit length (`knockProblems`, which the fuzzer checks each one by).
+  And the camera keeps to its limits: turned within a turn either way,
+  tilted within `TILT`, stood back within the zoom, and never left turning to face a place for longer than `TURN_TIME`, two
+  seconds (`viewProblems`, checked after each look from overhead, every frame of a turn to the flag and every frame of an aim turned to; the blend to the overhead view is a number from nought to one, its distance within `OVERHEAD`'s near and far, and its place inside the hole's bounds). And the sky is the fly-in's alone: no view that sees the horizon (`seesSky`, tilted past `SKY_TILT`) is left with no fly-in under way (`flyInProblems`, every frame, counted in `checked['sky seen']`), so no cloud is drawn between a shot and the camera it is aimed from. And a ball come to rest has the camera turn by itself to a heading within a quarter turn of the flag's, which is exactly the flag's on a hole with no line of play (`lineProblems`). And the camera keeps the ball
+  and the furthest a shot can reach on the screen (`framingProblems`, in `invariants.ts` and not in `checkInvariants(game)`, since it needs the
+  camera and a screen's shape: the ball and the reach point inside `safeBox` to 0.02, asked only when the view has settled, which is not
+  while it is turning, easing to an aim view, gliding, blended toward the overhead view or parked, and within `TURN_TIME` of a turn; the ball
+  in flight alone, always, whichever stroke the camera is following; called by the fuzzer, and read by tests through `view().framing`). On a golf hole the club in hand is one of the
+  bag's, and the ball is never faster in all, in the air as on the ground,
+  than the club that struck it could send it and a fall from the highest
+  ground make it, never at rest out of bounds or on water and never inside a tree's trunk
+  or canopy; each landing told is of the live ball, where it is, and at
+  least `LANDING.least` hard (`landingProblems`). And the caddie's tip is a lofted club of the bag, a shape and a spin of the three, not what is in hand, with words
+  and a button, and its shot tried again comes down clear where it said, and with a spin rests somewhere to play from (`caddieProblems`, not in `checkInvariants`, since it needs
+  the caddie; called by the fuzzer). A preview is a flight from
+  the ball to where it says it came down, in numbers, growing in length, no
+  further than the club goes and a fall adds, with a spread that is a spread
+  (`previewProblems`, which allow the longest tailwind's carry and need a heading); and the camera's distance is within the
+  zoom of its hole, further on golf, and its lead is a number of yards. Shape and spin are numbers within -1 and 1, the wind
+  a speed from nought to `WIND.most` along a unit direction and calm on a hole of minigolf, and a ball's speed is held to the
+  club that struck it, a fall, and what the wind adds over eight seconds of flight. The greens (`groundProblems`,
+  `arrowProblems`, `breakProblems`, all inside `checkInvariants`): a hole's greens run at a speed from `GREENS.fast` to
+  `GREENS.slow`, and only a golf hole has one; on a hole that says its greens' speed no tile of putting green leans more
+  than `GREEN.steepest` and a tenth over (`GREEN_RULES`; a test's own hill with a cup on it is not such a hole); the first cut
+  is on no sand, water, out of bounds, rock or rail, and there is none on minigolf; a ball at rest on a golf hole lies on
+  a slope its lie holds, by the tile's own roll (the physics' own: the cut and the green's speed counted) over gravity and a quarter more,
+  and lies as the zones say (`lieProblems`: `lieAt` at the ball is the lie of `zonesOf`'s zone, and the putter is in hand on the putting green);
+  `breakOf` is a number and its `across` no further than the cup is; and the arrows are numbers, each on a tile of putting
+  green and no more than the green has. And the kinds that move or throw (all inside `checkInvariants`): the ball is never
+  inside a kicker and never going faster at a kicker's side than the course may throw it (`kickerProblems`); a barrier
+  that was given a `bounce` throws with it, which is from nought to twice a post's (`bumperProblems`); each barrier's box is on its own slide and each windmill's gate at its own door, since the boxes are listed in the order the things were given and each thing keeps its own (`boxProblems`); a flipper's pose is
+  the one its game time alone says, worked out afresh, its root has not moved and its box has no speed but its turn
+  (`flipperProblems`); every tile of a stream is a belt's and no water, rock or out of bounds (`streamProblems`); and the
+  ball is inside no moving box, which a flipper's turned frame is held to as a barrier's is.
+- **Determinism:** the autopilot plays, with a player's slips from its own
+  chance, round after round, and the hash takes in the hole and the card.
+- **Pace:** the strokes a round of each course takes; see above (the minigolf courses: The Meadow 16.63 for par 26, The
+  Pinball Shed 22.06 for 27 and The Waterworks 20.75 for 28, written again on 8 October 2026 when The Fair went and its best
+  holes joined them (they were 20.94 for 25 and 18.94 for 28), which is what `scripts/pace-baseline.json`
+  holds, as it does for the golf courses below). The pace player never banks and fires
+  blind after ten seconds without a timing window, so a bank hole's par is the human's intent, and a timed hole
+  needs a window at the autopilot's margin, the ball's radius and 0.6. The
+  autopilot does not read a slope's break on minigolf, so on a hole that slopes it is a player
+  who aims straight and is carried by the ground; on a golf green it does, by rehearsal. The Links is a player one under par on every hole: 30.44 for 36 (30.75 over 48 seeds since the land rolled; the contoured greens did not move it: 30.19 over 48 seeds against 30.27
+  before them; the livelier ball and the respecified holes moved The Links to 30.33 over 48; the zones' lie and the stones' going left it at 30.25 over 48, and the sixteen at 30.5 from 29.88, which is the wobble of sixteen; the rolling land moved it from 30.25 to 30.75 over 48),
+  each hole a stroke or so better than its par, since the
+  autopilot plays like a good golfer and par is each hole's intent. The planner did not move the figure of a course of
+  level holes (6.88 to 6.94, when The Range was three holes): a player's slips, a tenth of the power and a few degrees, and the swing's own scatter,
+  are far bigger than the unit or two it gains on the level; its worth is in `test/planner.test.ts`, on slopes
+  and rises, and in `test/strategy.test.ts`, on a dogleg (3.4 strokes a round on a par four, and no ball lost
+  in twenty-four rounds, where aiming at the cup across the corner lost one in every round). The Fells and The Isles
+  are held to the order of how hard they are (`HARDER` in `scripts/pace.ts`: each course at least a tenth of a stroke a
+  hole over par above the one before it, a rule `pace:check` fails and a test holds), and a hole is picked up in no more than
+  one round of sixteen. The Heath (30.19 for 32), The Woods (37.44 for 35) and The Old Course (45.00 for 37) are held each to
+  its own figure only, written 14 October 2026 when they came (29.13, 37.44 and 45.19 as built, and written again the same
+  day with every course's when trees on the banks were felled and the crown became exact: The Links 30.44 to 30.25, The
+  Fells 36.75 to 36.5, The Isles 51.19 to 50.06, all within tolerance, since a ball that clipped a rim is no longer knocked); a hole's chance is the next hole's, so a change to one hole
+  moves a course's figure by a stroke or more, and the whole course is measured again after any. The Fells 36.75 for par 37 (0.03 a hole under, short of the target of a tenth to four tenths under) and The Isles
+  51.19 for par 45 (0.68 a hole over: past its old target of a tenth under to four tenths over, since the long swell's steeper ground, and kept so at the user's word on 9 October 2026, "Accept it harder"), against The Links' 0.62 under;
+  The Links and The Isles written again 9 October 2026 for the rolling land (the long swell and the banks: Links 30.5 to 30.44 over 16
+  seeds, 30.25 to 30.75 over 48; Isles 47.63 to 51.19 over 16, 46.79 to 50.52 over 48, a real swing of 3.7 a round, and every set of
+  sixteen the same way). Shown by putting `rolling: false` on both courses' specs in a scratch edit (reverted): 30.25 and 46.79 over 48
+  return, and the Fells (36.58 over 48 either way) and the minigolf courses do not move. The pace player never reads a bank, and a ball
+  in the rough on one is carried down toward the fairway or held up the slope with a club that goes less far; over 48 seeds no hole's median is
+  more than one past its par (The Green Isle 5/4, The Peninsula 5/4, The Long Swim 7/6), but over the gate's 16 The Green Isle's is 6/4,
+  two past, and its par is its intent; the order holds (0.62 under, 0.03 under, 0.68 over). Earlier:
+  written 9 October 2026 when the ground's lie came to be read from the zones and the bouncing stones went (the Fells 35.44
+  to 36.75 and the Isles 47.75 to 47.63; over 48 seeds the Fells rose from 35.00 to 36.58 and the Isles fell from 48.15 to 46.79,
+  every set of sixteen the same way, and the three minigolf courses did not move by a digit). Put back to the tile's lie in a
+  scratch edit, the Fells return to 35.00 over 48, the Links to 30.33 and the Isles to 47.44: the zones' lie is the Fells' rise,
+  and the Isles' fall is the stones (they cost it 0.7 a round, and had moved it from 47.75 to 48.69 on 8 October 2026 without
+  the baseline being written, being within tolerance). The Fells are now outside the target they were built to; whether to
+  retune them is for the user. Before that, 5 October 2026, when the Fells' hole five was renamed The Plunge (its wind is a
+  name's, and it moved the figure from 34.63 to 35.44).
+- **Leaks:** ten minutes of the autopilot playing round after round, on The
+  Meadow and again on each golf course (`GOLF_COURSES` in `scripts/leaks.ts`: the six, under
+  the Links' ceilings but for the save's bytes, 10,800 since 16 October 2026 for eighty-one holes' bests, the career's nine
+  course records, both tours' seasons at their longest, an event kept and the caddie's three counts at their limit (10,203 measured, held to the byte by `test/leaks.test.ts`); `leaks:check` queues the seven, an hour and ten minutes, and `--on` narrows a run to one kind for a short look; a test holds that a hole
+  with a lane is collectable, so `laneOf`'s cache keeps nothing alive, and one each that `zonesOf`'s and `pondOf`'s tables are weak; the
+  arena's reused ground weights are emptied at 256, held by a test, and nothing of the new caches is kept for a game's life, so
+  nothing was added to `scripts/leaks.ts`). The card is emptied each round and
+  watched against the number of holes; on golf a previewer is made with each hole, as
+  the page makes one, and tried now and then, and the bodies in its rehearsal are held
+  to the one ball.
+- **Bench:** the physics on a green of its own, the size the course was
+  before it had holes, so its figures are the physics' and not the
+  content's: at rest, which costs next to nothing, and full of falling balls
+  at `BODY_CAPACITY`. A frame of either is far under the gate's 0.05 ms of
+  slack, so the gate cannot fail until the physics costs several times what
+  it does.
+
+## How the code is laid out
+
+- `src/game.ts` is the game without the picture: everything that happens on
+  the course, a step at a time. It tells what happened through `GameEvents`,
+  and knows nothing of the renderer or the page.
+- `src/main.ts` is the page. It turns those events into words on the screen,
+  a drag into a shot through `shot.ts`, and draws the frame. There is no
+  game logic here. A hole begun is built whole before any of it is shown: the scene's static and moving groups, the grass
+  field, the previewer and the map are made first, and only then handed to the renderer and the hud, so a hole that is
+  refused leaves them as the last hole had them. A hole that cannot be drawn (the field of grass refuses one more than 489
+  tiles a side, `cellFor`; `wideHole()` in `test/wide-hole.ts` is one) stops the page, however the hole was begun (the frame
+  loop, a button, the test API or the boot): the boot screen goes up again over every panel with `holeFailureText`
+  (`src/failure.ts`: the hole's number and name, the reason, and to reload), the error is told to the console too, nothing
+  is played or drawn after it and the loop is not asked for another frame. The game has by then begun the hole, so its
+  state is the new hole's while the picture under the screen is the last one's. `smoke/progress.spec.ts` plays it on a desk
+  and a phone with the shop open over it, and `smoke/look.spec.ts` holds the screen. No test can see the order of the
+  build and the hand-over, since the screen covers whatever the renderer holds: it was checked once by a log at the
+  hand-over, with the order put back as it was to see the log change. Not done: the panels under the screen can still be
+  reached by keyboard.
+- `src/shot.ts` is the shot as the player makes it: a drag into a direction
+  and a power, and the pointer onto the ground. The ground under a pointer is read through a `HeldView` (a `ViewFrame`, a copy
+  of the camera's position, target, right, up and lens, made once and written into): `Input.down` calls `InputPorts.hold()` as the first
+  pointer of an aim drag lands, before the gesture reads any ground, so the aim is the drag and the view as it was when it began and
+  nothing the camera does after. That is what lets the camera turn to face the aim without a feedback loop: read through the live camera,
+  the ground under a still finger moves as the camera turns, and the aim with it (`groundAt(view, nx, ny, z)` is the arithmetic, which
+  the held view and the camera both serve). `src/gesture.ts` says what the pointers mean, by `Mode` (`aim` or `overhead`): in aim one
+  pulled back is a shot; in overhead one dragged is a `pan` (the ground goes with the finger) and never strikes, and `hold` is not called;
+  in both two are a pinch, and a second finger mid-drag takes the drag back. There is no Look mode and no free orbit: a player cannot
+  turn the camera by hand, it turns to the aim (see the director). `src/input.ts` turns what the gesture says into the ball struck or the camera moved,
+  through ports it is handed (`shoot`, `zoom`, `pan`, `hold`, `ground`, `blocked`), so the page and the fuzzer press on the course alike.
+  `src/camera.ts` says where the camera is: it follows the ball, and has an `azimuth` (wrapped to a turn either way) which only
+  `turnTo(wrap(heading))` and a new hole's `glide` change in play (`facing` is the azimuth from one ground point to another, nothing
+  for the same place; `settle` eases it by the shortest way at a rate of six a second, a first-order filter that does not overshoot, and
+  a zoom does not end it); `orbit(turn, tilt)` stays as a setter for tests, which a player has no way to reach), and
+  tilted between `TILT.least` and `TILT.most` (home is 0.78, 45 degrees; the
+  lowest is 57 degrees only because the grass is what a frame costs, and a
+  lower view draws far more of it: `TILT`'s comment has the figures, and the
+  worst view is held under the 6 ms budget by `smoke/game.spec.ts`), and its
+  lead of `LEAD` units turns with the view so the ball stays low on the
+  screen. A new hole puts the overhead view away and eases the view home
+  over the glide, by the shortest way; nothing of the view is saved. On a
+  golf hole (`setGolf`) it may stand back `VIEW.golfFar`, 200 (on a tall phone `VIEW.phoneFar`, 400, which `setScreen(aspect)` gives the rig from the page's size: a phone's narrow screen draws less ground at 400 back than a desk does at 200, so a drive's landing ring and its spread clear the coins and the switch at the top, aimed for the far edge of the ring and the chips' real pixel height, `CHROME` in `aimview.ts`; desktop and tablet are as they were), where minigolf
+  stops at 110 (and never further than that from what it looks at, tall
+  screen and all), since a player who cannot see where a shot comes down cannot
+  play it; and it is sent to the **aim view** of the club in hand (`aimAt`,
+  eased by `settle` in game time at a rate of four a second, taken back by the
+  first zoom of the player's, which goes out freely but never nearer than the view's own `floor`, so a zoom cannot push
+  the reach off the screen). `src/aimview.ts` works that view out
+  from the club's reach and the screen's shape and from nothing else: the
+  camera stood back as far as the landing needs (no nearer than home), tipped
+  lower the longer the club (from 45 degrees to the lowest, since a low view
+  shows far more depth for the same distance), looking a quarter of its
+  distance ahead of the ball so the ball sits low with the landing above it, the
+  landing at 0.85 of the way up the screen, and 0.72 on a tall one where the
+  coins and the shop are across the top; those two figures and the sides and foot are `safeBox(aspect, height)`, the part of the
+  screen the ball and the reach are kept inside (`x` 0.9 either side, `bottom` -0.9, `top` as said), which the aim view is worked from and the framing rule
+  holds the camera to. **Never worked out from a drag**: the
+  aim is the ground under the finger through the view held when the drag began, and a camera that
+  moved under a drag would turn it. `reachOf(club, lie, wind)` is where a shot comes down at its furthest (the carry at full power
+  and the tailwind's reach, `LANDS_PAST` more), in one place for the camera, the Director and the fuzzer; `reachOnMinigolf(ground, x, y,
+angle, roll)` is how far the putter's hardest putt rolls along an angle before the first rail or wall stops it, which a minigolf hole's
+  view is framed by.
+- `src/director.ts` is what is done to the camera as a game goes on, whoever plays: `new Director(rig)`, given a game (`use`), the
+  screen's shape (`setScreen(aspect, height)`) and a seed (`setSeed`), driven by the page and the fuzzer alike (one implementation, so
+  the fuzzer holds the page and not a copy of it). `started()` puts the camera on a hole's tee and, on golf, sends it to the driver's aim
+  view; `frame(dt, parked)` sends the aim view again when the club or the lie changes, eases the rig and follows the ball; `struck()`
+  says whether the stroke is followed; `aiming(input.aim)`, `faceFlag(held)`, `nearFlag()` and `reachPoint(out)` are below; `park(on)` is the test API's `look` telling it the camera has been left where a test put it, so a hole of minigolf is not sent to the view that frames the reach (`frame`'s own `parked` says only that the ball is not followed). It holds a fixed
+  set of numbers and one string, never a list (the leaks gate has nothing of it to watch), and it never draws the game's chance. On a
+  golf hole it keeps the ball and the reach on the screen by the aim view of the club in hand; on minigolf it frames the putter's reach
+  along the way the camera faces, which is the home view exactly (and the zoom as the player left it, no nearer than shows the
+  reach) when that fits there, so a minigolf hole is seen as it always was where nothing needs more, and otherwise the aim view of the reach
+  no further back than `VIEW.far`.
+  **Turning to the aim**: while the ball is ready, the start screen is not up and the overhead view is off, a held aim of at least `AIM_TURN.least`
+  (0.15 of the hardest shot) turns the camera, but only past a **dead zone**: while the aim is within `AIM_DEAD.half` (0.2 radians) of the way
+  the camera faces (`rig.headed`) it stays still and only the reticule moves; past it the camera `turnTo`s the heading that keeps the aim on
+  the zone's edge, so there is no jump as the aim crosses and the shot is seen from nearly behind. The aim is read through the held view, so the
+  turn cannot feed back into it. A drag taken back (released in the dead zone, a second finger, a cancel) simply stops calling `turnTo`, so the
+  camera is left looking the way the last strong aim had it; a shot let go faces its way while the ball is in the air.
+  **At the flag**: the flag button turns the camera to the cup's own heading from the ball (`nearFlag`, which is `facing(ball, cup)`), so the flag is
+  at the middle of the screen across; the earlier random offset of 0.10 to 0.26 was removed on 7 October 2026 after play-testing. Refused under the
+  start screen, while a drag is held, at the cup and from overhead. **On a ball come to rest** the Director turns the camera by itself (`frame` sees
+  `game.ready` go from false to true; not at a hole's start, and not from overhead), but only once the camera has got to the ball (its target
+  within `ARRIVED`, half a yard, along the ground): the move and the turn one after the other, since both at once swung the view round a place
+  still moving (7 October 2026). A drag, the flag button, a stroke or a new hole before then takes the waiting turn back, and the player's
+  next aim turns it on from there. **It looks along the line of play, and not at the flag** (10 October 2026, a player's say that on a dogleg the flag
+  is not the place to look): `nearLine()` is the heading to the point `PLAY_AHEAD` (130) yards along the hole's `way` from its nearest point to the
+  ball, or to the cup once that is within the 130 (`lookAlong` in `src/lineofplay.ts`, a leaf that makes nothing; the way ends a tile or so
+  from the cup, so the cup is `layout.cup` itself), which is the flag's own heading on minigolf and on any hole with no `way`, and the button is
+  still the flag's. Measured over the fifteen doglegs of 20 degrees and more on The Links, The Fells and The Isles, balls at rest on the fairway, rough
+  and cut: the straight line to the flag has a fifth or more of its first 150 yards in trees, rock or out of bounds for 37 per cent of them, and the
+  line of play 130 yards on for 8 per cent (60 yards 14, 100 yards 8, 160 yards 9, 200 yards 14, a driver's 260 yards 24); on straight holes it
+  turns the camera 0.7 degrees from the flag at the median and 5 at the ninetieth percentile, and blocks no more of the line. `view().line` is it, as
+  `view().flag` is the button's; it is never more than a quarter turn from the flag (`lineProblems`).
+  **Follow one stroke in five**: `struck()` follows the ball when `hashed(viewSeed, hole, strokes, SALT.follow) < FOLLOW.share` (0.2), exactly as
+  the camera always did (`catchUp`); for the other four the camera holds where it stood, exactly still, while the ball is in the inner
+  0.6 of the safe box (`HAND_OVER.from`, in the box's own terms: |nx| over the half width, ny over the top or the bottom), and the
+  ball flies across the aim view. From there out to the edge the camera is taken up (`handing`, which `following` reports) at a pace
+  that rises by a smoothstep from nothing at 0.6 to the full `catchUp` at the edge, and its change of speed is held to
+  `HAND_OVER.accel` (400 yards a second a second; the camera stops as smoothly if the ball falls back inside the band). The
+  hand-over was a latch at the edge, which sent the target from still to 150 a second in a frame (a change of speed of 130,000 a
+  second a second on a full drive, seen as a lurch); a pace that rose with the ball's distance out alone still rose as fast as the
+  ball crossed it (3,000 to 5,000), hence the held speed, and `test/director.test.ts` holds it under 500 on a desk and a phone.
+  The held speed toward the ball is never more than it can lose at half that rate in the way left (`limit`, each of the three
+  ways alone), so the camera never goes past a ball that stops: held speed alone ran a drive's camera sixteen yards past the ball
+  and back, which `test/director.test.ts` now forbids. The doublings (the pace doubled, at most eight times) stay as a never-a-looser-box safety, and are not reached by a drive; at
+  rest the camera eases to the ball as ever, and a new hole clears it. A ball put back at the tee after a splash is eased to like any
+  followed one. `followShots('drawn' |
+'always' | 'never')` is the test API's say in it, and the perf scenes that fly a ball set `always`.
+  **The overhead view** is the rig's: `overhead`, a blend `k` eased at `OVERHEAD.ease` (4 a second), and a `top` of its own (`x`, `y`,
+  `distance`). `OVERHEAD` is `tilt` 0.05 radians from vertical (not nought, since the renderer's camera has the ground's up for its own
+  and straight down is degenerate), `near` 60, `far` 3000 and `margin` 1.08; `overheadFit(bounds, azimuth, aspect)` is the least distance
+  that shows the hole's bounds (times the margin) for the way the camera is turned and the screen's shape; `setOverhead(on, fit)` blends to it and
+  back, `pan(dx, dy, heightPx)` keeps the ground under the finger and is clamped to the hole's bounds, and the zoom is held between `near`
+  and the fit. At `k` of nought the camera is placed exactly as it was before there was an overhead view (held bit for bit by a test), and the normal
+  view's azimuth, tilt, distance, lead and goal are not touched while it is on, so leaving it gives the view back to the digit. The renderer's far plane
+  is raised with it (`CLIP`: 800, and 2.5 times the overhead distance while blended, `farPlane`). The game keeps running, and the Director's logic
+  continues underneath it; the framing rule is not asked while it is blended. On the golf holes it stands out past every ring of the grass (`GRASS`: 36, 110 and 300) in all but
+  a few views, so it draws almost no blades and is plainer than the aim view. Measured 6 October 2026, load average 3 to 6, on every hole of the three golf courses
+  at 1280 by 800 and 400 by 860, every rung, turned along the hole and across it (54 scenes a run): the worst frame 2.90 ms on the top rung (desk, The Links' Water
+  Carry across) and 1.84 (phone), 1.52 and 0.87 on the next rung, at most 21,560 blades of room for 262,144 (none on a phone), and 3000 shows The Isles' longest hole, 858 yards, whole on a phone turned across it,
+  which needs 2737 (the plan's Part 0 has the figures; `test/overhead-far.test.ts` holds every golf hole to fit under `far`).
+  `src/quality.ts` is the ladder the picture steps down on a slow machine,
+  and the governor that chooses the rung from the time between frames and
+  how much of it the drawing takes: frames that come slowly but
+  cost little (a page throttled to thirty a second, a low-power mode) are a
+  slow screen and not a slow machine, and the governor once took them for one
+  and gave the grass up twelve seconds in. The page measures the drawing by
+  asking the queue when a frame is done, one frame in four. The grass is
+  thinned on the ladder and never given up, and it always sways. All are
+  arithmetic, tested without a page.
+- `src/scene.ts` is a hole as it is drawn: the grass, the rail, the cup and
+  flag, the tee's markers and the scenery, from the models. Each hole stands
+  on the rough as a raised green: the rough lies `ROUGH_DEPTH` below the
+  grass, under the bottom of the cup, so the cup is seen into, and the rail
+  comes down to meet it. The look is `LOOK.md`'s clean toy, toon daylight
+  on artshape-render v0.45.0 (0.23.0 brought the surface that flows, which the ponds
+  use; 0.24.0 and 0.25.0 particles blown by a wash of air, which the game does not yet use; 0.26.0 the ground texture; 0.27.0 open water, which a golf pond wears; 0.27.1 its sky no longer repeats: the sheet is bent by a slow warp and the swell is weaker; 0.28.0 a sky gradient, the sun's shadow fitted to the view, a soft shadow edge and open water in shadow, each only when asked; 0.29.0 to 0.44.0 nothing the game asks for, so they draw its frame as 0.28.0 did, the scene to the pixel on SwiftShader at The Straight Mile's tee; 0.45.0 the frame's dither), in `src/look.ts`, shared by the game and the
+  showcase: edges drawn at four samples a pixel (the post pass one rung
+  down the ladder, and none on the last), the toon bands eased at their
+  edges, a deep sea-green shade, a warm rim, the sky's light from above
+  and a bounce off the grass from below, the form light (`TOY.form` 5 since 9 October 2026, from 2.5, with the sun at about 46
+  degrees: `SUN` [0.50, 0.482, 0.719]), which keeps some
+  of the sun's fall-off in the top band so a slope turned from the sun is
+  darker than the flat and one facing it brighter (without it every slope
+  a ball can roll on was drawn as bright as the flat, and a hill had no
+  shape), the toy finish the renderer gives every toon look (a highlight on
+  what is smooth, the sky in a clear coat, one smooth ramp of light, shade
+  toward the shade colour in a crease) and its soft tone, the renderer's screen-space
+  occlusion where things meet, no film grain, and a haze so thin it only
+  pales the far rough; and a dither of a step of the screen's eight bits (`POST.dither`, 1; 16 October 2026), since the light
+  along a long fairway changes by a level or two over a hundred pixels and more, and rounded with nothing between it was drawn
+  as flat bands across the fairway's stripes, which a player saw on a phone on The Straight Mile; it is the same at a pixel
+  every frame, so a picture is the same every run, and moves a pixel by a level at most (`test/dither.test.ts`). The colours are named in `src/models/palette.ts`,
+  the green, rough and rail among them, so the scene and the showcase are
+  one green; the mown ground (green, fairway stripes, putting green, first cut, tee) wears a turf texture, made at boot by
+  `src/turfTexture.ts` (256 square, tileable, mid-grey on average, from seed 1) and handed to the renderer's `setGroundTexture` in
+  `look.ts` (which also compiles the textured build at boot): `TURF` in `scene.ts` is layer 1 at 1/1.4 tiles a unit, 0.2 of its
+  colour and 0.15 of its height (stronger, the shade's steps through the toon ramp show the noise's square grid), and on golf `TURF_GOLF`,
+  0.13 and 0.09, calmer since the lawn is seen from far back; the old speckle is dropped from those groups; the rough painted under the blades and out of
+  bounds stay plain. `look:metrics`
+  holds the look to its floors.
+- The ground is read in one place. `heightAt(layout, x, y)` in `arena.ts`
+  is how high the ground stands, the tile's step and the terrain smoothed
+  between the tiles' middles by the cubic B-spline the physics' terrain
+  uses; `stepAt` is the step alone, which is what makes a wall, so the
+  autopilot judges a rise and a ball is put down level by it; `slopeAt` and
+  `restingAbove` say how the ground slopes and how high a ball rests on it.
+  A hole's slopes are an optional `terrain`: a grid the shape of its map, a
+  digit a tile, half a unit each, or real heights, one a tile, row by row
+  from the south (a `Float32Array`, which `layoutOf` copies and checks:
+  finite, and not below nought). Digits are drawn, and heights are made,
+  which is what `noise.ts` is for: quantised to digits, noise carries a
+  ripple in its slope a third as big as the slope itself. Either is handed
+  to the world in `physics.ts` on a hole that has any. The physics says what it refuses, `terrainRefusal`
+  there asking its `terrainProblem`: neighbours side by side more than half
+  a tile apart, rock and all. A cup may stand on a slope since v0.7.0, its
+  rim following the ground, and the game draws it so: the cup's rim, liner
+  and collar are lifted onto the ground by `lifted` in `models/shapes.ts`,
+  its floor level. The game keeps its own copy of the smoothing, since only
+  `physics.ts` imports the package, and a test holds it to the physics'
+  own at hundreds of points. `src/ground.ts` draws the green
+  as one mesh following it, in its stripes, with earth down its steps; and
+  the rail (`railsOf`, to `RAIL`'s figures) as a rounded toy's, a cap
+  painted along its top and rounded over every edge that stands in the
+  open, plumb below that where the ball meets it, its corners rounded out
+  and square in, drawn on its own tiles and no further so what is seen is
+  what the ball meets, and sloping with the ground; `cupGround` is the
+  cup's own step and slope, which the collar is cut to. A cup wider than its tile (the horseshoe's 1.8, against a tile's half of 1.5)
+  has a mouth that reaches into the tiles beside it, so `groundOf(layout, mouth)` cuts every yard-square piece of their grass the
+  mouth reaches into (`cupRing`, the lining's own polygon, cut with `src/clip.ts`), each in the colour and the texture of its own
+  tile, and `wideCollar` is the cup tile's grass round it; the plain cup's is `collar`, zipped to the tile in one piece, which no hole's
+  picture has moved by a bit (`test/cup-drawn.test.ts`, which also draws every item on every kind of hole, since the fuzzer has no
+  picture to see a scene throw). `collar` still refuses a hole wider than its square, since the ground beside it would cover the rest.
+  A tile that is not level grass like the cup's (a step up, sand) is left whole, and the mouth stops at it. The cup, flag, tee, sand, posts,
+  aim, camera and glints all stand on it. No course's hole slopes now; the
+  test holes in `test/hills.ts` do, and `playCourse` in the test API plays one of a test's own.
+  `src/glints.ts` says when the gold of the cup and the pin twinkles, from
+  game time, and the page draws it as one of the renderer's glow quads.
+- **The golf ground is by zones, not tiles** (9 October 2026, the title look's second pass; plan `~/.claude/plans/ooergolf-title-look-two.md`).
+  `src/zones.ts`: `zonesOf(layout)` (a `WeakMap` by layout, so a hole let go takes it; held by a test) blurs each of the fairway,
+  green, tee, sand and out of bounds as a tile indicator, takes the 0.5 level set as its curve, and reads the signed distance to
+  it in a narrow band only (`ZONES`: four pieces a tile, 3 to 12 ms a hole in Node), and `at(x, y)` says the `Zone` (`sand`,
+  `lip`, `oob`, `tee`, `putting`, `cut`, `fairway`, `rough`) by `RULES`, the first cut and the fringe being bands a tile (3 yards) wide
+  outside the fairway's and the green's curves. **What is drawn is what is played**: `lieAt` reads the zone (`lieOfZone`; water and rock
+  keep their tile's), so a strike, a landing, the hole map, the grass and the stakes follow the curves, and `lieProblems` holds
+  the ball at rest to it. **The physics still rolls by tile** (`makeWorld`, `tileLieAt`, the break, the autopilot's slowing and the
+  slope invariant): near an edge a ball may roll at the other kind's rate for up to a tile and a half, which is small and said.
+  `ground.ts` colours each piece by `zones.at` at its middle, cut finer only where a curve crosses a tile (the worst hole, The
+  Isles 9, 183,524 triangles, ceiling 220,000 in `test/ground-zones.test.ts`): sand is a blob with a soft pale lip, the tee a rounded
+  rectangle, the lawn's checker (`mownAt`, `CHECKER` four tiles on golf) at `CONTRAST.golf` 0.75 of its tones. Minigolf keeps its
+  tiles and rails, and `zonesOf` refuses it. `src/fastmesh.ts` is the mesh builder the passes over a hole's ground and water use (typed
+  arrays grown by doubling, the package's very bytes), which is what keeps a golf hole's begin to about main's time plus 25 to 60 ms
+  (`test/begin-same.test.ts` holds every mesh bit for bit); `perf` holds the figure.
+- **The banks tinted** (`src/tint.ts`, `src/tintmesh.ts`; 9 October 2026, chosen from a mock, the spec's Part 6 in
+  `~/.claude/plans/pure-wiggling-shore.md`): from the play camera a bank showed only as faint shading, so a golf hole's rough
+  and out of bounds are coloured by a field from -1 (valley, a bank's foot) to 1 (crest): the height over the nearest play
+  tile over 6 yards plus the ground's curvature, `BANK_TINT` (tint 0.6, crease 0.6, the valley darker and cooler, the crest
+  toward a sunlit yellow-green). The renderer's vertices carry no colour, so the ground is divided into 21 meshes a step
+  each (a step under 5% of the ground's light, so no band is seen), and the blades follow in six tinted kinds of the grass
+  field's eight. Built with the hole: about 40 ms more to begin The Isles' longest hole, about 0.36 ms a frame at The Links 1
+  tee and none at The Isles 2 (a ground texture was smooth but cost 0.8 ms). Minigolf, the fairway, green, cut, tee and
+  sand are exactly as they were (`test/tint-colours.test.ts`). The Fells' steep faces read as broad lighter slopes, and a
+  flat golf test hole's rough a third darker, since both are height over the play.
+- **Water on golf and minigolf, and its ring of stones** (`src/waterdraw.ts`, `pondOf(layout)`, a `WeakMap` as the zones are): each
+  pond is the smooth curve of its tiles (the 0.45 level set of the blurred water, lowered where a channel a tile wide would
+  vanish) in a rim of foam, two shallows, mid and deep bands along it and along the tile's own side where it meets ground, **always
+  cut to water tiles** since play decides water by the tile; a water tile outside the curve is a low rocky shelf (`SHELF`, 0.18
+  above the water, warm brown). `OCEAN` is a deeper, more saturated blue with small glints (body (0.02, 0.38, 0.86), tint (0.4, 0.8,
+  0.97), tilt 0.3, scale 0.6 on both kinds). Along every edge stands a **ring of small lumpy stones**, scenery only, in the water's
+  tiles (`STONE_RING`: golf radius 0.8 to 1.25, minigolf 0.45 to 0.65, squashed to 0.6 high, three colours, touching, a partial
+  second row only against the first), worked out from the map by a hash and never chance, the ring under 15,500 triangles and the
+  bands under 28,300 a hole. The ring changes no play: the stones the ball bounced off (e8f846b) were removed on 9
+  October 2026, the user having kept the ring and dropped them.
+- **Scenery in two tones** (`src/models/tone.ts`): trees, bushes, ferns, rocks, the golf tree and the woods' trees are cut by a fixed
+  light into a lit, a mid and a shade tier, each its own part, so the dark side of a crown is deep and the rocks have clear facets
+  (broadleaf about 2.0/1.3/1.6 lit and 0.26/0.42/0.6 shade of the leaf colour; pines darker and warmer; rocks four tiers). A baked
+  light is right at one turn only, so each model is baked for `BUCKETS` (6) yaws, and a piece is placed at its bucket's yaw
+  (`bucketOf`). The light is `TONE_SUN`, the approved mock's, about 62 degrees of azimuth off `SUN`: chosen with the pictures and not
+  derived from the sun, so a change of `SUN` does not move it. Broadleaves vary in size 0.7 to 1.4 by a hash of the place, one in five
+  within 45 yards of the course 1.9 (`scenery.ts`).
+- **The world past a golf hole** (`src/hills.ts`): `groundZOf(layout, name)` is the ground past the map, the hole's own height at the
+  edge, hills from `gradientNoise` seeded by the name (`HILLS`: 3 yards high near, 25 far, none at the edge, out to 420), and the lake's
+  hollow carved into it (`HOLLOW`; the backdrop's lake shows in the fly-in as a strip at the horizon); `planeOf` is the plane under the
+  hole following it, tapering out, so no cliff throws a stair of shadow. Bunting posts, woods and the backdrop stand on `groundZOf` (no
+  constant lift). `BEYOND` (`scenery.ts`) is the near woods past out of bounds, 80% woods in 5:5:1 pine, broadleaf and bush, at most
+  1,700 pieces, 200,000 triangles a hole (worst 191,040), and `farWoods` the cheap trees from 140 to 440 yards, 2,400 at most, 50,000
+  triangles (worst 7,250), both in `BUDGET`; `SHADOW.top` is 38 for the great broadleaves.
+- What moves only to be seen, all from game time so a picture is the same
+  every run: `src/roll.ts` turns the ball as it rolls (the physics eases a
+  ball at rest toward flat, as a coin, so its turn is no good for this),
+  and the ball wears a band so the roll shows; `src/sway.ts` flies the flag
+  down the hole's wind and leans the trees with it, in the renderer's own
+  gusts, and, for rippling water, which no hole wears now (see `OCEAN_ON`), the ripples that spread over a pond
+  (`ripples`, `ringPlace`) and the ring where a ball went in (`splashRing`); `src/bursts.ts` is the
+  particles for a stroke (grass, or sand from a bunker), the cup and water. The particles move only as a
+  frame is drawn, so a test that pictures them steps a frame at a time, and
+  their gravity is set on the renderer in world units (30, as Miner has).
+  And everything answers, as `LOOK.md`'s stage 7 has it: the game tells of
+  a `knocked` ball, whose velocity turned by at least `KNOCK.least` in a
+  step (a rail met hard, a post, a drop off a step; never the green, sand,
+  a slope or a belt, and one knock in `KNOCK.apart` unless a harder one),
+  and `src/squash.ts` flattens the drawn ball against what it met and
+  springs it round again within a tenth of a second; `waggle` in `sway.ts`
+  swings the flag as a ball drops and `flash` in `glints.ts` lights the gold,
+  and `sparkle` there twinkles the sun on rippling water (at most six on a hole,
+  in the effects the gold leaves free; none on open water, so none on any hole now);
+  `src/pulse.ts` swells the aim's dots while a drag is held; and the
+  camera's `glide` eases it to each new tee.
+- `src/models.ts` and `src/models/` are the models: the cup with its
+  rounded gold bead, the collar, the flag on its round pole with a gold ball
+  on top and its cloth in soft folds, the tee's rounded markers, and the
+  ball (`golfBall`, smooth, with its band), each rounded and smooth-shaded
+  from `lathe` and the other shapes in `models/shapes.ts`; the obstacles at the sizes the physics will give them
+  (bumper, kicker, barrier, windmill with its turning blades, flipper, water, bunker,
+  conveyor, stream). Water lies `WATER_LEVEL` (0.3) below the grass, in the
+  earth `ground.ts` brings down to it from every edge of grass or sand that
+  meets it, in a rim of foam, two bands of shallows and deep water, filling its tiles exactly on minigolf and its streams; a golf
+  pond and a minigolf pond are drawn by `waterdraw.ts` as a curve (see the water, above). **Every hole's water is
+  open water**, golf and minigolf, ponds and streams, chosen by the user on 8 October 2026 from a sheet of the choices
+  (the ripple, open water for the ponds alone, and open water with and without the streams' streaks): `PATTERN.ocean`
+  (8, held equal to the renderer's `FLOW_WATER` by `test/water-ocean.test.ts`), waves that turn the normal in the world
+  and mirror the sky, so the sun glints on the crests and the glitter moves with the camera, in `OCEAN`'s figures
+  (`scale` 0.6 on golf and `minigolfScale` 0.6 on minigolf, read through `oceanScaleFor`; `speed` 0.55, `tilt` 0.3, a deep `body`
+  (0.02, 0.38, 0.86) and a `tint` of sky, retuned on 9 October 2026 against the title picture, whose water is less plastic), moving by the game's clock (`renderer.time`, which `main.ts` sets from game time,
+  so a paused game is still and a picture is the same every run). There are no circles on it: no idle rings, no splash
+  ring (`splashedAt` keeps none, so `motions().splash` reads 0) and no stream streaks, and no sparkles (a pond is still in
+  `ponds`, with a share of none, since the waves' own glints are the twinkle). So a stream shows no way it runs: the
+  user chose it so over streaks on the waves, and its tiles are painted as water on the map. `OCEAN_ON` (`{ golf: true,
+minigolf: true }`, read through `oceanFor`) is the one switch: `waterBed` and `streamBed` are built for either `look`,
+  and the rippling look is kept behind it, bit for bit (a hash of its beds, and a test that turning the switch off gives
+  minigolf its ripples, rings, splash ring and streaks again): the deep water in the renderer's ripple kind
+  (`PATTERN.ripple`, 5), travelling east at `RIPPLE.speed` 1.5 in cells of `RIPPLE.scale` 0.5, the crests in
+  `PALETTE.waterVein`, three idle rings a pond, and a stream marbled with streaks along it. The ripple cost a frame 0.4 to
+  0.6 ms on The Rapids and under 0.3 on The Meadow's Pond. Open water costs The Rapids from its tee about 0.2 ms a frame more than the ripple did (2.91 and 3.02 against 2.63 and 2.88), the whole of it 0.07 more, and the Pond nothing (3.18 to 3.20 both ways), timed in turn with the parent commit on 8 October 2026. A part's pattern with a flow kind has a `speed` where the old
+  kinds have a seed (`group` writes it with the renderer's `packFlow`); `look.ts`
+  hands the renderer a group with no placements and a flow kind at boot, so the
+  flowing build is compiled before the first hole is drawn. The showcase and the streams' beds are
+  one bed over all their tiles (`waterBed`, built as `sandBed` is:
+  the bands only along sides that meet what is not water, mitred at the
+  corners), so a pond of any shape has one edge and a channel between
+  ponds is one water; it was the largest rectangles to be had, each rimmed
+  on its own, and a pond that was not a rectangle showed the seams. `water`
+  is a pond as a rectangle, the showcase's, and still what the ripples and
+  sparkles find their room on; its `moving` part is one
+  fat ring of unit size, which the scene places as three ripples a pond
+  and one where a ball went in, each coloured from its fade by a tint
+  written every frame. `sandBed` is a hole's sand of any shape, raked in
+  stripes 0.75 wide in two tones laid by world position so they run on
+  across tiles, with the lip only where it meets grass, lit outside and
+  shaded within, which the game draws where `bunker` is only the
+  showcase's, built from it; and the decoration, moulded smooth from `models/smooth.ts`:
+  puffball trees with a lighter crown, stacked pines rounded at every rim,
+  pebbles, rounded hedges, flowering bushes and round posts and strings.
+  Each returns its parts, a mesh and a
+  material each, for `group` to turn into a renderer group; each has a
+  triangle budget in `BUDGET`. `showcase.html` draws every one
+  (`/showcase.html`, with `?model=name`), for building and looking at them.
+- **The kinds that throw or move** (the Pinball Shed's and the Waterworks'; each is held by an invariant and a
+  fuzzer action, above). A **kicker** is `KICKER` in `arena.ts` (`k` on a map, radius 1 and height 1.6 as a post's,
+  restitution 1.8 against a post's 1.2), handed to the physics as a bumper of its own. It throws about 1.75 times as fast
+  at the soft and middling shots (1.72 to 1.78 for arrivals of 8 to 35 units a second) and the course's ceiling still
+  holds it at the hardest shot (59.7 against 60), so it is felt where a post is not. It is drawn as a mushroom
+  (`models/kicker.ts`: an orange dome on a blue stem on a cream flange, to the physics' circle), kept out of the autopilot's route as
+  a post is, and lit by a warm flash for a third of a second when the ball knocks it (`kickFlash` in `glints.ts`, from game
+  time; `main.ts` keeps when each kicker was last hit, one slot a kicker, made with the hole, and draws the flash). A
+  **flipper** is an `ObstacleDef` in `obstacles.ts` (`at` the pivot's tile, `length` in tiles, `swing` in radians, `period`,
+  `phase`, `pivot` left or right). Its angle is a one-sided sine of game time (`flipperAngle`: up and back in the first half of
+  the period, at rest for the second, so a ball can be rolled under it), its yaw `flipperYaw`, and its pose from time alone,
+  never from where it was, so the physics is handed a box that turns about its root with a spin and no linear speed. A
+  ball met on the upswing is flung 4 units further and 2.9 times as fast as one rolled onto the arm at rest. Its pusher is
+  made last, so the barriers' and the windmills' keep their indices, and it is refused by name on a slope (the whole sweep
+  must be level) and for a length, period or swing it could not have. The autopilot's `inTheWay` and the invariants' box checks work in
+  the box's own frame, since an arm is turned where a barrier is not. A **moving bumper** is a `barrier` with `bounce`: the
+  physics box takes that restitution (refused by name past twice a post's or below nought), the scene draws it in the
+  bumper's red, and without it a barrier is what it was, held by a hash of five shots into The Meadow's Barriers. The speed cap
+  needed nothing new, since the game clamps every ball to its ceiling each step. A **stream** is a `conveyor` with `look: 'water'`:
+  a belt to the physics and the game (carried at the belt's speed, the same seeded trace as a plain conveyor) and
+  never lost on or splashed; water only to the eye and the map. It is drawn level with the grass, every stream of a hole as one bed over
+  the tiles of its belts (`models/obstacles.ts` `streamBed`, built as `waterBed` and `sandBed` are: a thin earth edge, foam
+  and shallows only along the sides that meet what is not a stream, so belts that touch are one channel; `stream` is the
+  one-belt model, which the rippling look's streak is taken from), in open water as every hole's water is (the rippling
+  look's streaks, carried along it at the belt's speed, `streamRipples` in `sway.ts`, are not drawn), and its tiles painted as water on the hole map
+  (`Obstacles.streamed`, read by `holemap.ts`). **No stream can be crossed**: a belt pulls a ball's velocity toward its own by
+  an eighth a step whatever its speed, and a belt is a tile deep, so a full-power shot across one dies 2.3 units in and is
+  carried off, and a ball carried at 6 units a second is counted at rest while it rides, so a hole's streams run beside the
+  line or along it, and The Rapids' belts run at 9.
+- `src/scenery.ts` scatters the decoration round a hole, on the rough and
+  clear of the course, from the hole's name and never the game's chance;
+  and dresses the hole, with bunting on tall posts round three sides just
+  outside the rail, beds of flowers at the rail's foot, and rocks in
+  clusters, the scattered trees kept off the bunting. Its `clearings` are the
+  discs of the rough round each rock, where no blade grows: the blades stand
+  higher than a rock does. The flowers carry their blooms on stems
+  (`BLOOM_TOPS`, in `models/decor.ts`) up out of the long grass, and a test
+  holds every bloom above three blades in four at the smallest scale a clump
+  is placed. All of it grows with the hole: `bigness(layout)` is the perimeter
+  over that of the biggest hole drawn by hand (fifteen tiles by seventeen), and
+  one for every hole that size or less, so a hole that was there has the very
+  scenery it had (a test holds every one to a hash), and a bigger has as many
+  pieces, tries and rock clusters again as it is bigger, and its bunting on
+  each side in strings of at most `REFERENCE.string` (60) units, each between
+  posts of its own.
+- **The grass of a golf hole** is the rough and the fairway, each its own kind (`turf.ts`, `golfFieldOf`, `golfKinds`):
+  the rough's long blades grow on the tiles of rough a ball is played from and the fairway's short ones on its fairway
+  tiles, inside the stakes, standing on the ground (each cell's own height, since a golf hole's ground rises and falls),
+  and nowhere else: not on the green, tee, first cut, sand or water (painted, as ever: the green and its fringe are mown
+  flat, and a bare cut keeps the putting surface and its edge one thing), and not past the stakes, on out of bounds, the
+  rock beyond it or on to the horizon (`outside` is left out), so the plain beyond is bare. The rough is the minigolf
+  rough, turf and not meadow since 4 October 2026 (`GOLF_ROUGH_DENSITY` 80 a square unit, as minigolf's); the fairway
+  (`FAIRWAY`, `GOLF_FAIRWAY_DENSITY` 100) is 0.3 tall, leaning 0.35 with its clumps at 0.2 (a quarter of the rough's
+  height, 0.39 at the tallest, under the ball's middle, so a ball on it is seen and is not pressed), in the painted fairway's green (`FAIRWAY_GREEN`, equal to `models/palette.ts` by a test: the blades average
+  to it by `grassGround`, so they read as the turf under them), stiff in the wind, and mown in the renderer's stripes,
+  two tiles across, the lighter on the rows the painted ones are, as strong (`FAIRWAY_STRIPE_ROWS`, held to
+  `ground.ts`'s). The cost of a view follows the blades it
+  draws (about 0.02 ms a thousand), and the rings (`GRASS`, shared with minigolf) have `near` 36, down from 45, for the turf (see `turf.ts`). A golf hole's
+  densest view draws 139,000 blades of the 262,144 there is room for (`BLADE_ROOM`), and minigolf's 122,000, held by
+  `smoke/game.spec.ts` (4 October 2026).
+  Nothing is scattered there either (`scatter` is empty on a golf hole, and its dressing is the bunting
+  alone, which marks where it ends), and the ground under it reaches the horizon (`GOLF_GROUND_REACH` past the hole's edge, in
+  the dry colour of out of bounds), where a square 600 across ran out under a hole 650 long and showed the sky. A ball at
+  rest in the rough has the grass pressed flat in a disc round it (`FLATTEN`, 6 yards across the radius, standing again 6
+  seconds after the ball is struck), through the renderer's own trample (`renderer.press`, once a frame at the game's
+  time, in the wind's direction): the grid it presses in is `trampleOf`, over the box round the hole at a cell of 0.5 to 1
+  yard, at most 320,000 texels; `flattenFor` says when and where (the rough only), and the page reads it back as
+  `motions().press`. A minigolf hole's grass, scatter and dressing are exactly what they were (held to a hash, and its
+  one kind of eighty blades, 0.55 tall, to a literal).
+- `src/turf.ts` is a hole's grass, as the renderer's GPU grass grows it: a
+  field of cells saying where the rough grows (off the course,
+  down where the rough lies, and on past the field as its `outside`), and
+  the hole's own wind from its name. The rough is turf, not a hayfield
+  (candidate B of a sheet, chosen 4 October 2026, so a ball sits down in it): eighty blades a square unit on every
+  course (a golf hole also grows its fairway, at a hundred), since 9 October 2026 shorter and lighter, the title picture's lawn
+  (`ab` of the second pass's mock: 0.55 tall and a fifth more or less, colour (0.17, 0.35, 0.009), `variation` 0.12 so it is calm, and no
+  painted grain on golf), leaning (0.45), its tallest, 0.66, well
+  under the level of the course (it was 1.2 tall, 1.8 at most, and darker); the blades sway in a wind that bends them
+  about 30 degrees across the ground at one moment, in gusts eight units
+  across that the renderer carries downwind at five units a second, which
+  is the flow, so ripples roll across the rough (and the flag and trees
+  follow the same gusts). `GRASS` is how the renderer thins it: `near`,
+  `mid` and `far` are the game's own, since the renderer's scale with the
+  blade's height and would keep every blade for eighty units, and `BLADE_ROOM`
+  is its room for blades in a frame, which the smoke test holds every hole
+  at every zoom well short of. The standard view cost 3.0 ms of the 6 when the turf landed (the `perf` baseline 2.99; the worst view the camera can be
+  orbited to 3.9 to 4.9), and the ladder's rungs 1.3, 1.0 and 0.7 below it at the home view (4 October 2026); the water's ripple and the
+  ground texture came after, and the figure to hold is the baseline `perf` has now. At `near` 45 the turf's worst orbited view drew all
+  262,144 blades and cost 7.2 ms, which is why `near` is 36: that view draws 160,000. No blade grows on the course:
+  the green is painted, in its two stripes, by the scene (`PALETTE` in
+  `scene.ts`), as `LOOK.md`'s clean look has it, and the ball leaves no
+  track. The page hands the field to the renderer when a hole begins, and
+  the first frame waits for the grass. Under the rough's blades, the scene
+  paints the ground in the colour the renderer gives for between them
+  (`grassGround`), so the thinned rungs hold the field's colour. The field
+  is a texture the renderer limits to `MAX_SIDE` (1024) cells a side, and
+  the finest cell, a quarter of a unit, covers a hole of sixty tiles across
+  and no more: `cellFor` takes the finest of `CELLS` (each goes a whole
+  number of times into a tile, so the course's edge falls between cells)
+  that fits, which for every hole drawn by hand is the quarter, and for a
+  bigger one coarser, up to 489 tiles a side with the 1.5 cell, and refuses
+  a bigger by its size. A coarse cell clears every cell a rock's clearing
+  touches, and the margin round the course is a whole number of cells so its
+  edge lies on a tile's. What a hole costs to begin grows with its tiles,
+  about 8 microseconds each, and not with its cells: the `perf` gate holds
+  the biggest.
+- **The title's look** (8 October 2026; `LOOK.md` says what was chosen and what it costs). The scenery is low-poly
+  (`src/models/lowpoly.ts`: `broadleaf`, `conifer`, `boulder`, `bush`, `fern`, `cloud`, `stone`, `farTree` and the golf
+  tree, flat-faced from `shapes.ts`'s `lump` and `frustum`); the scatter's kinds are named for what is drawn (`broadleaf`,
+  `conifer`, `bush`, a bush of variant one drawn as a fern, `flowers`, `rock`), and the scenery hash test maps them back to
+  the names it was written with, so every piece's place is held. Round a golf hole `beyond(layout, name)` in `scenery.ts`
+  puts the near woods on the ground no ball can reach (see the world past a golf hole, above). The lawn is mown in a checker (`mownAt` and
+  `CHECKER` in `ground.ts`, the one place it is said: squares of four tiles on golf, two on minigolf), and a golf hole's
+  fairway, alone, in broad stripes along its line of play instead (`stripedAt`, `STRIPE.width` 3 tiles, by how far a point is
+  across `HoleDef.way`, the line from the tee by the corner to the cup that `golfHole` makes in world units and `layoutOf`
+  carries as `Layout.way`, so a stripe curves with a dogleg and is no stair of tiles; the green, the cut and a hole without a
+  `way` keep the checker; a hole's hash leaves `way` out), and a fairway's blades are unstriped over it. The sun's shadow box (`boxOf`) holds what stands round a hole and is `SHADOW.top` high;
+  on golf its map is fitted to the view (`sunFitOf`, `SHADOW` in `look.ts`), softened, and falls on water too.
+  **The backdrop** (`src/backdrop.ts`, `backdropOf` and `cloudAt`): faceted hills from `BACKDROP.gap` past the hole and its scenery,
+  mountains, a lake in a gap of them (the hole's water too, so it follows `OCEAN_ON`), a thousand far trees and clouds that
+  drift by game time along the hole's wind, within `BUDGET.backdrop` triangles. **The fly-in** shows it: `FLY_IN` in
+  `camera.ts`, `rig.flyIn` and `rig.cutShort` (once only, since a held drag tells it every frame), the far plane out to
+  `CLIP.horizon` while it flies (`farPlaneAt`); the Director's `{ flyIn: true }`, which the page and the fuzzer pass and a
+  test's page leaves out with `?flyin=0` (`start(page, { flyIn: true })` asks for it); cut short by a drag, the flag button,
+  Overhead or a stroke; held by `flyInProblems`. **The sky is the fly-in's and the title's alone** (10 October 2026): the clouds drift at
+  90 to 250 yards up along the wind, straight over the hole (on 42 of the 54 holes one passes over it in an hour, and a golf hole has one over it for
+  3 to 51 per cent of that), which is the height the aim view stands at (108 on a desk, 216 on a phone), and one drawn there was a cloud over the shot:
+  The Fell Race at nine minutes in was one cloud over a phone's whole screen. Measured with the clouds' real meshes put through the real
+  aim view of a driver, at the tee and half way up the first leg, some cloud was on the screen for 1.0 per cent of an hour over every golf hole, and for
+  up to 9 per cent on one hole on a phone (The Fell Race 9, Two Lakes 8, Home Stretch 7) and 2 on a desk. `seesSky(tilt, blend)` and `rig.seesSky(t)` say whether the top
+  of the screen is above the horizon (tilted past `SKY_TILT`, 70 degrees, which no view a shot is played from is: `TILT.most` is 57), and
+  `main.ts` hands the scene `scene.setSky(titled || rig.seesSky(t))` each frame; with it off the clouds are a matrix of no size where they were
+  (as the title's ball is) and `motions().sky` reads 0, with it on they are as they were, which leaves the fly-in's pictures as they were.
+- **The game is an installable app** (14 October 2026; plan `~/.claude/plans/humble-humming-dream.md`). It is served at
+  https://golf.ooer.com/, at the root, so every path is relative and Vite's base is untouched. `public/manifest.webmanifest`
+  names it (Ooergolf; "Of Course!" under the icon; standalone; the boot sky `--boot` for its colours, held equal by
+  `test/manifest.test.ts`) and `public/icons/` are its icons, cut from `src/title_sq.png` (the ball on its tee) by
+  `node scripts/make-icons.mjs`, run by hand when the picture or the crop changes, quantised to 32 levels a channel (the 512s
+  halved by it) and held under a ceiling; the maskable one is cut wider so the ball sits in the launcher's safe zone. The
+  service worker is `src/sw.ts`, a shell over `src/offline.ts` (the decisions, tested headless: the files a build keeps, the
+  cache named by a hash of them so a new build is a new cache and the old is thrown away on activate, a navigation
+  network-first with the cached page as fallback, a same-origin asset cache-first, matched by URL alone since Vite's preview
+  says `Vary: Origin`, anything else passed); the plugin `worker()` in `vite.config.ts` bundles it to `dist/sw.js` as the build
+  closes with `__ASSETS__` the files the build wrote (about 1.8 kB, 0.9 gzipped, at the root and not counted by `perf`'s
+  download). `src/install.ts` says when it is registered (`shouldRegister`: a built page only, so the dev server and every
+  smoke test on it register nothing, and `?sw=0` leaves a built page without one; `main.ts` registers it after `ready`, so the
+  boot cannot move) and keeps the browser's install offer (`InstallOffer`: `beforeinstallprompt` held, `prompt()` once when
+  the **Install the game** pill in the start screen's head (`#install`, `Hud.showInstall`: under the heading, and under the
+  title at the panel's top right beside it, so the cards take no height for it; it was under the cards, below the fold) is pressed, withdrawn on
+  `appinstalled`; Safari and iOS fire nothing and show no button, their Share → Add to Home Screen installs it).
+  `smoke/pwa.spec.ts` builds `dist` (`buildDist` in `smoke/build.ts`, which `perf` uses too) and serves it with Vite's preview on
+  the smoke port plus one: the worker ready, the build in one cache, the page booted offline with its save, `?sw=0`, and the
+  button through a synthetic offer. Not done: no "update ready" toast (a player online is on the new build from their next
+  load, and the open page is not told), no hint for iOS, the showcase is not cached.
+- `src/debug.ts` is `window.game`, the test API. `src/invariants.ts` lists
+  the rules that must always hold. `src/autopilot.ts` plays the game by
+  itself, for the gates and for par; its route over the tiles (`pathToCup`)
+  is a search with a heap, n log n, and a test holds it to the plain way of
+  finding it, on every hole and on random maps, because looking at every tile
+  for the nearest each time was n squared and took twelve seconds a shot on a
+  hole of a hundred thousand tiles.
+- Golf is a layout that is `golf`, which `layoutOf` says of a map drawn in `f`
+  fairway, `r` rough, `g` green, `c` first cut and `t` tee's box (refused by name if mixed
+  with `.` or the digits), beside the same `T`, `C`, `s`, `~`, `o` and `#`.
+  `lieAt(layout, x, y)` is the one place the ground's kind is read, by `LIE` (on golf by zone, see the golf ground, below;
+  `tileLieAt` is the tile's, which the physics rolls by), and `src/surfaces.ts` is the leaf table of what each kind does: its `roll`
+  (which is also the slope it holds a ball on, asin of the roll over 70), how
+  much of its speed a landing `keep`s and how much it hops (`bounce`), and
+  what it takes off a club from that lie (`power`, `loft`, `wild`). A hole of
+  minigolf is given none of it and plays as it did (the pace figures and its
+  pictures hold).
+- `src/bag.ts` is eight fixed clubs (nothing bought, nothing saved), each a
+  loft and a launch speed; a unit is a yard, the driver carries 250. `carrying`
+  is the one formula for a carry (speed squared times sin of twice the loft
+  over gravity), to which the game's own flights are held within 8%.
+  `src/flight.ts` turns a club, a power, an aim and a lie into a launch
+  (`strike`), with a scatter that grows with the power and never adds speed,
+  from the game's `random`, and none, no chance spent, for the putter.
+- `Game` on a golf hole holds the club in hand (`inHand`, `pick`, the driver
+  at each tee, and the putter when a ball comes to rest on the putting green, which the player may override with `pick`) and lands the ball: a step that met the ground going in faster
+  than `LANDING.least` has the speed along the ground cut to `keep` less the
+  steeper it came down, and hops by `bounce`, along the slope. That, and not
+  `roll`, is what makes a driver run on a fifth of its carry (288 yards from a 239 carry), a 7-iron a tenth and a sand wedge
+  a thirtieth, and hop 4 or 5 yards high after a 7-iron (`surfaces.ts` says why, and why the tee and the fairway keep a
+  roll of 20: it is the slope the ground holds a ball on, which the generator holds every Links hole's hills to, so lowering it
+  would make every hole's hills gentler, and "a little less rolling friction" is the greens' speed and the landing's `keep`
+  and `bounce` instead; the first-landing carry never moves with any of it, so the ring is true); `landed(x, y, speed, first)` tells of
+  it. Golf pays coins as minigolf does (`PAY`, and the shop's items work on both), and the rail is a wall to a ball in the air.
+- `src/shaping.ts` is what a golf shot has besides its aim and power, and what the air does to it: a **shape** (the
+  player's choice per lofted shot of straight, draw or fade: -1, 0, +1, a heading that turns in the air at
+  `curveRate(shape, loft)` radians a second, positive a fade, to the right as seen from behind the ball, a pure
+  rotation that adds and takes no speed, falling with the club's loft to nothing at 72 degrees so a driver curves 46
+  yards at the fullest, a 7-iron 25 and a sand wedge 6, and only until the ball first comes down: twice what it was, since on 10
+  October 2026 a player said the draw and the fade made little difference, at 23, 12 and 3, a ninth of the carry or less; `SHAPE.turn` is
+  0.38, which the narrowest phone's aim view shows the landing of at three quarters of the way to the safe box's edge, held by `test/shape.test.ts`, so it was not made more; a sixth of the carry with a wood or an iron, a twelfth with a wedge, and the
+  shop's shapers, 1.5 to 2 times it, are relative to it); a **spin** (flat,
+  back or top: 0, -1, +1, which multiplies the share of its ground speed the ball keeps at its FIRST landing by
+  `spunKeep`: full topspin about 2.7 times a driver's roll-out, full backspin takes more than all of it, so the ball is
+  checked and comes back a yard or nine); and a **wind** (`HoleDef.wind`, miles an hour, `WIND.most` 25, calm
+  without it, which is every minigolf hole; it blows the way the hole's grass and flag already show,
+  `windDirection`, the very vector `turf.ts windOf` gives, and pushes a ball in the air, steady, `windPush` yards a second
+  a second, 10 mph moving a full driver 9 yards sideways or along and a sand wedge 23, since a high ball is blown
+  longer). `Game.shape`/`spin` are chosen (`setShape`, `setSpin`, a number that is not one is refused, a value past the
+  limits held in them), latched at the strike, and put back to nought by it and at each hole; `Game.wind` is worked out
+  once a hole. All three are plain additions in `Game.step` (`blow`, before the step's velocities are read, only to a ball in the air on
+  a golf hole) and `Game.landing`, with no chance drawn, so the preview and the autopilot's rehearsal, trials of the same
+  game, include them to the digit (`Previewer.run` and `Rehearsal.shot` take shape and spin; `Preview.heading` is
+  where the ball went, which the spread is laid along). `airTime` and `windReach` say how long a shot is in the air and how
+  much a tailwind carries it further, which the camera's aim view adds to its reach. The Links have winds of 4, 6, 10, 12,
+  5, 8, 7, 10 and 12 miles an hour (nine holes' own, chosen so the autopilot's round stays within a seventh of what it was).
+- `src/preview.ts` is the flight a drag would make, worked out before it is taken: a trial in a rehearsal of the hole
+  (`Game.rehearsal`, handed the events it is told by), with chance in the middle, so it is what the game does to the
+  shot struck true, exactly (the arithmetic carry is four in a hundred short, and worse on a slope), a knock by a
+  tree or the rail in the air included. A `Previewer` is made with each golf hole (a millisecond or two) and let go
+  with it, and `run` writes a `Preview` into buffers made once: the path a point a frame to the first landing, where it
+  came down, went into the water, dropped in the cup or was lost out of bounds (which the game does a step before it would
+  tell of a landing, so the `outOfBounds` event is its place), what the ground is and how it slopes there, the carry, where
+  a tree or the rail knocked it, and the swing's spread (across: the carry times the sine of the scatter; along: what the
+  worst mishit of speed falls short by, the carry going as the speed squared), an ellipse whose far end is the ring since
+  a swing never adds speed. About 0.6 to 0.8 ms a preview, once, when the aim, club or ball changes. `src/readout.ts`
+  says the pin (`pinReadout`, `pinText`: whole yards and an arrow for half a yard or more of rise) and where a shot comes
+  down in words (`landingText`). `src/holemap.ts` paints a hole's ground from above into a buffer (one pixel a yard at
+  most, off-course ground clear, trees as dots, in the scene's own palette) and says where a point is on it
+  (`mapInto`, `mapPoint`); the hud draws it on a canvas at the left edge and over it the ball, the cup's flag, the aim's
+  line, ring and spread, and what the camera shows, redrawn only when something changed.
+- On the page a lofted shot being aimed is drawn as its flight, not its dots (a putt keeps the dots): twenty-eight dots of
+  arc by length along it, a ring at the landing (the marker's yellow, blue for the water, red for out of bounds, lime for
+  the cup), the spread, and a red mark where a tree or the rail knocks it, each a group after the marker's
+  (`Scene.setShot`, `shotMarks`), scaled for the camera's distance (`markScale`) and laid along the ground's slope and
+  lifted clear of a hollow (`placeOnSlope`, `ringLift`: a flat ring over a hill is a crescent in the turf). The bag says
+  where it comes down after the club ("Driver · lands 260 yd · fairway", "hits a tree · lands 67 yd · fairway"), the
+  hole's panel says the pin ("503 yd ▲ 1") and under it the wind (an arrow that points the way it blows on the screen,
+  turned with the camera by `windArrow`, and "12 mph", or "calm"), and the map is shown on a golf hole and away on minigolf
+  and under the start screen. In the bag, between the words and the clubs, two cycle buttons, **Shape: Straight / Draw /
+  Fade** and **Spin: Flat / Back / Top**, shown with a lofted club in hand and put back to straight and flat by a
+  stroke (the hud is reconciled to the game's values each frame), and the bag's words name them ("Driver · fade · back ·
+  lands 262 yd · fairway").
+- A `Course` has `golf`, held by a test to its holes' layouts. `ground.ts`
+  draws each kind of golf ground as a mesh of its own colour; the rough is
+  painted under its blades (see the grass of a golf hole, in `turf.ts`'s bullet). `src/marker.ts` is the ring at a
+  first landing, from game time; the camera follows a lofted ball up and
+  catches up faster the faster it flies (`catchUp`).
+- Out of bounds is `x` in a golf map: rough to roll on and play from, and a ball on the ground on it is lost, as one
+  in water is (a stroke, `outOfBounds(x, y)`, the ball put back where it was struck from; `Game.putBack` is both), and
+  one in the air over it is not. It is drawn dry and pale, with a stake (`stakesOf`, `models/decor.ts`'s `stake`)
+  every second tile of the line; `place` refuses it, and an invariant says a ball never rests on it. A tree is `^`:
+  its trunk is a post the physics has (`TREE`, in `src/trees.ts`) and its canopy a cone the game tests the ball's
+  step against (`hitCanopy`, `turned`): a drive at twenty units high is stopped and drops, a high wedge (about 26 to
+  51 units short of it) goes over, and one rising into the underside is knocked down. What is drawn is what is met:
+  `golfTree`'s tiers lie inside the cone a ball's radius bigger, which a test holds. That cone (`insideCanopy`, the rule
+  the invariants hold a ball to) is the ball's radius round the solid cone exactly since 14 October 2026: a rounded rim and
+  an underside no wider than the base (it was a sharp rim and a cylinder under the base a little wider than it, which the
+  fuzzer found holding a ball at rest on The Old Course's The Burn, 6.5 yards from a trunk and 3.8 above its foot on the
+  hillside, to be inside the crown by a tenth where its sphere cleared the rim by a hair). And a tree whose crown a ball at
+  rest on the ground round it would be inside at all (`restUnderCrown`: the bank climbs two yards a tile, so a ball five
+  yards uphill of the trunk is above the crown's base) is **felled** once the ground is final, banks and all (`felled` in
+  `golf.ts`, spending no chance): a tree or two on 34 holes of the six courses, held by `test/tree-ground.test.ts` on every
+  tree of every course; the hole hashes, the kit hashes, the fuzzer's draws and the pace figures were written again for it.
+- `src/golf.ts` makes a golf hole from a `GolfSpec` and a seed (`golfHole`): a fairway along a way of play bent once
+  (`bend`), rough, out of bounds and rock round it, a green, a tee's box, bunkers at the green and along the fairway,
+  ponds set in hollows, trees in clusters in the rough, all placed clear of the tee and the cup, and the ground hills
+  with the tee, the green and every bed levelled, made gentler until the tee, fairway and green rest a ball. **The land
+  rolls on The Links and The Isles** (`GolfSpec.rolling`, set on their `HILLS`; off by default, and then a hole is the hole it
+  was, byte for byte, which `test/golf-hash.test.ts` and `test/banks.test.ts` hold; The Fells and minigolf do not ask for it): a
+  long swell under the hills (`noiseGround`'s `long`, `LONG_SWELL` in `noise.ts`: an octave 100 tiles, about 300 yd, across at
+  weight 0.8, with the lake and pond blends left out of the scale that is found from the steepest step, since a lake's wall
+  flattened every hill; the walls are cut to the limit after), and **banks** (`banked`, `BANKS` in `golf.ts`): after every
+  hazard is placed, the rough and the ground past it rise by a smoothstep of the distance from the nearest tile a ball is
+  played from (fairway, green, cut, tee) to 6 yd over about 18 yd (`BANKS.height`, `width`; not within `BANKS.dry` tiles of
+  water, nor on sand), averaged with its neighbours six times (`BANKS.smooth`), eased at 1.3 a tile and the whole held under 1.45,
+  so the fairway lies in a gentle valley as the title picture's does and a ball in the rough is carried back toward it. The
+  smoothing came on 16 October 2026 from a player's screenshot of banding across the rough of The Straight Mile: counted in whole
+  tiles from a fairway's edge that steps a tile at a time, a bank rose in shelves a yard high wherever the edge stepped, and the
+  tint's bend drew each as a dark and a light band; `test/banks.test.ts` holds the bend along a bank's run under 0.3 yards a tile
+  at the ninetieth percentile on every course that rolls (0.31 to 0.57 before, 0.14 to 0.28 after). It felled 40 fewer trees on
+  the five courses that roll and moved their pace within tolerance (The Links 30.25 to 29.88, The Heath 30.19 to 29.63, The Woods
+  37.44 to 37.5, The Isles 50.06 to 50.94, The Old Course 45 to 44.06; the baseline not written). Placed from the ground as it was (`plain`, the hollows), so a
+  hole keeps its water, sand, trees, out of bounds, tee and cup tile for tile, and its seed and par. Chosen by the user on 9
+  October 2026 from a mock (banks 6, the swell at 0.8, stripes). Relief over the playable tiles (`test/banks.test.ts` holds at
+  least 8 yd): The Links 9.4 to 14.4 yd (was 4 to 9) and The Isles 13.6 to 25 (was 2.5 to 6); the share of rough that drains
+  toward out of bounds falls on every hole (The Opener 29.6% to 8.0%); a hole begins about 8 ms slower. The fuzzer counts balls
+  come to rest on a bank (`checked['rest on a bank']`, `onBank` in `src/slopes.ts`: rough 1.5 yd or more above the lowest played
+  ground within eight tiles; 80 over `test/fuzz-links.test.ts`'s four seeds) and `smoke/progress.spec.ts` strikes one from
+  the highest bank of The Opener. It refuses a spec that cannot be made, by name. `src/links.ts` is The Links: nine specs, made when first asked for, each seed
+  chosen by playing forty with the pace gate's player and looking. A hole of 560 yards is 24,000 tiles of map and
+  8,500 of ground: about 110 ms to begin in the page (the zones and the water's curve are most of what it costs more than before), 3.9 ms a frame at its worst view, held by `perf`.
+  What the two hard courses added are options of a `GolfSpec`, each with a default that leaves a hole as it was
+  (`test/golf-hash.test.ts` holds every hole of every course to a hash of its map, par, wind, greens, obstacles and terrain, so
+  when a gate says a hash moved, a generator changed and not the content; a hole of a new course is added to it when it should be
+  held): **`heighten`** (1 to 2.5, refused by name outside it) is `noiseGround`'s own, which scales the heights, multiplies
+  them by the steepness and cuts every tile to the exact lower envelope under the physics' step (`lowerToLimit`, which says how
+  many rounds it took), with the tee and cup plateaus and the level discs held level again; only the tee box, the green and
+  its plate, and the **`shelves`** (yards along the way, 40 or more from tee and cup, each a level disc of four tiles) are asked
+  to rest a ball, and in place of the rest of the fairway holding one, `drainFault` in `src/slopes.ts` asks that from every tile
+  that does not, the steepest descent of the smoothed ground reach ground that holds a ball, rough, sand or water, never rock or
+  out of bounds. `holdsBall` there is the one rule for whether a lie holds a tile's slope, and `runningShare` the share of fairway
+  that does not. Only hills or long hills give relief enough, and heighten 1.4 to 1.8, which the plan began with, reached no more
+  than about a twelfth, so The Fells are at 2.5 on steepness 0.9 (seeds are chosen by share and relief). **`gap: { to, width? }`**
+  on a bend of 35 degrees or more plants the rough inside the corner as a wood, trunks three tiles apart, with a lane from the
+  tee to `to` yards along the second leg kept clear (`laneOf(hole)` gives it to a test) and a shelf at its end; a wood spends no
+  chance. A lane on a bend past 55 degrees runs into the rock beyond out of bounds. **`lakes`** (`LakeSpec`: where along the way
+  or round the green, which side, a radius range, `islands` of fairway, rough, sand or the green, and an optional `carry`) lays
+  water too big to go round, before any bunker or pond; `CARRY` is the most water, 45 tiles, a flight may need, and a lake that
+  would leave no way is not laid; **`bunkers.island`** puts sand on an island (radius 5 or more, since two on a radius of
+  4 fail half the seeds). A lake across a 560-yard hole is only 45 to 80 yards of water on its shortest line, so an island is a
+  lay-up only from well back. The seed search takes `--course links|fells|isles|heath|woods|old` (a table in `scripts/seed-search.ts`, a row a course) and prints the running share.
+  **`woods`** (`true`, or `{ from }` tiles, `WOODS.from` 2, 1 to 5) plants the rough on both sides of the whole hole on the gap's
+  grid from `from` tiles off the fairway's edge to the stakes, after a gap's own wood and before the scattered trees, keeping
+  the tee's and the green's clearings and a gap's lane as `treeFits` does and spending no chance: about 130 trunks on 500 yards
+  (a trunk for every nine tiles of a band three and a half tiles wide each side), drawn under `BUDGET['wooded hole']`; off, a
+  hole is the hole it was to the byte (`test/woods-option.test.ts`). The Woods are made of it.
+- **Putting** (stage 6). A golf map's `c` is the **first cut** (`LIE.cut`): mown, but longer than the green, one tile
+  (3 yards) wide round every putting green (eight ways, so no gap at a corner) and one tile of rough along each side of a
+  fairway, laid by `mown` in `golf.ts` after everything else is placed, spending no chance, and only on a tile that is
+  exactly `r` or `f`. It rolls slower than the fairway (23), is a little worse to play from (`power` 0.97, `wild` 1.1),
+  grows no blades and is drawn in an olive of its own. A hole's greens run at `HoleDef.greens`, in yards a second a second,
+  less the faster (`GREENS` in `surfaces.ts`: 11 fast, 14 normal, 19.5 slow; a hole without it has 14; 11 and not 10.5 since
+  the break model holds to the game's putt down to 11):
+  `rollOf(lie, greens)` is the one place that says it, for the physics' world (`makeWorld`'s fifth argument),
+  `Game.rollAt`, the autopilot and the rule that a hole's tee, fairway and green rest a ball, and the cut runs as much
+  slower than the green as it always did. The green's **contour** (`GolfSpec.contour`, from 0 to 1 of `GREEN.steepest`,
+  0.10: a tenth) is in the ground's own `terrain`, so a putt is the minigolf's model on a slope: `greenContour` in
+  `noise.ts` is a plane through the cup, tilted along a direction from the hole's seed (`tiltAngle`; 0.8 of the
+  slope) with two sizes of swells on it (0.2), scaled so the steepest slope on the green's tiles is exactly the contour
+  times `GREEN.steepest`; `golfHole` lays it on a level plate round the cup (`PLATE`), which eases back into the hills over
+  as few tiles as keep every step no steeper than the hills' own, so the hills away from the green are the hills the hole has
+  (a test holds every Links hole's terrain beyond 34 tiles of the cup to a hash, written again for the rolling land) and a green that would go below nought is lifted. A uniform tilt is what makes a
+  break: swells alone are zero-mean, their pull on a ball changes sign along a putt and cancels (median break 0.07
+  yards on The Links, with the cup 1.45 yards in radius). The Links' contours run from 0.3 (the opener) to 1 (the last) and
+  its greens from 11.4 to 16.7 (`speedName`: fast at 12.5 and under, slow over 17); The Straight Mile asks for its hills as they were (`steepness: 0.6975`, the 0.75 the
+  generator used to gentle once because its green was not level). **The break** is in `green.ts`: `puttFrom` works a putt
+  out backward from the cup, a point mass over the game's own ground with each lie's roll (about 0.03 ms, held by a count
+  of slope reads), `breakOf` is its `across` (how far to aim off the cup, positive to the _right_, so a fall to the right is
+  aimed to the left: the putt that arrives and would die half a yard past on a level green) and `rise`, held to the game's
+  own rehearsed putts to 0.4 yards at the 90th percentile at every speed of green, and `greenArrows` is an arrow for each
+  tile of green leaning more than 0.002. Across the Links' greens, putts of 5 to 25 yards break by a median 0.84 yards,
+  at the 90th percentile 2.15, and 26% by more than the cup's radius (Home Stretch: 1.76, 4.01, 63%). A putt is struck along the
+  ground's slope in `Game.shoot`, since sent flat into a rising face a hard one is going into the ground by its speed times the
+  slope, which a tenth of a slope at the putter's hardest makes a landing, and the surface scrubs a landing. On the page the
+  arrows (a merged group of flat arrows, blue-violet, pointing the way the ground carries a ball and 0.9 to 2.2 yards long
+  by the slope, built once for a hole, none on a level green) show while the ball rests on the putting green or the first cut,
+  the panel under the pin says "Fast greens" (`speedName`) and "Putt: aim 3.5 yd left, downhill 0.8 yd" (`puttText`: worked
+  out when the ball comes to rest, never in a frame, and only on a hole that sets its greens' speed, so a level hole of the test helpers reads
+  as it did), and a putt being aimed on such a hole is drawn as its own roll along the ground to a ring where it comes to rest
+  (`Previewer.roll`, a second `Preview` made once with the hole, its dots over the straight ones, so the gap is the break).
+  The autopilot putts by it: on a green that leans anywhere on the line the putt is tried in the rehearsal and corrected by
+  `refine` (`PUTT` in `autopilot.ts`: tolerance 0.2, up to 8 trials), and on a level one it is the arithmetic, shot for shot
+  what it was (the minigolf courses' rounds are held identical); the cut is dearer to route over
+  than the fairway and cheaper than the rough, and a ball in it is played with the putter within 45 yards or with
+  the club that reaches.
+- The autopilot's golf shot is tried before it is taken. `Game.rehearsal()` is a game of the same hole that no one
+  plays, chance held in the middle so a trial is the shot struck true, and only it may `trial(x, y)`; `refine`
+  (`src/planner.ts`) corrects a candidate's power in proportion and its aim by the angle it was out by until the
+  ball rests where it is meant to or drops. `src/route.ts` is the way to the cup over ground a ball is played from
+  (round water, out of bounds, rock and canopies; the fairway cheapest; where land is cut off from the cup by water, an
+  island or a shore a lake runs across, the flood back from the cup also crosses water at the fairway's cost, so the ball
+  there has a distance and a lay-up has somewhere to go, a way point never stopping on water; land of fewer than `ISLAND`, 6, tiles
+  is not counted as cut off, and canopies are ignored when judging it), and `strokesToGo` judges a resting ball by it,
+  by its lie and by whether it is under a tree. The candidates are the arithmetic's (`golfCandidates`: the two shortest
+  clubs that reach, the putter for a chip and run) at the cup, and lay-ups (`golfLayUps`): the longest few clubs at the
+  place on the route they reach; `choose` tries each, judges it by where it rests (a ball lost is the stroke again and
+  one more) and the best few again a little to either side and short, as a swing's scatter has them, and takes the best,
+  the putter before any and then the earliest. A `Plan` says where it expects the ball to rest (`expect`), which is
+  what happens, to the digit, when the swing is true. A shot is fifteen or so trials of 0.3 ms. `planProblems` is the
+  rule that a plan is a shot, and the fuzzer checks each it takes. How far a ball runs on after it lands, which the
+  arithmetic's first guess must allow for, is `runOn(club, lie)` in `autopilot.ts`, worked out from the surface table by
+  the arithmetic of a landing (keep less the steepness, then the hops by bounce, then the roll) and not written down, so it
+  moves with the next retune; against the game on the fairway it is within a tenth of a point of the share of the carry
+  (driver 20.0 against 20.4 per cent). A ball that bounces on a side slope rests at a distance that is not a line of its
+  power (a 5-iron at 160 yards across seven or ten degrees: 163 at 0.855 falling to 156 at 0.915, with steps of 8 and 18
+  between neighbours), so the planner there finds the nearest it can (2 to 3 off) and not its tolerance.
+- **The caddie** (16 October 2026; `src/caddie.ts`): a word of advice when a golf ball comes to rest off the putting green, so a
+  player sees what the clubs and a draw or a fade are for. `Caddie` (one a golf hole, made with it as the previewer is, with a
+  `Previewer` of its own that leaves the rest out, `{ rest: false }`) asks what a player most likely does next, the club in hand
+  struck straight at full power along the line of play (`lookAlong`, the camera's own heading), and when that comes down in
+  trouble (`troubleOf`: water, out of bounds, sand, or a tree or the rail in the air) offers a **shape** of the same club that
+  comes down clear (the one nearest the cup), and failing that a **lay-up**, the first shorter club that does; and where the club
+  in hand carries `CADDIE.past` (25) yards past the pin, the club that **reaches** it, at the pin. Every tip is a preview, struck
+  true and tried, and must make `CADDIE.progress` of the distance (The Fells' Plunge had "a full 3-wood carries 26" before that
+  rule). It spends at most one preview a `step` and `CADDIE.previews` (6) a look, since the autopilot's planner, which would choose
+  better, costs 49 ms a shot on average and 233 at worst; a step is 2.2 ms at the median, 3.7 at the ninetieth percentile and 16 at
+  worst in Node (16 October 2026), as one preview of a drag is. Measured over four rounds of each golf course before it was built: a
+  driver along the line from the tee is in trouble on 8 of 36 tees of The Links, 20 of The Heath, 12 of The Fells, 8 of The Isles and
+  none of The Woods or The Old Course, and a shape saves about half the shots in trouble. `CaddieTalk` is when it speaks, for the
+  page and the fuzzer alike: a look begun when the ball comes to rest somewhere new or the club or shape in hand changes, a tip said
+  of its own accord once a shot (`voiced`), while the player has taken fewer than `CADDIE.taken` (3) of its kind (`speaks`), and
+  otherwise only when the bag's **Caddie** button asks (`ask`; with nothing to change it says the club is fine, `fineText`); its ✕
+  puts it away for the shot, and its button (`take`: "Try a draw", "Take the 5-iron") puts the club and shape in hand. A stroke
+  that took the tip, by its button or by choosing it, is counted (`tookTip`, read through `Game.struckShape`, the shape the stroke
+  was struck with, since `shape` is put back before the stroke is told of) in the save's `caddie` counts, held at the limit by
+  `Progress.tookTip(kind, most)` so the save is bounded. The tip is a panel of its own (`#caddie`) at the bottom left above the
+  help, and on a phone where the drag's help goes (the two are never up at once), never over the bag, since the ball rests just
+  above the bag on every screen; it is put away while a drag is held (`data-held`). It speaks in career events too (the user's
+  choice: it says only what trying the clubs in the preview would show). Not on minigolf, on the putting green or with the putter
+  in hand. **Spin** (17 October 2026): once the club and the shape are settled, the shot they came to (the tip's, or the club in
+  hand's where it came down clear) is struck flat, back and top and each carried on to where it rests, and `bestSpin` chooses:
+  back spin where a shot that lands on the green rolls off it and back spin holds it, and otherwise whichever of back and top comes
+  to a good rest (fairway, cut, green, tee or the cup) `CADDIE.nearer` (10) yards nearer the pin, or keeps out of the water, out of
+  bounds or sand that flat rolls into; added to the tip there is ("…with back spin") or a tip of its own, kind `spin` ("Add top
+  spin"), never the spin already in hand, and a tip whose flat roll ends in trouble that no spin saves is dropped. Measured before
+  it was built over two rounds of each golf course: an approach that lands on the green rolls off it about 85 per cent of the time
+  flat, and back spin holds it in about 70 per cent of those; top spin leaves a short shot five yards and more nearer on about a
+  third of approaches, mostly drives and lay-ups. A roll to rest is 4 ms on average and 52 at worst in one go, so the `Previewer`
+  runs it a slice at a time (`beginRest`, `stepRest`, which come to the very rest `carryOn` does, point for point, held by a test)
+  and the caddie runs `CADDIE.slice` (60) frames a step, never a flight and a slice in one: 1.0 ms a step at the median, 3.1 at the
+  ninety-ninth percentile and 15 at worst (a flight), about ten steps a look and 17 at most on the tees of every course. Spin has
+  its own count in the save (`caddie.spin`) and goes quiet as the others do, and `Game.struckSpin` is the spin a stroke was struck
+  with. Not done: the wind and the putt in words, and a tip for a shot the player has aimed rather than the line of play.
+- `src/hud.ts` is the words over the course: the hole and strokes, the
+  score's name when a hole is done, the card, the coins and gems, the
+  shop, and the start screen, shown at boot and from the card's Courses button, which since 15 October 2026 is the
+  **course picker** (plan `~/.claude/plans/ooergolf-course-picker.md`; it was a card for each course, cramped at nine): two
+  tabs, Proper Golf and Mini Golf (an ARIA tablist, golf first since the game leans to proper golf), one course of the tab in
+  view at a time in a card of its colour (the six colours going round the tab's courses, `data-colour`). The card is layout C
+  of a sheet of three, chosen 15 October 2026: its name, its figures as tiles (Holes, Par and on golf Yards), its difficulty as
+  pips up to its place among the tab's courses (`#coursePips`, "Difficulty 3 of 6" to a screen reader, since the courses stand
+  easiest first), one badge (`#courseBadge`: the hole the round kept goes on from, else the course's career record, else the
+  best round its holes' bests in the save add up to, else "Not yet played"), and under them a strip of its nine holes from
+  above, each with its number and par (`#courseStrip`, hidden from a screen reader as the words say it all). Arrows either side
+  step and wrap (the arrow keys anywhere on the screen do the same, and on a tab walk the tabs), dots under the card say which
+  of how many, and Play begins the course in view, or reads Continue for the round kept; on a phone the card takes the
+  panel's width and the arrows stand under it either side of the dots. The Install pill stands in the panel's head, at the top
+  right under the title (a round download button on a phone, its words kept for a screen reader). `src/picker.ts` is the
+  arithmetic with no page (`Picker`: `tab`, `step`, `show(name)`, `has`, `shown()`, `bestRound`, `ordinal`), which the hud draws
+  (`drawPicker`) and never works out again; the test API's `chooseCourse(name)` presses the tab, the next arrow until the
+  course is in view and Play, as a player does. The strips are generated: `npm run previews` (`scripts/make-previews.ts`)
+  makes every course (0.2 to 1 s each in Node, which is why nothing is painted as a player steps) and paints each hole
+  (`paintPreview` in `src/previews.ts`) into `public/previews/<slug>/<n>.png`, a golf hole by the hole map's `paintMap` fitted to
+  `PREVIEW.box` (120) pixels a side and a hole of minigolf by its own painter a whole number of pixels a tile (the rail with its
+  cap, raised steps lighter, sand, water and streams, belts, posts, kickers, the cup in a white rim and the tee's mark, in
+  `MINI_COLOUR`, the palette through the hole map's `screen`; the hole map paints minigolf as flat grass, which read as green
+  blocks; barriers and windmills, which move, are not drawn); and writes `src/previews.json` (each course's holes' names, pars,
+  lengths in yards along `way` or tee to cup, `holeLength`, and picture sizes). Both are committed and never edited; the folder
+  is emptied first. 81 pictures, 155 kB in all and 9 to 23 kB a course, held by `test/previews.test.ts` under 40 kB a course and
+  200 kB in all, and to the painter's pixels and the courses' figures, so a course changed without the script run fails it; a
+  step to a course fetches its nine. The panel does not scroll on a desk, a laptop, a tablet or a phone (`smoke/title.spec.ts`,
+  on every course of both tabs; a phone on its side still scrolls), the start screen's "Choose a course" line shows only on a
+  page without the title, a phone's panel takes `CARDS.tall`, 0.6, of its screen, and the stepping has no animation. Not done:
+  part 5 of the plan, the course last shown kept in the save.
+  The frame-cost label (`#stats`) is away under the start screen and back once a course is chosen. `src/score.ts` names a score
+  (four or more under par is a Condor!, a hole in one still first) and says what kind it
+  is, which colours its callout. Both are given what to show and never read
+  the game. How the words look and move is `index.html`'s stylesheet, in the
+  clean toy of `LOOK.md`: bright panels with a thick coloured edge, chunky
+  pill buttons that sink when pressed, the score popped in as a tilted
+  sticker, and every panel arriving with a short spring, none under reduced
+  motion; in the system's rounded face, as decided. The view group
+  (`#viewMode`) is a pill at the bottom right above the ms label, and the
+  bottom slot on a phone; it is shown with the course's other panels and put
+  away under the start screen, and the help beside it says what a drag does, and, while a drag is held, how to take it back (10 October 2026,
+  `helpText` in `readout.ts`: "tap a second finger to cancel" for a finger, "let go where you pressed to cancel" for a mouse or a pen, in the
+  sun's yellow, `#help[data-aiming]`, said by `hud.setAiming` from `input.holding` each frame once the drag has been held `HELD_HINT.after`, 0.6 of a
+  second of game time (`heldHint`: a shot struck at once is not nagged, and a look picture taken a frame or two after a drag is held is as it was), and nothing of it
+  from overhead, where a drag is a pan). A phone has no help the rest of the time, and shows this one at the left just above the bag, clear of the shot and of every panel,
+  or at the top beside the chip on a phone on its side, where the bottom left is the map's; held by `smoke/hud.spec.ts` on a desk, two phones
+  and a phone on its side, with a second finger really putting the drag back (no stroke). It holds the **Overhead** button (`#viewOverhead`, a text pill with
+  `aria-pressed`: not saved, off at boot and put away by a new hole, and while it is on a drag pans the view over the hole, two fingers or the wheel zoom it,
+  nothing is struck and the help says "drag to look round the hole"), and the **flag** (`#viewFlag`, a flag
+  icon, no text, labelled "Look at the flag"): an action, not a toggle, which turns the camera to look at the cup from the
+  ball (`faceFlag` in `main.ts`, through the hud's `flag` handler, to the Director's `nearFlag`), eased and by the shortest way, on
+  minigolf as on golf, leaving the zoom, the tilt and an aim view as they are; it does nothing under the start
+  screen, with the ball at the cup or while a drag is held on the course, and is disabled while Overhead is on (there is no
+  way to face the cup from above). There is no Look switch and no Aim button: it is always aim. **On a phone** (under 600 wide or 500 high) the hole's
+  panel (`#strokes`: name, par, strokes, pin, wind, greens, break) is a drawer off the left edge, out of the page's flow,
+  pulled out by a chip at the top left (`#holeChip`: "Hole 3 · 0 strokes") and shut by its ✕, a tap on the dimmed course
+  (`#drawerScrim`, which is not the canvas, so a drag there is never a shot) or escape; a new hole or the start screen shuts
+  it, and `Hud.setDrawer` keeps its state as `data-drawer` on the page's root. The map stays out, under the chip. A desk
+  has no chip and the panel as it was. The bag's clubs are round (`--club` across, 44 on a desk and as many as eight
+  fit across a phone's width, 35.9 at 360, which is why `CLUB_LEAST` in `smoke/panels.ts` is not a thumb), the shape
+  button carries an arrow in the stylesheet (a mask, so `textContent` is still the words: up for straight, curving left
+  for a draw and right for a fade), and the purse shows coins and gems on golf as on minigolf.
+- **The title screen is drawn by the game** (10 October 2026; plan `~/.claude/plans/ooergolf-3d-title.md`, whose notes say what was
+  tried and chosen; `LOOK.md` says why). There is no picture: the boot panel (`#boot` in `index.html`, over every other panel) is
+  plain sky, the title's own blue gradient in the stylesheet, from the first paint, and fades away (`TITLE.fadeOut` 300 ms, the
+  panel's `--title-out`; `src/title.ts` is that timing and `src/titlepage.ts` the page's side of it, handed the panel, `?title=0`
+  and the player's word on motion) to **"Of Course!" in 3D letters dropping in over the sky, and then a hole of The Links, Water
+  Carry, behind them**. The boot is ordered for the soonest title (`ooergolf-faster-title.md`, 10 October 2026): the pipelines'
+  compile is started first and awaited only where a frame needs it, the letters are built while it runs and drawn over the sky as
+  soon as it is done (the drop's clock and the fade begin there), and the course is built after and cuts in behind them (the
+  renderer has no alpha a group to fade it by). Measured on a production build: letters at 258 ms and the course at 426 (were both
+  509), and at 4x CPU 567 and 1002 (were 1106). A progress bar (`#bootBar`, `src/bootsteps.ts`: the boot's steps weighted by their
+  measured cost, a share that only grows) shows on the sky only if the title is not up 500 ms after page start (`BOOT_BAR.after`,
+  held equal to the stylesheet's delay by a test), so a fast machine never sees it. The start screen is up behind the panel, held back (`Hud.showStart(..., hold)`) until the last
+  letter has landed, and then the cards come up under the word. The lettering is **traced from the old picture**:
+  `scripts/trace-title.mjs` (run by hand when the picture changes, `node scripts/trace-title.mjs`, from `src/title_sq.png`, which
+  stays as the art the look is held to and is never fetched) reads the cream faces, tan undersides, dark green outline, ball, flag,
+  pole and sparkles off it by colour and walks their contours (marching squares, Douglas-Peucker, one Chaikin pass) into
+  `src/titletrace.json` (54 kB, 17 kB gzipped, committed). `src/models/lettering.ts` builds the title from that data with earcut
+  (`titleLetters`: the pieces, each about its own pivot; `titleModel` is the whole for the showcase's `?model=title`): each letter
+  a face of 12 smooth bands in the picture's colours (through a per-channel gain, since the renderer has no unlit material) with
+  a bevel on a tan underside, the outline cut into a rigid piece for each letter and grown under its neighbours so no gap opens
+  when pieces move apart, a dimpled ball in the O's counter, a two-red flag and pole, and the sparkles; 26,483 triangles of
+  `BUDGET.title`'s 30,000, drawn only on the title. A part with no triangles is no group (the GPU warns of a draw of nothing each
+  frame), which a golf hole's empty rail needed too (`scene.ts`), held by `test/cup-drawn.test.ts` and by `smoke/title.spec.ts`,
+  which holds the title's console clean. `src/titlescene.ts` is the arithmetic with no page: `fitTitle(aspect, cardsTop, word)`
+  fits the word in one place above the cards for the screen's shape (a desk, or a phone with the cards at `CARDS.tall`), the
+  camera (`VIEW`: 12 yards behind the tee, looking up the hole, the word 4 units from it), `letterPose(piece, t, reduced, out)`
+  (letters one by one from the left `DROP.apart` 0.09 s apart, a fall of 0.3 s and a squash that springs back, the outlines rigid,
+  a pure function of the title's own clock so a picture is the same every run) and `TitleScene`, the clock, which begins
+  `DROP.lead` before the first letter and stops where the last has landed, about 1.6 s. **The flow** is in `main.ts`: the title
+  hole is the game's hole until a course is chosen (`wantTitle`), its lettering in groups after the hole's own, posed each frame
+  in the camera's plane (`writeTitle`) and the renderer's economy held no lower than the second rung while it is up (its grass is
+  thinned; the frame is about 2.1 ms); choosing a course lets the whole scene go before the course's first hole is built
+  (`endTitle`, held by `titlesAlive`, a `FinalizationRegistry` count, which the leaks test reads), and the card's Courses
+  button brings it back with the letters standing. Under reduced motion the letters are standing and the panel does not fade.
+  A boot that fails puts the panel up over everything with its words (`showError` calls `hold()`). **`?title=0` leaves the title
+  out** (the start screen over The Meadow, as before), which `start()` in `smoke/game.ts` does for every test but one that asks
+  `{ title: true }`; `smoke/title.spec.ts` is that one, holds the word inside the screen and clear of the cards on eight sizes, a
+  course chosen mid-drop, the console clean and its pictures (`title-desk`, `title-phone`, `title-drop`, `title-lettering`).
+  **The test API's `title()`** says whether it is up, its clock, whether the letters have landed and the cards are in sight, how
+  many title scenes are not yet collected, the fit, and each piece's pose and the box it covers on the page. The fuzzer drops the
+  lettering as the page does and chooses a course while it drops (`titleProblems`, `checked.title`). Figures (10 October 2026):
+  pictures a page fetches 0 kB (was 116 kB); the download 217 kB gzipped (188 kB before: the trace data, earcut and the lettering in); a title frame 2.06 ms against 2.5 for the same hole's tee on main; the boot the player sees 448 ms
+  against 285, and the `perf` boot figure, which stops at the frame loop, unchanged. Not done: the title is not held to a
+  look metric; the traced shapes are only as good as the picture (retrace it with the tool).
+- `src/noise.ts` makes ground from noise: `gradientNoise(seed)` is Perlin's,
+  and `noiseGround(layout, { seed, feel, steepness })` a hole's heights from
+  it, the same for a seed every time, never below nought, with optional
+  level discs (`flats`, for a pond at nought and a bunker's bed, each with an
+  optional `blend`, the tiles it takes to come back to the noise) made before
+  the steepness is set, the steepest step
+  between neighbouring tiles exactly `steepness` of the physics' limit of
+  half a tile, and flat round the tee and the cup so a ball rests on the one
+  and beside the other. A feel (`FEELS`) is the noise's shape: `gentle`, a
+  broad swell a ball rests on everywhere; `rolling`, swells the width of the
+  hole; `choppy`, small bumps (a height a tile cannot draw one smaller than
+  about three tiles, so choppy is no more than about 1.4 times as bumpy as
+  rolling); `rolling and choppy`; and `hills` and `long hills`, swells thirty
+  and forty-five tiles (ninety and a hundred and thirty-five units) across. A
+  swell's height is about its width times the slope over six, so the small
+  feels, whose swells are eighteen to twenty-four units, are a ripple a ball's
+  width high on a hole of a hundred and fifty units at any steepness, and hills
+  stand four to five times as high at the same one, and are smooth: The Links'
+  hills are cut from them. With `long` an octave of `LONG_SWELL` (a hundred tiles across) is added under whichever feel,
+  and a level disc of `floor` (a lake's and a pond's) is out of the scale; a ground without it is as it always was. `test/ground-metrics.ts` says what a
+  feel is in figures (relief, steepest slope, bumpiness, detail, and how much
+  of the ground a ball rests on), which the tests hold each hole to.
+- The courses are content in `course.ts`, `COURSES`, each a name and its holes: The Meadow (`COURSE`), The Pinball Shed
+  (`SHED`, `src/shed.ts`), The Waterworks (`WATERWORKS`, `src/waterworks.ts`),
+  The Links, The Heath (`src/heath.ts`), The Fells (`src/fells.ts`), The Woods (`src/woods.ts`), The Isles (`src/isles.ts`) and
+  The Old Course (`src/old.ts`), the golf easiest first by the pace figure. The three minigolf courses are nine holes each, drawn by hand as The Meadow's are, with no generator, and
+  made as the page loads. Each hole has a comment saying its idea and why it is drawn as it is, since what the
+  autopilot would play decided the drawing: a ball's radius and three tenths of a unit clear of the water, a timing window at
+  the autopilot's margin, a cup on level grass with a tile of grass round it. The Pinball Shed (par 27) is banks and bounces:
+  the rail is a cushion, posts and kickers throw, Dodgems' bumpers slide and throw, and two holes have a flipper to time. The
+  Waterworks (par 28) has water on six holes, three of them with a stream to ride, and three timed holes, Traffic, Ferris and
+  The Big Wheel, from The Fair. The moved holes' own tests are in `test/timed-holes.test.ts`. Each `Course` has a `summary` of its holes and par that the
+  start screen reads without making it, so a course made by a generator is made when first asked for and not as the
+  page loads. `openHole` in `src/open.ts` makes a hole of open country from a spec (a shape, a feel, a steepness, a seed
+  and a list of `Feature`s: ponds, bunkers and stands of posts) and never by hand; no course uses it now, and the two
+  test holes in `smoke/bighole.ts` (the biggest minigolf hole the perf gate holds, and a small one of fifty-one units)
+  are made by it. It places each feature clear of the tee, the cup and the rail and a tile from the next, never so that no
+  route three tiles wide is left from the tee to the cup, a pond in the lowest of the ground at nought and a bunker on a
+  level bed (`noiseGround`'s level discs, blended by `BLEND`), and refuses a spec that cannot be made by name. A hole's
+  name draws its wind, which must move the grass (`test/turf.test.ts`): names have been changed because they did not. The
+  cup stands at least two tiles in from the rail. A hole is a map drawn
+  as seen from the tee (`#` rail, `.` grass, `T` tee, `C` cup, `~` water,
+  `s` sand, `o` a post on grass, `k` a kicker on grass (refused on golf), a digit for grass raised that many steps of
+  0.4, space for off the course),
+  a par, what moves on it, by map tile, and its `terrain`; and the cup's
+  size. Hole names are unique across the courses, since the save keeps a
+  best score by name. A step the
+  ball rolls up; three (1.2) are a wall to it. Water is a floor below the
+  world's bottom: a ball in it is lost, a stroke is added, and it is put back
+  where it was struck from; what is drawn is a surface at `WATER_LEVEL`,
+  which the ball never meets. `src/obstacles.ts` says where a barrier, a
+  windmill's gate, a flipper's arm and a belt are at any moment of game time, as the physics'
+  boxes and belts. `arena.ts` reads a map into a layout, and holds
+  the kinds of body, the hardest shot and how the ball rolls. Each hole is a
+  world of its own, made when it begins: nothing may keep `game.world`.
+- The shop is content in `items.ts` and has three aisles, **clubs, balls and accessories**, fifteen items each (`ITEMS`, forty-five,
+  cheapest first, held by `test/prices.test.ts`), and the player wears one from each at once: the **kit** (`Save.kit`, `Best.kit`,
+  `{ club, ball, accessory }`, each `''` or an owned item of its aisle). An item says in `figures` which numbers of the `Kit` it moves;
+  `kitOf(slots)` works the three into one `Kit` once, when the kit changes, with each figure combined by `COMBINE` and held inside
+  `CEILINGS` (power at most 1.2, scatter and loss at least a quarter, rail 0.5 to 1.5, roll 0.8 to 1.25, touch 0.8 to 1.8), and
+  empty slots are `NO_KIT` itself, so a game with nothing worn is the game as it was (a hash of seeded rounds holds it). No module reads
+  an id: `game.kit` is asked for a number, so the preview, the autopilot's rehearsal and the shot agree. **Clubs** move only the
+  strike. On golf that is the flight (power, `woods`, scatter, loss, shape, spin, loft, wind, what sand and rough take off); on minigolf
+  the six strike figures: `touch` (a drag becomes power as `drag ^ touch`, applied in `shot.ts`), `puttScatter` (a miss of a few
+  degrees from the game's chance, none drawn without it), `bend` (a putt curves at that many radians a second until its first knock, the
+  dots with it), `puttSpin` (top and back change what the first rail, post or kicker keeps), the chip (`chipSand`, `chipAll`: a loft
+  that never rises past the rail) and `sandPutt`. **Balls** move only the ground: `roll`, `sand`, `green`, `rough`, `rail` (trees and
+  rock too), `keep`, `hop` and `belt`, into `makeWorld` and `Game.landing`; a ball's ground figures take hold at the next hole, a club's
+  at once, and **a putt's power stays how far it rolls** (`strikeSpeed`, `powerFor`, the dots and `runOn` read the ball's roll). Each
+  ball has a `BallLook` (`models/course.ts`: a colour, a second, a pattern and a finish; a test holds no two alike) that `scene.dynamic`
+  draws and `src/swatch.ts` paints in the shop. **Accessories** move anything or only the look: the cap (wind, belts), tee, gloves, shoes,
+  clover (`paid`), watch (the one retake a round, the Retake button), snorkel, horseshoe (the cup takes a ball from 1.8), piggy bank
+  (consumable, empties its slot), the scope (golf's preview to rest, and on minigolf a `Previewer` of the putt to rest, made when the kit
+  rests and redone four times a second on a hole that moves), the chalk (the break anywhere on golf; on minigolf the line drawn past its
+  first bank, `src/bank.ts`) and four looks (comet trail, party cup, pennant, fireworks). Prices follow the rule in `items.ts`'s header,
+  measured by `npm run value`. The cup of the horseshoe is wider than a tile, which the scene refused until 6 October 2026 (the page
+  stopped on a blue screen as it loaded and a hole begun in a round was never drawn; `smoke/progress.spec.ts` plays it). The save
+  (`progress.ts`) holds coins, gems, the items owned, the kit worn and each hole's best with the kit it was made with; an id the shop does
+  not sell is dropped and a slot is read only if owned, so a save from before the three aisles loads with its coins, gems and bests and
+  no items. `Game` pays into it when a hole is done (golf too; never in free play, see the career), and buys, equips (`equip`,
+  `unequip(aisle)`) from it. Every save shape is in `test/saves/`. Chance comes from `random.ts`, handed in.
+- **The career is a season of tournaments** (15 and 16 October 2026; plan `~/.claude/plans/wobbly-sprouting-gizmo.md`, which says
+  what was chosen from its mock and why). Two tours, golf (the six courses in their order, six events) and mini (three), each of
+  three grades, club, county and championship; each event is a field of the player and eleven named rivals (`src/rivals.ts`, a
+  roster a grade, skills S2 to S4, S1 to S3 and S0 to S2), whose cards are drawn hole by hole from `src/field.json` by a hash of
+  the season's seed, the event, the rival and the hole, so no chance of the game's is spent and the same season is the same field.
+  The table is made by `npm run field` (`scripts/make-field.ts`, about twenty minutes: the autopilot at the five `RIVAL_SKILLS` of
+  `src/field.ts` for 32 rounds of every course, as the pace gate plays one, `scripts/field-round.ts`), keyed by each hole's hash
+  (`src/holehash.ts`), and `test/field.test.ts` fails, saying to run it, when a course, the autopilot or a skill changes (it
+  plays The Meadow again to the count). The arithmetic is `src/season.ts` (a leaf: fee, stake and pot, places shared on a tie and
+  their money pooled as in golf, points 25, 18, 15 down to 1, the top three going up a grade) and `src/tournament.ts` (a season put
+  together: `nextEvent`, `eventField`, `seasonMerit`, `finishEvent`); `src/tours.ts` is the real season the page hands the game
+  (`GameOptions.season`). A course's stake is 25 coins a point of its purse; the fee is the stake, **and nothing at the club grade**
+  (the user's choice of 16 October 2026, since a new player had no way to a first fee); the pot is twelve stakes at every grade,
+  paid 50, 30 and 20 per cent, and a course record's 25 on top. The save has `season`, each tour's grade, seasons begun, the
+  events played this season (the player's card, or null for one given up) and titles; a round kept is an event's (`SavedRound.tour`,
+  kept from its first tee, so a reload cannot lose a fee), and one from before the seasons, with no tour, is dropped.
+  `Game.enter(tour)` takes the fee and begins the event (refused in free play, without a season or short of coins, changing
+  nothing), `resume` goes on with it, and entering again, `newRound`, `playCourse` or `adopt` of a named course gives it up, recorded
+  as missed, the fee spent. At its last hole the round is placed, paid and told by `roundPaid` and then `placed` (a `Placement`),
+  the card added to the season, and at a season's end the top three go up a grade, or win a title at the championship.
+  `Game.practise` plays a course paying its holes and keeping their bests as any paid hole (the user's choice: a player short of a
+  fee can earn it), and no prize, record, round or season; the retake is refused in an event. A course played in the career that
+  is no event pays its holes and keeps nothing. Free play (`setMode`) pays and keeps nothing, as before. On the page, in the career
+  each tab of the start screen is its tour's next event (`Hud.setEvents`: the line over its name, Par, Entry and Purse as the
+  tiles, the order of merit beside the card on a desk and under it on a phone, Enter, Continue for an event kept, or "Need N
+  coins", and Practise), the leaderboard is the foot of the hole's panel thru the holes finished (`Hud.setBoard`, in a phone's
+  drawer), and the card at an event's end shows the place and prize, the field's top four and you, the order of merit's move and a
+  season's end, with Next event (`finished`'s `Results`; two columns on a desk). The words are `src/eventwords.ts`. Under the title
+  a phone has no room for the strip of holes, the line about the field or the order of merit's fourth row, which go there.
+  The mode is a switch named Career mode (`#playMode`, `role="switch"`, `aria-checked`), the word Career beside a track that is
+  on in the career and off in free play, on the tabs' row at the right (16 October 2026: a cycle button at the foot left it
+  unclear whether its words said the mode or what a press would choose). Under 381 pixels wide the tabs read Golf and Mini so
+  the switch keeps its word on their row, and under the title on a phone the round Install button stands at the panel's top
+  left, above them.
+  `careerProblems` holds the season in `checkInvariants`. A reload keeps the round between holes and not where a ball lies part
+  way round one, so that hole is begun again from its tee.
+- `src/physics.ts` is the game's side of artshape-physics, and nothing else
+  imports the package directly. A change a package needs goes in that repo,
+  with a version bump here, as v0.4.1 was for a ball put to sleep in the
+  mouth of the cup. It builds a hole's world: the green's steady slowing
+  (`ROLL` in `arena.ts`) on every tile but a belt's, which has none, so a
+  belt carries at its own speed; the rail's bounce and the obstacles'
+  (`BOUNCE`); the cup with its rim and no pull (`CUP` in `course.ts`), told
+  from the water by the hole the physics reports; and a ball never put to
+  sleep in the air or going faster than 2, banked off the rail as off one
+  flat wall, and moved in pieces when it is fast. A shot's power is how far
+  it rolls, and `strikeSpeed` and `powerFor` in `arena.ts` go between that
+  and a speed.
+
+## The test API
+
+`window.game`, in `src/debug.ts`, typed, and the smoke tests compile against
+it. Time: `pause`, `resume`, `step(frames)`, `seed(n)`, and `?seed=N` and
+`?paused=1` on the page. Reading: `state` (with `strokes` and `ready`),
+`ball`, `bodies`, `content` (the hole's grass, tee and cup, its sand and
+posts, kickers, trees, `zones(x, y)` (the golf ground's zone at a point, null on minigolf), the hardest shot, and every hole's name and par), `events`,
+`invariants`, and `aiming`,
+the shot a drag under way would make. `state` has the hole, its par, the
+phase (`play`, `done`, `over`), the card, the coins and gems, the club in
+hand, the items owned and the kit worn (`kit`: club, ball, accessory), the hardest shot the club in hand strikes, the
+course's name, whether the start screen is up (`choosing`), and whether the
+hole is golf and the club of the bag in hand (`golf`, `inHand`).
+Playing: `shoot(angle, power, club?, shape?, spin?)` (with a club of the bag put in hand
+first, on a golf hole, and a shape and a spin chosen for it), `club(id)`, `bag()` (each club's loft, hardest launch
+speed and carry) and `suggest()` for the autopilot's shot from
+where the ball lies (with its `club` on a golf hole), `chooseCourse(name)`, which presses that course's
+button on the start screen, `startHole(index)`, `playCourse(holes)` for
+holes of the test's own that are not on a course, `newRound()`, `buy(id)`,
+`equip(id)`, `unequip(aisle)`, `shopTab(aisle)` (the shop's tab as a click on it), and `drag(page, from, to, { touch, hold })` in
+`smoke/game.ts` for a real mouse or finger, pressed where `project(x, y,
+z)` says a point on the course is on the page. Setting a scene: `place` for
+a body that exists (raw: on a hole that slopes, `lay(x, y)`, the game's own, puts the ball down on the ground there),
+`save`, and `start(page, { save, seed, paused, rung })`
+for a save that is not the player's, which chooses The Meadow unless given
+`screen` to leave the start screen up, and `touches(page, steps)` for fingers, several at once.
+Looking: `look(x, y, distance)` parks the camera until `follow`, at the home view (home tilt and a lead of `LEAD`, however the
+aim view of a golf hole had set it), `view()`
+says how far back it stands, how far ahead of the ball it looks (`lead`), whether it is still easing to an aim view (`aiming`)
+and which rung of the quality ladder the
+picture is on and whether the grass sways (`swaying`), what a drag is (`mode`,
+`aim` or `overhead`) and how the view is turned and tilted (`azimuth`, `tilt`), the azimuth it is turning to (`heading`; its own
+when it is turning to none) and where the flag button would turn it from where the ball lies (`flag`, null at the cup), how far it is
+blended to the overhead view (`blend`) and the renderer's far plane (`farPlane`, raised while it is), whether it is following the ball
+for the stroke played (`following`), whether it is flying in to the hole (`flying`), and the framing rule as it stands (`framing`: where the ball and the reach point are in NDC, the
+safe box, whether the view has settled and the problems `framingProblems` finds, empty when it holds); `orbit(turn, tilt)` is a test's
+own setter for the turn and the tilt, which no player can reach (a drag does not move it), `overhead(on?)` presses the Overhead
+button's action (the other way to now when not told; refused under the start screen) and says whether it is on after,
+`followShots('drawn' | 'always' | 'never')` chooses the strokes the camera follows the ball for, `seed(n)` seeds the camera's tosses (which side of
+the flag it looks to, which strokes it follows) as well as the game's chance, `faceFlag()` presses the flag button's action (false when it did nothing), and `measureFrame`;
+`judge(frames, gapMs, workMs)` feeds the quality governor as the frame loop does, and says
+the rung; `grass()` how many blades of the rough the last frame drew near
+and far, and the wind; `bladesAround(x, y, radius)` how many the GPU drew
+with roots there; `motions()` where each of
+the things that answer is (the ball's squash, the flag's waggle, the gold's
+flash and the glints the last frame lit, `kicks` (how many kickers the last frame lit with a flash; absent while none is), the camera's glide and the aim's
+pulse, the sparkles of the water and where on the page each was drawn, how
+wide the ring is where a ball went into the water, what the last stroke
+threw up, sand or grass, and where the ring is that marks a lofted ball's
+first landing and how wide, and `shot`: the preview of the shot being aimed, its dots of arc, its ring with its
+colour and size, the spread's half axes, where a tree knocks it and what it comes to, null when none is drawn), read back
+from what the last frame placed; and `map()`, the hole's map over the course: its size and where the ball, the cup and the
+landing of the shot being aimed are on it. `state()` has the shape and the spin chosen, the hole's `wind` (x, y, speed), its `greens` speed and its name (`greenSpeed`: `fast`,
+`medium`, `slow` or null) and `arrows`, how many stand over its green;
+`caddie()` says what the caddie's panel says (its words, its button's, and whether a drag holds it out of the way), the tip
+offered for this shot, the look under way and the tips taken, and `caddiePress('try' | 'close' | 'ask')` clicks its buttons;
+`career()` says the mode, the records, the round kept, the course the round in play is of and whether it counts;
+`season()` says each tour's season as the save has it, the event in play, whether the round is practice, and the leaderboard as
+drawn; `enter(tour)` and `practise(tour)` press that tour's tab and its event card's button (false where it is not to be pressed);
+`tournamentHud({ events, board, results })` hands the hud fixed figures for a test of the drawing alone; `chooseCourse` puts the
+career's event cards away before it steps the picker, a shortcut no player has;
+`playMode(mode)` presses the start screen's Career switch until it is in that mode, and `continueRound()` presses the card of the
+round kept (false with none);
+`app()` says the service worker's registration (`worker`: `none`, `registering`, `ready` or `failed`), whether the browser
+offers to install (`offered`) and whether the page runs standalone, and `install()` presses the Install button's action (false
+with no offer to take). `motions()` has `wind` (the arrow's turn in degrees and its text, read back from the page), `controls` (the two buttons as drawn),
+`arrows` ({ shown, count }: what the last frame wrote), `shot.heading` and `press` (the grass pressed flat round a ball at rest in the rough this frame: where, how wide, and whether
+the renderer took it; null otherwise). `view()` also has `turning` (whether the camera is turning to face the cup), `line` (where it turns by itself to a ball come to rest, along the line of play; `flag` is the button's), and `putt` and `greens`, the two lines under the pin as drawn (null when none); `motions()` also has `sky` (how many clouds the last frame drew with a size: all to the fly-in and the title, none to any other view) and `help` (the help as drawn: its words, and `aiming` for how the drag now held was begun, or null). `?rung=N` on the page puts the picture
+on a rung and holds it; paused, the governor never moves it, so pictures are
+always taken at the top rung unless a test asks. In unit tests, `game.place(x, y)` puts the
+ball down at a lie.
+
+## What is not there yet
+
+- The Fells and The Isles, as they are. The preview shows only the first landing, so how far a ball runs down The Fells' slopes
+  after it lands is not seen, which is the biggest risk to how the course feels and is for the user to judge by playing. The
+  autopilot and the pace player know no slope and play round the wood, so a lane is a human's shortcut that no gate plays.
+  On steep ground a marginal slope does not run when a ball is put down on it, only when struck. A lake across one of The Isles' longer holes is 45 to 80 yards of water, no more than a flight needs.
+- A draw or a fade from a shaper, on a narrow phone. `SHAPE.turn` was doubled on 10 October 2026 and the narrowest phone's aim view shows a plain
+  fullest fade from a driver at three quarters of the way to the safe box's edge (`test/shape.test.ts`); the shop's shapers curve a shot 1.5 to 2
+  times as far again, 69 to 92 yards from a driver, which that view does not reach, since the aim view is worked out from the club's straight reach and
+  the wind's and knows nothing of a curve. With one worn, a fullest fade from a driver on such a phone is aimed with its ring past the screen's side.
+  Not widened, because the framing rule would have to know the shape and the kit, and was not asked for.
+- The camera looks along a line of play only where a hole has one. A hole of minigolf has none (`HoleDef.way` is the golf generator's), so a ball come to
+  rest there still has the camera turn to the flag; and on golf a ball far from the way, across a wood or on the other side of a bend, looks along it from
+  the way's nearest point, which can be behind a tree (8 per cent of the balls measured on the bends, against 37 for the flag).
+- The clouds leave a view in one frame: as the fly-in ends and the camera tilts past `SKY_TILT` they are a matrix of no size, so one low enough to be on
+  the screen at that moment is gone at once and not faded (the renderer has no alpha a group to fade it by). It was not seen as a fault in a picture.
+
+Each of these is the first feature's to bring, with every gate green at
+each step, and a gate handed what it needs in the same change:
+
+- The limits of the golf there is, from `~/.claude/plans/ooergolf-proper-golf.md` (all six stages are built). What stage 3
+  leaves as it found it: a golf hole's green is round and stepped by the tile, so are its bunkers, an invisible wall
+  stands beyond out of bounds, a ball landing on a post's top or a box is left as the physics has it, the club in hand is
+  not saved, and the planner knows nothing of a lay-up chosen for the next shot's
+  sake. What stage 4 leaves: the preview is the true swing to the first landing (the run-out after it is not shown, nor
+  where the ball would rest, so a spin is not seen until the ball has landed); the map is not
+  interactive and does not turn with the camera; the camera can lose the ball behind a tree at a low tilt; and the aim
+  view is not saved (nothing of the view is). What stage 5 leaves: the wind is steady (no gusts) and uniform along a hole,
+  and a lofted club is blown further in yards than a driver; a shape's rate is fixed per club, so a half-power shot curves
+  about an eighth as far in yards as a full one; the autopilot plays straight and flat, copes with the wind through its
+  rehearsal (12 to 22 trials a shot in 15 mph, against 12 to 17 calm) and does not choose a shape or a spin; the shape
+  and spin are chosen in three steps, not continuously; and the shape and spin buttons are not in the golf pictures the
+  look gate holds, which were not rewritten for them (see the commit). What stage 6 leaves: a green is one tilted plane
+  with swells on it, no tiers, humps or ridges, one speed to a hole and the same on all of it, and no first cut wider than a
+  tile; the cup takes a ball within about 1.4 yards of its line, so a break shows in play only past that (a median putt on
+  The Links aims 0.8 yards off, and one in four more than the cup's radius), and a smaller cup or a steeper green is a feel
+  to be chosen, not a bug; `breakOf` is the aim of the putt that would die half a yard past the cup on the level, which
+  on a slope this steep is not where it rests, and past the putter's reach (a putt over 50 yards on a green of 16) it says
+  so by `speed` over `HARDEST_SHOT` and gives no best-effort figure; the autopilot's putt count in `strokesToGo` and its
+  lay-ups know no contour or speed, so it will not leave a ball below the hole; a putt played toward the camera (the ball
+  past the cup) has the cup under the bag; the arrows are not switched off, and show whenever the ball rests on the green or
+  the cut; the speed of the greens is not in the shop; and the cut's colour, the arrows' and the roll's look were chosen
+  once, by looking, and are a taste.
+
+- An autopilot that keeps a margin from water that grows with the shot. It
+  skirts a pond by 1.3 units, and a 5% slip over a 45-unit shot wanders 2.3,
+  so on a big hole with a pond on its line it can splash four or five times
+  and be picked up at the limit (three seeds of sixteen on an open spec);
+  a margin that grows would move the pace of the courses there are.
+- Holes past what the grass field, the frame and the look allow. A cell of
+  1.5 lifts the field's limit to 489 tiles a side; a frame at 400 by 400
+  tiles was 4.7 ms when the budget was 5 (it is 6 now), since a bigger hole draws more ground; and some
+  holes of 200 tiles a side and more show rough blades pale and frosty near
+  the camera, which was not the shadow's fit or the cell and is not
+  understood. No hole there is comes near them.
+- An autopilot that reads a slope's break on minigolf (on a golf green it does, by rehearsal). It aims straight at the cup and
+  judges the distance along the level: it stops within 0.6 units of where
+  it means on four shots across a hollow in five, and 2.4 long on a 21-unit
+  climb, since the physics slows a ball along the slope. So a sloped hole's par
+  is its intent. A barrier or a windmill on a slope is refused when a hole is
+  built, as the physics' fuzzer found one carrying a ball round for good; a flipper is refused on a slope too.
+- Belts on a slope. The physics allows a conveyor on sloping ground and carries a ball up it, but the scene draws every
+  belt at ground level, so one on a slope is buried; The Flood's bowl of steps stands on level ground, and The Lift (cut on
+  8 October 2026) was level with a step at its end; `test/obstacles.test.ts` holds that the physics carries a ball up one. No belt may stand on a slope in a picture until the scene lifts them.
+- A stream that can be crossed, or a belt that lets a ball off it: see the kinds above. A ring of belts holds a ball for
+  good and a real turntable is a package change, so Carousel was a mound with belts round it (cut on 8 October 2026, since
+  whatever the power the ball ended in the same place), and the turntable was dropped.
+- A drag in a smoke test begun while the panels were still springing in. Found 8 October 2026: the phone drive's picture
+  missed about one run in four on 3 October because the view switch's arrival swept within a pixel of where its drag began,
+  and Chrome gives a touch that close to the button, so the browser took the drag and nothing was aimed. `drag` and
+  `touches` in `smoke/game.ts` now wait for the panels to land (`landed`), and `pullDown` says what was under the finger
+  when a drag aims nothing. One miss in about 420 runs since the switch moved was seen once and not caught again, so its
+  cause is not proven; the next one names itself.
+- The ball part way round a hole, in the save: a reload goes on with an event from the tee of the hole it was on, with none
+  of that hole's strokes counted, so in an event a bad shot can be undone by reloading (left so at the user's word on 16 October
+  2026). A round of free play or practice is not kept at all.
+- Steps a ball meets as ledges. v0.8.0's `stepEdges` bounces a ball off a
+  step's top edge and lets it climb a riser only with speed; tried on the
+  game, Up and Over's median went from 2 to 4 and four tests failed, so it
+  is off in `makeWorld` until the stairs are ramps of terrain.
+- The ninth hole's own, as `DESIGN.md` has it, with everything on it: The
+  Mill Race has no sand and no post yet.
+- Pars that are what a player takes: see the pace gate, above. The
+  autopilot would need a player's timing, measured against real play.
+- Ball upgrades: the physics has bounce and roll by kind of body.
+- Turning the camera by hand (the right mouse button, the keys, a two-finger twist, or the Look switch that was removed
+  on 6 October 2026): the camera turns to the aim and to near the flag, and the overhead view is for looking. The view is not saved.
+  The near rail can hide the ball at a low tilt from some headings, and
+  catches a strong pale sheen from some: both are left as they are. A chase camera behind the ball for the strokes it does not follow, the
+  ball hidden behind a tree or a rail, and the map turning with the camera are not there, and how the held view feels after a big turn to the
+  aim, desk and phone, is for the user to judge by playing. The overhead view draws no grass on most holes (it stands past the rings), and
+  has no new rung on the ladder, since it costs a frame less than the standard view. The overhead view is fitted to the screen and not to what the panels leave of it: on a phone the far end of a long hole is under the chips and its tee under the bag, and on a desk the tee is under the bag; the pictures `overhead-links` and `phone-overhead-meadow` show it, and whether to fit it inside the safe area is for the user to say.
+- The autopilot chooses no item, shape, spin or bend and never takes the watch's retake, and with most balls on golf it plays a little
+  worse than with none. On the Isles' Long Water it repeats a lost 3-wood with more
+  power. The shop's prices for what it cannot feel are judgement (`items.ts`'s header).
+- The scope's ring on minigolf is held by its picture alone, since `motions().shot` is null there; the pennant has no `motions` marker.
+  The horseshoe's mouth is cut only in the level grass round the cup, so on Three Cushion, whose cup stands against a wall 1.2 high, the
+  hole runs into the wall's foot, where no ball can be; no `look` picture holds a wide cup, since a picture is held to the GPU it was
+  written on.
