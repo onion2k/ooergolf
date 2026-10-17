@@ -92,6 +92,10 @@ Beyond the kit's:
 - **One place wires everything:** `main.ts`. A module takes what it needs as arguments; lower modules import no content.
 - **Lint holds what it can read** (`eslint.config.js`, each rule with its reason): no `Math.random` and no `console` in
   `src/`, and a rule turned off says why on the line, after `--` (`house/directive-reason`, a local rule).
+- **What may import what** is lint's too: only the picture (`PICTURE` in `eslint.config.js`: the page and what draws)
+  imports the renderer or is imported by it, only `physics.ts` imports artshape-physics, and nothing imports `main.ts`
+  or `showcase.ts`. A type alone is let through. Nothing imports in a circle (`test/structure.test.ts`), which is why
+  `TILE` is in `src/tile.ts`, re-exported by `arena.ts`.
 - **Nothing is made each frame.** Pools are sized once and written into; the renderer's groups are fixed and `move`
   writes them. A per-frame allocation is a frame-time bug and a garbage-collection stutter.
 - **Nothing is kept for ever.** A list, map or cache added to is emptied somewhere, and its ceiling named in
@@ -222,8 +226,8 @@ Each of the kit's checks, as surveyed on 17 October 2026, and the order the miss
   GPU's, so another machine's are not comparable. The smoke tests run against the dev server, not the build.
 - **The history's secret scan is by hand** until there is CI to run it on every push; GitHub's own secret scanning and
   push protection are on. The code reads no secret, so there is no `.env.example`.
-- **No code scanning, no structure check.** No tight coupling and "only `physics.ts` imports the
-  package" are held by words and review, not by a tool.
+- **No code scanning.** "A module takes what it needs as arguments" and "lower modules import no content" are held by
+  review: lint holds only which side of the game and its picture a module is on.
 - **The audit runs by hand** until CI runs it on every push and on a schedule. This machine's Node is 23.4, which
   vitest 4 and knip run on but do not list; Node 24 is the supported one.
 - **No headers check** for https://golf.ooer.com/, which sends HSTS and nothing else of the five.

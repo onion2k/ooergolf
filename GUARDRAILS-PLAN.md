@@ -14,7 +14,7 @@ figure of cost below is an estimate and says so, except the quick check's, which
 | formatting       | held, needs work | Prettier 3, checked in `check:quick`, written by `npm run format`. `.prettierignore` leaves `test/saves/` and the generated files, and `.claude` (so the kit's skills), but not `guardrails/`. `.prettierrc.json`'s three settings have no reason beside them.                                                                                                                                                                    |
 | lint             | held             | Type-aware rules, and the project's own: no `Math.random` or `console` in `src/`, a reason on every disable; each seen failing (box 3).                                                                                                                                                                                                                                                                                           |
 | code scanning    | missing          | The repo is public, so CodeQL's default setup is free and needs no workflow; it is not on. Data from outside: the page's address (`?seed`, `?rung`, `?title`), the save in local storage.                                                                                                                                                                                                                                         |
-| structure        | missing          | "Only `physics.ts` imports artshape-physics", "`game.ts` knows nothing of the page" and "`main.ts` alone wires everything" are held by words alone.                                                                                                                                                                                                                                                                               |
+| structure        | held             | ESLint's `no-restricted-imports`: the game without its picture or the renderer, artshape-physics through `physics.ts` alone, nothing importing the entries; `test/structure.test.ts`: nothing in a circle. Each seen failing (box 5).                                                                                                                                                                                             |
 | dependencies     | held             | Lockfile committed, `npm ci` exact; audit (no advisories), licences and unused, each seen failing (box 4); Dependabot for security only, to be turned on in settings. The audit runs by hand until CI.                                                                                                                                                                                                                            |
 | unit             | held             | 165 files, 2442 tests, seeded through `newGame(seed)`, with a 30 s timeout and its reason. The commits record mutation checks for new tests.                                                                                                                                                                                                                                                                                      |
 | test API         | held, needs work | `window.game` in `src/debug.ts`, typed, with the smoke tests compiled against it, driving a real pointer. The smoke tests run against the dev server (`playwright.config.ts`'s `webServer` is `vite`), not the built game; only `perf` and `pwa` build `dist`.                                                                                                                                                                    |
@@ -80,10 +80,18 @@ what it adds to the full check, an estimate in every case.
       imported, named by knip; the audit at `--registry http://127.0.0.1:9`, "no report", exit 1. Licences and unused are
       in `npm run check` (under a second); the audit needs the network and waits for CI (box 9). Left to the user: turning on
       Dependabot security updates in the repository's settings.
-- [ ] **5. Structure.** dependency-cruiser: the logic (`game`, `arena`, `invariants`, `autopilot`, `planner`, `golf`, and
-      the rest `AGENTS.md`'s _Layout_ names) imports none of `main`, `scene`, `hud`, `ground`, `look` or artshape-render;
-      only `physics.ts` imports artshape-physics; nothing in a circle. Proved by a planted import for each, and each
-      rule's paths seen to match. 3 to 5 s, in the quick check if it is under that.
+- [x] **5. Structure.** Done 17 October 2026, with no new dependency: dependency-cruiser 18 asks for Node 22, 24 or
+      26, not this machine's 23.4, and core ESLint's `no-restricted-imports` holds what may import what, by file. In
+      `eslint.config.js`: the game does not import the renderer nor the picture's modules (`PICTURE`: the page, `main`,
+      `showcase`, `debug`, `hud`, `titlepage` and `install`, and what draws, `scene`, `ground`, `look`, `models` and the
+      rest; `holemap`, which takes its colours from the models, joined it); only `physics.ts` imports artshape-physics;
+      nothing imports `main.ts` or `showcase.ts`; a type alone is let through. Nothing in a circle is
+      `test/structure.test.ts`, reading src with TypeScript's own parser and resolver. It found one, `arena.ts` and
+      `zones.ts`, for the one constant `TILE`, which moved to `src/tile.ts`, re-exported by `arena.ts`. The game was found
+      to reach nothing of the picture at any depth. Seen failing: `game.ts` importing `./scene`, the renderer and
+      `./models/palette`, `arena.ts` importing artshape-physics and `scene.ts` importing `./main`, each named by its rule; a
+      type of the renderer let through; the cycle put back, named "arena.ts -> zones.ts -> arena.ts". Every name in
+      `PICTURE` is a file. In the quick check, at no cost to see.
 - [ ] **6. Headers.** `public/_headers` for Netlify, with a CSP that lets the WebGPU page and its service worker run and
       allows no `'unsafe-inline'` script, `frame-ancestors 'none'`, `X-Frame-Options`, `nosniff` and a `Referrer-Policy`;
       and a test that reads them from a response. Vite's preview does not serve `_headers`, so the test reads the file
