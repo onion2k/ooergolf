@@ -985,12 +985,12 @@ for (const [label, width, height] of PHONES) {
   test.describe(`on a ${label} phone`, () => {
     test.use({ viewport: { width, height }, hasTouch: true, isMobile: true });
     const short = height <= 500;
-    // a thumb high, but the shape and spin on a short screen, where three rows of thumbs are most of its height, and a club
-    // round and as wide as the row of eight allows
+    // a thumb high, but the bag's row of shape, spin and the caddie on a short screen, where three rows of thumbs are most of
+    // its height, and a club round and as wide as the row of eight allows
     const thumbOf = (text: string) =>
       CLUBS.includes(text)
         ? CLUB_LEAST
-        : (text.startsWith('Shape') || text.startsWith('Spin')) && short
+        : (text.startsWith('Shape') || text.startsWith('Spin') || text === 'Caddie') && short
           ? SHORT_THUMB
           : THUMB;
 
@@ -1016,7 +1016,7 @@ for (const [label, width, height] of PHONES) {
           r.texts.filter((t) => t.ratio < CONTRAST).map((t) => `"${t.text}" ${t.ratio}:1`),
           `${what}: faint words`,
         ).toEqual([]);
-        // a thumb high, but the shape and spin on a short screen, where three rows of thumbs are most of its height
+        // a thumb high, but the bag's row of shape, spin and the caddie on a short screen
         expect
           .soft(
             r.buttons.filter((b) => b.height < thumbOf(b.text)),

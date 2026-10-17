@@ -224,8 +224,9 @@ Each of the kit's checks, as surveyed on 17 October 2026, and the order the miss
 - **No dependency audit, licence check or unused-dependency check**; the threshold and licences above are not yet run.
   `npm audit` finds four advisories in the dev dependencies (one high, two critical), none in what ships.
 - **No headers check** for https://golf.ooer.com/, which sends HSTS and nothing else of the five.
-- **The smoke tests are red on main:** 115 of 429 failed on 17 October 2026, the same at dcb764c, look pictures, frame
-  costs and four of `progress.spec.ts` (a ball put down on a bank of The Links is out of bounds). Being put right next.
+- **The frame-cost smoke tests are not yet seen green together** since the pictures were written again on 17 October
+  2026: eight failed under another session's load (load average 8 to 11) and passed when timed quiet. Run them on a quiet
+  machine before trusting a frame figure.
 - **The bench's and perf's judgements have no unit tests** of their own.
 - **Mutation checks are by hand,** in the work's report, with no tool to record them.
 - **What only a person can judge:** how a course feels to play, a matter of taste in the look, and the limits listed in

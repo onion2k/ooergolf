@@ -24,6 +24,7 @@ import { puttText } from '../src/readout';
 import { DRAG } from '../src/shot';
 import { scoreName } from '../src/score';
 import { LIE } from '../src/surfaces';
+import { zonesOf } from '../src/zones';
 import { CADDIE_HOLES, FLAT } from '../test/level';
 import { wideHole } from '../test/wide-hole';
 import { smallHole } from './bighole';
@@ -1032,14 +1033,17 @@ test('a ball lying on a bank of The Links, in the rough above the fairway, is st
   page,
 }) => {
   const problems = watch(page);
-  // the highest tile of rough on The Opener that the fuzzer counts as a bank, so the ball lies well up a slope and not on its toe
+  // the highest tile of rough on The Opener that the fuzzer counts as a bank, so the ball lies well up a slope and not on its
+  // toe; rough by the zones, as the game puts a ball down by them, since a tile of rough by the stakes can lie past the
+  // curve of out of bounds (where `lieAt` says rough too, out of bounds being rough to roll on)
   const hole = links()[0];
   const layout = layoutOf(hole.map, hole.terrain);
   let best = { x: 0, y: 0, z: -1 };
   for (let t = 0; t < layout.cols * layout.rows; t++) {
     const x = layout.originX + ((t % layout.cols) + 0.5) * TILE,
       y = layout.originY + (Math.floor(t / layout.cols) + 0.5) * TILE;
-    if (layout.terrain[t] > best.z && onBank(layout, x, y)) best = { x, y, z: layout.terrain[t] };
+    if (layout.terrain[t] > best.z && onBank(layout, x, y) && zonesOf(layout).at(x, y) === 'rough')
+      best = { x, y, z: layout.terrain[t] };
   }
   expect(best.z, 'a bank to stand on').toBeGreaterThan(3);
   await start(page, { seed: 1, paused: true });
@@ -1609,7 +1613,7 @@ test.describe('the caddie', () => {
     );
     await expect(page.locator('#caddieTry')).toHaveText('Try a draw');
     const said = await page.evaluate(() => window.game!.caddie());
-    expect(said.offered).toEqual({ kind: 'shape', club: 'driver', shape: -1 });
+    expect(said.offered).toEqual({ kind: 'shape', club: 'driver', shape: -1, spin: 0 });
     expect(said.looking.done).toBe(true);
     // a drag held puts it out of the way, and it is back when the drag is taken back where it began
     const ball = await page.evaluate(() => {
@@ -1641,7 +1645,7 @@ test.describe('the caddie', () => {
       window.game!.shoot(Math.PI / 2, 1);
       window.game!.step(900);
     });
-    expect((await page.evaluate(() => window.game!.caddie())).taken).toEqual({ club: 0, shape: 1 });
+    expect((await page.evaluate(() => window.game!.caddie())).taken).toEqual({ club: 0, shape: 1, spin: 0 });
     // asked for from where the ball now lies it says something, a tip or that the club is fine, and its ✕ puts it away
     expect(await page.evaluate(() => window.game!.caddiePress('ask'))).toBe(true);
     await page.evaluate(() => window.game!.step(10));
