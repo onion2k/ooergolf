@@ -29,7 +29,7 @@ const NO_SEASON = {
   mini: { grade: 'club', begun: 0, played: [], titles: 0 },
 };
 /** What a save from before the caddie loads its tips taken as: none of either kind. */
-const NO_TIPS = { club: 0, shape: 0 };
+const NO_TIPS = { club: 0, shape: 0, spin: 0 };
 /** What a save from before the career loads its career as: counted in it, as every round was, with no record, no round and no season. */
 const CAREER = { mode: 'career', records: {}, round: null, season: NO_SEASON, caddie: NO_TIPS };
 const FRESH = { coins: 0, gems: 0, owned: [], kit: NONE, best: {}, ...CAREER };
@@ -140,7 +140,20 @@ const KEPT: Record<string, Record<string, unknown>> = {
     records: {},
     round: null,
     season: NO_SEASON,
-    caddie: { club: 2, shape: 3 },
+    caddie: { club: 2, shape: 3, spin: 0 },
+  },
+  // the caddie's spin of 17 October 2026: a tip of spin taken once, beside the two of a club and three of a shape
+  '10-caddie-spin.json': {
+    coins: 120,
+    gems: 0,
+    owned: [],
+    kit: NONE,
+    best: { 'Heather Run': { strokes: 4, kit: NONE } },
+    mode: 'career',
+    records: {},
+    round: null,
+    season: NO_SEASON,
+    caddie: { club: 2, shape: 3, spin: 1 },
   },
 };
 
@@ -358,15 +371,16 @@ describe('saves from every shape the game has written', () => {
 
   it('reads the caddie’s tips taken only as counts, and none of a kind that is not one', () => {
     const read = (caddie: unknown) => new Progress(memoryStore(JSON.stringify({ caddie }))).save.caddie;
-    expect(read({ club: 1, shape: 4 })).toEqual({ club: 1, shape: 4 });
-    expect(read({ club: -1, shape: 1.5 })).toEqual(NO_TIPS);
-    expect(read({ shape: 2, other: 9 })).toEqual({ club: 0, shape: 2 });
+    expect(read({ club: 1, shape: 4, spin: 2 })).toEqual({ club: 1, shape: 4, spin: 2 });
+    expect(read({ club: -1, shape: 1.5, spin: 'top' })).toEqual(NO_TIPS);
+    expect(read({ shape: 2, other: 9 })).toEqual({ club: 0, shape: 2, spin: 0 });
     for (const bad of [null, 'tips', [1, 2], 7]) expect(read(bad), JSON.stringify(bad)).toEqual(NO_TIPS);
     const progress = new Progress(memoryStore());
     progress.tookTip('shape', 3);
     progress.tookTip('shape', 3);
     progress.tookTip('club', 3);
-    expect(progress.save.caddie).toEqual({ club: 1, shape: 2 });
+    progress.tookTip('spin', 3);
+    expect(progress.save.caddie).toEqual({ club: 1, shape: 2, spin: 1 });
     // past the limit the count stands, so the save's bytes are bounded
     for (let k = 0; k < 20; k++) progress.tookTip('shape', 3);
     expect(progress.save.caddie.shape).toBe(3);

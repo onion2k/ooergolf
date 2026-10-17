@@ -64,7 +64,7 @@ import { centre, figures } from '../test/lake-figures';
 import { LINKS_SPECS } from '../src/links';
 import { onBank } from '../src/slopes';
 import { flipperYaw } from '../src/obstacles';
-import { Previewer } from '../src/preview';
+import { GHOST_FRAMES, Previewer } from '../src/preview';
 import { CADDIE, CaddieTalk } from '../src/caddie';
 import { BAG, PUTTER, type BagClub } from '../src/bag';
 import { bankOf, makeBank } from '../src/bank';
@@ -1110,6 +1110,8 @@ export function fuzz(
      * back as it was, so the monkey's stream and the run play on as they would have; the game and its chance are not touched.
      */
     const caddier = seeded(seed * 73 + 19);
+    /** The most frames a look may take: its flights, and three rolls to rest a slice a frame, each a flight long at most. */
+    const SPIN_LOOK_FRAMES = CADDIE.previews + CADDIE.spins * (1 + Math.ceil(GHOST_FRAMES / CADDIE.slice)) + 2;
     const talk = new CaddieTalk();
     let talkOf: { game: Game | null; hole: number; course: readonly HoleDef[] | null } = {
       game: null,
@@ -1137,14 +1139,14 @@ export function fuzz(
         ]);
       const before = digest(),
         drawn = draws;
-      const inHand = { club: game.inHand.id, shape: game.shape };
+      const inHand = { club: game.inHand.id, shape: game.shape, spin: game.spin };
       const taken = game.progress.save.caddie;
       let frames = 0;
       do {
         talk.frame(game, taken);
         frames++;
-      } while (!talk.looking.done && frames < 3 * CADDIE.previews);
-      if (!talk.looking.done || talk.looking.previews > CADDIE.previews)
+      } while (!talk.looking.done && frames < SPIN_LOOK_FRAMES);
+      if (!talk.looking.done || talk.looking.previews > CADDIE.previews + CADDIE.spins)
         told.push(`the caddie's look took ${frames} frames and ${talk.looking.previews} previews`);
       const asked = caddier() < 0.3;
       if (asked) talk.ask();
@@ -1158,14 +1160,20 @@ export function fuzz(
       if (digest() !== before) told.push('hearing the caddie changed the game');
       if (draws !== drawn) told.push(`hearing the caddie drew ${draws - drawn} numbers of the game's chance`);
       if (tip) count(checked, `caddie's ${tip.kind}`);
+      if (tip && tip.spin !== 0) count(checked, `caddie's ${tip.spin < 0 ? 'back' : 'top'} spin`);
       if (tip && talk.said.button !== null && caddier() < 0.5) {
         if (!talk.take(game)) told.push("the caddie's button put nothing in hand");
-        else if (game.inHand.id !== tip.club || Math.sign(game.shape) !== tip.shape)
+        else if (
+          game.inHand.id !== tip.club ||
+          Math.sign(game.shape) !== tip.shape ||
+          Math.sign(game.spin) !== tip.spin
+        )
           told.push(
-            `the caddie's button put the ${game.inHand.id} shaped ${game.shape} in hand, for a tip of the ${tip.club} shaped ${tip.shape}`,
+            `the caddie's button put the ${game.inHand.id} shaped ${game.shape} and spun ${game.spin} in hand, for a tip of the ${tip.club} shaped ${tip.shape} and spun ${tip.spin}`,
           );
         game.pick(inHand.club);
         game.setShape(inHand.shape);
+        game.setSpin(inHand.spin);
         did("take the caddie's tip");
       }
       if (caddier() < 0.2) {

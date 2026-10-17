@@ -850,7 +850,7 @@ async function main() {
       hud.setStrokes(game?.strokes ?? 0);
       // a stroke that took the caddie's tip for it is counted, so it goes quiet on that kind once it has been taken enough
       if (game) {
-        const took = talk.struck(game.inHand.id, game.struckShape);
+        const took = talk.struck(game.inHand.id, game.struckShape, game.struckSpin);
         if (took) progress.tookTip(took, CADDIE.taken);
         hud.setTip(null);
       }
@@ -1851,7 +1851,9 @@ async function main() {
     faceFlag,
     caddie: () => ({
       said: hud.tipShown(),
-      offered: talk.offered ? { kind: talk.offered.kind, club: talk.offered.club, shape: talk.offered.shape } : null,
+      offered: talk.offered
+        ? { kind: talk.offered.kind, club: talk.offered.club, shape: talk.offered.shape, spin: talk.offered.spin }
+        : null,
       looking: talk.looking,
       taken: { ...progress.save.caddie },
     }),

@@ -44,7 +44,7 @@ export interface Save {
   /** The season each tour is on: its grade, the seasons begun, the events played so far and the titles won. */
   season: Record<Tour, TourSeason>;
   /** How many shots took a tip of the caddie's of each kind: once three of a kind are taken, that kind is said only when asked for. */
-  caddie: { club: number; shape: number };
+  caddie: { club: number; shape: number; spin: number };
 }
 
 /** Where the save is kept. */
@@ -109,7 +109,7 @@ const fresh = (): Save => ({
   records: {},
   round: null,
   season: { golf: freshTourSeason(), mini: freshTourSeason() },
-  caddie: { club: 0, shape: 0 },
+  caddie: { club: 0, shape: 0, spin: 0 },
 });
 
 /** A kit from a save, slot by slot: an id of the slot's own aisle that the shop sells, and '' for anything else. */
@@ -225,6 +225,7 @@ function read(json: string | null): Save {
   if (isMap(from.caddie)) {
     save.caddie.club = count(from.caddie.club, 0);
     save.caddie.shape = count(from.caddie.shape, 0);
+    save.caddie.spin = count(from.caddie.spin, 0);
   }
   return save;
 }
@@ -245,7 +246,7 @@ export class Progress {
    * A shot that took a tip of the caddie's of `kind`, counted and kept, up to `most` (the caddie's own limit, past which the
    * count says nothing more), so the save's bytes are bounded however long it is played.
    */
-  tookTip(kind: 'club' | 'shape', most: number) {
+  tookTip(kind: 'club' | 'shape' | 'spin', most: number) {
     if (this.save.caddie[kind] >= most) return;
     this.save.caddie[kind]++;
     this.persist();

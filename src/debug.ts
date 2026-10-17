@@ -455,9 +455,9 @@ export interface GrassDrawn {
  */
 export interface CaddieReport {
   said: { text: string; button: string | null; held: boolean } | null;
-  offered: { kind: 'club' | 'shape'; club: string; shape: number } | null;
+  offered: { kind: 'club' | 'shape' | 'spin'; club: string; shape: number; spin: number } | null;
   looking: { previews: number; done: boolean };
-  taken: { club: number; shape: number };
+  taken: { club: number; shape: number; spin: number };
 }
 
 export interface DebugHost {

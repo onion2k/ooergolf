@@ -17,7 +17,7 @@ import { BAG, type BagClub } from './bag';
 import { carryFrom } from './flight';
 import type { Game } from './game';
 import { PLAY_AHEAD, lookAlong } from './lineofplay';
-import { Previewer, type Preview } from './preview';
+import { GHOST_FRAMES, Previewer, type Preview } from './preview';
 import { LIE, SURFACES } from './surfaces';
 
 export const CADDIE = {
@@ -32,19 +32,32 @@ export const CADDIE = {
    * struck a hillside thirty yards out is no advice (The Fells' Plunge had "a full 3-wood carries 26" before this).
    */
   progress: 0.75,
+  /** The most flights the look at spin takes, after the look at the club and the shape: flat, back and top. */
+  spins: 3,
+  /**
+   * How many frames of a roll to where the ball rests the caddie runs in one step: a rest is up to 1,500 frames of the
+   * rehearsal, 4 ms on average and 52 ms at worst in one go (16 October 2026), so it is run 60 frames, about 2 ms, a frame.
+   */
+  slice: 60,
+  /** How many yards nearer the pin a spin must leave the ball before it is offered for that alone. */
+  nearer: 10,
 } as const;
 
 /** What goes wrong with a shot: it comes down in the water, out of bounds or in the sand, or a tree or the rail knocks it in the air. */
 export type Trouble = 'water' | 'out' | 'sand' | 'tree';
 
-export type TipKind = 'shape' | 'club';
+export type TipKind = 'shape' | 'club' | 'spin';
 
-/** A tip: the club and the shape to strike it with, the way it was tried, the words, and what its button says. */
+/**
+ * A tip: the club, the shape and the spin to strike it with, the way it was tried, the words, and what its button says. A tip
+ * of a club or a shape may carry a spin as well; a tip of spin is the club and shape in hand with a spin put on.
+ */
 export interface Tip {
   kind: TipKind;
-  /** The club of the bag to take, and the shape to strike it with: -1 a draw, 0 straight, 1 a fade. */
+  /** The club of the bag to take, the shape to strike it with (-1 a draw, 0 straight, 1 a fade) and the spin (-1 back, 0 flat, 1 top). */
   club: string;
   shape: number;
+  spin: number;
   /** The way the tip's shot was tried, as an angle from +x toward +y, and how far it comes down from the ball, in yards. */
   angle: number;
   carry: number;
@@ -88,7 +101,40 @@ function onGround(p: Preview): string {
 /** A club's name in the middle of a sentence: "the 9-iron", "the pitching wedge". */
 const lower = (club: BagClub) => club.name.toLowerCase();
 
-type Phase = 'idle' | 'start' | 'shapes' | 'layup' | 'reach' | 'done';
+type Phase = 'idle' | 'start' | 'shapes' | 'layup' | 'reach' | 'spin' | 'done';
+
+/** The spins the look at spin tries, in turn: flat first, which the other two are measured against. */
+const SPINS = [0, -1, 1] as const;
+
+/** Whether a rest is somewhere to play from at all: in the cup, or at rest out of the water, out of bounds and the sand. */
+function restOk(p: Preview): boolean {
+  const r = p.rest;
+  return r.end === 'holed' || (r.end === 'rest' && r.lie !== LIE.sand);
+}
+
+/** Whether a rest is a good one: in the cup, or at rest on the fairway, the first cut, the green or the tee, and not the rough. */
+function restGood(p: Preview): boolean {
+  const r = p.rest;
+  return (
+    r.end === 'holed' ||
+    (r.end === 'rest' && (r.lie === LIE.fairway || r.lie === LIE.cut || r.lie === LIE.green || r.lie === LIE.tee))
+  );
+}
+
+/** What a flat roll does after it lands, in words: "runs into the water", or "runs off it" for one that lands on the green and leaves it. */
+function runsOff(end: string, lie: number): string {
+  if (end === 'water') return 'runs into the water';
+  if (end === 'out') return 'runs out of bounds';
+  if (lie === LIE.sand) return 'runs into the sand';
+  return 'runs off it';
+}
+
+/** Where a rest is, as a golfer says it: in the rough, on the fairway, in the cup. */
+function restGround(p: { end: string; lie: number }): string {
+  if (p.end === 'holed') return 'in the cup';
+  const name = SURFACES[p.lie]?.name ?? 'ground';
+  return `${p.lie === LIE.rough || p.lie === LIE.sand ? 'in' : 'on'} the ${name}`;
+}
 
 /** The caddie of one golf hole: made with it, as the page makes its previewer, and let go with it. */
 export class Caddie {
@@ -119,6 +165,24 @@ export class Caddie {
   private handCarry = 0;
   /** How many clubs the reach has tried. */
   private reachTried = 0;
+  /** The spin in hand when the look began, and whether the shot the look settled on is one to put a spin on (it came down clear). */
+  private spin = 0;
+  private spinnable = false;
+  /** The look at spin: the shot it spins, which spin it is on, whether a rest is being run, and what each spin came to. */
+  private readonly base = { club: BAG[0], angle: 0, shape: 0 };
+  private spinAt = 0;
+  private resting = false;
+  private readonly spun: Spun = {
+    ok: [false, false, false],
+    good: [false, false, false],
+    miss: new Float64Array(3),
+    landedOnGreen: false,
+    flatEnd: 'rest',
+    flatLie: 0,
+    restLie: [0, 0, 0],
+    holed: [false, false, false],
+    restYards: new Float64Array(3),
+  };
 
   constructor(private readonly game: Game) {
     this.previewer = new Previewer(game, { rest: false });
@@ -138,6 +202,7 @@ export class Caddie {
     this.tip = null;
     this.previews = 0;
     this.phase = 'done';
+    this.spinnable = this.resting = false;
     const { layout, world, ball } = game;
     if (!layout.golf || !game.ready || game.phase !== 'play') return;
     const x = world.x[ball],
@@ -147,6 +212,7 @@ export class Caddie {
     this.from.y = y;
     this.inHand = BAG.find((c) => c.id === game.inHand.id) ?? BAG[0];
     this.shape = Math.sign(game.shape);
+    this.spin = Math.sign(game.spin);
     const { cup } = layout;
     this.cupHeading = Math.atan2(cup.y - y, cup.x - x);
     this.cupYards = Math.hypot(cup.x - x, cup.y - y);
@@ -172,11 +238,16 @@ export class Caddie {
       case 'reach':
         this.reach();
         break;
+      case 'spin':
+        this.spins();
+        return this.done;
       case 'done':
       case 'idle':
         break;
     }
     if (this.previews >= CADDIE.previews && !this.done) this.phase = 'done';
+    // the club and the shape settled, the shot they came to is looked at again for its spin, if it came down clear
+    if (this.phase === 'done' && this.spinnable) this.startSpin();
     return this.done;
   }
 
@@ -212,6 +283,7 @@ export class Caddie {
     const p = this.run(this.inHand, this.heading, this.shape);
     const trouble = troubleOf(p);
     if (!trouble) {
+      this.spinnable = true;
       this.phase = 'done';
       return;
     }
@@ -234,10 +306,12 @@ export class Caddie {
       } else {
         const s = this.bestShape;
         const fix = s === 0 ? 'Hit it straight and it stays clear.' : `A ${SHAPE_NAME[s]} bends it clear.`;
+        this.spinnable = true;
         this.tip = {
           kind: 'shape',
           club: this.inHand.id,
           shape: s,
+          spin: 0,
           angle: this.heading,
           carry: this.bestCarry,
           text: `${this.inHand.name} ${troubleWords(this.trouble, this.troubleYards)}. ${fix}`,
@@ -270,10 +344,12 @@ export class Caddie {
     // a lay-up comes down short of the trouble, and so is held to the shorter share of it
     if (troubleOf(p) || p.carry < (this.troubleYards * CADDIE.progress) / 1.5) return;
     const where = onGround(p);
+    this.spinnable = true;
     this.tip = {
       kind: 'club',
       club: club.id,
       shape: 0,
+      spin: 0,
       angle: this.heading,
       carry: p.carry,
       text: `${this.inHand.name} ${troubleWords(this.trouble, this.troubleYards)}. The ${lower(club)} lays up at ${Math.round(p.carry)} yd ${where}.`,
@@ -293,10 +369,12 @@ export class Caddie {
     this.reachTried++;
     const p = this.run(club, this.cupHeading, 0);
     if (troubleOf(p) || (p.end !== 'holed' && p.carry < this.cupYards * CADDIE.progress)) return;
+    this.spinnable = true;
     this.tip = {
       kind: 'club',
       club: club.id,
       shape: 0,
+      spin: 0,
       angle: this.cupHeading,
       carry: p.carry,
       text: `${this.inHand.name} carries ${Math.round(this.handCarry)}, and the pin is ${Math.round(this.cupYards)} yd. A full ${lower(club)} ${p.end === 'holed' ? 'drops in the cup' : `carries ${Math.round(p.carry)}`}.`,
@@ -305,15 +383,124 @@ export class Caddie {
     this.phase = 'done';
   }
 
-  /** A preview of `club` at full power along `angle` with `shape`, counted. */
-  private run(club: BagClub, angle: number, shape: number): Preview {
+  /** A preview of `club` at full power along `angle` with `shape` and `spin`, counted. */
+  private run(club: BagClub, angle: number, shape: number, spin = 0): Preview {
     this.previews++;
-    return this.previewer.run(this.from, club, angle, 1, shape, 0);
+    return this.previewer.run(this.from, club, angle, 1, shape, spin);
   }
 
-  /** The tip's own shot tried again, from where the ball lies: what `caddieProblems` holds it to. */
+  /** The look at spin begun, on the tip's shot if there is one and the club in hand's otherwise. */
+  private startSpin() {
+    this.spinnable = false;
+    const tip = this.tip;
+    this.base.club = tip ? (BAG.find((c) => c.id === tip.club) ?? this.inHand) : this.inHand;
+    this.base.angle = tip ? tip.angle : this.heading;
+    this.base.shape = tip ? tip.shape : this.shape;
+    this.spinAt = 0;
+    this.resting = false;
+    this.phase = 'spin';
+  }
+
+  /**
+   * One step of the look at spin: a flight of the next spin, or a slice of the roll to where it rests, never both, so a
+   * step costs about what a preview of a drag does; and once all three are in, the spin chosen.
+   */
+  private spins() {
+    const p = this.previewer.result;
+    if (!this.resting) {
+      const s = SPINS[this.spinAt];
+      this.run(this.base.club, this.base.angle, this.base.shape, s);
+      if (this.spinAt === 0) {
+        this.spun.landedOnGreen = p.end === 'landed' && p.lie === LIE.green;
+      }
+      this.resting = !this.previewer.beginRest(p, this.from);
+      if (this.resting) return;
+    } else if (!this.previewer.stepRest(CADDIE.slice)) return;
+    this.resting = false;
+    const k = this.spinAt++;
+    const r = p.rest;
+    this.spun.ok[k] = restOk(p);
+    this.spun.good[k] = restGood(p);
+    this.spun.holed[k] = r.end === 'holed';
+    this.spun.restLie[k] = r.lie;
+    this.spun.restYards[k] = r.carry;
+    const { cup } = this.game.layout;
+    this.spun.miss[k] = r.end === 'holed' ? 0 : Math.hypot(r.x - cup.x, r.y - cup.y);
+    if (k === 0) {
+      this.spun.flatEnd = r.end;
+      this.spun.flatLie = r.lie;
+    }
+    if (this.spinAt < SPINS.length) return;
+    this.chooseSpin();
+    this.phase = 'done';
+  }
+
+  /**
+   * The spin the look found best, and the tip it makes: back spin where a shot that lands on the green would roll off it and
+   * back spin holds it, and otherwise whichever of back and top leaves the ball at a good rest `CADDIE.nearer` yards nearer the
+   * pin than flat does (or at a good rest where flat leaves it in the sand or worse). Added to the tip there is, or a tip of
+   * its own for the club and shape in hand.
+   */
+  private chooseSpin() {
+    const { spun } = this;
+    const best = bestSpin(spun);
+    const holdsGreen = (k: number) => spun.holed[k] || (spun.good[k] && spun.restLie[k] === LIE.green);
+    const tip = this.tip;
+    if (best === 0) {
+      // a tip whose ball, struck flat, rolls on into the water, out of bounds or the sand, and that no spin saves, is no tip
+      if (tip && !spun.ok[0]) this.tip = null;
+      return;
+    }
+    const k = best < 0 ? 1 : 2;
+    const club = this.base.club;
+    const it = tip ? 'it' : `the ${lower(club)}`;
+    const stops = spun.holed[k] ? 'drops it in the cup' : `stops it ${Math.round(spun.miss[k])} yd from the pin`;
+    const name = best < 0 ? 'back spin' : 'top spin';
+    const Name = best < 0 ? 'Back spin' : 'Top spin';
+    const rest = { end: spun.holed[k] ? 'holed' : 'rest', lie: spun.restLie[k] };
+    let said: string;
+    if (best < 0 && spun.landedOnGreen && !holdsGreen(0))
+      said = `${tip ? 'It' : `The ${lower(club)}`} lands on the green and ${runsOff(spun.flatEnd, spun.flatLie)}. Back spin ${stops}.`;
+    else if (!spun.ok[0])
+      said = `Struck flat, ${it} ${runsOff(spun.flatEnd, spun.flatLie)}. ${Name} keeps it ${restGround(rest)}, ${Math.round(spun.miss[k])} yd from the pin.`;
+    else if (best < 0) said = `Back spin ${stops}, ${Math.round(spun.miss[0] - spun.miss[k])} yd nearer.`;
+    else
+      said = `Top spin runs ${it} on to ${Math.round(spun.restYards[k])} yd, ${spun.holed[k] ? 'in the cup' : `${Math.round(spun.miss[k])} yd from the pin`}.`;
+    if (tip) {
+      tip.spin = best;
+      tip.text = `${tip.text} ${said}`;
+      tip.button = `${tip.button} with ${name}`;
+      return;
+    }
+    // a spin already in hand is not offered again
+    if (best === this.spin) return;
+    this.tip = {
+      kind: 'spin',
+      club: club.id,
+      shape: this.base.shape,
+      spin: best,
+      angle: this.base.angle,
+      carry: this.previewer.result.carry,
+      text: said,
+      button: `Add ${name}`,
+    };
+  }
+
+  /**
+   * The tip's own shot tried again, from where the ball lies, carried on to where it rests when the tip has a spin: what
+   * `caddieProblems` holds it to. Run in one go, so it is for a test and the fuzzer, never a frame.
+   */
   retry(tip: Tip): Preview {
-    return this.previewer.run(this.from, BAG.find((c) => c.id === tip.club) ?? BAG[0], tip.angle, 1, tip.shape, 0);
+    const p = this.previewer.run(
+      this.from,
+      BAG.find((c) => c.id === tip.club) ?? BAG[0],
+      tip.angle,
+      1,
+      tip.shape,
+      tip.spin,
+    );
+    if (tip.spin !== 0 && !this.previewer.beginRest(p, this.from)) while (!this.previewer.stepRest(GHOST_FRAMES));
+    return p;
   }
 
   /** How many bodies its rehearsal has: the one ball. */
@@ -322,13 +509,59 @@ export class Caddie {
   }
 }
 
-/** Whether a shot struck with `club` and `shape` took `tip`: the tip's club, and for a tip of shape its shape too. */
-export function tookTip(tip: Tip, club: string, shape: number): boolean {
-  return club === tip.club && (tip.kind === 'club' || Math.sign(shape) === tip.shape);
+/**
+ * Whether a shot struck with `club`, `shape` and `spin` took `tip`: the tip's club, for a tip of shape its shape too, and for a
+ * tip of spin its spin.
+ */
+export function tookTip(tip: Tip, club: string, shape: number, spin = 0): boolean {
+  if (club !== tip.club) return false;
+  if (tip.kind === 'shape') return Math.sign(shape) === tip.shape;
+  if (tip.kind === 'spin') return Math.sign(spin) === tip.spin;
+  return true;
+}
+
+/**
+ * What each of the three spins, flat, back and top in that order, came to: whether its rest is somewhere to play from (`ok`) and
+ * a good lie (`good`), whether it dropped, what it rests on, how far from the pin, and how far from the ball; and whether the flat
+ * shot first came down on the putting green, and how its roll ended.
+ */
+export interface Spun {
+  ok: boolean[];
+  good: boolean[];
+  miss: Float64Array;
+  landedOnGreen: boolean;
+  flatEnd: string;
+  flatLie: number;
+  restLie: number[];
+  holed: boolean[];
+  restYards: Float64Array;
+}
+
+/**
+ * The spin to offer, from what flat, back and top came to: back spin where a shot that lands on the green rolls off it and back
+ * spin holds it there, at any gain; and otherwise whichever of back and top comes to a good rest (the fairway, the cut, the green
+ * or the tee, or the cup) `CADDIE.nearer` yards nearer the pin than flat, the more, or which keeps out of the trouble flat rolls
+ * into. Nought for none.
+ */
+export function bestSpin(spun: Spun): number {
+  const holdsGreen = (k: number) => spun.holed[k] || (spun.good[k] && spun.restLie[k] === LIE.green);
+  if (spun.landedOnGreen && !holdsGreen(0) && holdsGreen(1)) return -1;
+  let best = 0,
+    gain = -Infinity;
+  for (const k of [1, 2]) {
+    if (!spun.good[k]) continue;
+    // a spin that keeps out of the trouble flat rolls into is worth it at any distance; otherwise it must gain the yards
+    const g = spun.ok[0] ? spun.miss[0] - spun.miss[k] : CADDIE.nearer + 1e6 - spun.miss[k];
+    if (g >= CADDIE.nearer && g > gain) {
+      gain = g;
+      best = SPINS[k];
+    }
+  }
+  return best;
 }
 
 /** Whether a kind of tip is said without being asked for: until the player has taken `CADDIE.taken` of it. */
-export function speaks(kind: TipKind, taken: { club: number; shape: number }): boolean {
+export function speaks(kind: TipKind, taken: Readonly<Record<TipKind, number>>): boolean {
   return taken[kind] < CADDIE.taken;
 }
 
@@ -354,7 +587,7 @@ export class CaddieTalk {
    * changes: a kit put on changes how far a club goes, and a tip worked out with the last one may not hold (the fuzzer found a
    * 3-wood offered with no item that met a tree once the Titanium Driver was worn).
    */
-  private readonly at = { x: NaN, y: NaN, club: '', shape: NaN, kitClub: '', kitBall: '', kitAccessory: '' };
+  private readonly at = { x: NaN, y: NaN, club: '', shape: NaN, spin: NaN, kitClub: '', kitBall: '', kitAccessory: '' };
   /** Whether a tip was said of its own accord for this shot, put away, or asked for. */
   private voiced = false;
   private dismissed = false;
@@ -381,7 +614,7 @@ export class CaddieTalk {
    * A frame: a look begun if the ball has come to rest somewhere new or the club or shape in hand changed, a preview of it
    * spent, and what is said settled. `quiet` is nothing said at all (the start screen, the title); `taken` the save's counts.
    */
-  frame(game: Game, taken: { club: number; shape: number }, quiet = false) {
+  frame(game: Game, taken: Readonly<Record<TipKind, number>>, quiet = false) {
     const caddie = this.caddie;
     if (!caddie || quiet || !game.ready || game.phase !== 'play') {
       this.say(null);
@@ -391,7 +624,8 @@ export class CaddieTalk {
     const x = world.x[ball],
       y = world.y[ball];
     const club = game.inHand.id,
-      shape = Math.sign(game.shape);
+      shape = Math.sign(game.shape),
+      spin = Math.sign(game.spin);
     if (x !== this.at.x || y !== this.at.y) this.newShot();
     const { at } = this,
       slots = game.slots;
@@ -400,6 +634,7 @@ export class CaddieTalk {
       y !== at.y ||
       club !== at.club ||
       shape !== at.shape ||
+      spin !== at.spin ||
       slots.club !== at.kitClub ||
       slots.ball !== at.kitBall ||
       slots.accessory !== at.kitAccessory
@@ -408,6 +643,7 @@ export class CaddieTalk {
       at.y = y;
       at.club = club;
       at.shape = shape;
+      at.spin = spin;
       at.kitClub = slots.club;
       at.kitBall = slots.ball;
       at.kitAccessory = slots.accessory;
@@ -422,7 +658,11 @@ export class CaddieTalk {
       return;
     }
     const same =
-      tip !== null && this.offered !== null && tip.club === this.offered.club && tip.shape === this.offered.shape;
+      tip !== null &&
+      this.offered !== null &&
+      tip.club === this.offered.club &&
+      tip.shape === this.offered.shape &&
+      tip.spin === this.offered.spin;
     if (tip && !this.dismissed && speaks(tip.kind, taken) && (!this.voiced || same)) {
       this.voiced = true;
       this.offer(tip);
@@ -442,24 +682,25 @@ export class CaddieTalk {
     this.say(null);
   }
 
-  /** The tip's button: its club and shape put in hand, as the bag's buttons would. Whether there was a tip to take. */
+  /** The tip's button: its club, shape and spin put in hand, as the bag's buttons would. Whether there was a tip to take. */
   take(game: Game): boolean {
     const tip = this.offered;
     if (!tip || this.said.text === null || this.said.button === null) return false;
     if (!game.pick(tip.club)) return false;
     game.setShape(tip.shape);
+    game.setSpin(tip.spin);
     this.asked = false;
     return true;
   }
 
-  /** A stroke struck with `club` and `shape`: the kind of the tip it took, if a tip was said for this shot and it took it. */
-  struck(club: string, shape: number): TipKind | null {
+  /** A stroke struck with `club`, `shape` and `spin`: the kind of the tip it took, if a tip was said for this shot and it took it. */
+  struck(club: string, shape: number, spin = 0): TipKind | null {
     const tip = this.offered;
     this.newShot();
     this.say(null);
     // a ball put back where it was struck from (the water, out of bounds) is a new shot from the same place, and is looked at again
     this.at.x = NaN;
-    return tip && tookTip(tip, club, shape) ? tip.kind : null;
+    return tip && tookTip(tip, club, shape, spin) ? tip.kind : null;
   }
 
   private offer(tip: Tip) {
