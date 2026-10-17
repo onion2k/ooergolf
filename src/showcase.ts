@@ -130,6 +130,7 @@ const bootMsg = document.getElementById('bootMsg')!;
 
 main().catch((err: unknown) => {
   bootMsg.textContent = err instanceof Error ? err.message : String(err);
+  // eslint-disable-next-line no-console -- the showcase's failure, with its stack, for whoever is building a model
   console.error(err);
 });
 

@@ -179,7 +179,7 @@ describe('saves from every shape the game has written', () => {
         const store = memoryStore(read(file));
         const before = new Progress(store).save;
         expect(store.json, 'loading alone must not write').toBe(read(file));
-        const game = new Game(new Progress(store));
+        const game = new Game(new Progress(store), {}, { random: seeded(1) });
         game.persist();
         const after = new Progress(memoryStore(store.json)).save;
         expect(after).toEqual(before);
@@ -224,7 +224,7 @@ describe('saves from every shape the game has written', () => {
     const store = memoryStore(
       JSON.stringify({ coins: 9, gems: 3, owned: all, kit, best: { Straight: { strokes: 1, kit } } }),
     );
-    const game = new Game(new Progress(store));
+    const game = new Game(new Progress(store), {}, { random: seeded(1) });
     game.persist();
     const back = new Progress(memoryStore(store.json)).save;
     expect(back.owned).toEqual(all);
@@ -397,7 +397,7 @@ describe('saves from every shape the game has written', () => {
   });
 
   it('has the shape the game writes now: a new field means a new file here', () => {
-    const game = new Game(new Progress(memoryStore()));
+    const game = new Game(new Progress(memoryStore()), {}, { random: seeded(1) });
     game.persist();
     const now = Object.keys(JSON.parse(JSON.stringify(game.progress.save)) as object).sort();
     const newest = Object.keys(JSON.parse(read(files[files.length - 1])) as object).sort();

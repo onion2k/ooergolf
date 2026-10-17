@@ -211,6 +211,7 @@ function titleDraw(standing: boolean, reduced: boolean, aspect: number): TitleDr
 
 main().catch((err: unknown) => {
   showError(reasonOf(err));
+  // eslint-disable-next-line no-console -- the screen says the boot failed; the console keeps the stack for a report
   console.error(err);
 });
 
@@ -598,6 +599,7 @@ async function main() {
   const stop = (index: number, name: string, err: unknown) => {
     failure = holeFailureText(index, name, err);
     showError(failure);
+    // eslint-disable-next-line no-console -- the screen says the hole could not be drawn; the console keeps the stack
     console.error(failure, err);
   };
   const scene = new Scene();
@@ -1064,10 +1066,11 @@ async function main() {
     }
   }
 
-  // ?seed=N makes chance the same from before the game is built, for a test that wants the same course every run
+  // ?seed=N makes chance the same from before the game is built, for a test that wants the same course every run; a
+  // player's game is seeded from the browser's own randomness, so the game has one source of chance however it is begun
   const seed = query.get('seed');
   const played = new Game(progress, events, {
-    ...(seed !== null ? { random: seeded(+seed) } : {}),
+    random: seeded(seed !== null ? +seed : crypto.getRandomValues(new Uint32Array(1))[0]),
     // the day a course record is made, in the player's own time
     today: () => dayOf(new Date()),
     // the courses, rivals and scores an event is made of, so the game can be entered in one: the page's buttons for it come later

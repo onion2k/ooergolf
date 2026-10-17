@@ -125,8 +125,8 @@ export interface Placement {
 }
 
 export interface GameOptions {
-  /** Chance; Math.random unless told otherwise, and the tests always tell. */
-  random?: Random;
+  /** Chance, from the one seeded source the page or the test hands in: never the language's own, which no seed replays. */
+  random: Random;
   /** The holes to play; the course unless told otherwise. */
   course?: readonly HoleDef[];
   /** A game to try shots in and not to play: see `Game.rehearsal`. */
@@ -305,10 +305,10 @@ export class Game {
 
   constructor(
     readonly progress: Progress,
-    readonly events: GameEvents = {},
-    options: GameOptions = {},
+    readonly events: GameEvents,
+    options: GameOptions,
   ) {
-    this.random = options.random ?? Math.random;
+    this.random = options.random;
     this.course = options.course ?? COURSE;
     this.rehearsing = options.rehearsal === true;
     this.lent = options.kit;

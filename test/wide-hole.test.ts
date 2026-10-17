@@ -11,6 +11,7 @@ import { cellFor, fieldOf, windOf } from '../src/turf';
 import { layoutOf } from '../src/arena';
 import { Game } from '../src/game';
 import { Progress, memoryStore } from '../src/progress';
+import { seeded } from '../src/random';
 import { corridor, tooLong, wideHole } from './wide-hole';
 
 describe('the hole the grass refuses', () => {
@@ -24,7 +25,7 @@ describe('the hole the grass refuses', () => {
 
   it('is played by the game, and its scene is built as for any hole: it is the field of grass alone that refuses it', () => {
     const hole = wideHole();
-    const game = new Game(new Progress(memoryStore()), {}, { course: [hole] });
+    const game = new Game(new Progress(memoryStore()), {}, { course: [hole], random: seeded(1) });
     expect(game.phase, 'the game begins it').toBe('play');
     const { layout } = game;
     const scene = new Scene();

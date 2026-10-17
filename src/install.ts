@@ -28,6 +28,7 @@ export function registerWorker(container: WorkerContainer, told: (state: WorkerS
   container.register('./sw.js', { type: 'module' }).then(
     () => told('ready'),
     (error: unknown) => {
+      // eslint-disable-next-line no-console -- a worker that fails to register is told to whoever opens the console; the game plays on without it
       console.error('The service worker could not be registered.', error);
       told('failed');
     },
