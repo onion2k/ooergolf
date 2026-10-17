@@ -10,7 +10,8 @@
  * point of a finer grid took half a second on a long hole, and a hole may not begin that slowly. Without the band the
  * begin gate would fail on every golf hole; without the sign the far side of a curve would read as the near.
  */
-import { TILE, type Layout } from './arena';
+import type { Layout } from './arena';
+import { TILE } from './tile';
 import { LIE } from './surfaces';
 
 /** The fields, in the order the rules read them: negative inside the kind, in yards. */

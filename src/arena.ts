@@ -7,9 +7,10 @@
  */
 import { LIE, type Lie } from './surfaces';
 import { TREE } from './trees';
+import { TILE } from './tile';
 import { zonesOf, type Zone } from './zones';
 
-export const TILE = 3;
+export { TILE };
 /**
  * The physics' fixed step, and its gravity: the package's defaults, which the game steps and predicts by. Here, with the
  * figures a hole is made of, since a hole's ground is judged by what it holds a ball against gravity, and the tools that
