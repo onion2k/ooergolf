@@ -10,7 +10,7 @@
  * minutes.
  *
  * Every size is held two ways: under a ceiling that says what it could ever
- * reasonably be, and, where marked `steady`, not still climbing by the end —
+ * reasonably be, and, where given a `climb`, not still climbing by the end —
  * the last third of the run against the middle third, so a size that fills
  * up early and settles is left alone, and one that creeps all the way
  * through is not. A new list, map or cache in the game gets a line in
@@ -33,7 +33,17 @@ const DT = 1 / 60;
  * reasonably be, not a guess at what the game does now, so tuning does not
  * move it and a leak cannot hide under it.
  */
-export const WATCH: Partial<Record<string, { ceiling: number; steady?: boolean }>> = {
+/**
+ * How far a size's last third may rise over its middle third, in its own units, before it is still climbing: a share of
+ * the middle and a slack, both. A share alone lets a steady leak through, whose last third is under 1.8 times its middle
+ * whatever its rate, so a size that wobbles little is given a slack alone.
+ */
+export interface Climb {
+  share: number;
+  slack: number;
+}
+
+export const WATCH: Partial<Record<string, { ceiling: number; climb?: Climb }>> = {
   bodies: { ceiling: BODY_CAPACITY },
   slots: { ceiling: BODY_CAPACITY },
   // a best is kept for each hole by its name and is written and never read, so the save only grows, a hole at a time, to
@@ -63,19 +73,35 @@ export const WATCH: Partial<Record<string, { ceiling: number; steady?: boolean }
   // the buffers the ghost shot's path is written into, in each of the two previews a golf hole's previewer holds (the flight's
   // and the putt's roll), made once with the previewer and let go of with the hole: about 8 kB each, a little over 16 in all
   'preview rest bytes': { ceiling: 20_000 },
-  // the catch-all for what is leaking and has no name here; noisy, so it is given a lot of room
-  'heap MB': { ceiling: 300, steady: true },
+  // the catch-all for what is leaking and has no name here: what is kept alive, read after a collection (`sizes`). Measured
+  // on 18 October 2026 over three seeds of every kind for ten minutes, sampled every ten seconds: 7 to 10 MB, the last
+  // third at most 0.21 MB over the middle. A slack of 1 MB, five times that, catches a leak of 0.6 MB a minute in a
+  // ten-minute run (a third of a run is 20 samples, so the last third's middle is 3.3 minutes past the middle's) and about
+  // 0.05 MB a minute in an hour; and the ceiling is ten times what it holds
+  'heap MB': { ceiling: 100, climb: { share: 0, slack: 1 } },
+  // the bytes typed arrays hold, outside the heap: the hole in play's grids and meshes, 0.1 to 0.3 MB on The Meadow and 4 to
+  // 58 MB on golf, swinging with the hole, the last third at most 5.4 MB over the middle in the same runs; a slack of 15 MB,
+  // about three times that, catches 4.5 MB a minute in ten minutes and 0.75 MB a minute in an hour, and the ceiling is
+  // twice the most the longest hole held
+  'buffers MB': { ceiling: 120, climb: { share: 0, slack: 15 } },
 };
 
 /** Every size worth watching, read off a game as it stands. */
 export function sizes(game: Game): Record<string, number> {
   const { world, progress } = game;
+  // what is kept alive, and not what is not yet collected: read at any moment, the heap counts the garbage a golf hole's
+  // previews make, and wobbled by 12 MB (the arrays' bytes by 22) between the middle and the last third of runs that kept
+  // nothing (18 October 2026), as wide as the leak to be caught. The leak check runs with --expose-gc; a test has none
+  const gc = (globalThis as { gc?: () => void }).gc;
+  if (gc) gc();
   return {
     bodies: world.live,
     slots: world.count,
     'save bytes': JSON.stringify(progress.save).length,
     'card scores': game.card.length,
     'heap MB': Math.round(process.memoryUsage().heapUsed / 1e5) / 10,
+    // the bytes typed arrays hold, which live outside the heap and which `heapUsed` leaves out
+    'buffers MB': Math.round(process.memoryUsage().arrayBuffers / 1e5) / 10,
   };
 }
 
@@ -101,7 +127,7 @@ export function trouble(samples: Record<string, number[]>): string[] {
     const watch = WATCH[key];
     const most = Math.max(...series);
     if (watch && most > watch.ceiling) out.push(`${key} went to ${most}, over its ceiling of ${watch.ceiling}`);
-    else if (watch?.steady && grew(series, key === 'heap MB' ? 0.5 : 0.15, key === 'heap MB' ? 20 : 3)) {
+    else if (watch?.climb && grew(series, watch.climb.share, watch.climb.slack)) {
       const third = Math.floor(series.length / 3);
       const at = (xs: number[]) => Math.round(xs.reduce((a, b) => a + b, 0) / xs.length);
       out.push(
@@ -136,14 +162,14 @@ export interface LeakRun {
   minutes: number;
   /** Which course of golf it was played on, if not The Meadow. */
   golf?: GolfCourseKey;
-  /** Every size, sampled once a game minute. */
+  /** Every size, sampled every ten seconds of play. */
   samples: Record<string, number[]>;
   problems: string[];
   /** Real seconds it took. */
   seconds: number;
 }
 
-/** Play a long game, sampling the sizes once a game minute, and say what would not stay bounded. */
+/** Play a long game, sampling the sizes every ten seconds of play, and say what would not stay bounded. */
 export function leakRun({ seed, minutes, golf }: LeakOptions): LeakRun {
   const started = performance.now();
   const samples: Record<string, number[]> = {};
@@ -165,8 +191,10 @@ export function leakRun({ seed, minutes, golf }: LeakOptions): LeakRun {
     // the glow ball's trail, written as the page writes it, for every ball that moves: the most places it held in the minute
     const trail = new Trail();
     let held = 0;
-    for (let minute = 0; minute < minutes; minute++) {
-      for (let f = 0; f < 3600; f++) {
+    // a sample every ten seconds of play, six a minute: a third of a ten-minute run is then twenty samples, enough for its
+    // floor to be the least a hole holds, where at one a minute (one a golf hole or so) it was whichever hole was in play
+    for (let sample = 0; sample < minutes * 6; sample++) {
+      for (let f = 0; f < 600; f++) {
         pilot.step(DT);
         const { world, ball } = game;
         if (world.alive[ball] && Math.hypot(world.vx[ball], world.vy[ball], world.vz[ball]) > TRAIL.moving)

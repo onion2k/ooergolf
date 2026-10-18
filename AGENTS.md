@@ -238,6 +238,8 @@ Each of the kit's checks, as surveyed on 17 October 2026, and the order the miss
 - **The deployed headers are read by hand,** with `npm run headers:live` after a deploy. The build writes
   `dist/_headers` (`scripts/headers.ts`), and `smoke/headers.spec.ts` boots the built game under it; that Netlify serves
   the file as written is seen only on the live site.
+- **The look lets a colour moved by a few
+  levels in 255 through** (its threshold, 0.02, is the GPU's drift), and fails one moved by about ten.
 - **Frame costs double now and then, on the same code on a quiet machine.** Home Waters' tee read 9.67 ms on the
   build at load 2.7 and 4.62 to 4.97 ms five times after, in this checkout and a fresh worktree alike (17 October 2026);
   eight or so frame-cost smoke tests fail in a full run, and pass when run again. The cause is not found, so a frame

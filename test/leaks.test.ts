@@ -119,7 +119,7 @@ describe('what must stay bounded', () => {
   it('reports a size over its ceiling, and a steady one still climbing', () => {
     expect(trouble({ bodies: [10, 10, 10] })).toEqual([]);
     expect(trouble({ bodies: [10, 10_000, 10] }).join('\n')).toMatch(/bodies went to 10000/);
-    expect(trouble({ 'heap MB': [10, 40, 70, 100, 130, 160, 190, 220, 250] }).join('\n')).toMatch(/grew all the way/);
+    expect(trouble({ 'heap MB': [10, 18, 26, 34, 42, 50, 58, 66, 74] }).join('\n')).toMatch(/grew all the way/);
     // a size that only ever climbs is held by its ceiling alone
     expect(trouble({ slots: [1, 2, 3, 4, 5, 6, 7, 8, 9] })).toEqual([]);
   });
@@ -237,5 +237,44 @@ describe('what must stay bounded', () => {
       groundInto(layout, layout.originX + 2 + i * 0.00137, layout.originY + 3 + i * 0.00291, out);
     expect(keptWeights()).toBeLessThanOrEqual(257);
     expect(keptWeights()).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * The Isles, seed 1, ten minutes with nothing kept, sampled every ten seconds after a collection (18 October 2026): the
+ * heap steady about 8 to 10 MB, and the arrays' bytes swinging 8.5 to 51.4 MB with the hole in play.
+ */
+const CLEAN_HEAP = [
+  9.2, 9.3, 9.5, 9.5, 9.4, 9.4, 9.6, 9.6, 9.6, 9.6, 9.6, 9.6, 9.6, 9.6, 9.6, 9.7, 9.6, 9.7, 9.6, 9.7, 9.7, 9.7, 9.7,
+  9.7, 8.3, 8.3, 8.3, 8.3, 8.3, 8.3, 8.3, 8.3, 8.3, 8.4, 8.3, 8.4, 8.4, 8.4, 8.4, 8.4, 8.3, 8.4, 8.4, 8.4, 8.4, 8.4,
+  8.4, 8.4, 8.4, 8.4, 8.4, 8.4, 8.4, 8.4, 8.4, 8.4, 8.4, 8.4, 8.4, 8.4,
+];
+const CLEAN_BUFFERS = [
+  12.2, 22.2, 37.7, 46.7, 27.7, 8.5, 22.5, 41.8, 18.9, 35.3, 28.5, 28, 40.9, 12.2, 21.1, 36, 45.5, 8.5, 8.5, 33.6, 51.4,
+  18.9, 18.9, 34.5, 28, 28, 40.1, 25.6, 27.3, 25.5, 44.3, 27.7, 8.5, 22.5, 22.5, 40.6, 33.4, 44.4, 28, 37.2, 21.1, 34.5,
+  25.5, 45.5, 28, 30.2, 22.5, 41.8, 33.4, 42.6, 28, 39.4, 21.1, 34.4, 25.5, 44.3, 27.7, 22.5, 22.5, 40.6,
+];
+
+describe("the heap's and the arrays' climb", () => {
+  it('lets a run that keeps nothing through, on the most swinging of the courses', () => {
+    expect(trouble({ 'heap MB': CLEAN_HEAP, 'buffers MB': CLEAN_BUFFERS })).toEqual([]);
+  });
+
+  it('catches a steady leak of the heap, slow or fast, under its ceiling', () => {
+    // 0.6 MB a minute for ten minutes, sixty samples: the slowest a ten-minute run is meant to catch
+    const slow = CLEAN_HEAP.map((m, k) => m + (0.6 * k) / 6);
+    expect(trouble({ 'heap MB': slow }).join('\n')).toMatch(/heap MB grew/);
+    // the cache of plain arrays planted at the top of a step, about 20 MB a minute, as one run sampled it once a minute: the
+    // old rule let it through (the last third under half again the middle and 20 MB more); it is now over the ceiling of 100
+    expect(
+      trouble({ 'heap MB': [37.7, 47.5, 77.5, 99.8, 104.6, 122.7, 142.8, 161.3, 205.8, 207.3] }).join('\n'),
+    ).toMatch(/heap MB went to 207.3, over its ceiling/);
+  });
+
+  it('catches the arrays creeping up under their swing', () => {
+    // 6 MB a minute for ten minutes, under every hole's own swing; and 3 MB a minute, which a ten-minute run lets through
+    const creeping = CLEAN_BUFFERS.map((m, k) => m + k);
+    expect(trouble({ 'buffers MB': CLEAN_BUFFERS.map((m, k) => m + k / 2) })).toEqual([]);
+    expect(trouble({ 'buffers MB': creeping }).join('\n')).toMatch(/buffers MB grew/);
   });
 });

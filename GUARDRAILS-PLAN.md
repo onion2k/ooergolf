@@ -149,9 +149,40 @@ what it adds to the full check, an estimate in every case.
 Most of what is held was never recorded failing a fault put in on purpose. Each is proved once, as its check's _Seen
 failing_ says, and the result written here:
 
-- [ ] the fuzzer finds a planted bug (a stroke not counted), and its seed replays it
-- [ ] determinism catches a `Math.random()` put into the game
-- [ ] the save corpus fails with a field's default taken out
-- [ ] leaks catches a cache that is never emptied, as still climbing under its ceiling
-- [ ] the look fails on a palette colour moved a little
-- [ ] an invariant newly added is seen found by the fuzzer with its bug put back
+Done 18 October 2026, each fault put in, seen caught and taken out again, the tree left as it was:
+
+- [x] **The fuzzer finds a planted bug, and its seed replays it.** `this.strokes++` taken out of `Game.shoot`: over seeds
+      1 to 4, seed 1 on The Heath failed at frame 2170, "hole 1 is scored 0, not between 1 and 8", with the actions before
+      it; `--seed 1 --on heath` failed the same, at the same frame; put back, no rule broken.
+- [x] **Determinism catches a `Math.random()` put into the game.** Each stroke's power wobbled by a millionth: all 54
+      runs (six seeds on each of nine courses) parted, most by frame 300, and the check said where to look; put back, "the
+      same twice, every seed on every course".
+- [x] **The save corpus fails a field's default taken out,** and **a field with no sample.** The caddie's counts taken
+      out of the default save: every save from before the caddie failed to load, and those that loaded could not play on.
+      A field added to what the game writes with no file for it: the last test failed, "add a save in the new shape to
+      test/saves". Put back, all 42 pass.
+- [x] **Leaks catches a cache never emptied, under its ceiling, as still climbing.** At first only narrowly: a cache of
+      plain arrays kept every frame (about 20 MB a minute) on The Meadow went to 205 to 207 MB under the 300 MB ceiling,
+      and was caught once in two runs, 7.5 MB past its threshold; a steady leak's last third is under 1.8 times its middle
+      whatever its rate, and the rule asked half again and 20 MB more. And a typed array's bytes were not counted at all
+      (`heapUsed` leaves out an `ArrayBuffer`'s). Put right the same day, from the wobble measured first: the heap is read
+      after a collection (`--expose-gc`), so it is what is kept alive, 7 to 10 MB on every kind, rising at most 0.21 MB
+      from the middle third to the last over 21 clean runs (it had wobbled by 12 MB read at any moment); the arrays' bytes
+      are sampled too (`buffers MB`, 4 to 58 MB with the hole in play, rising at most 5.4); sizes are sampled every ten
+      seconds of play, not every minute; and each climb has a slack of its own and no share (`Climb` in `WATCH`): the heap
+      1 MB, ceiling 100, the arrays 15 MB, ceiling 120. Unit tests from the measured runs (a clean run on The Isles let
+      through; 0.6 MB a minute of heap caught; the arrays 6 MB a minute caught and 3 let through), each failing the old
+      rule. Clean, 105 runs over seeds 1 to 12 of every kind let through. Planted, each on three seeds, every one caught:
+      the fast cache (over the ceiling at 194 MB), a slow one of the played game alone on The Isles (about 1.3 MB a
+      minute, heap 9 to 22 MB, caught by its climb), and a typed array of 2 kB a frame (buffers 35 to 90 MB, caught by
+      their climb under the ceiling). A leak in what a rehearsal steps, which every preview does, grows many times faster
+      on golf, and the ceiling catches it.
+- [x] **The look fails a colour moved a little: at a step of 0.04.** The golf sand's green moved from 0.75 to 0.71 failed
+      the green of Island Green (7% of its pixels); 0.74 and 0.73 passed, as did the minigolf sand moved 0.02 on all 190
+      pictures. The comparison's per-pixel threshold, 0.02, was set for the GPU's drift between runs, so a colour moved by
+      a few levels in 255 is let through, and one anyone would see is not; layout is held to the pixel (the bag's shorter
+      words moved seven pictures by 0.5%).
+- [x] **An invariant is found by the fuzzer with its bug put back.** No invariant came with this work, so "a ball never
+      rests out of bounds" stood in: the put-back on out of bounds taken out of `Game.step`, and over seeds 1 to 4 on The
+      Links, seed 1 failed at frame 1650 and seed 3 at frame 840, "the ball is at rest out of bounds"; put back, no rule
+      broken.
