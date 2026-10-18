@@ -104,6 +104,20 @@ describe('what must always hold', () => {
     expect(checkInvariants(game)).toEqual([]);
   });
 
+  it('reports a sound setting out of range: a mute that is not a boolean, a volume outside 0 to 1', () => {
+    const { game } = newGame();
+    const save = game.progress.save;
+    (save as { muted: unknown }).muted = 'yes';
+    expect(checkInvariants(game).join('\n')).toMatch(/the sound's mute is yes/);
+    save.muted = true;
+    for (const v of [-0.01, 1.01, NaN]) {
+      save.volume = v;
+      expect(checkInvariants(game).join('\n'), String(v)).toMatch(/the sound's volume is/);
+    }
+    save.volume = 0;
+    expect(checkInvariants(game)).toEqual([]);
+  });
+
   it('reports a ball inside something that moves', () => {
     const { game } = newGame();
     const { world, ball } = game;

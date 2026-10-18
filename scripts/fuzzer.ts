@@ -1272,6 +1272,23 @@ export function fuzz(
       did('aim and take back');
     };
     /**
+     * A player turning the sound off or on, or moving its slider, at any moment, rolling or not: on a chance of its own, as the
+     * flag button is, so the monkey's stream is as it was. The sound is the page's, so the game is not touched and draws none
+     * of its chance; the save keeps the setting, and the invariants hold it in range every ten frames.
+     */
+    const listener = seeded(seed * 79 + 17);
+    const setSound = () => {
+      const { progress } = game;
+      const digest = () => JSON.stringify([game.t, game.strokes, game.world.x[game.ball], game.world.y[game.ball]]);
+      const [was, drawn] = [digest(), draws];
+      if (listener() < 0.5) progress.setMuted(!progress.save.muted);
+      // the slider's ends as often as anywhere between, since a player drags it to one end as often as not
+      else progress.setVolume(listener() < 0.3 ? Math.round(listener()) : listener());
+      if (digest() !== was) told.push('setting the sound changed the game');
+      if (draws !== drawn) told.push(`setting the sound drew ${draws - drawn} numbers of the game's chance`);
+      did('set the sound');
+    };
+    /**
      * A player sending the ball into a moving bumper: struck at the place a barrier that throws is at this moment, a little
      * off its middle either way, at any power, the hardest often. Done only on a hole that has one, and on a chance of its
      * own, as the flag button is, so the monkey's stream is as it was and no other hole plays differently. The ceiling on
@@ -1707,6 +1724,7 @@ export function fuzz(
       if (facer() < 0.008) face();
       if (caddier() < 0.01) hearCaddie();
       if (aimer() < 0.01) aimAndTakeBack();
+      if (listener() < 0.002) setSound();
       if (bumped() < 0.03) bump();
       if (game.layout.kickers.length && striker() < 0.03) strike();
       if (game.obstacles.streamed.size && streamer() < 0.03) strikeOntoStream();

@@ -588,6 +588,8 @@ export function checkInvariants(game: Game): string[] {
     if (!Number.isInteger(save[key]) || save[key] < 0) out.push(`the ${key} are ${save[key]}`);
   for (const id of save.owned) if (!itemById(id)) out.push(`an item no one sells is owned: ${id}`);
   if (new Set(save.owned).size !== save.owned.length) out.push('an item is owned twice');
+  if (typeof save.muted !== 'boolean') out.push(`the sound's mute is ${String(save.muted)}`);
+  if (!(save.volume >= 0 && save.volume <= 1)) out.push(`the sound's volume is ${save.volume}`);
   // the bag's own club, or its copy as the kit tunes it
   if (layout.golf && !BAG.some((c) => game.club(c) === game.inHand))
     out.push(`the club in hand on a golf hole, ${game.inHand.id}, is not in the bag`);

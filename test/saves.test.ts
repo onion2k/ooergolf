@@ -32,14 +32,16 @@ const NO_SEASON = {
 const NO_TIPS = { club: 0, shape: 0, spin: 0 };
 /** What a save from before the career loads its career as: counted in it, as every round was, with no record, no round and no season. */
 const CAREER = { mode: 'career', records: {}, round: null, season: NO_SEASON, caddie: NO_TIPS };
-const FRESH = { coins: 0, gems: 0, owned: [], kit: NONE, best: {}, ...CAREER };
+/** What a save from before the sound loads its setting as: on, at full volume. */
+const NO_SOUND = { muted: false, volume: 1 };
+const FRESH = { coins: 0, gems: 0, owned: [], kit: NONE, best: {}, ...CAREER, ...NO_SOUND };
 
 /**
  * What each save loads as. The first is the template's stub's, a bank the
  * game no longer has, and the second the empty save of a course with no
  * cup: both must still load, as a fresh save, with nothing of them kept.
  */
-const KEPT: Record<string, Record<string, unknown>> = {
+const BEFORE_SOUND: Record<string, Record<string, unknown>> = {
   '01-first.json': FRESH,
   '02-empty.json': FRESH,
   '03-shop.json': {
@@ -155,6 +157,11 @@ const KEPT: Record<string, Record<string, unknown>> = {
     season: NO_SEASON,
     caddie: { club: 2, shape: 3, spin: 1 },
   },
+};
+const KEPT: Record<string, Record<string, unknown>> = {
+  ...Object.fromEntries(Object.entries(BEFORE_SOUND).map(([file, save]) => [file, { ...save, ...NO_SOUND }])),
+  // the sound of 18 October 2026: turned off, and the volume at two fifths
+  '11-sound.json': { ...BEFORE_SOUND['10-caddie-spin.json'], muted: true, volume: 0.4 },
 };
 
 describe('saves from every shape the game has written', () => {
@@ -384,6 +391,34 @@ describe('saves from every shape the game has written', () => {
     // past the limit the count stands, so the save's bytes are bounded
     for (let k = 0; k < 20; k++) progress.tookTip('shape', 3);
     expect(progress.save.caddie.shape).toBe(3);
+  });
+
+  it('reads the sound only as a boolean and a volume from 0 to 1, and the default for anything else', () => {
+    const sound = (json: string) => {
+      const { muted, volume } = new Progress(memoryStore(json)).save;
+      return { muted, volume };
+    };
+    expect(sound('{"muted": true, "volume": 0.25}')).toEqual({ muted: true, volume: 0.25 });
+    expect(sound('{"muted": false, "volume": 0}'), 'none at all is a volume').toEqual({ muted: false, volume: 0 });
+    expect(sound('{"muted": "true"}'), 'a string is not a boolean').toEqual(NO_SOUND);
+    expect(sound('{"muted": 1}'), 'a number is not a boolean').toEqual(NO_SOUND);
+    expect(sound('{"muted": null, "volume": null}')).toEqual(NO_SOUND);
+    expect(sound('{"coins": 2}'), 'missing').toEqual(NO_SOUND);
+    for (const v of ['1.5', '-0.1', '"loud"', '1e999', '[0.5]'])
+      expect(sound(`{"muted": true, "volume": ${v}}`), `volume ${v}`).toEqual({ muted: true, volume: 1 });
+  });
+
+  it('writes the sound as it is set, and a reload keeps it', () => {
+    const store = memoryStore();
+    const progress = new Progress(store);
+    progress.setMuted(true);
+    progress.setVolume(0.3);
+    expect(new Progress(memoryStore(store.json)).save).toMatchObject({ muted: true, volume: 0.3 });
+    progress.setMuted(false);
+    expect(new Progress(memoryStore(store.json)).save.muted).toBe(false);
+    // a volume out of range is the caller's bug, refused by name and not written
+    for (const bad of [-0.1, 1.01, NaN, Infinity]) expect(() => progress.setVolume(bad), String(bad)).toThrow(/volume/);
+    expect(new Progress(memoryStore(store.json)).save.volume).toBe(0.3);
   });
 
   it('goes on with the event round kept in the seasons’ own save, and breaks no rule', () => {

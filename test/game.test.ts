@@ -175,6 +175,8 @@ describe('the game', () => {
         mini: { grade: 'club', begun: 0, played: [], titles: 0 },
       },
       caddie: { club: 0, shape: 0, spin: 0 },
+      muted: false,
+      volume: 1,
     });
   });
 });

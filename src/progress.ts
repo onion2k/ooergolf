@@ -45,6 +45,10 @@ export interface Save {
   season: Record<Tour, TourSeason>;
   /** How many shots took a tip of the caddie's of each kind: once three of a kind are taken, that kind is said only when asked for. */
   caddie: { club: number; shape: number; spin: number };
+  /** Whether the player has turned the sound off: on for a save from before there was sound. */
+  muted: boolean;
+  /** The sound's volume, from 0 to 1: full for a save from before there was sound. */
+  volume: number;
 }
 
 /** Where the save is kept. */
@@ -110,6 +114,8 @@ const fresh = (): Save => ({
   round: null,
   season: { golf: freshTourSeason(), mini: freshTourSeason() },
   caddie: { club: 0, shape: 0, spin: 0 },
+  muted: false,
+  volume: 1,
 });
 
 /** A kit from a save, slot by slot: an id of the slot's own aisle that the shop sells, and '' for anything else. */
@@ -128,6 +134,11 @@ const isMap = (v: unknown): v is Record<string, unknown> => typeof v === 'object
 /** A count from a save: a whole number, not below nought, or the default. */
 function count(v: unknown, or: number): number {
   return typeof v === 'number' && Number.isInteger(v) && v >= 0 ? v : or;
+}
+
+/** A volume from a save: a number from 0 to 1, or the default. */
+function unit(v: unknown, or: number): number {
+  return typeof v === 'number' && v >= 0 && v <= 1 ? v : or;
 }
 
 /** The save read from whatever was stored, each field checked and defaulted. */
@@ -227,6 +238,9 @@ function read(json: string | null): Save {
     save.caddie.shape = count(from.caddie.shape, 0);
     save.caddie.spin = count(from.caddie.spin, 0);
   }
+  // a string "true" is not true, and a volume past either end is not the nearest end but the default
+  if (typeof from.muted === 'boolean') save.muted = from.muted;
+  save.volume = unit(from.volume, save.volume);
   return save;
 }
 
@@ -249,6 +263,19 @@ export class Progress {
   tookTip(kind: 'club' | 'shape' | 'spin', most: number) {
     if (this.save.caddie[kind] >= most) return;
     this.save.caddie[kind]++;
+    this.persist();
+  }
+
+  /** The sound turned off or on, and the save written at once, since nothing else will write it. */
+  setMuted(muted: boolean) {
+    this.save.muted = muted;
+    this.persist();
+  }
+
+  /** The volume set, from 0 to 1, and written; anything else is the caller's mistake, refused by name and not kept. */
+  setVolume(volume: number) {
+    if (!(volume >= 0 && volume <= 1)) throw new RangeError(`volume must be from 0 to 1, got ${volume}`);
+    this.save.volume = volume;
     this.persist();
   }
 
