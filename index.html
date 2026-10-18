@@ -503,6 +503,12 @@
    * room for it on the start screen under the title nor beside the flag where a shot's drag begins; a desk has neither this
    * nor the need, with its speaker beside the flag, M, and the start screen's switch and volume
    */
+  #shopOpen svg {
+    display: none;
+    width: 24px;
+    height: 24px;
+    pointer-events: none;
+  }
   #purse #purseSound {
     display: none;
     place-items: center;
@@ -1708,17 +1714,32 @@
     #purse #purseSound {
       display: grid;
     }
+    /* and the Shop is a bag, the word kept for a screen reader, so the coins, a full purse's, and the speaker fit */
+    #top #purse #shopOpen {
+      display: grid;
+      place-items: center;
+      min-width: 44px;
+      padding: 0;
+    }
+    #shopOpen .word {
+      display: none;
+    }
+    #shopOpen svg {
+      display: block;
+    }
   }
   /* on the narrowest phones the coins, the Shop and the speaker are drawn closer, so the three stand inside the gutter */
   @media (max-width: 400px) {
     #top #purse {
-      gap: 6px;
+      gap: 4px;
       padding-left: 10px;
+      font-size: 15px;
     }
     #top #purse button {
       padding: 0 10px;
     }
-    #top #purse #purseSound {
+    #top #purse #purseSound,
+    #top #purse #shopOpen {
       min-width: 34px;
     }
   }
@@ -2436,7 +2457,24 @@
   <div class="panel" id="purse" hidden>
     <span class="coin"><b id="coins">0</b><em> coins</em></span
     ><span class="gem"><i id="gems">0</i><em> gems</em></span
-    ><button id="shopOpen">Shop</button
+    ><button id="shopOpen" aria-label="Shop">
+      <span class="word">Shop</span
+      ><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path
+          d="M5 8.5h14l-1.2 11.5H6.2Z"
+          fill="currentColor"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linejoin="round"
+        />
+        <path
+          d="M8.5 10V7a3.5 3.5 0 0 1 7 0v3"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.2"
+          stroke-linecap="round"
+        />
+      </svg></button
     ><button id="purseSound" class="quiet" type="button" aria-pressed="false" aria-label="Mute">
       <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
         <path
