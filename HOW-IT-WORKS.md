@@ -1300,7 +1300,9 @@ landing of the shot being aimed are on it. `state()` has the shape and the spin 
 `medium`, `slow` or null) and `arrows`, how many stand over its green;
 `sound()` says whether the sound is awake, its mute and volume, the voices and loops playing, how many sounds are loaded
 of how many, what each load took and the slowest, the music's beat, whether the music and the ambience are asked for, and
-the speaker button and the slider as drawn (`shown`); `mute(on)` and `volume(v)` set it as the controls do and write the
+the controls as drawn (`shown`: whether the speakers say muted, whether the start screen's switch is on, where the slider
+stands); a desk's speaker is beside the flag and its switch and slider are in the start screen's tabs' row, and a phone's
+speaker (upright or on its side) is beside the Shop, there being room for none of those on a phone; `mute(on)` and `volume(v)` set it as the controls do and write the
 save, and `wake()` stands in for the first gesture;
 `caddie()` says what the caddie's panel says (its words, its button's, and whether a drag holds it out of the way), the tip
 offered for this shot, the look under way and the tips taken, and `caddiePress('try' | 'close' | 'ask')` clicks its buttons;

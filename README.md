@@ -73,8 +73,9 @@ a lake to carry, a wood with a lane, ground that runs, sand, a pond on the line.
 
 Every shot is heard: the club meeting the ball (a wood's ping, an iron's click), the ball landing and hopping, a knock off a
 rail, the rattle of the cup and a run up a marimba as good as the score, polite applause for a birdie. A golf hole has its
-wind and birds, and the menus have music. The speaker beside the flag, or the M key, turns it off, and the start screen has
-its volume; both are kept. None of it is a file: every sound is made from numbers when the game starts, by
+wind and birds, and the menus have music. On a desk the speaker beside the flag, the M key or the start screen's switch turns
+it off, and the start screen has its volume; on a phone the speaker is beside the Shop, and the phone's own buttons set the
+volume. Both are kept. None of it is a file: every sound is made from numbers when the game starts, by
 [artshape-sound](https://github.com/onion2k/artshape-sound).
 
 ## What is here

@@ -193,6 +193,7 @@ test('the speaker button, the M key and the slider set the sound, and a reload k
   await page.click('#viewSound');
   expect(await sound(page)).toMatchObject({ awake: true, muted: true, volume: 0.3, shown: { muted: true } });
   await expect(page.locator('#viewSound')).toHaveAttribute('aria-label', 'Unmute');
+  await expect(page.locator('#purseSound'), 'a desk has no speaker beside the Shop').toBeHidden();
   expect(await savedSound(page)).toEqual({ muted: true, volume: 0.3 });
   await page.keyboard.press('m');
   expect(await sound(page)).toMatchObject({ muted: false, shown: { muted: false } });
@@ -270,9 +271,7 @@ test('a page out of sight stops the sound, the wind with it, and it comes back w
   await expect.poll(async () => (await sound(page)).context).toBe('running');
 });
 
-test('on a phone the course has no speaker, and the start screen’s switch turns the sound off and on', async ({
-  page,
-}) => {
+test('on a phone the speaker is beside the Shop, and not by the flag nor on the start screen', async ({ page }) => {
   for (const size of [
     { width: 375, height: 812 },
     { width: 812, height: 375 },
@@ -280,18 +279,17 @@ test('on a phone the course has no speaker, and the start screen’s switch turn
     await page.setViewportSize(size);
     await start(page, { seed: 1, paused: true, screen: true });
     await landed(page);
-    await page.click('#soundSwitch');
-    expect(await sound(page), `${size.width} wide`).toMatchObject({
-      muted: true,
-      shown: { muted: true, switchOn: false },
-    });
-    expect(await savedSound(page)).toMatchObject({ muted: true });
-    await page.click('#soundSwitch');
-    expect(await sound(page)).toMatchObject({ muted: false, shown: { switchOn: true } });
+    // the tabs' row is full on a phone, and the cards under the title have no height to spare
+    await expect(page.locator('#soundControls'), `${size.width} wide`).toBeHidden();
     await page.evaluate(() => window.game!.chooseCourse('The Meadow'));
     await landed(page);
-    await expect(page.locator('#viewMode')).toBeVisible();
-    await expect(page.locator('#viewSound'), 'no speaker on a phone’s course').toBeHidden();
+    await expect(page.locator('#viewSound'), 'no speaker by the flag on a phone').toBeHidden();
+    await page.click('#purseSound');
+    expect(await sound(page)).toMatchObject({ muted: true, shown: { muted: true } });
+    await expect(page.locator('#purseSound')).toHaveAttribute('aria-label', 'Unmute');
+    expect(await savedSound(page)).toMatchObject({ muted: true });
+    await page.click('#purseSound');
+    expect(await sound(page)).toMatchObject({ muted: false });
     await page.evaluate(() => localStorage.clear());
   }
 });

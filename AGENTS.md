@@ -172,7 +172,8 @@ For anything new, check what it does:
 - **the career:** in an event, in practice and in free play; a fee refused; a reload mid-event
 - **the sound:** before the first gesture (no context, a silence), while the ball moves (only a sound cheap to load is
   loaded, one a frame; a dear one waits for a still screen), heard once an event, under a menu (the music) and on a golf
-  hole (the wind and birds), muted and at every volume, and kept in the save across a reload
+  hole (the wind and birds), muted and at every volume, and kept in the save across a reload; its controls on a desk (the
+  speaker by the flag, M, the start screen's switch and slider) and a phone (the speaker beside the Shop alone), at 320 px
 
 ## Gates
 

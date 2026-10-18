@@ -346,6 +346,8 @@ export class Hud {
   private readonly overheadButton = document.getElementById('viewOverhead') as HTMLButtonElement;
   private readonly flagButton = document.getElementById('viewFlag') as HTMLButtonElement;
   private readonly soundButton = document.getElementById('viewSound') as HTMLButtonElement;
+  /** A phone's speaker, beside the Shop: the stylesheet shows one of the two speakers, by the screen. */
+  private readonly purseSound = document.getElementById('purseSound') as HTMLButtonElement;
   private readonly volumeSlider = document.getElementById('volume') as HTMLInputElement;
   private readonly soundSwitch = document.getElementById('soundSwitch') as HTMLButtonElement;
   private readonly retakePanel = document.getElementById('retakePanel')!;
@@ -502,9 +504,8 @@ export class Hud {
     });
     this.overheadButton.addEventListener('click', () => handlers.overhead(this.mode !== 'overhead'));
     this.flagButton.addEventListener('click', () => handlers.flag());
-    this.soundButton.addEventListener('click', () =>
-      handlers.mute(this.soundButton.getAttribute('aria-pressed') !== 'true'),
-    );
+    for (const speaker of [this.soundButton, this.purseSound])
+      speaker.addEventListener('click', () => handlers.mute(speaker.getAttribute('aria-pressed') !== 'true'));
     this.volumeSlider.addEventListener('input', () => handlers.volume(+this.volumeSlider.value));
     // the start screen's switch says whether the sound is on: a press turns it off while it is
     this.soundSwitch.addEventListener('click', () =>
@@ -643,9 +644,11 @@ export class Hud {
 
   /** The sound as the save has it: the button pressed while it is muted, and the slider where the volume is. */
   setSound(muted: boolean, volume: number) {
-    this.soundButton.setAttribute('aria-pressed', String(muted));
     const label = muted ? 'Unmute' : 'Mute';
-    this.soundButton.setAttribute('aria-label', label);
+    for (const speaker of [this.soundButton, this.purseSound]) {
+      speaker.setAttribute('aria-pressed', String(muted));
+      speaker.setAttribute('aria-label', label);
+    }
     this.soundButton.title = `${label} (M)`;
     this.soundSwitch.setAttribute('aria-checked', String(!muted));
     if (+this.volumeSlider.value !== volume) this.volumeSlider.value = String(volume);
