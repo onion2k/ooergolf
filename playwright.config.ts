@@ -24,7 +24,14 @@ export default defineConfig({
     baseURL: `http://localhost:${PORT}`,
     browserName: 'chromium',
     channel: 'chromium',
-    launchOptions: { args: ['--enable-unsafe-webgpu'] },
+    launchOptions: {
+      args: [
+        '--enable-unsafe-webgpu',
+        // the test API's wake() stands in for a gesture, and a browser starts an AudioContext only after one: this lets the
+        // game's context run under the API, so the sound can be played and counted
+        '--autoplay-policy=no-user-gesture-required',
+      ],
+    },
     viewport: { width: 1280, height: 800 },
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure',

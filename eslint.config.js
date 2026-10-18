@@ -36,6 +36,7 @@ const PICTURE = [
   'fastmesh',
   'tintmesh',
   'waterdraw',
+  'sound',
 ];
 /** The game does not import the renderer: it runs without a page, in a test and in the fuzzer. */
 const RENDERER = {
@@ -55,6 +56,12 @@ const PHYSICS = {
   group: ['artshape-physics', 'artshape-physics/*'],
   allowTypeImports: true,
   message: 'Only src/physics.ts imports artshape-physics; import physics.ts.',
+};
+/** The sound package is reached through its one side, sound.ts, which is the page's: the game runs silent and headless. */
+const SOUND = {
+  group: ['artshape-sound', 'artshape-sound/*'],
+  allowTypeImports: true,
+  message: 'Only src/sound.ts imports artshape-sound; the page imports sound.ts.',
 };
 /** One place wires everything: the page's entries are imported by nothing. */
 const THE_PAGE = {
@@ -124,13 +131,18 @@ export default tseslint.config(
   {
     files: ['src/**/*.ts'],
     ignores: PICTURE.map((m) => `src/${m}.ts`).concat('src/models/**/*.ts', 'src/physics.ts'),
-    rules: { 'no-restricted-imports': ['error', { patterns: [RENDERER, THE_PICTURE, PHYSICS] }] },
+    rules: { 'no-restricted-imports': ['error', { patterns: [RENDERER, THE_PICTURE, PHYSICS, SOUND] }] },
   },
-  { files: ['src/physics.ts'], rules: { 'no-restricted-imports': ['error', { patterns: [RENDERER, THE_PICTURE] }] } },
+  {
+    files: ['src/physics.ts'],
+    rules: { 'no-restricted-imports': ['error', { patterns: [RENDERER, THE_PICTURE, SOUND] }] },
+  },
   {
     files: PICTURE.map((m) => `src/${m}.ts`).concat('src/models/**/*.ts'),
-    rules: { 'no-restricted-imports': ['error', { patterns: [PHYSICS, THE_PAGE] }] },
+    ignores: ['src/sound.ts'],
+    rules: { 'no-restricted-imports': ['error', { patterns: [PHYSICS, THE_PAGE, SOUND] }] },
   },
+  { files: ['src/sound.ts'], rules: { 'no-restricted-imports': ['error', { patterns: [PHYSICS, THE_PAGE] }] } },
   {
     files: ['scripts/**', 'test/**', '*.config.ts', '*.config.js'],
     languageOptions: { globals: { ...globals.node } },

@@ -764,6 +764,8 @@ test.describe('what it looks like', () => {
     await goOn(page);
     await playRound(page);
     await hideStats(page);
+    // the mouse off the card: the start screen's last click left it where the card's buttons come up, lit as if hovered
+    await page.mouse.move(0, 0);
     await expect(page).toHaveScreenshot('event-results.png', TOLERANCE);
     expect(problems).toEqual([]);
   });

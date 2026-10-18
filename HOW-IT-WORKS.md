@@ -1222,6 +1222,15 @@ minigolf: true }`, read through `oceanFor`) is the one switch: `waterBed` and `s
   left, above them.
   `careerProblems` holds the season in `checkInvariants`. A reload keeps the round between holes and not where a ball lies part
   way round one, so that hole is begun again from its tee.
+- `src/sound.ts` is the game's side of artshape-sound, and nothing else imports the package (lint holds it, `SOUND` in
+  `eslint.config.js`); it is of the picture, so the game itself runs silent. The golf sounds the package's stock does not
+  have are `Layered` sounds here (`GOLF`: a strike for the woods, the irons and the wedges, a putt, sand, a landing on
+  turf and in sand, the cup's rattle and the kicker's spring), beside the stock wood, marimba, bell, splash, applause, wind
+  and birds and the `lounge` song. `GameSound` plays them by event (`struck` by `strikeOf(club)`, `landed`, `knocked`,
+  `holed`, `splashed`, `lost`), steps the music only while a menu is up and the wind's `Ambience` only on a golf hole
+  played, and loads one sound a step in `QUEUE`'s order, a `dear` one (4 ms or more to render in Chromium) only while the
+  screen is still. `LazySound` is what `main.ts` holds: no context until the first key or click, the save's setting kept
+  meanwhile. Its chance is its own, one past the game's seed, so the determinism check never sees it.
 - `src/physics.ts` is the game's side of artshape-physics, and nothing else
   imports the package directly. A change a package needs goes in that repo,
   with a version bump here, as v0.4.1 was for a ball put to sleep in the
@@ -1289,6 +1298,10 @@ colour and size, the spread's half axes, where a tree knocks it and what it come
 from what the last frame placed; and `map()`, the hole's map over the course: its size and where the ball, the cup and the
 landing of the shot being aimed are on it. `state()` has the shape and the spin chosen, the hole's `wind` (x, y, speed), its `greens` speed and its name (`greenSpeed`: `fast`,
 `medium`, `slow` or null) and `arrows`, how many stand over its green;
+`sound()` says whether the sound is awake, its mute and volume, the voices and loops playing, how many sounds are loaded
+of how many, what each load took and the slowest, the music's beat, whether the music and the ambience are asked for, and
+the speaker button and the slider as drawn (`shown`); `mute(on)` and `volume(v)` set it as the controls do and write the
+save, and `wake()` stands in for the first gesture;
 `caddie()` says what the caddie's panel says (its words, its button's, and whether a drag holds it out of the way), the tip
 offered for this shot, the look under way and the tips taken, and `caddiePress('try' | 'close' | 'ask')` clicks its buttons;
 `career()` says the mode, the records, the round kept, the course the round in play is of and whether it counts;

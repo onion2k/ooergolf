@@ -25,6 +25,7 @@ import { greenArrows, speedName } from './green';
 import type { Game } from './game';
 import { checkInvariants } from './invariants';
 import { seeded } from './random';
+import type { SoundState } from './sound';
 import { zonesOf, type Zone } from './zones';
 
 declare global {
@@ -234,6 +235,17 @@ export interface GameApi {
   career(): CareerReport;
   /** The caddie as the last frame left it: see `CaddieReport`. */
   caddie(): CaddieReport;
+  /** The sound as it stands, since what is heard cannot be read: see `SoundState`; and the buttons' and slider's as drawn. */
+  sound(): SoundState & {
+    shown: { muted: boolean; switchOn: boolean; volume: number };
+    context: AudioContextState | 'none';
+  };
+  /** The sound turned off or on, as the speaker button and the M key do, and the save written. */
+  mute(on: boolean): void;
+  /** The volume set from 0 to 1, as the start screen's slider does, and the save written. */
+  volume(v: number): void;
+  /** The first gesture stood in for: the context made and the sounds begun loading, as a key or a click would. */
+  wake(): void;
   /** One of the caddie's buttons pressed, as a click on it: its tip's (`try`), its ✕ (`close`) or the bag's Caddie (`ask`). False where it is not shown. */
   caddiePress(action: 'try' | 'close' | 'ask'): boolean;
   /** Career mode or Free play chosen on the start screen, as clicks on its button (none if it shows that already). */
@@ -509,6 +521,13 @@ export interface DebugHost {
   install(): boolean;
   caddie(): CaddieReport;
   caddiePress(action: 'try' | 'close' | 'ask'): boolean;
+  sound(): SoundState & {
+    shown: { muted: boolean; switchOn: boolean; volume: number };
+    context: AudioContextState | 'none';
+  };
+  mute(on: boolean): void;
+  volume(v: number): void;
+  wake(): void;
   /** The start screen's career buttons pressed, as a click on each. */
   playMode(mode: PlayMode): void;
   continueRound(): boolean;
@@ -673,6 +692,10 @@ export function createApi(host: DebugHost): GameApi {
     app: () => host.app(),
     install: () => host.install(),
     caddie: () => host.caddie(),
+    sound: () => host.sound(),
+    mute: (on) => host.mute(on),
+    volume: (v) => host.volume(v),
+    wake: () => host.wake(),
     caddiePress: (action) => host.caddiePress(action),
     career: () => ({
       mode: progress.save.mode,

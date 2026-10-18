@@ -49,6 +49,10 @@ export interface HudHandlers {
   overhead(on: boolean): void;
   /** The flag button pressed: the camera turned to face the cup. */
   flag(): void;
+  /** The sound button pressed: the sound wanted off (`muted`) or on, the one it is not now. */
+  mute(muted: boolean): void;
+  /** The start screen's volume moved, to `volume` from 0 to 1. */
+  volume(volume: number): void;
   /** The Retake button pressed: the kit's one free retake of the last stroke. */
   retake(): void;
   /** A club of the bag chosen on a golf hole, by its id. */
@@ -341,6 +345,9 @@ export class Hud {
   private readonly modes = document.getElementById('viewMode')!;
   private readonly overheadButton = document.getElementById('viewOverhead') as HTMLButtonElement;
   private readonly flagButton = document.getElementById('viewFlag') as HTMLButtonElement;
+  private readonly soundButton = document.getElementById('viewSound') as HTMLButtonElement;
+  private readonly volumeSlider = document.getElementById('volume') as HTMLInputElement;
+  private readonly soundSwitch = document.getElementById('soundSwitch') as HTMLButtonElement;
   private readonly retakePanel = document.getElementById('retakePanel')!;
   private readonly retakeButton = document.getElementById('mulligan') as HTMLButtonElement;
   private readonly bag = document.getElementById('bag')!;
@@ -495,6 +502,14 @@ export class Hud {
     });
     this.overheadButton.addEventListener('click', () => handlers.overhead(this.mode !== 'overhead'));
     this.flagButton.addEventListener('click', () => handlers.flag());
+    this.soundButton.addEventListener('click', () =>
+      handlers.mute(this.soundButton.getAttribute('aria-pressed') !== 'true'),
+    );
+    this.volumeSlider.addEventListener('input', () => handlers.volume(+this.volumeSlider.value));
+    // the start screen's switch says whether the sound is on: a press turns it off while it is
+    this.soundSwitch.addEventListener('click', () =>
+      handlers.mute(this.soundSwitch.getAttribute('aria-checked') === 'true'),
+    );
     this.retakeButton.addEventListener('click', () => handlers.retake());
     // each cycles to the next of its three, and the game says what it took (`setShaping`)
     this.shapeButton.addEventListener('click', () => handlers.shape(this.next(SHAPES, this.shapeShown)));
@@ -624,6 +639,31 @@ export class Hud {
   /** Whether the Retake button is up and can be pressed, as drawn: for the test API. */
   retakeDrawn(): { shown: boolean; enabled: boolean } {
     return { shown: !this.retakePanel.hidden, enabled: !this.retakeButton.disabled };
+  }
+
+  /** The sound as the save has it: the button pressed while it is muted, and the slider where the volume is. */
+  setSound(muted: boolean, volume: number) {
+    this.soundButton.setAttribute('aria-pressed', String(muted));
+    const label = muted ? 'Unmute' : 'Mute';
+    this.soundButton.setAttribute('aria-label', label);
+    this.soundButton.title = `${label} (M)`;
+    this.soundSwitch.setAttribute('aria-checked', String(!muted));
+    if (+this.volumeSlider.value !== volume) this.volumeSlider.value = String(volume);
+    this.volumeSlider.setAttribute('aria-valuetext', `${Math.round(volume * 100)}%`);
+  }
+
+  /** The sound's controls as drawn, for the test API: whether the button and the switch say muted, and where the slider stands. */
+  soundShown(): { muted: boolean; switchOn: boolean; volume: number } {
+    return {
+      muted: this.soundButton.getAttribute('aria-pressed') === 'true',
+      switchOn: this.soundSwitch.getAttribute('aria-checked') === 'true',
+      volume: +this.volumeSlider.value,
+    };
+  }
+
+  /** Whether a menu is up: the start screen (or the title it waits under), the shop or the card. The music plays under them. */
+  get inMenus(): boolean {
+    return this.startUp || !this.shop.hidden || !this.card.hidden;
   }
 
   /**

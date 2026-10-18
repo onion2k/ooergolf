@@ -910,7 +910,8 @@
     background: transparent;
     box-shadow: none;
   }
-  #playMode i {
+  #playMode i,
+  #soundSwitch i {
     position: relative;
     width: 48px;
     height: 28px;
@@ -919,7 +920,8 @@
     box-shadow: inset 0 2px 0 rgba(0, 0, 0, 0.12);
     transition: background-color 120ms linear;
   }
-  #playMode i::after {
+  #playMode i::after,
+  #soundSwitch i::after {
     content: '';
     position: absolute;
     top: 3px;
@@ -931,10 +933,12 @@
     box-shadow: 0 2px 0 rgba(0, 0, 0, 0.18);
     transition: translate 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
   }
-  #playMode[aria-checked='true'] i {
+  #playMode[aria-checked='true'] i,
+  #soundSwitch[aria-checked='true'] i {
     background: var(--leaf-deep);
   }
-  #playMode[aria-checked='true'] i::after {
+  #playMode[aria-checked='true'] i::after,
+  #soundSwitch[aria-checked='true'] i::after {
     translate: 20px 0;
   }
   /* the card's one badge: a record or a best round in the sun's yellow, the hole a round kept goes on from in the sky's, and a
@@ -1617,6 +1621,68 @@
     place-items: center;
     min-width: 44px;
     padding: 0;
+  }
+  /*
+   * the sound beside the flag: a quiet pill with a speaker, its waves while the sound is on and a cross while it is off;
+   * pressed, it is muted, and the M key does the same
+   */
+  #viewMode #viewSound {
+    display: grid;
+    place-items: center;
+    min-width: 44px;
+    padding: 0;
+  }
+  #viewSound svg {
+    width: 26px;
+    height: 26px;
+    pointer-events: none;
+  }
+  #viewSound[aria-pressed='true'] .on,
+  #viewSound[aria-pressed='false'] .off {
+    display: none;
+  }
+  /*
+   * the sound under the start screen's buttons, quiet, as the setting it is: a switch for it on or off, in the career's
+   * switch's shape, and the volume; on a phone the switch is the only way to turn it off, the speaker on the course being
+   * left out there
+   */
+  #soundControls {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 6px 18px;
+    margin: 12px 0 0;
+  }
+  .panel #soundSwitch {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 4px 0 8px;
+    font-size: 14px;
+    color: var(--ink-soft);
+    background: transparent;
+    box-shadow: none;
+  }
+  #volumeControl {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+    color: var(--ink-soft);
+  }
+  /*
+   * on a phone, upright or on its side, the speaker is left off the course: beside the flag it pushed the view's switch into
+   * the middle of the top of the screen, where a drag for a shot begins, and the start screen's switch turns the sound off
+   */
+  @media (max-width: 600px), (max-height: 500px) {
+    #viewMode #viewSound {
+      display: none;
+    }
+  }
+  #volumeControl input {
+    width: min(200px, 50vw);
+    accent-color: var(--sky-deep);
   }
   #viewFlag svg {
     width: 29px;
@@ -2493,6 +2559,12 @@
     <button id="enterEvent" type="button" hidden>Enter</button>
     <button id="practise" type="button" class="quiet" hidden>Practise</button>
   </div>
+  <div id="soundControls">
+    <button id="soundSwitch" type="button" role="switch" aria-checked="true">Sound <i></i></button>
+    <label id="volumeControl" for="volume"
+      >Volume <input id="volume" type="range" min="0" max="1" step="0.05" value="1" aria-valuetext="100%"
+    /></label>
+  </div>
 </div>
 <div class="panel" id="stats" hidden></div>
 <div class="panel" id="bag" role="group" aria-label="Club" hidden>
@@ -2517,6 +2589,32 @@
         stroke="var(--flag)"
         stroke-width="3"
         stroke-linejoin="round"
+      />
+    </svg></button
+  ><button id="viewSound" class="quiet" type="button" aria-pressed="false" aria-label="Mute" title="Mute (M)">
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M4 9.5h3.5L12 5v14l-4.5-4.5H4Z"
+        fill="var(--ink)"
+        stroke="var(--ink)"
+        stroke-width="2"
+        stroke-linejoin="round"
+      />
+      <path
+        class="on"
+        d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"
+        fill="none"
+        stroke="var(--sky-deep)"
+        stroke-width="2.5"
+        stroke-linecap="round"
+      />
+      <path
+        class="off"
+        d="M15.5 9.5l5 5M20.5 9.5l-5 5"
+        fill="none"
+        stroke="var(--flag)"
+        stroke-width="2.5"
+        stroke-linecap="round"
       />
     </svg>
   </button>

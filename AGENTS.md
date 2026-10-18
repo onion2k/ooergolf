@@ -79,7 +79,8 @@ The whole of it, module by module, is `HOW-IT-WORKS.md`'s _How the code is laid 
   `director.ts` (the camera's decisions, shared by the page and the fuzzer), `season.ts` and `tournament.ts`.
 - **The page:** `src/main.ts` wires everything and holds no game logic; `hud.ts` draws the words it is handed;
   `scene.ts`, `ground.ts`, `turf.ts`, `look.ts` and `src/models/` are what is drawn; `shot.ts`, `gesture.ts` and
-  `input.ts` turn pointers into a shot through ports.
+  `input.ts` turn pointers into a shot through ports; `sound.ts` is what is heard, the only importer of artshape-sound
+  (`GameSound`, and the `LazySound` the page holds, which makes the context on the first gesture).
 - **Content:** the courses in `course.ts` (`COURSES`) and one file each (`links.ts`, `heath.ts`, `fells.ts`, `woods.ts`,
   `isles.ts`, `old.ts`, `shed.ts`, `waterworks.ts`); the shop in `items.ts`; rivals in `rivals.ts` and `field.json`.
 - **The persisted shape:** `src/progress.ts`, with every save shape ever written in `test/saves/`.
@@ -96,7 +97,8 @@ Beyond the kit's:
 - **Lint holds what it can read** (`eslint.config.js`, each rule with its reason): no `Math.random` and no `console` in
   `src/`, and a rule turned off says why on the line, after `--` (`house/directive-reason`, a local rule).
 - **What may import what** is lint's too: only the picture (`PICTURE` in `eslint.config.js`: the page and what draws)
-  imports the renderer or is imported by it, only `physics.ts` imports artshape-physics, and nothing imports `main.ts`
+  imports the renderer or is imported by it, only `physics.ts` imports artshape-physics, only `sound.ts` (of the
+  picture) imports artshape-sound, and nothing imports `main.ts`
   or `showcase.ts`. A type alone is let through. Nothing imports in a circle (`test/structure.test.ts`), which is why
   `TILE` is in `src/tile.ts`, re-exported by `arena.ts`.
 - **Nothing is made each frame.** Pools are sized once and written into; the renderer's groups are fixed and `move`
@@ -136,7 +138,10 @@ What to copy the shape of, when building something new:
 `window.game`, in `src/debug.ts`, typed, and the smoke tests compile against it; every call is in `HOW-IT-WORKS.md`'s
 _The test API_. Time: `pause`, `resume`, `step(frames)`, `seed(n)`, and `?seed=N`, `?paused=1`, `?rung=N`, `?title=0`,
 `?flyin=0` on the page. Reading: `state`, `ball`, `bodies`, `content`, `events`, `invariants`, `view()`, `motions()`,
-`caddie()`, `season()`. Playing: `shoot`, `club`, `chooseCourse`, `startHole`, `playCourse`, `buy`, `equip`. A smoke test
+`caddie()`, `season()`, `sound()` (awake, mute, volume, voices, loops, what is loaded and what each load took, the
+music's beat, and the controls as drawn). Playing: `shoot`, `club`, `chooseCourse`, `startHole`, `playCourse`, `buy`,
+`equip`; `mute(on)`, `volume(v)`, and `wake()` for the first gesture. The event log has a `sound …` line for each sound
+an event plays. Playwright's Chromium lifts the autoplay rule, so a context made by `wake()` runs. A smoke test
 starts the page headless with `start(page, { save, seed, paused, rung })` in `smoke/game.ts`, a fresh context and a
 save of its own, and drives a real mouse or finger with `drag` and `touches`. Never a timeout: pause, seed, step.
 
@@ -165,6 +170,9 @@ For anything new, check what it does:
   and taken back; the flag button at the cup, and the turn by itself at rest; a stroke followed and one held; the
   overhead view fitted to the hole, desk and phone, and left to the view as it was
 - **the career:** in an event, in practice and in free play; a fee refused; a reload mid-event
+- **the sound:** before the first gesture (no context, a silence), while the ball moves (only a sound cheap to load is
+  loaded, one a frame; a dear one waits for a still screen), heard once an event, under a menu (the music) and on a golf
+  hole (the wind and birds), muted and at every volume, and kept in the save across a reload
 
 ## Gates
 
@@ -247,6 +255,12 @@ Each of the kit's checks, as surveyed on 17 October 2026, and the order the miss
   to 11.7 ms, on 18 October 2026. `alone()` holds it where `ioreg` can be read; elsewhere it says it cannot tell, and a
   frame figure is taken as it comes. A burst from another process far shorter than a long timing is averaged over the
   window, so a long test can let a short one through.
+- **Whether the sound is good** is heard, not tested: the tests read what was asked of the package (the event log's
+  `sound …` lines, the voices, the loops, what loaded), never what came out of the speakers. Only Chromium's Web Audio is
+  run, with its autoplay rule lifted; the rule a player meets is held only as far as no context being made before a
+  gesture. The sound's ceilings (16 voices, one loop, one load a sound) are in `smoke/sound.spec.ts` and not
+  `scripts/leaks.ts`, which plays in node, where there is no AudioContext. A game paused by the test API stops the music's
+  and the birds' steps but not the wind's loop, which runs on the audio clock; a page out of sight suspends the context.
 - **Mutation checks are by hand,** in the work's report, with no tool to record them.
 - **What only a person can judge:** how a course feels to play, a matter of taste in the look, and the limits listed in
   `HOW-IT-WORKS.md`'s _What is not there yet_.

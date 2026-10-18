@@ -13,6 +13,7 @@ import {
   HARDEST_SHOT,
   KICKER,
   KIND_RADIUS,
+  KNOCK,
   heightAt,
   kickerAt,
   lieAt,
@@ -52,6 +53,7 @@ import { greensText, heldHint, landingText, pinReadout, pinText, puttText, windA
 import { daylight } from './look';
 import { Progress } from './progress';
 import { seeded } from './random';
+import { GameSound, LazySound, strikeOf } from './sound';
 import { titlePage } from './titlepage';
 import { BootProgress, type BootStep } from './bootsteps';
 import {
@@ -289,6 +291,52 @@ async function main() {
         .map((a) => a.toFixed(1))
         .join(',')}`.trim(),
     );
+
+  // ---- the sound ----
+
+  // The context is made on the first key or click and not here: it costs a tenth of a second or so, is silent until a
+  // gesture anyway, and is made on the page because which one the browser has is the page's to say. Until then the sound
+  // is a silence that keeps the save's setting. Its chance is its own, one past the game's under ?seed=N (the determinism
+  // check hashes the game, and a sound that drew from the game's source would move the game), and the browser's otherwise.
+  const soundSeed = query.get('seed');
+  let audioContext: AudioContext | null = null;
+  const sound = new LazySound({
+    volume: progress.save.volume,
+    muted: progress.save.muted,
+    make: (setting) =>
+      new GameSound({
+        context: (audioContext = new AudioContext()),
+        random: seeded(soundSeed !== null ? +soundSeed + 1 : crypto.getRandomValues(new Uint32Array(1))[0]),
+        now: () => performance.now(),
+        ...setting,
+      }),
+  });
+  const wake = () => sound.wake();
+  // a page out of sight has no frames, and the wind's loop would blow on by the audio clock: the context waits with it
+  document.addEventListener('visibilitychange', () => {
+    if (audioContext) void (document.hidden ? audioContext.suspend() : audioContext.resume());
+  });
+  addEventListener('pointerdown', wake, { once: true, capture: true });
+  addEventListener('keydown', wake, { once: true, capture: true });
+  /** The sound turned off or on, by the button, the M key or the test API: heard, shown and kept. */
+  function setMuted(on: boolean) {
+    sound.mute(on);
+    progress.setMuted(on);
+    hud.setSound(on, sound.volume);
+  }
+  /** The volume set, by the start screen's slider or the test API: heard, shown and kept. */
+  function setVolume(volume: number) {
+    sound.volume = volume;
+    progress.setVolume(volume);
+    hud.setSound(sound.muted, volume);
+  }
+  // M, as the button does; not while a key is held down, nor while typing in a box
+  addEventListener('keydown', (e) => {
+    if (e.repeat || e.key.toLowerCase() !== 'm' || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.target instanceof HTMLInputElement && e.target.type !== 'range') return;
+    setMuted(!sound.muted);
+  });
+
   // the game tells of its first hole as it is built, before it is here to be read: that one is shown once it is
   let game: Game | undefined = undefined;
   /** The course being played, and whether the start screen is up to choose one: it is, as the page opens. */
@@ -541,6 +589,14 @@ async function main() {
       // the flag: the camera turned to face the cup
       flag() {
         faceFlag();
+      },
+      // the speaker: the sound off or on
+      mute(on) {
+        setMuted(on);
+      },
+      // the start screen's slider: the volume
+      volume(v) {
+        setVolume(v);
       },
       // the Retake button: the kit's free retake, which the game says whether it took (and tells of, through `mulliganed`)
       retake() {
@@ -861,6 +917,12 @@ async function main() {
       // sand from a ball that lay in a bunker, and grass from any other
       const ground = game && onSand(game.layout, x, y) ? 'sand' : 'grass';
       drawn.puff = ground;
+      // the club meeting the ball: struck as the club in hand strikes, the sand thrown with it from a bunker
+      if (game) {
+        const kind = strikeOf(game.inHand);
+        sound.struck(kind, power, ground === 'sand');
+        log(`sound struck ${kind} ${power.toFixed(2)}${ground === 'sand' ? ' sand' : ''}`);
+      }
       for (const e of strikePuff(x, y, power, ground)) renderer.emit(e);
     },
     // a lofted ball come down: the first landing is marked, and throws up the ground it came down on
@@ -868,6 +930,10 @@ async function main() {
       if (!game || !first) return;
       scene.landedAt(x, y, game.t);
       const ground = onSand(game.layout, x, y) ? 'sand' : 'grass';
+      // the thud of it, and its hops on turf; plugged in sand
+      const fall = Math.min(1, speed / 60);
+      sound.landed(fall, ground === 'sand');
+      log(`sound landed ${fall.toFixed(2)}${ground === 'sand' ? ' sand' : ''}`);
       for (const e of strikePuff(x, y, Math.min(1, speed / 60), ground)) renderer.emit(e);
     },
     // knocked off the rail, a post or the ground it dropped onto: squashed along it, and sprung back
@@ -877,6 +943,9 @@ async function main() {
       // a kicker that was hit lights up, and a hit on it again lights it anew
       const k = kickerAt(game.layout, x, y, KIND_RADIUS[BALL] + 0.25);
       if (k >= 0) kickedAt[k] = game.t;
+      // a wooden knock as hard as the hit, and the kicker's spring with it
+      sound.knocked(hard, KNOCK.least, k >= 0);
+      log(`sound knocked ${hard.toFixed(1)}${k >= 0 ? ' kicker' : ''}`);
     },
     // the waders took the loss that is about to be told of: the next word for it says it cost nothing
     waded() {
@@ -900,12 +969,16 @@ async function main() {
       trail.clear();
       // a splash up, and a ring spreading over the water from where it went in
       if (game) scene.splashedAt(x, y, game.t);
+      sound.splashed();
+      log('sound splash');
       for (const e of splash(x, y)) renderer.emit(e);
     },
     // out of bounds: a word for it, and the stroke it cost; the ball put back is round
     outOfBounds() {
       hud.setStrokes(game?.strokes ?? 0);
       hud.outOfBounds(wadedNow);
+      sound.lost(false);
+      log('sound lost');
       wadedNow = false;
       squash.clear();
       trail.clear();
@@ -913,6 +986,9 @@ async function main() {
     // in the cup: confetti out of it, the flag waggling and its gold flashing, from the moment it dropped
     holed(strokes, par) {
       hud.done(strokes, par, false);
+      // the ball rattling in the cup, and a run up the marimba as good as the score
+      sound.holed(strokes, par);
+      log(`sound holed ${strokes} ${par}`);
       hud.setBoard(boardNow());
       if (!game) return;
       scene.holedAt = game.t;
@@ -935,6 +1011,8 @@ async function main() {
     },
     pickedUp: (strokes, par) => {
       hud.done(strokes, par, true);
+      sound.lost(true);
+      log('sound picked up');
       hud.setBoard(boardNow());
     },
     finished: () => {
@@ -1095,6 +1173,7 @@ async function main() {
   // a first hole that cannot be drawn is the boot's failure: the screen says so, and there is no game to start
   if (stopped()) return;
   showPurse();
+  hud.setSound(progress.save.muted, progress.save.volume);
 
   // ---- the scene and the camera ----
 
@@ -1674,6 +1753,13 @@ async function main() {
       if (titled.scene.landed) hud.releaseStart();
     }
     played.step(dt);
+    // after the game, so that a game that is not stepping has no music and no ambience: the music under a menu, and on a
+    // golf hole being played the wind as strong as the hole's and the birds; a sound loaded a step until all are
+    const menus = hud.inMenus;
+    sound.setMusic(menus);
+    sound.setAmbience(!menus && titled === null && played.layout.golf, played.wind.speed);
+    // a sound that is dear to load waits for a still screen: a menu up, or the ball at rest
+    sound.step(dt, menus || played.ready);
     // the step may have begun a hole that could not be drawn: the rest of the frame is of a hole no one sees
     if (stopped()) return;
     // the camera: the aim view for the next shot, eased, and the ball followed, by game time so a test stepping the game
@@ -2016,6 +2102,10 @@ async function main() {
       for (const b of [...near, ...far]) if (Math.hypot(b.x - x, b.y - y) <= radius) n++;
       return n;
     },
+    sound: () => ({ ...sound.state, shown: hud.soundShown(), context: audioContext?.state ?? 'none' }),
+    mute: setMuted,
+    volume: setVolume,
+    wake,
     events: eventLog,
   });
 
