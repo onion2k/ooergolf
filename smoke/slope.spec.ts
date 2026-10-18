@@ -12,6 +12,7 @@ import { bigHole } from './bighole';
 import { BUDGET } from './budget';
 import { drag, start, watch } from './game';
 import { CONTRAST, openDrawer, read } from './panels';
+import { alone } from './gpu';
 
 const TOLERANCE = { maxDiffPixelRatio: 0.002, threshold: 0.02 };
 const LAYOUT = layoutOf(SIDE_HILL.map, SIDE_HILL.terrain);
@@ -82,7 +83,7 @@ test.describe('the break on a sloped hole of minigolf', () => {
     expect(aimed.shot!.arc).toBeGreaterThan(4);
     expect(aimed.shot!.ring).not.toBeNull();
     expect(aimed.shot!.spread, 'a putt has none').toBeNull();
-    const ms = await page.evaluate(() => window.game!.measureFrame());
+    const ms = await alone(() => page.evaluate(() => window.game!.measureFrame()));
     console.log(`slope: a frame with the roll aimed and the arrows up, ${ms.toFixed(2)} ms`);
     expect(ms).toBeLessThan(BUDGET.frameMs);
     await hideStats(page);
@@ -112,11 +113,13 @@ test.describe('the break on a sloped hole of minigolf', () => {
       for (let f = 0; f < 120; f++) g.step(1);
     }, bigHole());
     await aim(page, 100, 10);
-    const seen = await page.evaluate(async () => ({
-      arrows: window.game!.motions().arrows,
-      shot: window.game!.motions().shot,
-      ms: await window.game!.measureFrame(),
-    }));
+    const seen = await alone(() =>
+      page.evaluate(async () => ({
+        arrows: window.game!.motions().arrows,
+        shot: window.game!.motions().shot,
+        ms: await window.game!.measureFrame(),
+      })),
+    );
     expect(seen.arrows.count).toBeGreaterThan(1500);
     expect(seen.shot).not.toBeNull();
     console.log(`slope: The Far Pin, ${seen.arrows.count} arrows and a roll aimed, a frame ${seen.ms.toFixed(2)} ms`);

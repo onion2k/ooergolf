@@ -28,6 +28,7 @@ import { BLADE_ROOM, GOLF_FAIRWAY_DENSITY, GOLF_ROUGH_DENSITY, cellFor } from '.
 import { BUDGET } from './budget';
 import { drag, intoThePond, start, touches, watch } from './game';
 import { holeOut, read, toCard } from './panels';
+import { alone } from './gpu';
 
 /** The strips the course card shows, as the generated data has them. */
 const STRIPS = JSON.parse(readFileSync('src/previews.json', 'utf8')) as Record<string, CoursePreview>;
@@ -615,14 +616,16 @@ test.describe('the view', () => {
     test.setTimeout(120_000);
     const problems = watch(page);
     await start(page, { seed: 11, paused: true });
-    const cost = await page.evaluate(async () => {
-      const g = window.game!;
-      g.step(120);
-      // from behind and as low as it goes, the most grass it can see
-      g.orbit(Math.PI, 10);
-      g.step(2);
-      return g.measureFrame(200);
-    });
+    const cost = await alone(() =>
+      page.evaluate(async () => {
+        const g = window.game!;
+        g.step(120);
+        // from behind and as low as it goes, the most grass it can see
+        g.orbit(Math.PI, 10);
+        g.step(2);
+        return g.measureFrame(200);
+      }),
+    );
     console.log(`orbit: the worst view, ${cost.toFixed(2)} ms a frame`);
     expect(cost, `inside the ${BUDGET.frameMs} ms budget`).toBeLessThan(BUDGET.frameMs);
     expect(problems).toEqual([]);
@@ -636,18 +639,20 @@ test.describe('water', () => {
     test.setTimeout(120_000);
     const problems = watch(page);
     await start(page, { seed: 11, paused: true });
-    const cost = await page.evaluate(async () => {
-      const g = window.game!;
-      g.chooseCourse('The Waterworks');
-      g.startHole(7);
-      g.step(120);
-      const tee = await g.measureFrame(100);
-      const { floor } = g.content();
-      g.look((floor.minX + floor.maxX) / 2, (floor.minY + floor.maxY) / 2, 110);
-      g.step(2);
-      const whole = await g.measureFrame(100);
-      return { tee, whole };
-    });
+    const cost = await alone(() =>
+      page.evaluate(async () => {
+        const g = window.game!;
+        g.chooseCourse('The Waterworks');
+        g.startHole(7);
+        g.step(120);
+        const tee = await g.measureFrame(100);
+        const { floor } = g.content();
+        g.look((floor.minX + floor.maxX) / 2, (floor.minY + floor.maxY) / 2, 110);
+        g.step(2);
+        const whole = await g.measureFrame(100);
+        return { tee, whole };
+      }),
+    );
     console.log(
       `the water: The Rapids from its tee ${cost.tee.toFixed(2)} ms, the whole hole ${cost.whole.toFixed(2)} ms a frame`,
     );
@@ -662,17 +667,19 @@ test.describe('water', () => {
     test.setTimeout(120_000);
     const problems = watch(page);
     await start(page, { seed: 11, paused: true });
-    const cost = await page.evaluate(async () => {
-      const g = window.game!;
-      g.startHole(g.content().holes.findIndex((h) => h.name === 'Pond'));
-      g.step(120);
-      const tee = await g.measureFrame(100);
-      const { floor } = g.content();
-      g.look((floor.minX + floor.maxX) / 2, (floor.minY + floor.maxY) / 2, 40);
-      g.step(2);
-      const wide = await g.measureFrame(100);
-      return { tee, wide };
-    });
+    const cost = await alone(() =>
+      page.evaluate(async () => {
+        const g = window.game!;
+        g.startHole(g.content().holes.findIndex((h) => h.name === 'Pond'));
+        g.step(120);
+        const tee = await g.measureFrame(100);
+        const { floor } = g.content();
+        g.look((floor.minX + floor.maxX) / 2, (floor.minY + floor.maxY) / 2, 40);
+        g.step(2);
+        const wide = await g.measureFrame(100);
+        return { tee, wide };
+      }),
+    );
     console.log(
       `the water: The Meadow's Pond from its tee ${cost.tee.toFixed(2)} ms, from far ${cost.wide.toFixed(2)} ms a frame`,
     );
@@ -692,31 +699,33 @@ test.describe('golf', () => {
     test.setTimeout(120_000);
     const problems = watch(page);
     await start(page, { seed: 11, paused: true });
-    const cost = await page.evaluate(async (longest) => {
-      const g = window.game!;
-      g.chooseCourse('The Links');
-      g.startHole(longest);
-      g.step(120);
-      const tee = await g.measureFrame(60);
-      // a drive in the air, the camera on it (as it follows, which is one stroke in five unless told: a measure of the frame in the
-      // air is a measure of the view that follows)
-      g.followShots('always');
-      g.shoot(Math.PI / 2, 1, 'driver');
-      g.step(40);
-      const air = await g.measureFrame(60);
-      // from behind and as low as it goes, the most ground it can see: over the whole hole, ground and rail and rough
-      for (let f = 0; f < 600 && !g.state().ready; f++) g.step(1);
-      g.orbit(Math.PI, 10);
-      g.step(2);
-      const worst = await g.measureFrame(60);
-      // the whole hole from the middle of it, as far back as the zoom goes: the fairway and the rough at their densest
-      g.orbit(-Math.PI, -10);
-      const { tee: t, cup } = g.content();
-      g.look((t.x + cup.x) / 2, (t.y + cup.y) / 2, 110);
-      g.step(2);
-      const whole = await g.measureFrame(60);
-      return { tee, air, worst, whole };
-    }, LONGEST);
+    const cost = await alone(() =>
+      page.evaluate(async (longest) => {
+        const g = window.game!;
+        g.chooseCourse('The Links');
+        g.startHole(longest);
+        g.step(120);
+        const tee = await g.measureFrame(60);
+        // a drive in the air, the camera on it (as it follows, which is one stroke in five unless told: a measure of the frame in the
+        // air is a measure of the view that follows)
+        g.followShots('always');
+        g.shoot(Math.PI / 2, 1, 'driver');
+        g.step(40);
+        const air = await g.measureFrame(60);
+        // from behind and as low as it goes, the most ground it can see: over the whole hole, ground and rail and rough
+        for (let f = 0; f < 600 && !g.state().ready; f++) g.step(1);
+        g.orbit(Math.PI, 10);
+        g.step(2);
+        const worst = await g.measureFrame(60);
+        // the whole hole from the middle of it, as far back as the zoom goes: the fairway and the rough at their densest
+        g.orbit(-Math.PI, -10);
+        const { tee: t, cup } = g.content();
+        g.look((t.x + cup.x) / 2, (t.y + cup.y) / 2, 110);
+        g.step(2);
+        const whole = await g.measureFrame(60);
+        return { tee, air, worst, whole };
+      }, LONGEST),
+    );
     console.log(
       `The Links' longest hole: tee ${cost.tee.toFixed(2)} ms, in the air ${cost.air.toFixed(2)} ms, the worst view ${cost.worst.toFixed(2)} ms, the whole hole ${cost.whole.toFixed(2)} ms a frame`,
     );
@@ -891,40 +900,42 @@ test.describe('golf on The Fells and The Isles, and the three courses that came 
       test.setTimeout(180_000);
       const problems = watch(page);
       await start(page, { seed: 11, paused: true });
-      const seen = await page.evaluate(
-        async ([name, hole]) => {
-          const g = window.game!;
-          g.chooseCourse(name as string);
-          g.startHole(hole as number);
-          g.club('driver');
-          g.step(300);
-          const out: { where: string; ms: number; blades: number }[] = [];
-          const take = async (where: string) => {
-            g.step(2);
-            const ms = await g.measureFrame(60);
-            const grass = await g.grass();
-            out.push({ where, ms, blades: grass.near + grass.far });
-          };
-          // the driver's aim view, from the tee, facing up the hole (the home view of a golf hole)
-          await take('the aim view of the driver, facing up the hole');
-          g.orbit(Math.PI, 0);
-          await take('the aim view of the driver, turned right round');
-          g.orbit(-Math.PI, 0);
-          // the home view parked at the tee, and then as low as the camera goes, from behind and turned round: the most
-          // ground in view (the driver's aim view is already at the lowest tilt, so this is the home zoom's worst)
-          const { tee, cup } = g.content();
-          g.look(tee.x, tee.y, 62);
-          await take('the home view from the tee');
-          g.orbit(Math.PI, 10);
-          await take('the lowest tilt at the home zoom, turned round');
-          g.orbit(-Math.PI, -10);
-          for (const d of [110, 200]) {
-            g.look((tee.x + cup.x) / 2, (tee.y + cup.y) / 2, d);
-            await take(`the whole hole at zoom ${d}`);
-          }
-          return out;
-        },
-        [course, hole],
+      const seen = await alone(() =>
+        page.evaluate(
+          async ([name, hole]) => {
+            const g = window.game!;
+            g.chooseCourse(name as string);
+            g.startHole(hole as number);
+            g.club('driver');
+            g.step(300);
+            const out: { where: string; ms: number; blades: number }[] = [];
+            const take = async (where: string) => {
+              g.step(2);
+              const ms = await g.measureFrame(60);
+              const grass = await g.grass();
+              out.push({ where, ms, blades: grass.near + grass.far });
+            };
+            // the driver's aim view, from the tee, facing up the hole (the home view of a golf hole)
+            await take('the aim view of the driver, facing up the hole');
+            g.orbit(Math.PI, 0);
+            await take('the aim view of the driver, turned right round');
+            g.orbit(-Math.PI, 0);
+            // the home view parked at the tee, and then as low as the camera goes, from behind and turned round: the most
+            // ground in view (the driver's aim view is already at the lowest tilt, so this is the home zoom's worst)
+            const { tee, cup } = g.content();
+            g.look(tee.x, tee.y, 62);
+            await take('the home view from the tee');
+            g.orbit(Math.PI, 10);
+            await take('the lowest tilt at the home zoom, turned round');
+            g.orbit(-Math.PI, -10);
+            for (const d of [110, 200]) {
+              g.look((tee.x + cup.x) / 2, (tee.y + cup.y) / 2, d);
+              await take(`the whole hole at zoom ${d}`);
+            }
+            return out;
+          },
+          [course, hole],
+        ),
       );
       for (const r of seen)
         console.log(`${holes[hole].name}: ${r.where}, ${r.ms.toFixed(2)} ms a frame, ${r.blades} blades`);
@@ -944,28 +955,30 @@ test.describe('golf on The Links', () => {
     test.setTimeout(120_000);
     const problems = watch(page);
     await start(page, { seed: 11, paused: true });
-    const cost = await page.evaluate(async () => {
-      const g = window.game!;
-      g.chooseCourse('The Links');
-      g.startHole(6);
-      g.step(120);
-      const tee = await g.measureFrame(60);
-      g.followShots('always');
-      g.shoot(Math.PI / 2, 1, 'driver');
-      g.step(40);
-      const air = await g.measureFrame(60);
-      for (let f = 0; f < 900 && !g.state().ready; f++) g.step(1);
-      g.orbit(Math.PI, 10);
-      g.step(2);
-      const worst = await g.measureFrame(60);
-      // the whole hole from the middle of it, as far back as the zoom goes: every tree and every tile of it in view
-      g.orbit(-Math.PI, -10);
-      const { tee: t, cup } = g.content();
-      g.look((t.x + cup.x) / 2, (t.y + cup.y) / 2, 110);
-      g.step(2);
-      const whole = await g.measureFrame(60);
-      return { tee, air, worst, whole };
-    });
+    const cost = await alone(() =>
+      page.evaluate(async () => {
+        const g = window.game!;
+        g.chooseCourse('The Links');
+        g.startHole(6);
+        g.step(120);
+        const tee = await g.measureFrame(60);
+        g.followShots('always');
+        g.shoot(Math.PI / 2, 1, 'driver');
+        g.step(40);
+        const air = await g.measureFrame(60);
+        for (let f = 0; f < 900 && !g.state().ready; f++) g.step(1);
+        g.orbit(Math.PI, 10);
+        g.step(2);
+        const worst = await g.measureFrame(60);
+        // the whole hole from the middle of it, as far back as the zoom goes: every tree and every tile of it in view
+        g.orbit(-Math.PI, -10);
+        const { tee: t, cup } = g.content();
+        g.look((t.x + cup.x) / 2, (t.y + cup.y) / 2, 110);
+        g.step(2);
+        const whole = await g.measureFrame(60);
+        return { tee, air, worst, whole };
+      }),
+    );
     console.log(
       `the links: tee ${cost.tee.toFixed(2)} ms, in the air ${cost.air.toFixed(2)} ms, the worst view ${cost.worst.toFixed(2)} ms, the whole hole ${cost.whole.toFixed(2)} ms a frame`,
     );
@@ -980,30 +993,32 @@ test.describe('golf on The Links', () => {
     test.setTimeout(240_000);
     const problems = watch(page);
     await start(page, { seed: 11, paused: true });
-    const rows = await page.evaluate(async () => {
-      const g = window.game!;
-      g.chooseCourse('The Links');
-      const out: { where: string; ms: number; distance: number }[] = [];
-      for (const hole of [2, 6]) {
-        g.startHole(hole);
-        for (const club of ['driver', '3-wood', '5-iron', '7-iron', '9-iron', 'pitching-wedge', 'sand-wedge']) {
-          g.club(club);
-          g.step(300);
-          const v = g.view();
-          out.push({ where: `hole ${hole + 1}, the ${club}`, ms: await g.measureFrame(40), distance: v.distance });
-          // and the same view turned right round, looking back down the hole at the tee and the grass behind it
-          g.orbit(Math.PI, 0);
-          g.step(2);
-          out.push({
-            where: `hole ${hole + 1}, the ${club}, turned round`,
-            ms: await g.measureFrame(40),
-            distance: v.distance,
-          });
-          g.orbit(-Math.PI, 0);
+    const rows = await alone(() =>
+      page.evaluate(async () => {
+        const g = window.game!;
+        g.chooseCourse('The Links');
+        const out: { where: string; ms: number; distance: number }[] = [];
+        for (const hole of [2, 6]) {
+          g.startHole(hole);
+          for (const club of ['driver', '3-wood', '5-iron', '7-iron', '9-iron', 'pitching-wedge', 'sand-wedge']) {
+            g.club(club);
+            g.step(300);
+            const v = g.view();
+            out.push({ where: `hole ${hole + 1}, the ${club}`, ms: await g.measureFrame(40), distance: v.distance });
+            // and the same view turned right round, looking back down the hole at the tee and the grass behind it
+            g.orbit(Math.PI, 0);
+            g.step(2);
+            out.push({
+              where: `hole ${hole + 1}, the ${club}, turned round`,
+              ms: await g.measureFrame(40),
+              distance: v.distance,
+            });
+            g.orbit(-Math.PI, 0);
+          }
         }
-      }
-      return out;
-    });
+        return out;
+      }),
+    );
     const worst = rows.reduce((a, b) => (b.ms > a.ms ? b : a));
     console.log(
       `the aim view: the worst is ${worst.where}, ${worst.ms.toFixed(2)} ms a frame, of ${rows.length} measured`,
@@ -1028,13 +1043,15 @@ test.describe('golf on The Links', () => {
       const problems = watch(page);
       await start(page, { seed: 11, paused: true, rung });
       costs.push(
-        await page.evaluate(async () => {
-          const g = window.game!;
-          g.chooseCourse('The Links');
-          g.startHole(6);
-          g.step(300);
-          return g.measureFrame(40);
-        }),
+        await alone(() =>
+          page.evaluate(async () => {
+            const g = window.game!;
+            g.chooseCourse('The Links');
+            g.startHole(6);
+            g.step(300);
+            return g.measureFrame(40);
+          }),
+        ),
       );
       expect(problems).toEqual([]);
     }
@@ -1065,32 +1082,34 @@ test.describe('the aim view on a phone held upright', () => {
       await page.setViewportSize(size);
       const problems = watch(page);
       await start(page, { seed: 11, paused: true });
-      const rows = await page.evaluate(async () => {
-        const g = window.game!;
-        const out: { where: string; ms: number; back: number }[] = [];
-        const measure = async (course: string, hole: number, clubs: string[]) => {
-          g.chooseCourse(course);
-          g.startHole(hole);
-          for (const club of clubs) {
-            g.club(club);
-            g.step(300);
-            const back = g.view().distance;
-            out.push({ where: `${course} hole ${hole + 1}, the ${club}`, ms: await g.measureFrame(40), back });
-            g.orbit(Math.PI, 0);
-            g.step(2);
-            out.push({
-              where: `${course} hole ${hole + 1}, the ${club}, turned round`,
-              ms: await g.measureFrame(40),
-              back,
-            });
-            g.orbit(-Math.PI, 0);
-          }
-        };
-        const bag = ['driver', '3-wood', '5-iron', '9-iron', 'sand-wedge'];
-        await measure('The Links', 2, bag);
-        await measure('The Links', 6, bag);
-        return out;
-      });
+      const rows = await alone(() =>
+        page.evaluate(async () => {
+          const g = window.game!;
+          const out: { where: string; ms: number; back: number }[] = [];
+          const measure = async (course: string, hole: number, clubs: string[]) => {
+            g.chooseCourse(course);
+            g.startHole(hole);
+            for (const club of clubs) {
+              g.club(club);
+              g.step(300);
+              const back = g.view().distance;
+              out.push({ where: `${course} hole ${hole + 1}, the ${club}`, ms: await g.measureFrame(40), back });
+              g.orbit(Math.PI, 0);
+              g.step(2);
+              out.push({
+                where: `${course} hole ${hole + 1}, the ${club}, turned round`,
+                ms: await g.measureFrame(40),
+                back,
+              });
+              g.orbit(-Math.PI, 0);
+            }
+          };
+          const bag = ['driver', '3-wood', '5-iron', '9-iron', 'sand-wedge'];
+          await measure('The Links', 2, bag);
+          await measure('The Links', 6, bag);
+          return out;
+        }),
+      );
       for (const r of rows) {
         if (r.ms > worst.ms) Object.assign(worst, { ms: r.ms, where: `${size.width}x${size.height} ${r.where}` });
         expect(
@@ -1113,13 +1132,15 @@ test.describe('the aim view on a phone held upright', () => {
       const problems = watch(page);
       await start(page, { seed: 11, paused: true, rung });
       costs.push(
-        await page.evaluate(async () => {
-          const g = window.game!;
-          g.chooseCourse('The Links');
-          g.startHole(6);
-          g.step(300);
-          return g.measureFrame(40);
-        }),
+        await alone(() =>
+          page.evaluate(async () => {
+            const g = window.game!;
+            g.chooseCourse('The Links');
+            g.startHole(6);
+            g.step(300);
+            return g.measureFrame(40);
+          }),
+        ),
       );
       expect(problems).toEqual([]);
     }
@@ -1518,26 +1539,28 @@ test.describe('the grass', () => {
       const layout = layoutOf(map);
       expect(cellFor(layout), `${tiles} tiles across`).toBe(cell);
       const terrain = Array.from(noiseGround(layout, { seed: 8, feel: 'gentle', steepness: 0.3 }));
-      const seen = await page.evaluate(
-        async ({ map, terrain }) => {
-          const g = window.game!;
-          g.playCourse([{ name: 'Big', par: 9, map, terrain: Float32Array.from(terrain), moving: {} } as never]);
-          g.step(120);
-          const { floor, tee } = g.content();
-          // the rough from just outside the rail's corner
-          g.look(floor.minX - 12, floor.minY - 12, 62);
-          g.step(2);
-          const rough = await g.grass();
-          // and the course underfoot at the tee, in view, where a blade that grew on it would be drawn: within four units of
-          // it is all green, the rail's outer face being seven and a half away
-          g.look(tee.x, tee.y, 62);
-          g.step(2);
-          const onCourse = await g.bladesAround(tee.x, tee.y, 4);
-          const cost = await g.measureFrame(60);
-          g.follow();
-          return { blades: rough.near + rough.far, onCourse, cost };
-        },
-        { map, terrain },
+      const seen = await alone(() =>
+        page.evaluate(
+          async ({ map, terrain }) => {
+            const g = window.game!;
+            g.playCourse([{ name: 'Big', par: 9, map, terrain: Float32Array.from(terrain), moving: {} } as never]);
+            g.step(120);
+            const { floor, tee } = g.content();
+            // the rough from just outside the rail's corner
+            g.look(floor.minX - 12, floor.minY - 12, 62);
+            g.step(2);
+            const rough = await g.grass();
+            // and the course underfoot at the tee, in view, where a blade that grew on it would be drawn: within four units of
+            // it is all green, the rail's outer face being seven and a half away
+            g.look(tee.x, tee.y, 62);
+            g.step(2);
+            const onCourse = await g.bladesAround(tee.x, tee.y, 4);
+            const cost = await g.measureFrame(60);
+            g.follow();
+            return { blades: rough.near + rough.far, onCourse, cost };
+          },
+          { map, terrain },
+        ),
       );
       expect(seen.blades, `${tiles} tiles: the rough grows round it`).toBeGreaterThan(20_000);
       expect(seen.blades, `${tiles} tiles: within the renderer's room`).toBeLessThan(BLADE_ROOM * 0.85);

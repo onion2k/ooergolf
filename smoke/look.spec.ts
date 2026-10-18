@@ -38,6 +38,7 @@ import { wideHole } from '../test/wide-hole';
 import { smallHole } from './bighole';
 import { drag, landed, puttingHole, start, watch } from './game';
 import { openDrawer } from './panels';
+import { alone } from './gpu';
 
 /** How far the pictures may differ before it is a change and not the GPU: a fiftieth of the pixels, each well off. */
 const TOLERANCE = { maxDiffPixelRatio: 0.002, threshold: 0.02 };
@@ -1895,7 +1896,7 @@ test.describe('a stream', () => {
     }, STREAM_HOLE);
     await hideStats(page);
     await expect(page.locator('#view')).toHaveScreenshot('stream.png', TOLERANCE);
-    const ms = await page.evaluate(() => window.game!.measureFrame(30));
+    const ms = await alone(() => page.evaluate(() => window.game!.measureFrame(30)));
     console.log(`a frame of the stream scene: ${ms.toFixed(2)} ms`);
     expect(problems).toEqual([]);
   });

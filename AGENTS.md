@@ -184,8 +184,10 @@ Budgets on this machine at 1280×800. What each gate holds today, and what the n
 | The look: colour, framing, contrast, shade, shape | floors                     | `smoke/look-metrics.spec.ts`  | none: a floor                                   | `look:metrics` |
 | The pictures                                      | none                       | `smoke/screens/`              | per picture, in `smoke/look.spec.ts`            | `look`         |
 
-The perf gates read wrong while anything else is on the GPU: on a busy machine a change is timed in turn with its parent
-commit and no baseline is written.
+The perf gates read wrong while anything else is on the GPU, and the load average never shows it: every smoke test that
+times a frame does it inside `alone()` (`smoke/gpu.ts`), which reads each process's GPU time from `ioreg`, waits up to two
+minutes for the others to fall under 200 ms of it a second, and fails a timing they passed it during, figure unreported.
+On a busy machine a change is timed in turn with its parent commit and no baseline is written.
 
 - **Audit threshold:** high and critical fail; moderate is reported; an exception is written with why, and looked at
   again within 90 days.
@@ -240,10 +242,11 @@ Each of the kit's checks, as surveyed on 17 October 2026, and the order the miss
   the file as written is seen only on the live site.
 - **The look lets a colour moved by a few
   levels in 255 through** (its threshold, 0.02, is the GPU's drift), and fails one moved by about ten.
-- **Frame costs double now and then, on the same code on a quiet machine.** Home Waters' tee read 9.67 ms on the
-  build at load 2.7 and 4.62 to 4.97 ms five times after, in this checkout and a fresh worktree alike (17 October 2026);
-  eight or so frame-cost smoke tests fail in a full run, and pass when run again. The cause is not found, so a frame
-  figure is not trusted from one run, and the smoke run is not seen wholly green.
+- **A shared GPU is seen only on macOS.** Frame costs doubled now and then (Home Waters' tee 9.67 ms against 4.6 to
+  5.0) because another process drew on the GPU at the same time: alone 4.1 to 4.3 ms, beside a second headless game 9.9
+  to 11.7 ms, on 18 October 2026. `alone()` holds it where `ioreg` can be read; elsewhere it says it cannot tell, and a
+  frame figure is taken as it comes. A burst from another process far shorter than a long timing is averaged over the
+  window, so a long test can let a short one through.
 - **Mutation checks are by hand,** in the work's report, with no tool to record them.
 - **What only a person can judge:** how a course feels to play, a matter of taste in the look, and the limits listed in
   `HOW-IT-WORKS.md`'s _What is not there yet_.

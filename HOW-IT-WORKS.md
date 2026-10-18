@@ -71,6 +71,13 @@ the last commit, held both ways, so a step toward a budget is noticed as
 much as a step over it. The perf tolerances are the measured wobble of a
 headless boot and a GPU frame, and say so in the file.
 
+A frame is timed only on a GPU the test has to itself. The GPU's overall use cannot tell: our own paused page keeps it at
+84 %, and timing reads 100 % alone or shared. So `alone()` in `smoke/gpu.ts` reads the GPU time macOS keeps for each
+process (`AppUsage` on every `AGXDeviceUserClient` in `ioreg`, read entry by entry, since a client's usage is printed
+before its creator) either side of the timing, and sums everyone's but our own browser's: about 40 ms of it a second
+alone, 560 beside a second headless game. Over 200 before, it waits; over 200 during, the test fails and the figure is
+not reported. Each timing logs what it read, so a pass is seen to have looked.
+
 The pace gate holds the strokes a round of each course takes, the mean over
 sixteen seeds, each course held to its own figure, played by the autopilot with a player's slips: a few degrees of aim, a
 tenth of the power. A median was tried and jumps a whole stroke between

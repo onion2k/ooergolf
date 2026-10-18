@@ -25,6 +25,7 @@ import { bigHole, smallHole } from './bighole';
 import { movedFrom } from '../scripts/gates';
 import { BUDGET } from './budget';
 import { start, watch } from './game';
+import { alone } from './gpu';
 
 export { BUDGET };
 
@@ -119,82 +120,88 @@ test('boots, draws and downloads within budget, and as it did before', async ({ 
   await start(page, { seed: 11, paused: true });
   const boot = await page.evaluate(() => window.game!.bootMs);
   // the standard view: the whole course, seen from the far end of the zoom, the most of it there is to draw
-  const frame = await page.evaluate(async () => {
-    const g = window.game!;
-    g.step(180);
-    g.look(0, 0, 110);
-    g.step(1);
-    // a GPU idle while the page booted runs slow for a while: warmed first, or the figure is two figures
-    return g.measureFrame(300);
-  });
+  const frame = await alone(() =>
+    page.evaluate(async () => {
+      const g = window.game!;
+      g.step(180);
+      g.look(0, 0, 110);
+      g.step(1);
+      // a GPU idle while the page booted runs slow for a while: warmed first, or the figure is two figures
+      return g.measureFrame(300);
+    }),
+  );
   // the biggest hole that is not golf (`BIG`, in `bighole.ts`, a test hole of the test's own), many times the size of
   // any on a course: what it costs to begin, and to draw. A hole is
   // begun and its readback awaited with nothing stepped between, since a frame stepped and not yet drawn is queued, and the
   // begin after it would wait on that as well; the biggest is begun in turn with the smallest, so each begin is a new hole
   const holes = [smallHole(), bigHole()];
-  const big = await page.evaluate(async (holes) => {
-    const g = window.game!;
-    g.playCourse(holes.map((h) => ({ ...h, terrain: Float32Array.from(h.terrain) }) as never));
-    g.step(2);
-    await g.grass();
-    const begins: number[] = [];
-    for (let k = 0; k < 11; k++) {
-      const t = performance.now();
-      g.startHole(k % 2 ? 0 : 1);
-      await g.grass();
-      if (k % 2 === 0) begins.push(performance.now() - t);
-    }
-    begins.sort((a, b) => a - b);
-    // a frame of the biggest, at the views that draw the most of it: the tee, and the rough from outside its corner
-    g.startHole(1);
-    g.step(120);
-    const { floor } = g.content();
-    const frames: number[] = [];
-    for (const [x, y, distance] of [
-      [g.ball().x, g.ball().y, 62],
-      [floor.minX - 12, floor.minY - 12, 62],
-      [floor.minX - 12, floor.minY - 12, 110],
-    ]) {
-      g.look(x, y, distance);
+  const big = await alone(() =>
+    page.evaluate(async (holes) => {
+      const g = window.game!;
+      g.playCourse(holes.map((h) => ({ ...h, terrain: Float32Array.from(h.terrain) }) as never));
       g.step(2);
-      frames.push(await g.measureFrame(120));
-    }
-    return { begin: begins[Math.floor(begins.length / 2)], frame: Math.max(...frames) };
-  }, holes);
+      await g.grass();
+      const begins: number[] = [];
+      for (let k = 0; k < 11; k++) {
+        const t = performance.now();
+        g.startHole(k % 2 ? 0 : 1);
+        await g.grass();
+        if (k % 2 === 0) begins.push(performance.now() - t);
+      }
+      begins.sort((a, b) => a - b);
+      // a frame of the biggest, at the views that draw the most of it: the tee, and the rough from outside its corner
+      g.startHole(1);
+      g.step(120);
+      const { floor } = g.content();
+      const frames: number[] = [];
+      for (const [x, y, distance] of [
+        [g.ball().x, g.ball().y, 62],
+        [floor.minX - 12, floor.minY - 12, 62],
+        [floor.minX - 12, floor.minY - 12, 110],
+      ]) {
+        g.look(x, y, distance);
+        g.step(2);
+        frames.push(await g.measureFrame(120));
+      }
+      return { begin: begins[Math.floor(begins.length / 2)], frame: Math.max(...frames) };
+    }, holes),
+  );
   // and the same of the biggest golf hole of any course (Home Waters, the par six of The Isles, at the time of writing):
   // golf's holes are of a different sort, tens of thousands of tiles of map with hills, lakes, trees and out of bounds on
   // them, and what they cost is held on their own
   const golf = biggestGolfHole();
   console.log(`perf: the biggest golf hole is ${golf.name} of ${golf.course}, ${golf.tiles} tiles`);
-  const links = await page.evaluate(async (golf) => {
-    const g = window.game!;
-    g.chooseCourse(golf.course);
-    g.step(2);
-    await g.grass();
-    const begins: number[] = [];
-    for (let k = 0; k < 11; k++) {
-      const t = performance.now();
-      g.startHole(k % 2 ? golf.small : golf.big);
-      await g.grass();
-      if (k % 2 === 0) begins.push(performance.now() - t);
-    }
-    begins.sort((a, b) => a - b);
-    g.startHole(golf.big);
-    g.step(120);
-    const { floor, tee, cup } = g.content();
-    const frames: number[] = [];
-    for (const [x, y, distance] of [
-      [g.ball().x, g.ball().y, 62],
-      [(tee.x + cup.x) / 2, (tee.y + cup.y) / 2, 110],
-      [floor.minX - 12, floor.minY - 12, 62],
-      [floor.maxX + 12, floor.maxY + 12, 110],
-    ]) {
-      g.look(x, y, distance);
+  const links = await alone(() =>
+    page.evaluate(async (golf) => {
+      const g = window.game!;
+      g.chooseCourse(golf.course);
       g.step(2);
-      frames.push(await g.measureFrame(120));
-    }
-    return { begin: begins[Math.floor(begins.length / 2)], frame: Math.max(...frames) };
-  }, golf);
+      await g.grass();
+      const begins: number[] = [];
+      for (let k = 0; k < 11; k++) {
+        const t = performance.now();
+        g.startHole(k % 2 ? golf.small : golf.big);
+        await g.grass();
+        if (k % 2 === 0) begins.push(performance.now() - t);
+      }
+      begins.sort((a, b) => a - b);
+      g.startHole(golf.big);
+      g.step(120);
+      const { floor, tee, cup } = g.content();
+      const frames: number[] = [];
+      for (const [x, y, distance] of [
+        [g.ball().x, g.ball().y, 62],
+        [(tee.x + cup.x) / 2, (tee.y + cup.y) / 2, 110],
+        [floor.minX - 12, floor.minY - 12, 62],
+        [floor.maxX + 12, floor.maxY + 12, 110],
+      ]) {
+        g.look(x, y, distance);
+        g.step(2);
+        frames.push(await g.measureFrame(120));
+      }
+      return { begin: begins[Math.floor(begins.length / 2)], frame: Math.max(...frames) };
+    }, golf),
+  );
   const now: Figures = {
     bootMs: Math.round(boot),
     frameMs: Math.round(frame * 100) / 100,

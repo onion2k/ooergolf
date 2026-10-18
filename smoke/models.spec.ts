@@ -18,6 +18,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import type {} from '../src/showcase';
 import { watch } from './game';
+import { alone } from './gpu';
 
 /** The showcase, on the dev server the config starts for it: it is not in the build. */
 const SHOWCASE = `http://localhost:${(Number(process.env.PORT) || 5201) + 10}/showcase.html`;
@@ -61,10 +62,12 @@ test.describe('the models', () => {
     const problems = watch(page);
     await showcase(page);
     await look(page, 'all');
-    const { ms, triangles } = await page.evaluate(async () => ({
-      ms: await window.showcase!.measureFrame(),
-      triangles: window.showcase!.triangles,
-    }));
+    const { ms, triangles } = await alone(() =>
+      page.evaluate(async () => ({
+        ms: await window.showcase!.measureFrame(),
+        triangles: window.showcase!.triangles,
+      })),
+    );
     console.log(`showcase: frame ${ms.toFixed(2)} ms, ${triangles} triangles`);
     expect(ms).toBeGreaterThan(0);
     expect(ms).toBeLessThan(FRAME_BUDGET_MS / 2);

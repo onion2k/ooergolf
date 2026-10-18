@@ -31,6 +31,7 @@ import { smallHole } from './bighole';
 import { BUDGET } from './budget';
 import { drag, intoThePond, landed, puttingHole, start, watch } from './game';
 import { CONTRAST, THUMB, holeOut, openDrawer, read } from './panels';
+import { alone } from './gpu';
 
 /** Play `frames` frames, and check nothing that must hold has broken. */
 async function play(page: Page, frames: number, stage: string) {
@@ -2189,7 +2190,7 @@ test.describe('putting on a golf hole whose greens have a speed and a contour', 
     const across = Math.abs((ring.x - from.ball.x) * -dir.y + (ring.y - from.ball.y) * dir.x);
     expect(across, 'the ring is off the aimed line by the break').toBeGreaterThan(0.3);
     // the frame with the roll, the arrows and the cut drawn is inside the budget: they cost a few hundred triangles
-    const ms = await page.evaluate(() => window.game!.measureFrame());
+    const ms = await alone(() => page.evaluate(() => window.game!.measureFrame()));
     console.log(`putting: a frame with the roll aimed and the arrows up, ${ms.toFixed(2)} ms`);
     expect(ms, 'a frame of the putting green').toBeLessThan(BUDGET.frameMs);
     // let go: the ball comes to rest at the ring
