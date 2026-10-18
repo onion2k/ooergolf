@@ -64,6 +64,14 @@ async function hideStats(page: Page) {
       (i) => i.complete && i.naturalWidth > 0,
     ),
   );
+  // loaded is not yet painted: the picture was still seen 1,170 pixels off in a full run on 17 October 2026, on the
+  // build as on the dev server, so each is decoded and two frames are drawn after
+  await page.evaluate(async () => {
+    await Promise.all(
+      Array.from(document.querySelectorAll<HTMLImageElement>('#courseStrip img')).map((i) => i.decode()),
+    );
+    await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
+  });
 }
 
 /**

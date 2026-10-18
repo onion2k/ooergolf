@@ -729,7 +729,7 @@ minigolf: true }`, read through `oceanFor`) is the one switch: `waterBed` and `s
   the **Install the game** pill in the start screen's head (`#install`, `Hud.showInstall`: under the heading, and under the
   title at the panel's top right beside it, so the cards take no height for it; it was under the cards, below the fold) is pressed, withdrawn on
   `appinstalled`; Safari and iOS fire nothing and show no button, their Share → Add to Home Screen installs it).
-  `smoke/pwa.spec.ts` builds `dist` (`buildDist` in `smoke/build.ts`, which `perf` uses too) and serves it with Vite's preview on
+  `smoke/pwa.spec.ts` serves the run's own `dist` (every smoke run builds it first, `playwright.config.ts`) with Vite's preview on
   the smoke port plus one: the worker ready, the build in one cache, the page booted offline with its save, `?sw=0`, and the
   button through a synthetic offer. Not done: no "update ready" toast (a player online is on the new build from their next
   load, and the open page is not told), no hint for iOS, the showcase is not cached.

@@ -19,6 +19,9 @@ import { expect, test, type Page } from '@playwright/test';
 import type {} from '../src/showcase';
 import { watch } from './game';
 
+/** The showcase, on the dev server the config starts for it: it is not in the build. */
+const SHOWCASE = `http://localhost:${(Number(process.env.PORT) || 5201) + 10}/showcase.html`;
+
 /** How far the pictures may differ before it is a change and not the GPU: as the game's look pictures. */
 const TOLERANCE = { maxDiffPixelRatio: 0.002, threshold: 0.02 };
 /** What a frame may cost at all, as the game's perf budget has it. */
@@ -26,7 +29,7 @@ const FRAME_BUDGET_MS = 8;
 
 /** The showcase in the page, paused, its decoration from `seed`, and ready; `model` adds an exhibit that is shown only when asked for (`title`, `balls`). */
 async function showcase(page: Page, seed = 1, model?: string) {
-  await page.goto(`/showcase.html?paused=1&seed=${seed}${model ? `&model=${model}` : ''}`);
+  await page.goto(`${SHOWCASE}?paused=1&seed=${seed}${model ? `&model=${model}` : ''}`);
   try {
     await expect.poll(() => page.evaluate(() => window.showcase?.ready ?? false), { timeout: 60_000 }).toBe(true);
   } catch {

@@ -44,7 +44,8 @@ green by moving its baseline.
     npm run pace           strokes a round, seed by seed, and each hole's median against par; pace:check holds the figures
     npm run bench          the physics' frame time held to scripts/bench-baseline.json
     npm run perf           boot, frame and download held to smoke/perf-baseline.json and the budget
-    npm run smoke          the game in headless Chromium on the real GPU (Playwright, smoke/)
+    npm run smoke          the built game in headless Chromium on the real GPU (Playwright, smoke/): every run builds dist first
+                           and serves it with Vite's preview; the models' showcase alone is on a dev server, ten ports up
     npm run look           the scenes and the models' showcase, held to the pictures in smoke/screens
     npm run look:metrics   the look's colour, framing, contrast, cool shade and shape, held to their floors
     npm run format         prettier, writing: by hand, never by the hook
@@ -224,7 +225,7 @@ Each of the kit's checks, as surveyed on 17 October 2026, and the order the miss
 `GUARDRAILS-PLAN.md`; a line here goes as its box is ticked. In short:
 
 - **No CI.** Every check runs on this machine alone, one browser (Chromium) and one GPU; the look pictures are this
-  GPU's, so another machine's are not comparable. The smoke tests run against the dev server, not the build.
+  GPU's, so another machine's are not comparable.
 - **The history's secret scan is by hand** until there is CI to run it on every push; GitHub's own secret scanning and
   push protection are on. The code reads no secret, so there is no `.env.example`.
 - **No code scanning.** "A module takes what it needs as arguments" and "lower modules import no content" are held by
@@ -234,9 +235,10 @@ Each of the kit's checks, as surveyed on 17 October 2026, and the order the miss
 - **The deployed headers are read by hand,** with `npm run headers:live` after a deploy, until CI does. The build writes
   `dist/_headers` (`scripts/headers.ts`), and `smoke/headers.spec.ts` boots the built game under it; that Netlify serves
   the file as written is seen only on the live site.
-- **The frame-cost smoke tests are not yet seen green together** since the pictures were written again on 17 October
-  2026: eight failed under another session's load (load average 8 to 11) and passed when timed quiet. Run them on a quiet
-  machine before trusting a frame figure.
+- **Frame costs double now and then, on the same code on a quiet machine.** Home Waters' tee read 9.67 ms on the
+  build at load 2.7 and 4.62 to 4.97 ms five times after, in this checkout and a fresh worktree alike (17 October 2026);
+  eight or so frame-cost smoke tests fail in a full run, and pass when run again. The cause is not found, so a frame
+  figure is not trusted from one run, and the smoke run is not seen wholly green.
 - **The bench's and perf's judgements have no unit tests** of their own.
 - **Mutation checks are by hand,** in the work's report, with no tool to record them.
 - **What only a person can judge:** how a course feels to play, a matter of taste in the look, and the limits listed in

@@ -1,5 +1,6 @@
 /**
- * The game as an installable app, on the built page served as a player gets it (the dev server registers no worker):
+ * The game as an installable app, on the built page served as a player gets it, the worker let register (`?sw=0` keeps it
+ * out of every other test):
  * the manifest a browser installs from, the service worker registered once the game is ready and the build cached,
  * a boot with no network from that cache with the player's save read as ever, and the Install button on the start
  * screen, shown when the browser offers and taking the offer once. The offer is the browser's own event, fired here by
@@ -7,7 +8,6 @@
  */
 import { expect, test, type Page } from '@playwright/test';
 import { preview, type PreviewServer } from 'vite';
-import { buildDist } from './build';
 import { ready, watch } from './game';
 
 /** The built page's port: beside the dev server's, so the two never collide. */
@@ -18,7 +18,6 @@ const SAVE = { coins: 123, gems: 4, owned: [], kit: { club: '', ball: '', access
 let served: PreviewServer;
 
 test.beforeAll(async () => {
-  buildDist();
   served = await preview({ logLevel: 'silent', preview: { port: PORT, strictPort: true } });
 });
 

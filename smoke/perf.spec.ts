@@ -22,7 +22,6 @@ import { expect, test } from '@playwright/test';
 import { layoutOf } from '../src/arena';
 import { COURSES } from '../src/course';
 import { bigHole, smallHole } from './bighole';
-import { buildDist } from './build';
 import { BUDGET } from './budget';
 import { start, watch } from './game';
 
@@ -88,9 +87,8 @@ interface Figures {
   linksFrameMs: number;
 }
 
-/** The built game's download: every script and stylesheet in dist/, gzipped, in kilobytes. */
+/** The built game's download: every script and stylesheet in dist/, gzipped, in kilobytes: the run's own build, made as it began (playwright.config.ts). */
 function bundleKb(): number {
-  buildDist();
   const dir = 'dist/assets';
   let bytes = 0;
   for (const f of readdirSync(dir)) {
@@ -101,7 +99,7 @@ function bundleKb(): number {
   return Math.round(bytes / 102.4) / 10;
 }
 
-/** The built game's pictures: every image in dist/assets, kilobytes as they are sent (they are compressed already, and gzip does nothing for them). Needs `bundleKb` to have built first. */
+/** The built game's pictures: every image in dist/assets, kilobytes as they are sent (they are compressed already, and gzip does nothing for them). The run's own build, made as it began. */
 function imageKb(): number {
   const dir = 'dist/assets';
   let bytes = 0;

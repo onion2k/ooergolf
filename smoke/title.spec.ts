@@ -71,7 +71,7 @@ test.describe('the boot panel', () => {
         if (words) said.add(words);
       }).observe(document, { childList: true, subtree: true, characterData: true });
     });
-    await page.goto('/?paused=1&seed=1');
+    await page.goto('/?paused=1&seed=1&sw=0');
     await ready(page);
     // the pictures the page fetches are the strip of the course in view, its nine holes (15 October 2026): nothing of the panel
     expect(
@@ -129,7 +129,7 @@ test.describe('the boot panel', () => {
     await page.addInitScript(() => {
       Object.defineProperty(navigator, 'gpu', { value: undefined, configurable: true });
     });
-    await page.goto('/?seed=1');
+    await page.goto('/?seed=1&sw=0');
     const message = page.locator('#bootMsg');
     await expect(message).toBeVisible({ timeout: 30_000 });
     expect((await message.textContent())!.length, 'the reason is in words').toBeGreaterThan(5);
@@ -419,7 +419,7 @@ test.describe('the letters on the sky', () => {
       const w = window as unknown as { courseGate: Promise<void>; letCourseIn: () => void };
       w.courseGate = new Promise<void>((done) => (w.letCourseIn = done));
     });
-    await page.goto('/?seed=1&flyin=0');
+    await page.goto('/?seed=1&flyin=0&sw=0');
     await expect
       .poll(() => page.evaluate(() => performance.getEntriesByName('title-letters').length), { timeout: 30_000 })
       .toBe(1);
@@ -441,7 +441,7 @@ test.describe('the progress bar', () => {
 
   test('is never in sight on a boot that has the title up inside half a second', async ({ page }) => {
     await watchBar(page);
-    await page.goto('/?seed=1&flyin=0');
+    await page.goto('/?seed=1&flyin=0&sw=0');
     await ready(page);
     const boot = await page.evaluate(() => performance.getEntriesByName('title-letters')[0]?.startTime ?? Infinity);
     await page.waitForTimeout(800);
@@ -461,7 +461,7 @@ test.describe('the progress bar', () => {
     const cdp = await page.context().newCDPSession(page);
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: 6 });
     await watchBar(page);
-    await page.goto('/?seed=1&flyin=0');
+    await page.goto('/?seed=1&flyin=0&sw=0');
     await ready(page);
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
     const seen = await barSeen(page);

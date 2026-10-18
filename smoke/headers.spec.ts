@@ -10,7 +10,6 @@ import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { preview, type PreviewServer } from 'vite';
 import { headerProblems, readHeadersFile } from '../scripts/headers';
-import { buildDist } from './build';
 import { ready, watch } from './game';
 
 /** Beside the dev server's port and the app test's, so none of the three collide. */
@@ -21,7 +20,6 @@ let served: PreviewServer;
 let sent: Record<string, string>;
 
 test.beforeAll(async () => {
-  buildDist();
   sent = readHeadersFile(readFileSync('dist/_headers', 'utf8'));
   served = await preview({ logLevel: 'silent', preview: { port: PORT, strictPort: true, headers: sent } });
 });

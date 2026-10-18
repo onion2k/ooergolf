@@ -61,6 +61,8 @@ export async function start(
   const query = new URLSearchParams();
   if (!title) query.set('title', '0');
   if (!flyIn) query.set('flyin', '0');
+  // the built page registers its service worker once ready, which only the app and headers tests are about
+  query.set('sw', '0');
   if (rung !== undefined) query.set('rung', String(rung));
   if (seed !== undefined) query.set('seed', String(seed));
   if (paused) query.set('paused', '1');
