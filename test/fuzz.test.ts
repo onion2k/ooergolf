@@ -129,6 +129,8 @@ describe('the fuzzer', () => {
       'reload',
       // seed 25's round is on minigolf for a while, where the watch's retake, a putt's shape and spin and the shop's try-on are
       'retake',
+      // the sound turned off and on and its slider moved, which only the save keeps
+      'set the sound',
       'shape and spin a putt',
       'shoot',
       'shoot as aimed',

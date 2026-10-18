@@ -71,8 +71,9 @@ describe('what must stay bounded', () => {
     const bytes = JSON.stringify(progress.save).length;
     // held to the byte, so a longer id, a new hole or a new field in a best is seen and the ceiling thought about again
     // (15 October 2026: 9,800 before the seasons, 10,164 with a season less one event played on both tours and an event round kept;
-    // 16 October 2026: 10,194 with the caddie's two counts; 17 October 2026: 10,203 with its count of spin)
-    expect(bytes, `${bytes} bytes for ${holes.length} holes`).toBe(10_203);
+    // 16 October 2026: 10,194 with the caddie's two counts; 17 October 2026: 10,203 with its count of spin; 18 October 2026:
+    // 10,228 with the sound's mute and volume)
+    expect(bytes, `${bytes} bytes for ${holes.length} holes`).toBe(10_228);
     expect(bytes, 'under the ceiling').toBeLessThan(WATCH['save bytes']!.ceiling);
     expect(WATCH['save bytes']!.ceiling, 'with room for about six holes more and no more').toBeLessThan(bytes * 1.15);
   });
