@@ -293,3 +293,48 @@ test('on a phone the speaker is beside the Shop, and not by the flag nor on the 
     await page.evaluate(() => localStorage.clear());
   }
 });
+
+test('a context made without a gesture is started by the next one, as a browser’s autoplay rule asks', async ({
+  page,
+}) => {
+  // the rule a player's browser keeps, put in the page: a context starts suspended, and resume() starts it only within a
+  // gesture. Headless Chromium under automation keeps no such rule a test can rely on (it let a context run unasked, after
+  // a key that is no gesture, or made through the protocol with none), so the rule is the test's own. On 18 October 2026
+  // the page woke the sound on the first key or pointerdown and tried to start it then and never again; where the browser
+  // did not count that as a gesture (a touchscreen's or a pen's pointerdown, some keys), it stayed silent until the tab
+  // was left and come back to
+  await page.addInitScript(() => {
+    const Real = window.AudioContext;
+    window.AudioContext = class extends Real {
+      constructor(options?: AudioContextOptions) {
+        super(options);
+        void super.suspend();
+      }
+      override resume() {
+        return navigator.userActivation.isActive
+          ? super.resume()
+          : Promise.reject(new DOMException('not allowed without a gesture', 'NotAllowedError'));
+      }
+    };
+  });
+  const problems = watch(page);
+  await start(page, { seed: 1, paused: true, screen: true });
+  // through the protocol, with no gesture: Playwright's own evaluate counts as one
+  const cdp = await page.context().newCDPSession(page);
+  const run = async (expression: string) =>
+    (
+      (await cdp.send('Runtime.evaluate', {
+        expression,
+        userGesture: false,
+        awaitPromise: true,
+        returnByValue: true,
+      })) as { result: { value?: unknown } }
+    ).result.value;
+  // the gesture start()'s own reads left behind lasts a few seconds; the sound is woken once it has gone
+  await expect.poll(() => run('navigator.userActivation.isActive'), { timeout: 15_000 }).toBe(false);
+  await run('window.game.wake(); new Promise((r) => setTimeout(r, 200))');
+  expect((await sound(page)).context, 'made with no gesture, it is held').toBe('suspended');
+  await page.mouse.click(640, 120);
+  await expect.poll(async () => (await sound(page)).context, 'the next click starts it').toBe('running');
+  expect(problems, 'a refused start is not an error').toEqual([]);
+});

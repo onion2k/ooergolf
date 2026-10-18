@@ -314,10 +314,20 @@ async function main() {
   const wake = () => sound.wake();
   // a page out of sight has no frames, and the wind's loop would blow on by the audio clock: the context waits with it
   document.addEventListener('visibilitychange', () => {
-    if (audioContext) void (document.hidden ? audioContext.suspend() : audioContext.resume());
+    if (audioContext) (document.hidden ? audioContext.suspend() : audioContext.resume()).catch(() => undefined);
   });
-  addEventListener('pointerdown', wake, { once: true, capture: true });
-  addEventListener('keydown', wake, { once: true, capture: true });
+  // A browser lets the context start only within what it counts as a gesture, and not every input is one: a touchscreen's
+  // or a pen's pointerdown is not, nor some keys. The first press makes the context, and every press tries to start it until
+  // it runs (a refusal is the browser's to make, and not an error); on 18 October 2026 only the first tried, and a sound
+  // made by one that did not count stayed silent until the tab was left and come back to.
+  const unlock = (e: Event) => {
+    // a click the page makes itself (a button pressed by the test API) is no gesture, and wakes nothing
+    if (!e.isTrusted) return;
+    sound.wake();
+    if (audioContext?.state === 'suspended' && !document.hidden) audioContext.resume().catch(() => undefined);
+  };
+  for (const type of ['pointerdown', 'pointerup', 'click', 'touchend', 'keydown'] as const)
+    addEventListener(type, unlock, { capture: true });
   /** The sound turned off or on, by the button, the M key or the test API: heard, shown and kept. */
   function setMuted(on: boolean) {
     sound.mute(on);

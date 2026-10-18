@@ -473,7 +473,8 @@ export class LazySound {
     this.sound = this.make({ volume: this.volumeSetting, muted: this.muteSetting });
     this.sound.setMusic(this.music);
     this.sound.setAmbience(...this.ambience);
-    void this.sound.resume();
+    // the browser may refuse to start it from what it does not count as a gesture: the page tries again at the next
+    this.sound.resume().catch(() => undefined);
     // the first sound loaded at once, the putt, so that a first gesture that is a putt is heard
     this.sound.step(0, false);
   }
