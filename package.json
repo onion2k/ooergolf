@@ -44,7 +44,7 @@
   "dependencies": {
     "artshape-physics": "github:onion2k/artshape-physics#v0.8.0",
     "artshape-render": "github:onion2k/artshape-render#v0.45.0",
-    "artshape-sound": "github:onion2k/artshape-sound#v0.2.0",
+    "artshape-sound": "github:onion2k/artshape-sound#v0.3.0",
     "earcut": "^3.2.3"
   },
   "devDependencies": {
