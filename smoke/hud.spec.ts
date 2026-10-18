@@ -1256,3 +1256,46 @@ test('from overhead a drag is a pan and the help says so, whichever way it is he
   await page.mouse.up();
   expect(problems).toEqual([]);
 });
+
+/**
+ * The bag's shape and spin buttons on a phone held upright: each choice's words whole inside the button, never running
+ * into its edge. With the Caddie button beside them in one row, "Shape: Straight" ran past its button's edge at 400
+ * pixels wide and below (17 October 2026), so a narrow phone shows the choice alone, the arrow saying it is the shape.
+ */
+for (const [width, height] of [
+  [360, 780],
+  [375, 812],
+  [390, 844],
+  [400, 860],
+  [430, 932],
+]) {
+  test(`the bag's shape and spin read whole inside their buttons on a ${width} by ${height} phone, in every choice`, async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await page.setViewportSize({ width, height });
+    await start(page, { seed: 11, paused: true, screen: true });
+    await page.evaluate(() => {
+      window.game!.chooseCourse('The Links');
+      window.game!.step(60);
+    });
+    for (let press = 0; press < 3; press++) {
+      for (const id of ['#shapeButton', '#spinButton']) {
+        // where the words end, against where the button's padding begins: words in the padding touch the edge
+        const fit = await page.locator(id).evaluate((b: HTMLElement) => {
+          const words = document.createRange();
+          words.selectNodeContents(b);
+          const style = getComputedStyle(b);
+          const inner =
+            b.getBoundingClientRect().right - parseFloat(style.borderRightWidth) - parseFloat(style.paddingRight);
+          return { text: b.textContent, over: Math.round((words.getBoundingClientRect().right - inner) * 10) / 10 };
+        });
+        expect(fit.over, `${fit.text}: into its button's padding by`).toBeLessThanOrEqual(0);
+      }
+      await page.locator('#shapeButton').click();
+      await page.locator('#spinButton').click();
+      await page.evaluate(() => window.game!.step(2));
+    }
+    expect(problems).toEqual([]);
+  });
+}

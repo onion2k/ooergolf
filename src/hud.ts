@@ -578,12 +578,24 @@ export class Hud {
     this.spinShown = spin;
     const s = SHAPES.find((c) => c.value === Math.sign(shape)) ?? SHAPES[0];
     const p = SPINS.find((c) => c.value === Math.sign(spin)) ?? SPINS[0];
-    this.shapeButton.textContent = `Shape: ${s.label}`;
+    Hud.cycleWords(this.shapeButton, 'Shape', s.label);
     this.shapeButton.dataset.shape = String(s.value);
     this.shapeButton.setAttribute('aria-label', `Shape: ${s.say}. Press to change.`);
-    this.spinButton.textContent = `Spin: ${p.label}`;
+    Hud.cycleWords(this.spinButton, 'Spin', p.label);
     this.spinButton.dataset.spin = String(p.value);
     this.spinButton.setAttribute('aria-label', `Spin: ${p.say}. Press to change.`);
+  }
+
+  /**
+   * A cycle button's words: what it chooses ("Shape: "), in a span of its own, and the choice. The stylesheet hides the
+   * span on a phone held upright, where with the Caddie button in the same row "Shape: Straight" ran into its button's
+   * edge; the arrow says it is the shape, and the button's own label says both to a screen reader.
+   */
+  private static cycleWords(button: HTMLElement, what: string, choice: string) {
+    const span = document.createElement('span');
+    span.className = 'what';
+    span.textContent = `${what}: `;
+    button.replaceChildren(span, choice);
   }
 
   /** The two buttons as they are drawn now, read from the page and not from what was last said to it: for the test API. */

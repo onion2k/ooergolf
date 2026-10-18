@@ -1734,6 +1734,15 @@
    * on the narrowest phones the bag's row of shape, spin and the caddie is three words across the width of eight clubs, so its
    * words are a size smaller and closer to their edges, or the shape's is cut short
    */
+  /*
+   * on a phone held upright the shape and spin buttons show the choice alone ("Straight", "Back"), the arrow saying which is
+   * the shape: with the Caddie button in their row, "Shape: Straight" ran into its button's edge at 400 pixels and below
+   */
+  @media (max-width: 420px) {
+    #bagShaping .what {
+      display: none;
+    }
+  }
   @media (max-width: 380px) {
     #bag #bagShaping button {
       padding: 0 5px;

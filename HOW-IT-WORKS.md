@@ -815,7 +815,11 @@ minigolf: true }`, read through `oceanFor`) is the one switch: `waterBed` and `s
   and under the start screen. In the bag, between the words and the clubs, two cycle buttons, **Shape: Straight / Draw /
   Fade** and **Spin: Flat / Back / Top**, shown with a lofted club in hand and put back to straight and flat by a
   stroke (the hud is reconciled to the game's values each frame), and the bag's words name them ("Driver · fade · back ·
-  lands 262 yd · fairway").
+  lands 262 yd · fairway"). On a phone held upright (420 px wide and under) they show the choice alone ("Straight",
+  "Back"), "Shape: " and "Spin: " being a span the stylesheet hides (`cycleWords` in `hud.ts`), since with the Caddie
+  button in their row "Shape: Straight" ran into its button's edge (18 October 2026); the arrow says which is the shape,
+  the buttons' labels say both to a screen reader, and `smoke/hud.spec.ts` holds the words inside each button's padding at
+  five phone widths.
 - A `Course` has `golf`, held by a test to its holes' layouts. `ground.ts`
   draws each kind of golf ground as a mesh of its own colour; the rough is
   painted under its blades (see the grass of a golf hole, in `turf.ts`'s bullet). `src/marker.ts` is the ring at a
