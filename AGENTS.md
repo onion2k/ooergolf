@@ -59,6 +59,7 @@ green by moving its baseline.
     npm run licences       every package that ships, its licence on the list under Gates (in check)
     npm run unused         knip: a dependency nothing imports (in check)
     npm run headers:live   the deployed page's response held to the headers' rules (after a deploy; needs the network)
+    npm run branches       every branch and worktree merged into the default branch and left, here and on the remote (in check)
     npm ci                 the exact install from the lockfile, refused where it and package.json disagree
     updates                Dependabot for security updates only (on in the repository's settings); versions by hand, monthly, a commit each
 
@@ -254,7 +255,9 @@ The rules are guardrails/GUARDRAILS.md's _Landing a change_. This project's answ
   tagging are asked each time.
 
 Whether a change goes straight to the default branch or by PR is the remote's to say, by protecting the branch or not,
-and is read from it each time. Commits go through `/commit`; landing through `/land`.
+and is read from it each time. Commits go through `/commit`; landing through `/land`. Once a change has landed, the
+branches and worktrees it was built on are cleared, each checked first as merged (`npm run branches` lists them), a
+branch on the remote only on the user's word.
 
 ## Skills
 

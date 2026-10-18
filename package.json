@@ -30,6 +30,7 @@
     "licences": "esbuild scripts/deps-check.ts --bundle --platform=node --format=esm --outfile=node_modules/.cache/scripts/deps.mjs --log-level=warning && node node_modules/.cache/scripts/deps.mjs licences",
     "unused": "knip --dependencies",
     "headers:live": "esbuild scripts/headers-check.ts --bundle --platform=node --format=esm --outfile=node_modules/.cache/scripts/headers.mjs --log-level=warning && node node_modules/.cache/scripts/headers.mjs",
+    "branches": "esbuild scripts/branches-check.ts --bundle --platform=node --format=esm --outfile=node_modules/.cache/scripts/branches.mjs --log-level=warning && node node_modules/.cache/scripts/branches.mjs",
     "smoke": "playwright test",
     "look": "playwright test smoke/look.spec.ts smoke/models.spec.ts",
     "look:update": "playwright test smoke/look.spec.ts smoke/models.spec.ts --update-snapshots",
@@ -37,7 +38,7 @@
     "perf": "playwright test smoke/perf.spec.ts",
     "perf:update": "PERF_UPDATE=1 playwright test smoke/perf.spec.ts",
     "check:quick": "sh scripts/quick-check.sh",
-    "check": "npm run --silent check:quick && vitest run --project slow --reporter dot --maxWorkers 50% && npm run --silent licences && npm run --silent unused && npm run --silent fuzz && npm run --silent determinism && npm run --silent leaks:check && npm run --silent pace:check && npm run --silent bench && npm run --silent smoke",
+    "check": "npm run --silent check:quick && vitest run --project slow --reporter dot --maxWorkers 50% && npm run --silent licences && npm run --silent unused && npm run --silent branches && npm run --silent fuzz && npm run --silent determinism && npm run --silent leaks:check && npm run --silent pace:check && npm run --silent bench && npm run --silent smoke",
     "prepare": "git config core.hooksPath .githooks"
   },
   "dependencies": {
