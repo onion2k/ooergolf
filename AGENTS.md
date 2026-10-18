@@ -34,7 +34,7 @@ green by moving its baseline.
 
     npm run dev            the game at http://localhost:5200 (PORT=n for another; the smoke tests take PORT too, 5201 by default)
     git commit             the pre-commit hook: gitleaks over what is staged (gitleaks 8 on the PATH; the hook refuses without it), then check:quick
-    gitleaks git --redact  the whole history scanned for secrets (by hand until CI; clean at 212 commits on 17 October 2026)
+    gitleaks git --redact  the whole history scanned for secrets, by hand before a push (clean at 212 commits on 17 October 2026)
     npm run check:quick    formatting, types and lint side by side, then the quick unit tests (the pre-commit hook; ~28 s)
     npm run check          all of it: check:quick, the slow unit tests, fuzz, determinism, leaks:check, pace:check, bench, smoke (~15 min)
     npm test               every unit test, quick and slow (Vitest, test/)
@@ -54,8 +54,8 @@ green by moving its baseline.
     npm run previews       the start screen's hole pictures and src/previews.json again (when a course changes)
     node scripts/make-icons.mjs     the app's icons from src/title_sq.png (when the picture or the crop changes)
     node scripts/trace-title.mjs    src/titletrace.json from src/title_sq.png (when the picture changes)
-    CI                     none yet: every check runs on this machine only
-    npm run audit          the installed tree's advisories at the threshold under Gates; needs the network, so by hand until CI
+    CI                     none, by choice: every check runs on this machine, before a push
+    npm run audit          the installed tree's advisories at the threshold under Gates; needs the network, so by hand before a push
     npm run licences       every package that ships, its licence on the list under Gates (in check)
     npm run unused         knip: a dependency nothing imports (in check)
     npm run headers:live   the deployed page's response held to the headers' rules (after a deploy; needs the network)
@@ -224,15 +224,17 @@ with `start()` in `smoke/game.ts`; the in-app browser pane pauses when hidden.
 Each of the kit's checks, as surveyed on 17 October 2026, and the order the missing ones are added in, is
 `GUARDRAILS-PLAN.md`; a line here goes as its box is ticked. In short:
 
-- **No CI.** Every check runs on this machine alone, one browser (Chromium) and one GPU; the look pictures are this
-  GPU's, so another machine's are not comparable.
-- **The history's secret scan is by hand** until there is CI to run it on every push; GitHub's own secret scanning and
+- **No CI, by choice** (the user's word, 18 October 2026: the checks run locally before a push). Every check runs on
+  this machine alone, one browser (Chromium) and one GPU, so a green check holds this machine; the look pictures are
+  this GPU's, and another machine's are not comparable. Nothing runs on the remote when a change lands, so the pass is
+  run here before a push.
+- **The history's secret scan is by hand,** `gitleaks git --redact` before a push; GitHub's own secret scanning and
   push protection are on. The code reads no secret, so there is no `.env.example`.
 - **No code scanning.** "A module takes what it needs as arguments" and "lower modules import no content" are held by
   review: lint holds only which side of the game and its picture a module is on.
-- **The audit runs by hand** until CI runs it on every push and on a schedule. This machine's Node is 23.4, which
-  vitest 4 and knip run on but do not list; Node 24 is the supported one.
-- **The deployed headers are read by hand,** with `npm run headers:live` after a deploy, until CI does. The build writes
+- **The audit runs by hand,** `npm run audit` before a push, and on no schedule: an advisory published against a tree
+  that has not changed is seen at the next push, or by Dependabot's security updates.
+- **The deployed headers are read by hand,** with `npm run headers:live` after a deploy. The build writes
   `dist/_headers` (`scripts/headers.ts`), and `smoke/headers.spec.ts` boots the built game under it; that Netlify serves
   the file as written is seen only on the live site.
 - **Frame costs double now and then, on the same code on a quiet machine.** Home Waters' tee read 9.67 ms on the
