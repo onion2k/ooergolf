@@ -24,6 +24,7 @@ import type { HoleDef } from '../src/course';
 import { Game } from '../src/game';
 import { Progress, memoryStore } from '../src/progress';
 import { seeded } from '../src/random';
+import { benchVerdict } from './gates';
 
 const BASELINE = 'scripts/bench-baseline.json';
 /**
@@ -207,14 +208,7 @@ async function main() {
       return;
     }
     const change = now.relative / was.relative - 1;
-    // what the baseline's time comes to on this machine as it is now, for the absolute allowance
-    const expected = was.relative * now.ref;
-    const verdict =
-      change > TOLERANCE && now.ms - expected > SLACK_MS
-        ? 'SLOWER'
-        : change < -TOLERANCE && expected - now.ms > SLACK_MS
-          ? 'faster'
-          : 'within tolerance';
+    const verdict = benchVerdict(now, was, TOLERANCE, SLACK_MS);
     if (verdict === 'SLOWER') slower++;
     console.log(
       `${s.name}: ${line(now)}, ${change >= 0 ? '+' : ''}${(change * 100).toFixed(0)}% on the baseline (${verdict})`,

@@ -22,6 +22,7 @@ import { expect, test } from '@playwright/test';
 import { layoutOf } from '../src/arena';
 import { COURSES } from '../src/course';
 import { bigHole, smallHole } from './bighole';
+import { movedFrom } from '../scripts/gates';
 import { BUDGET } from './budget';
 import { start, watch } from './game';
 
@@ -219,27 +220,12 @@ test('boots, draws and downloads within budget, and as it did before', async ({ 
     } catch {
       throw new Error('no baseline: run npm run perf:update first');
     }
-    const moved: string[] = [];
-    for (const key of [
-      'bootMs',
-      'frameMs',
-      'bundleKb',
-      'imageKb',
-      'beginMs',
-      'bigFrameMs',
-      'linksBeginMs',
-      'linksFrameMs',
-    ] as const) {
-      const was = baseline[key];
-      if (was === undefined) {
-        moved.push(`${key} ${now[key]} (not in the baseline)`);
-        continue;
-      }
-      const [share, slack] = TOLERANCE[key];
-      const out = Math.abs(now[key] - was) > Math.max(Math.abs(was) * share, slack);
-      console.log(`  ${key}: ${was} -> ${now[key]} (${out ? 'MOVED' : 'within tolerance'})`);
-      if (out) moved.push(`${key} ${was} -> ${now[key]}`);
-    }
+    const keys = Object.keys(TOLERANCE) as (keyof typeof TOLERANCE)[];
+    const moved = movedFrom(baseline, now, TOLERANCE, keys);
+    for (const key of keys)
+      console.log(
+        `  ${key}: ${baseline[key]} -> ${now[key]} (${moved.some((m) => m.startsWith(`${key} `)) ? 'MOVED' : 'within tolerance'})`,
+      );
     expect(moved, 'moved from the baseline: if that was meant, npm run perf:update, and say why').toEqual([]);
   }
   expect(now.bootMs, 'boot within budget').toBeLessThanOrEqual(BUDGET.bootMs);

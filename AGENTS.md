@@ -239,7 +239,6 @@ Each of the kit's checks, as surveyed on 17 October 2026, and the order the miss
   build at load 2.7 and 4.62 to 4.97 ms five times after, in this checkout and a fresh worktree alike (17 October 2026);
   eight or so frame-cost smoke tests fail in a full run, and pass when run again. The cause is not found, so a frame
   figure is not trusted from one run, and the smoke run is not seen wholly green.
-- **The bench's and perf's judgements have no unit tests** of their own.
 - **Mutation checks are by hand,** in the work's report, with no tool to record them.
 - **What only a person can judge:** how a course feels to play, a matter of taste in the look, and the limits listed in
   `HOW-IT-WORKS.md`'s _What is not there yet_.
