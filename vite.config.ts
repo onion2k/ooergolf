@@ -7,13 +7,13 @@ import { headersFile, headersFor } from './scripts/headers';
 import { assetsToCache } from './src/offline';
 
 /**
- * Where the two packages actually are: inside node_modules when installed,
+ * Where the three packages actually are: inside node_modules when installed,
  * and a checkout elsewhere on the disk when linked for working on both at
  * once. The dev server has to be allowed to serve from there, and its
  * watcher told not to ignore them.
  */
 const at = (pkg: string) => dirname(createRequire(import.meta.url).resolve(`${pkg}/package.json`));
-const packages = ['artshape-render', 'artshape-physics'];
+const packages = ['artshape-render', 'artshape-physics', 'artshape-sound'];
 
 /** The dev server's port: 5200, or `PORT` from the environment so a worktree built beside this one has a port of its own. */
 const port = Number(process.env.PORT) || 5200;
