@@ -31,8 +31,12 @@ anything a gate holds — the physics, the content, the pace, the look — run
 ## 4. The message
 
 Read the last few of `git log` and match them. A sentence summary in the
-house voice, saying what the game does now that it did not; then a body
-saying what changed and why, in prose, not a list of files. Where a figure
+house voice, saying what the game does now that it did not: a capital to
+start, a full stop to end, and no more than a hundred characters, which the
+`commit-msg` hook holds (count it before committing; the summaries before
+17 October 2026 often run longer and have no stop, and are not the model
+for these two). Then a blank line, and a body saying what changed and why,
+in prose, not a list of files. Where a figure
 moved, the body says from what to what and why. Where something is still
 open, the body says so.
 
