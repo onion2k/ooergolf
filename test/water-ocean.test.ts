@@ -53,7 +53,10 @@ function hashOf(m: Model): string {
   for (const part of [...m.parts, ...m.moving]) {
     h.update(part.name);
     h.update(Buffer.from(part.mesh.positions.buffer, part.mesh.positions.byteOffset, part.mesh.positions.byteLength));
-    h.update(JSON.stringify([part.material, part.pattern ?? null]));
+    // the material as the renderer is handed it, float32: its colours are worked out with Math.pow, whose last bit the
+    // language leaves to the engine (Node 23 and 24 differ in it on one colour here), and which float32 does not keep
+    h.update(Buffer.from(Float32Array.from(part.material).buffer));
+    h.update(JSON.stringify(part.pattern ?? null));
   }
   return h.digest('hex').slice(0, 16);
 }
@@ -125,9 +128,10 @@ describe('open water', () => {
     expect(surfaceOf(waterBed(CELLS, 3)).pattern?.kind).toBe(PATTERN.ripple);
     expect(surfaceOf(waterBed(CELLS, 3)).material.slice(0, 3)).toEqual(PALETTE.water.slice(0, 3));
     expect(surfaceOf(streamBed(CELLS, 3)).pattern?.kind).toBe(PATTERN.marbling);
-    // hashed from the beds as they were on main, before there was a look to choose
-    expect(hashOf(waterBed(CELLS, 3))).toBe('2c888d337423dc18');
-    expect(hashOf(streamBed(CELLS, 3, { seed: 5 }))).toBe('bfafe386631712ce');
+    // hashed from the beds as they were on main, before there was a look to choose; hashed again on 18 October 2026 with
+    // the material as float32, the old hashes passing on the same code under Node 23 just before, and these under 23 and 24
+    expect(hashOf(waterBed(CELLS, 3))).toBe('7babc6518fc94784');
+    expect(hashOf(streamBed(CELLS, 3, { seed: 5 }))).toBe('0eae6855f3e54525');
   });
 });
 

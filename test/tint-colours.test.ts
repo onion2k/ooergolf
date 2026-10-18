@@ -25,9 +25,25 @@ const bytesOf = steadyBytes;
 /** A group's mesh as bytes: where it is, which way it faces and how it is cut. */
 const meshHash = (g: GameGroup) =>
   [g.mesh.positions, g.mesh.normals, g.mesh.indices].reduce((x, a) => fnv(bytesOf(a), x), 2166136261);
-/** A group's look, as numbers: its colour, its roughness and its pattern and texture as the renderer is handed them. */
+/**
+ * A group's look as bytes: its colour, its roughness, its pattern and texture and its count as the renderer is handed
+ * them, each optional part led by its length, the floats steadied as the meshes are. The colours are worked out with
+ * `Math.pow`, whose last bit Node 23 and 24 differ in (18 October 2026), which float64 text kept and the GPU never sees.
+ */
 const lookOf = (g: GameGroup) =>
-  JSON.stringify([g.albedo, g.roughness, g.patterns && [...g.patterns], g.texture && [...g.texture], g.count]);
+  bytesOf(
+    Float64Array.from([
+      g.albedo ? 3 : 0,
+      ...(g.albedo ?? []),
+      g.roughness === undefined ? 0 : 1,
+      g.roughness ?? 0,
+      g.patterns?.length ?? -1,
+      ...(g.patterns ?? []),
+      g.texture?.length ?? -1,
+      ...(g.texture ?? []),
+      g.count ?? -1,
+    ]),
+  );
 
 /** How far a group's mesh reaches across, in its first coordinate. */
 const extent = (g: GameGroup) => {
@@ -56,13 +72,13 @@ function drawn(course: string, hole: number) {
   return { groups: new Scene().static(layout, h.name), layout };
 }
 
-/** The hashes of what a golf hole's static groups hold, written from a3c39d3; the meshes' written again on 10 October 2026 from d918912 unchanged, when they came to be taken over steadied bytes (`steady.ts`), since the raw bytes, written on a Mac, differed on Linux in a last bit of the minigolf ponds' stones. The two golf holes' were written again the same day when the golf hole's two rail groups, which have no triangles, stopped being made (the GPU warned of a draw of nothing): a group of no triangles is left out of the hash. The two golf holes' meshes written again on 16 October 2026 when the banks came to be smoothed along their run (`BANKS.smooth`), which moves the ground every group stands on; their colours did not move. */
+/** The hashes of what a golf hole's static groups hold, written from a3c39d3; the meshes' written again on 10 October 2026 from d918912 unchanged, when they came to be taken over steadied bytes (`steady.ts`), since the raw bytes, written on a Mac, differed on Linux in a last bit of the minigolf ponds' stones. The two golf holes' were written again the same day when the golf hole's two rail groups, which have no triangles, stopped being made (the GPU warned of a draw of nothing): a group of no triangles is left out of the hash. The two golf holes' meshes written again on 16 October 2026 when the banks came to be smoothed along their run (`BANKS.smooth`), which moves the ground every group stands on; their colours did not move. The colours written again on 18 October 2026 when they came to be taken over steadied bytes too, since Node 24 gave one a last bit Node 23 did not; the old hashes passed under Node 23 on the same code just before, and these under 23 and 24. */
 const AT_MAIN = {
-  'The Meadow/0': { meshes: 2351288662, looks: 2200126830 },
-  'The Pinball Shed/0': { meshes: 3193777536, looks: 3808239087 },
-  'The Waterworks/0': { meshes: 1616752155, looks: 3638244723 },
-  'The Links/0': { meshes: 307897204, looks: 79908569, tintedMeshes: 3463851149 },
-  'The Isles/1': { meshes: 570720841, looks: 2508287545, tintedMeshes: 3505977887 },
+  'The Meadow/0': { meshes: 2351288662, looks: 1662367848 },
+  'The Pinball Shed/0': { meshes: 3193777536, looks: 1995808509 },
+  'The Waterworks/0': { meshes: 1616752155, looks: 4277377434 },
+  'The Links/0': { meshes: 307897204, looks: 1729823911, tintedMeshes: 3463851149 },
+  'The Isles/1': { meshes: 570720841, looks: 572058714, tintedMeshes: 3505977887 },
 } as Record<string, { meshes: number; looks: number; tintedMeshes?: number }>;
 
 describe('what the banks tint leaves as it was', () => {
@@ -73,7 +89,7 @@ describe('what the banks tint leaves as it was', () => {
       const { groups } = drawn(course, Number(hole));
       const kept = groups.filter((g) => g.mesh.indices.length > 0 && (!tinted(g) || want.tintedMeshes === undefined));
       const meshes = kept.reduce((x, g) => Math.imul(x ^ meshHash(g), 16777619) >>> 0, 2166136261);
-      const looks = fnv(new TextEncoder().encode(kept.map(lookOf).join('\n')));
+      const looks = kept.reduce((x, g) => fnv(lookOf(g), x), 2166136261);
       if (process.env.TINT_PRINT) console.log(key, JSON.stringify({ meshes, looks }));
       expect(meshes, 'the meshes').toBe(want.meshes);
       expect(looks, 'the colours').toBe(want.looks);
