@@ -4,7 +4,7 @@
  * package's to hold and is heard in the smoke tests; its Player and Ambience are the real ones, driven over the stand-in.
  * What is held: the golf sounds are sounds the package takes, cheap enough to load one a frame; they load one a step,
  * the first shot's first, and none is played before it is loaded; each event plays the sounds it should, as loud as it
- * should; the music moves only while a menu is up, and the ambience only on the course; and the setting goes in and
+ * should; the music moves only while a menu is up; and the setting goes in and
  * comes out unchanged, kept while there is no context.
  */
 import { checkLayered, renderLayered } from 'artshape-sound/layers';
@@ -18,7 +18,7 @@ interface Asked {
   pitch: number;
   later: boolean;
 }
-const asked = vi.hoisted(() => ({ loads: [] as string[], plays: [] as Asked[], loops: 0, made: [] as unknown[] }));
+const asked = vi.hoisted(() => ({ loads: [] as string[], plays: [] as Asked[], made: [] as unknown[] }));
 
 vi.mock('artshape-sound/audio', async (real) => ({
   // the package's constants, which its player reads, are the real ones
@@ -28,7 +28,6 @@ vi.mock('artshape-sound/audio', async (real) => ({
     muted: boolean;
     time = 10;
     voices = 0;
-    loops = 0;
     private readonly names = new Set<string>();
     constructor(options: { volume?: number; muted?: boolean }) {
       asked.made.push(options);
@@ -44,18 +43,6 @@ vi.mock('artshape-sound/audio', async (real) => ({
       if (!this.names.has(name)) throw new Error(`no sound named "${name}"`);
       asked.plays.push({ name, gain: options.gain ?? 1, pitch: options.pitch ?? 1, later: options.at !== undefined });
       this.voices++;
-    }
-    loop(name: string) {
-      if (!this.names.has(name)) throw new Error(`no sound named "${name}"`);
-      asked.loops++;
-      this.loops++;
-      return {
-        stop: () => {
-          this.loops--;
-        },
-        gain: 1,
-        playing: true,
-      };
     }
     resume() {
       return Promise.resolve();
@@ -81,7 +68,6 @@ const names = () => asked.plays.map((p) => p.name);
 beforeEach(() => {
   asked.loads.length = 0;
   asked.plays.length = 0;
-  asked.loops = 0;
   asked.made.length = 0;
 });
 
@@ -119,8 +105,10 @@ describe('the game sound', () => {
     expect(asked.loads).toEqual(['putt', 'strike-iron', 'strike-wood', 'strike-wedge']);
     while (sound.state.loaded < sound.state.queued) sound.step(1 / 60, true);
     // the music's player loads its voices when it is made, in that last step
-    expect(asked.loads.slice(0, 16)).toContain('wind');
-    expect(asked.loads.slice(16).every((n) => n.startsWith('song'))).toBe(true);
+    expect(asked.loads.slice(0, 14)).toContain('applause');
+    expect(asked.loads.slice(14).every((n) => n.startsWith('song'))).toBe(true);
+    // the place's own sounds, which nothing seen answered, are gone
+    expect(asked.loads.filter((n) => n === 'wind' || n === 'birds')).toEqual([]);
     const all = asked.loads.length;
     sound.step(1 / 60, true);
     expect(asked.loads.length, 'nothing is loaded twice').toBe(all);
@@ -128,16 +116,16 @@ describe('the game sound', () => {
 
   it('loads a sound dear to load only while the screen is still, and the cheap ones after it meanwhile', () => {
     const sound = made();
-    // the ball rolling: the strikes, the splash, the applause, the bell, the wind and the music wait
+    // the ball rolling: the strikes, the splash, the applause, the bell and the music wait
     for (let k = 0; k < 40; k++) sound.step(1 / 60, false);
-    const dear = ['strike-iron', 'strike-wood', 'strike-wedge', 'splash', 'applause', 'bell', 'wind'];
+    const dear = ['strike-iron', 'strike-wood', 'strike-wedge', 'splash', 'applause', 'bell'];
     expect(asked.loads.filter((n) => dear.includes(n))).toEqual([]);
     expect(asked.loads.some((n) => n.startsWith('song'))).toBe(false);
-    expect(sound.state.loaded).toBe(sound.state.queued - 8);
+    expect(sound.state.loaded).toBe(sound.state.queued - 7);
     // at rest, one a step, in their order
     sound.step(1 / 60, true);
     expect(asked.loads.at(-1)).toBe('strike-iron');
-    for (let k = 0; k < 7; k++) sound.step(1 / 60, true);
+    for (let k = 0; k < 6; k++) sound.step(1 / 60, true);
     expect(sound.state.loaded).toBe(sound.state.queued);
   });
 
@@ -238,28 +226,6 @@ describe('the game sound', () => {
     sound.setMusic(false);
     for (let k = 0; k < 60; k++) sound.step(1 / 60, true);
     expect(sound.state.beat).toBe(beat);
-  });
-
-  it('starts the wind and birds on the course, as loud as the hole is windy, and stops them off it', () => {
-    const sound = made();
-    // asked for before the wind is loaded: it starts once it is
-    sound.setAmbience(true, 15);
-    while (sound.state.loaded < sound.state.queued) sound.step(1 / 60, true);
-    for (let k = 0; k < 10; k++) sound.step(1 / 60, true);
-    expect(sound.state.loops).toBe(1);
-    sound.setAmbience(false, 15);
-    expect(sound.state.loops).toBe(0);
-    sound.setAmbience(true, 4);
-    for (let k = 0; k < 10; k++) sound.step(1 / 60, true);
-    expect(sound.state.loops).toBe(1);
-    // the birds call now and then, on the course and not off it
-    asked.plays.length = 0;
-    for (let k = 0; k < 60 * 30; k++) sound.step(1 / 60, true);
-    expect(names().filter((n) => n === 'birds').length).toBeGreaterThan(0);
-    sound.setAmbience(false, 4);
-    asked.plays.length = 0;
-    for (let k = 0; k < 60 * 30; k++) sound.step(1 / 60, true);
-    expect(names()).toEqual([]);
   });
 
   it('takes the save’s volume and mute, and hands them back', () => {

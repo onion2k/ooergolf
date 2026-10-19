@@ -2,7 +2,8 @@
  * The sound is a package of its own, artshape-sound, which knows nothing of golf: a layered sound is a list of numbers,
  * a song a tempo and a pattern, and what the game hears is whichever it asks for by name. This is the game's side of it:
  * the golf sounds (a club meeting the ball, a putt, a ball landing, the cup), the stock ones it takes as they are (wood,
- * a marimba, a bell, a splash, applause, wind and birds), the menus' music and the course's ambience. Everything the
+ * a marimba, a bell, a splash and applause) and the menus' music. Each sound answers something the player sees happen: a
+ * place with no sound of its own (wind, birds) was tried and taken out, since nothing seen told what it was. Everything the
  * game makes a noise with goes through here, so the package stays behind one door, and a change it needs goes in its own
  * repo with a version bump here. It knows nothing of the page: the context, the first gesture and the buttons are
  * main.ts's.
@@ -12,11 +13,10 @@
  * is dear to make and silent until a gesture anyway, so the `GameSound` is made when the player first acts, and until
  * then the save's mute and volume are kept here. Without it the boot gate would measure a cost the player never waits on.
  */
-import { Ambience } from 'artshape-sound/ambience';
-import { Audio, type LoadOptions } from 'artshape-sound/audio';
+import { Audio } from 'artshape-sound/audio';
 import type { Layered } from 'artshape-sound/layers';
 import { Player } from 'artshape-sound/player';
-import { applause, bell, birds, marimba, splash, wind, wood, WIND_SECONDS } from 'artshape-sound/sounds';
+import { applause, bell, marimba, splash, wood } from 'artshape-sound/sounds';
 import { lounge } from 'artshape-sound/songs';
 import { isWedge, isWood, type BagClub } from './bag';
 
@@ -197,20 +197,19 @@ export const GOLF = {
  * One load: a sound, or the menus' song (`sound` none), whose player loads its voices when it is made. A `dear` one is
  * loaded only while the screen is still, a menu up or the ball at rest, so the frame it costs is one nobody sees move.
  * Dear are those that took 4 ms or more to load in headless Chromium on 18 October 2026, against a frame's budget of 6:
- * the splash 5, the applause 6, the menus' music 8, the wind's loop 10, the bell 3.6 to 4.8, and the first strike to load
+ * the splash 5, the applause 6, the menus' music 8, the bell 3.6 to 4.8, and the first strike to load
  * 3.8 to 5.3, whichever it was (the strikes are dear in any case at no cost: a ball is struck only at rest). What loads
  * while the ball moves took 3.8 ms at most, the first of them, which pays the browser's warm-up.
  */
 interface Load {
   name: string;
   sound?: Layered;
-  options?: LoadOptions;
   dear?: boolean;
 }
 
 /**
  * The order the sounds are loaded in, one a step: what the first shot needs first, the cup and the losses next, and the
- * ambience and the music, which can wait a moment, last. A dear one waits for a still screen, and the cheap ones after it
+ * music, which can wait a moment, last. A dear one waits for a still screen, and the cheap ones after it
  * go on loading meanwhile.
  */
 const QUEUE: readonly Load[] = [
@@ -228,17 +227,12 @@ const QUEUE: readonly Load[] = [
   { name: 'spring', sound: GOLF.spring },
   { name: 'applause', sound: applause, dear: true },
   { name: 'bell', sound: bell, dear: true },
-  { name: 'birds', sound: birds },
-  { name: 'wind', sound: wind, options: { loop: WIND_SECONDS }, dear: true },
   { name: 'music', dear: true },
 ];
 
 /** The marimba is rendered at C5; a note is played by bending it, and the MIDI numbers here say which. */
 const C5 = 72;
 const bend = (note: number) => 2 ** ((note - C5) / 12);
-
-/** The strongest wind of any hole, in the course files' own units: the ambience's bed is loudest there. */
-const STRONGEST_WIND = 15;
 
 export interface SoundOptions {
   /** The page's own AudioContext, so that which one the browser has is the page's to say. */
@@ -257,10 +251,8 @@ export interface SoundState {
   awake: boolean;
   muted: boolean;
   volume: number;
-  /** Sounds playing now, the music's notes among them; the loops (the wind) are not voices. */
+  /** Sounds playing now, the music's notes among them. */
   voices: number;
-  /** Loops playing now: the wind's bed, while the ambience is on. */
-  loops: number;
   /** Of the sounds to load, how many are, and how many there are. */
   loaded: number;
   queued: number;
@@ -271,9 +263,8 @@ export interface SoundState {
   loadMs: Record<string, number>;
   /** Where the menus' music is, in beats from its start: it moves only while a menu is up and the game is stepped. */
   beat: number;
-  /** Whether the menus' music and the course's ambience are asked for now. */
+  /** Whether the menus' music is asked for now. */
   music: boolean;
-  ambience: boolean;
 }
 
 export class GameSound {
@@ -287,10 +278,7 @@ export class GameSound {
   private slowestName = '';
   private readonly took: Record<string, number> = {};
   private player: Player | null = null;
-  private place: Ambience | null = null;
   private musicOn = false;
-  private ambienceOn = false;
-  private windy = 0;
 
   constructor({ context, random, volume, muted, now }: SoundOptions) {
     this.audio = new Audio({ context, random, volume, muted });
@@ -307,17 +295,13 @@ export class GameSound {
     const started = this.now?.() ?? 0;
     if (!load.sound) this.player = new Player(this.audio, lounge);
     else {
-      this.audio.load(load.name, load.sound, load.options);
+      this.audio.load(load.name, load.sound);
       this.loaded.add(load.name);
     }
     const took = this.now ? this.now() - started : 0;
     const { name } = load;
     this.took[name] = took;
     if (took > this.slowest) [this.slowest, this.slowestName] = [took, name];
-    if (this.loaded.has('wind') && this.loaded.has('birds') && !this.place) {
-      this.place = new Ambience(this.audio, { random: this.random, bed: 'wind', calls: ['birds'], callGain: 0.6 });
-      this.setAmbience(this.ambienceOn, this.windy);
-    }
   }
 
   /** A sound, if it is loaded yet, a hair higher or lower each time, so a repeat is not the same twice. */
@@ -380,21 +364,10 @@ export class GameSound {
     this.musicOn = on;
   }
 
-  /** The course's wind and birds wanted or not, the wind as loud as the hole's (`wind`, in the course files' units). */
-  setAmbience(on: boolean, wind: number) {
-    this.ambienceOn = on;
-    this.windy = wind;
-    if (!this.place) return;
-    this.place.intensity = 0.25 + 0.75 * Math.min(1, Math.max(0, wind) / STRONGEST_WIND);
-    if (on) this.place.start();
-    else this.place.stop();
-  }
-
-  /** On by `dt` seconds of game time: a sound loaded (a dear one only if the screen is `still`), the music if a menu is up, and the ambience. */
+  /** On by `dt` seconds of game time: a sound loaded (a dear one only if the screen is `still`), and the music if a menu is up. */
   step(dt: number, still: boolean) {
     this.loadOne(still);
     if (this.musicOn) this.player?.step(dt);
-    this.place?.step(dt);
   }
 
   /** Start the context, on the first gesture: a browser keeps it suspended until one. */
@@ -423,7 +396,6 @@ export class GameSound {
       muted: this.audio.muted,
       volume: this.audio.volume,
       voices: this.audio.voices,
-      loops: this.audio.loops,
       loaded: this.done.size,
       queued: QUEUE.length,
       slowestLoadMs: this.slowest,
@@ -431,7 +403,6 @@ export class GameSound {
       loadMs: { ...this.took },
       beat: this.player?.beat ?? 0,
       music: this.musicOn,
-      ambience: this.ambienceOn,
     };
   }
 }
@@ -446,14 +417,13 @@ export interface LazySoundOptions {
 
 /**
  * The game's sound, made on the first gesture; before it, every sound is a silence and the setting is only kept. What
- * the page asks for meanwhile (the music, the ambience) is kept too, and handed to the sound when it is made.
+ * the page asks for meanwhile (the music) is kept too, and handed to the sound when it is made.
  */
 export class LazySound {
   private sound: GameSound | null = null;
   private muteSetting: boolean;
   private volumeSetting: number;
   private music = false;
-  private ambience: [boolean, number] = [false, 0];
   private readonly make: LazySoundOptions['make'];
 
   constructor({ volume, muted, make }: LazySoundOptions) {
@@ -472,7 +442,6 @@ export class LazySound {
     if (this.sound) return;
     this.sound = this.make({ volume: this.volumeSetting, muted: this.muteSetting });
     this.sound.setMusic(this.music);
-    this.sound.setAmbience(...this.ambience);
     // the browser may refuse to start it from what it does not count as a gesture: the page tries again at the next
     this.sound.resume().catch(() => undefined);
     // the first sound loaded at once, the putt, so that a first gesture that is a putt is heard
@@ -510,12 +479,6 @@ export class LazySound {
     this.sound?.setMusic(on);
   }
 
-  setAmbience(on: boolean, wind: number) {
-    if (on === this.ambience[0] && wind === this.ambience[1]) return;
-    this.ambience = [on, wind];
-    this.sound?.setAmbience(on, wind);
-  }
-
   step(dt: number, still: boolean) {
     this.sound?.step(dt, still);
   }
@@ -543,7 +506,6 @@ export class LazySound {
       muted: this.muteSetting,
       volume: this.volumeSetting,
       voices: 0,
-      loops: 0,
       loaded: 0,
       queued: QUEUE.length,
       slowestLoadMs: 0,
@@ -551,7 +513,6 @@ export class LazySound {
       loadMs: {},
       beat: 0,
       music: this.music,
-      ambience: this.ambience[0],
     };
     return { awake: this.awake, ...(this.sound?.state ?? kept) };
   }

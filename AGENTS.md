@@ -171,8 +171,9 @@ For anything new, check what it does:
   overhead view fitted to the hole, desk and phone, and left to the view as it was
 - **the career:** in an event, in practice and in free play; a fee refused; a reload mid-event
 - **the sound:** before the first gesture (no context, a silence), while the ball moves (only a sound cheap to load is
-  loaded, one a frame; a dear one waits for a still screen), heard once an event, under a menu (the music) and on a golf
-  hole (the wind and birds), muted and at every volume, and kept in the save across a reload; its controls on a desk (the
+  loaded, one a frame; a dear one waits for a still screen), heard once an event and only for something seen (a place's own
+  sound, wind and birds, was taken out on 19 October 2026 for want of anything seen to tell what it was), under a menu
+  (the music), muted and at every volume, and kept in the save across a reload; its controls on a desk (the
   speaker by the flag, M, the start screen's switch and slider) and a phone (the speaker beside the Shop alone), at 320 px
 
 ## Gates
@@ -257,11 +258,11 @@ Each of the kit's checks, as surveyed on 17 October 2026, and the order the miss
   frame figure is taken as it comes. A burst from another process far shorter than a long timing is averaged over the
   window, so a long test can let a short one through.
 - **Whether the sound is good** is heard, not tested: the tests read what was asked of the package (the event log's
-  `sound …` lines, the voices, the loops, what loaded), never what came out of the speakers. Only Chromium's Web Audio is
+  `sound …` lines, the voices, what loaded), never what came out of the speakers. Only Chromium's Web Audio is
   run, with its autoplay rule lifted; the rule a player meets is held only as far as no context being made before a
-  gesture. The sound's ceilings (16 voices, one loop, one load a sound) are in `smoke/sound.spec.ts` and not
+  gesture. The sound's ceilings (16 voices and one load a sound) are in `smoke/sound.spec.ts` and not
   `scripts/leaks.ts`, which plays in node, where there is no AudioContext. A game paused by the test API stops the music's
-  and the birds' steps but not the wind's loop, which runs on the audio clock; a page out of sight suspends the context.
+  steps, and its notes already handed over play out; a page out of sight suspends the context.
 - **Mutation checks are by hand,** in the work's report, with no tool to record them.
 - **What only a person can judge:** how a course feels to play, a matter of taste in the look, and the limits listed in
   `HOW-IT-WORKS.md`'s _What is not there yet_.

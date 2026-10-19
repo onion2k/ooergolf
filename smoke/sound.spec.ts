@@ -1,8 +1,9 @@
 /**
  * The sound in a real browser, read through the test API, since what is heard cannot be: nothing made before the first
  * gesture, which makes the context and loads the sounds a frame at a time; each event the game tells of heard once, as
- * the event log says (a stroke by its club, a landing, a knock, the cup, the water); the music under a menu and the wind
- * on a golf hole, each moving only while the game steps; and the speaker button, the M key and the start screen's slider,
+ * the event log says (a stroke by its club, a landing, a knock, the cup, the water); the music under a menu, moving only
+ * while the game steps, and nothing on the course that no seen thing answers; and the speakers, the M key and the start
+ * screen's switch and slider,
  * kept in the save across a reload, from a save that has the setting, one that lacks it and one with it wrong.
  *
  * Played paused and stepped, as the other smoke tests are. Playwright's Chromium is started with the autoplay rule
@@ -60,7 +61,7 @@ test('the first gesture makes the sound and loads it a frame at a time, and a pu
   ]);
 
   // then one sound a frame, never two, and while the ball rolls only those cheap to load: the dear ones wait for it to rest
-  const DEAR = ['strike-iron', 'strike-wood', 'strike-wedge', 'splash', 'applause', 'bell', 'wind', 'music'];
+  const DEAR = ['strike-iron', 'strike-wood', 'strike-wedge', 'splash', 'applause', 'bell', 'music'];
   let loaded = woken.loaded;
   let names: string[] = [];
   for (let f = 0; f < 1200; f++) {
@@ -140,9 +141,7 @@ test('a ball holed is heard once, and a ball into water once', async ({ page }) 
   expect(count(lines, /^sound splash$/)).toBe(count(lines, /^splash /));
 });
 
-test('on a golf hole the club strikes as it is, the landing thuds, and the wind blows; the menus have music', async ({
-  page,
-}) => {
+test('on a golf hole the club strikes as it is and the landing thuds; the menus have music', async ({ page }) => {
   await start(page, { seed: 2, paused: true, screen: true });
   await page.evaluate(() => {
     window.game!.wake();
@@ -150,7 +149,7 @@ test('on a golf hole the club strikes as it is, the landing thuds, and the wind 
   });
   // the start screen is a menu: the music plays while the game steps
   const before = await sound(page);
-  expect(before).toMatchObject({ music: true, ambience: false });
+  expect(before).toMatchObject({ music: true });
   await page.evaluate(() => window.game!.step(120));
   const beat = (await sound(page)).beat;
   expect(beat).toBeGreaterThan(before.beat);
@@ -158,7 +157,9 @@ test('on a golf hole the club strikes as it is, the landing thuds, and the wind 
   await page.evaluate(() => window.game!.chooseCourse('The Links'));
   await page.evaluate(() => window.game!.step(30));
   const course = await sound(page);
-  expect(course).toMatchObject({ music: false, ambience: true, loops: 1 });
+  expect(course).toMatchObject({ music: false });
+  // the wind and the birds were taken out on 19 October 2026: nothing seen told what they were
+  expect(Object.keys(course.loadMs).filter((n) => n === 'wind' || n === 'birds')).toEqual([]);
   await page.evaluate(() => window.game!.step(120));
   expect((await sound(page)).beat, 'the music waits under the course').toBe(course.beat);
 
@@ -174,10 +175,10 @@ test('on a golf hole the club strikes as it is, the landing thuds, and the wind 
   // the shop is a menu too
   await page.click('#shopOpen');
   await page.evaluate(() => window.game!.step(2));
-  expect(await sound(page)).toMatchObject({ music: true, ambience: false, loops: 0 });
+  expect(await sound(page)).toMatchObject({ music: true });
   await page.click('#shopClose');
   await page.evaluate(() => window.game!.step(2));
-  expect(await sound(page)).toMatchObject({ music: false, ambience: true });
+  expect(await sound(page)).toMatchObject({ music: false });
 });
 
 test('the speaker button, the M key and the slider set the sound, and a reload keeps it', async ({ page }) => {
@@ -225,8 +226,8 @@ test('a save without the setting plays at full volume, and one with it wrong tak
   }
 });
 
-test('what the sound keeps stays bounded over many holes: the voices, the loops and the loads', async ({ page }) => {
-  // the ceilings: the package's voice pool (16), one loop (the wind) and one load a sound; scripts/leaks.ts plays the game
+test('what the sound keeps stays bounded over many holes: the voices and the loads', async ({ page }) => {
+  // the ceilings: the package's voice pool (16) and one load a sound; scripts/leaks.ts plays the game
   // in node, where there is no AudioContext, so the sound's ceilings are held here, in the browser, over a course
   await start(page, { seed: 5, paused: true });
   await page.evaluate(() => {
@@ -243,16 +244,13 @@ test('what the sound keeps stays bounded over many holes: the voices, the loops 
       await holeOut(page);
       const now = await sound(page);
       expect(now.voices, `${name} ${hole + 1}`).toBeLessThanOrEqual(16);
-      expect(now.loops).toBeLessThanOrEqual(1);
       expect(Object.keys(now.loadMs).length).toBeLessThanOrEqual(now.queued);
       await events(page);
     }
   }
 });
 
-test('a page out of sight stops the sound, the wind with it, and it comes back when the page is seen', async ({
-  page,
-}) => {
+test('a page out of sight stops the sound, and it comes back when the page is seen', async ({ page }) => {
   await start(page, { seed: 2, paused: true });
   await page.evaluate(() => {
     window.game!.wake();

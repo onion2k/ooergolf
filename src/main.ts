@@ -312,7 +312,8 @@ async function main() {
       }),
   });
   const wake = () => sound.wake();
-  // a page out of sight has no frames, and the wind's loop would blow on by the audio clock: the context waits with it
+  // a page out of sight has no frames, and the notes already handed over would play on by the audio clock: the context
+  // waits with it
   document.addEventListener('visibilitychange', () => {
     if (audioContext) (document.hidden ? audioContext.suspend() : audioContext.resume()).catch(() => undefined);
   });
@@ -1763,11 +1764,10 @@ async function main() {
       if (titled.scene.landed) hud.releaseStart();
     }
     played.step(dt);
-    // after the game, so that a game that is not stepping has no music and no ambience: the music under a menu, and on a
-    // golf hole being played the wind as strong as the hole's and the birds; a sound loaded a step until all are
+    // after the game, so that a game that is not stepping has no music: the music under a menu, and a sound loaded a step
+    // until all are
     const menus = hud.inMenus;
     sound.setMusic(menus);
-    sound.setAmbience(!menus && titled === null && played.layout.golf, played.wind.speed);
     // a sound that is dear to load waits for a still screen: a menu up, or the ball at rest
     sound.step(dt, menus || played.ready);
     // the step may have begun a hole that could not be drawn: the rest of the frame is of a hole no one sees

@@ -72,8 +72,8 @@ that is itself an island, and sand everywhere. The Old Course is the hardest, lo
 a lake to carry, a wood with a lane, ground that runs, sand, a pond on the line.
 
 Every shot is heard: the club meeting the ball (a wood's ping, an iron's click), the ball landing and hopping, a knock off a
-rail, the rattle of the cup and a run up a marimba as good as the score, polite applause for a birdie. A golf hole has its
-wind and birds, and the menus have music. On a desk the speaker beside the flag, the M key or the start screen's switch turns
+rail, the rattle of the cup and a run up a marimba as good as the score, polite applause for a birdie: every sound answers something
+you see happen, and the menus have music. On a desk the speaker beside the flag, the M key or the start screen's switch turns
 it off, and the start screen has its volume; on a phone the speaker is beside the Shop, and the phone's own buttons set the
 volume. Both are kept. None of it is a file: every sound is made from numbers when the game starts, by
 [artshape-sound](https://github.com/onion2k/artshape-sound).
@@ -122,7 +122,7 @@ fixed, and no baseline is moved to make it green.
     src/game.ts        the game without the picture
     src/main.ts        the page: events into words, the frame drawn
     src/debug.ts       window.game, the test API
-    src/sound.ts       what is heard: the golf sounds, the music and the wind, through artshape-sound
+    src/sound.ts       what is heard: the golf sounds and the music, through artshape-sound
     src/invariants.ts  what must always hold
     src/course.ts      the courses, and their holes: a map, a par, what moves on each, and its slopes
     src/shed.ts        The Pinball Shed: nine hand-drawn holes of banks, kickers, bumpers and a flipper
