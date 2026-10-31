@@ -24,7 +24,7 @@ export const DESERT = {
   scrub: shown(0.66, 0.6, 0.32),
   tuft: shown(0.84, 0.72, 0.4),
   mesa: shown(0.72, 0.4, 0.26),
-  weed: shown(0.8, 0.64, 0.38),
+  weed: shown(0.55, 0.36, 0.18),
   rock: shown(0.7, 0.42, 0.28),
 } as const;
 
@@ -56,8 +56,8 @@ function column(f: CactusFigures, seed: number, flower: readonly [number, number
   const turn = random() * Math.PI * 2;
   // an arm's elbow and top, as shares of the canopy's height above its base, and how thick it is as a share of the stem
   const arms = [
-    { side: 0, elbow: 0.09, top: 0.36, thick: 0.68 },
-    { side: 1, elbow: 0.25, top: 0.51, thick: 0.6 },
+    { side: 0, elbow: 0.09, top: 0.36, thick: 0.78 },
+    { side: 1, elbow: 0.25, top: 0.51, thick: 0.68 },
   ].map((a) => ({ ...a, turn: turn + a.side * Math.PI + (random() - 0.5) * 0.5 }));
   const cactus = built((b) => {
     const stem = at(0, 0, 0, turn);
@@ -83,7 +83,7 @@ function column(f: CactusFigures, seed: number, flower: readonly [number, number
     }
   });
   const bloom = built((b) => {
-    const k = H * 0.027;
+    const k = H * 0.04;
     lump(b, at(0, 0, H - 0.75 * k, turn), seeded(seed + 3), 2, 5, [k, k, 0.75 * k], { give: 0.1 });
   });
   return {
@@ -111,7 +111,7 @@ export function golfCactus(f: CactusFigures, { seed = 1 } = {}): Model {
  */
 export function saguaro(height: number, { seed = 1 } = {}): Model {
   const m = column(
-    { trunk: (0.8 * height) / 15, base: height / 3, radius: (3.5 * height) / 15, apex: height },
+    { trunk: (1.1 * height) / 15, base: height / 3, radius: (5 * height) / 15, apex: height },
     seed,
     DESERT.bloom,
   );
@@ -205,7 +205,7 @@ export function tumbleweed(r: number): Model {
       for (let i = 0; i < n; i++) {
         const a0 = (i / n) * Math.PI * 2,
           a1 = ((i + 1) / n) * Math.PI * 2;
-        rod(b, frame(Math.cos(a0) * r, Math.sin(a0) * r), frame(Math.cos(a1) * r, Math.sin(a1) * r), r * 0.07, 3);
+        rod(b, frame(Math.cos(a0) * r, Math.sin(a0) * r), frame(Math.cos(a1) * r, Math.sin(a1) * r), r * 0.13, 3);
       }
     };
     hoop((x, y) => [x, y, 0]);

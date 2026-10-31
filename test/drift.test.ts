@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { TILE } from '../src/arena';
-import { DRIFT, tumbleweedAt, tumbleweedCount } from '../src/drift';
+import { DRIFT, driftRing, tumbleweedAt, tumbleweedCount } from '../src/drift';
 import { golfGame, levelHole } from './helpers';
 
 const WAYS: [number, number][] = [
@@ -19,11 +19,11 @@ describe('a tumbleweed’s place', () => {
   const { game } = golfGame(levelHole({ name: 'drift', par: 3, length: 150, biome: 'desert' }));
   const layout = game.layout;
   const centre = [layout.originX + (layout.cols * TILE) / 2, layout.originY + (layout.rows * TILE) / 2];
-  const reach = Math.hypot(layout.cols * TILE, layout.rows * TILE) / 2 + DRIFT.reach;
+  const reach = driftRing(layout);
 
   it('is a few for a hole, the same few every time', () => {
     expect(tumbleweedCount(layout)).toBe(DRIFT.count);
-    expect(DRIFT.count).toBeGreaterThanOrEqual(3);
+    expect(DRIFT.count).toBe(6);
     expect(DRIFT.count).toBeLessThanOrEqual(8);
   });
 
@@ -80,5 +80,27 @@ describe('a tumbleweed’s place', () => {
     // asked with the wind still, it still goes (the page gives a still wind a direction of its own)
     const p = tumbleweedAt(layout, 'drift', 0, 10, [0, 0]);
     expect(Number.isFinite(p.x)).toBe(true);
+  });
+});
+
+describe('a tumbleweed in view', () => {
+  const { game } = golfGame(levelHole({ name: 'drift', par: 3, length: 150, biome: 'desert' }));
+  const layout = game.layout;
+  it('rolls across or beside the play of the hole, not out on the plain: on average within the hole’s own width and a little more', () => {
+    for (const way of WAYS) {
+      let inView = 0,
+        n = 0;
+      for (let k = 0; k < DRIFT.count; k++)
+        for (let t = 0; t < 600; t += 3) {
+          const p = tumbleweedAt(layout, 'drift', k, t, way);
+          const near = Math.hypot(
+            p.x - (layout.originX + (layout.cols * TILE) / 2),
+            p.y - (layout.originY + (layout.rows * TILE) / 2),
+          );
+          n++;
+          if (near < (layout.cols * TILE + layout.rows * TILE) / 2 + 40) inView++;
+        }
+      expect(inView / n, `wind ${way.join(',')}`).toBeGreaterThan(0.85);
+    }
   });
 });

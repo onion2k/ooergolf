@@ -25,6 +25,7 @@ import { DESERT, barrel, golfCactus, mesa, saguaro, scrub, tuft, tumbleweed } fr
 import type { Model } from './models/part';
 import { BANK_TINT } from './tint';
 import { PUFF, type Puffs } from './bursts';
+import { DRIFT } from './drift';
 import { ROCK_SIZE, type SceneryKind } from './scenery';
 import type { TreeFigures } from './trees';
 
@@ -281,7 +282,7 @@ const desert: Theme = {
     ['e6c978', 'dcbd68', 'a6612f', '8f5426', '7fb04a', '74a540', 'e6cf86', 'bfa650', 'a8432c', 'c75f3f'],
     0.55,
     // the pan: a pale clay, paler and greyer than the straw beside it, and a lip of the clay baked brown where it meets the red earth
-    ['e6d4ae', 'c9a577'],
+    ['d6bf92', 'b58f62'],
   ),
   crest: lit('e4b45e'),
   water: {
@@ -335,7 +336,7 @@ const desert: Theme = {
     },
     far: { conifer: () => mesa({ seed: 1 }), broadleaf: () => mesa({ seed: 2, width: 0.5 }) },
     golfTree: (tree) => golfCactus(tree),
-    drift: () => tumbleweed(1.3),
+    drift: () => tumbleweed(DRIFT.radius),
     hills: 6,
   },
   // the dry earth the ball lands in comes up as a pale dust, and the sand of a bunker as the red it is (as particles are coloured, on

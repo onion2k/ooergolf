@@ -1779,7 +1779,7 @@ describe('the desert’s plants and its rock', () => {
   /** What the physics' cone is at a height above the ground: a cactus is held inside it from the base up. */
   const coneAt = (z: number) => (CACTUS.radius * Math.max(0, CACTUS.apex - z)) / (CACTUS.apex - CACTUS.base);
   /** A flower's width over the cone's, at the tip, where the cone is a point: the one thing allowed past it. */
-  const MARGIN = 0.35;
+  const MARGIN = 0.4;
 
   it('a golf cactus stands on the ground to the tip the physics gives it, and below its base is no wider than its post', () => {
     for (const seed of [1, 2, 3, 4, 5, 6]) {
@@ -1813,15 +1813,17 @@ describe('the desert’s plants and its rock', () => {
     }
   });
 
-  it('has arms that begin above the base and reach no more than two yards out at nine high, and some of the cone is arm', () => {
+  it('has arms that begin above the base and reach about three yards out at nine high, and no more, and some of the cone is arm', () => {
     for (const seed of [1, 2, 3]) {
       const cactus = partNamed(golfCactus(CACTUS, { seed }), 'cactus');
       // a point is on an arm where it is further from the stem's own axis than the stem is wide
       const arm = points(cactus.mesh).filter(([x, y]) => Math.hypot(x, y) > CACTUS.trunk);
       expect(arm.length, 'arms there').toBeGreaterThan(20);
+      // thick enough to read from a tee, and reaching about 2.8 out from the post
+      expect(Math.max(...arm.map(([x, y]) => Math.hypot(x, y))), 'arms reach out').toBeGreaterThan(2.4);
       for (const [x, y, z] of arm) {
         expect(z, 'an arm is above the base').toBeGreaterThanOrEqual(CACTUS.base);
-        if (z >= 9 - 0.05 && z <= 9 + 0.05) expect(Math.hypot(x, y)).toBeLessThanOrEqual(2 + 1e-6);
+        if (z >= 9 - 0.05 && z <= 9 + 0.05) expect(Math.hypot(x, y)).toBeLessThanOrEqual(3 + 1e-6);
       }
     }
   });
@@ -1835,9 +1837,9 @@ describe('the desert’s plants and its rock', () => {
       expect(partNamed(m, 'flower')).toBeDefined();
       // its arms start above a third of its height and keep inside a cone a quarter as wide as it is tall at its base
       for (const [x, y, z] of points(partNamed(m, 'cactus').mesh)) {
-        if (Math.hypot(x, y) > 0.8 * (h / 15)) expect(z).toBeGreaterThanOrEqual(h / 3 - 1e-6);
+        if (Math.hypot(x, y) > 1.1 * (h / 15)) expect(z).toBeGreaterThanOrEqual(h / 3 - 1e-6);
         expect(Math.hypot(x, y)).toBeLessThanOrEqual(
-          ((3.5 * h) / 15) * Math.max(0, (h - Math.max(z, h / 3)) / ((2 * h) / 3)) + 1e-6,
+          ((5 * h) / 15) * Math.max(0, (h - Math.max(z, h / 3)) / ((2 * h) / 3)) + 1e-6,
         );
       }
     }

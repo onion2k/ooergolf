@@ -59,15 +59,14 @@ export const TREE = {
 /**
  * The desert's cactus (a saguaro), first figures to be tuned with the desert courses: a bare stem to five yards, as earth's crown
  * stands (a crown any lower was felled on any hill: `felled` fells a tree whose crown a ball at rest beside it would lie in), and
- * above it a narrower, shorter cone than a tree's. The post is a hand's breadth and carries the ball's stop below the crown. Part 6's
- * model has to fit inside this cone: its arms start above five and reach at most 2 yards from the post at 9 high (the cone is 2.1
- * out there; the figures are 3.5 at 5 and 0 at 15).
+ * above it a narrower, shorter cone than a tree's. The post is a hand's breadth and carries the ball's stop below the crown. The post is widened to 1.1 and the cone to 5 at its base (3 out at nine high) so the sheet's
+ * cactus, with arms that read from a tee, fits inside it: the model's arms start above five and reach about 2.8 out.
  */
 export const CACTUS = {
-  trunk: 0.8,
+  trunk: 1.1,
   base: 5,
   apex: 15,
-  radius: 3.5,
+  radius: 5,
   restitution: 0.1,
   glance: { bounce: 0.05, keep: 0.1 },
   under: { bounce: 0.05, keep: 0.1 },

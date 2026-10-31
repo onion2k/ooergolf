@@ -12,10 +12,10 @@ import { TILE, type Layout } from './arena';
 import { seeded } from './random';
 
 /**
- * How many a hole has, how fast each goes at the middle of its pace (units a second), how far past the hole's own circle the
- * ring they roll in reaches, how big a ball of them is, and how high one hops, in units, over the length of ground between hops.
+ * How many a hole has, how fast each goes at the middle of its pace (units a second), how far past the hole's own ends along the
+ * wind they roll and how far beside it (`beside`), how big a ball of them is, and how high one hops, in units, over the length of ground between hops.
  */
-export const DRIFT = { count: 5, speed: 6, reach: 40, radius: 1.3, hop: 0.9, hopEvery: 14 } as const;
+export const DRIFT = { count: 6, speed: 6, reach: 30, beside: 25, radius: 2, hop: 0.9, hopEvery: 14 } as const;
 
 /** Where a tumbleweed is: on the ground at (x, y), lifted `hop` above its resting height, turned `turn` radians about the line across the wind. */
 export interface Weed {
@@ -25,7 +25,7 @@ export interface Weed {
   turn: number;
 }
 
-/** What each weed's lane is, worked out once for a hole and its name and kept as long as the hole is. */
+/** What each weed's lane is, worked out once for a hole and its name and kept as long as the hole is: where across the wind it rolls, as a share of the hole's width that way, and where along it it starts. */
 interface Lane {
   across: number;
   start: number;
@@ -44,20 +44,33 @@ function seedOf(name: string): number {
 /** How many a hole has: the same few for every hole. */
 export const tumbleweedCount = (_layout: Layout): number => DRIFT.count;
 
-/** The radius of the circle the weeds roll in: a hole's own, and the reach past it. */
-const ringOf = (l: Layout) => Math.hypot(l.cols * TILE, l.rows * TILE) / 2 + DRIFT.reach;
+/**
+ * How far out from the hole's middle the weeds roll, across the wind and along it, for a wind along (wx, wy): the hole's own half
+ * extent that way and `DRIFT.reach` past it along the wind, and `DRIFT.beside` past it across. They roll across and beside the hole's
+ * play, in the view from a tee, and not out on the plain where no view looks.
+ */
+function extent(l: Layout, wx: number, wy: number): { along: number; across: number } {
+  const hx = (l.cols * TILE) / 2,
+    hy = (l.rows * TILE) / 2;
+  return {
+    along: Math.abs(wx) * hx + Math.abs(wy) * hy + DRIFT.reach,
+    across: Math.abs(wy) * hx + Math.abs(wx) * hy + DRIFT.beside,
+  };
+}
+
+/** The furthest from a hole's middle a weed is ever, at any wind: the hole's two half extents and the reach past them. */
+export const driftRing = (l: Layout): number => (l.cols * TILE) / 2 + (l.rows * TILE) / 2 + DRIFT.reach + DRIFT.beside;
 
 function lanesOf(l: Layout, name: string): Lane[] {
   const hit = LANES.get(l);
   if (hit && hit.name === name) return hit.lanes;
-  const R = ringOf(l);
   const random = seeded(seedOf(`${name} tumbleweeds`));
   const lanes = Array.from({ length: DRIFT.count }, (_, k): Lane => {
-    // lanes spread across the ring, not drawn alike by luck: weed k in the k-th fifth of the width, jittered within it
-    const across = ((k + random()) / DRIFT.count) * 2 * R * 0.9 - R * 0.9;
+    // lanes spread across the width, not drawn alike by luck: weed k in the k-th share of it, jittered within it
+    const across = ((k + random()) / DRIFT.count) * 2 - 1;
     return {
       across,
-      start: random() * 2 * R,
+      start: random() * 2,
       speed: DRIFT.speed * (0.7 + 0.6 * random()),
       hopping: DRIFT.hopEvery * (0.7 + 0.6 * random()),
     };
@@ -81,15 +94,16 @@ export function tumbleweedAt(
   const len = Math.hypot(way[0], way[1]);
   const wx = len > 0 ? way[0] / len : 1,
     wy = len > 0 ? way[1] / len : 0;
-  const R = ringOf(layout);
+  const room = extent(layout, wx, wy);
   const lane = lanesOf(layout, name)[k % DRIFT.count];
   const cx = layout.originX + (layout.cols * TILE) / 2,
     cy = layout.originY + (layout.rows * TILE) / 2;
-  const chord = Math.sqrt(Math.max(0, R * R - lane.across * lane.across));
-  const gone = lane.start + lane.speed * t;
+  const chord = room.along;
+  const across = lane.across * room.across;
+  const gone = lane.start * chord + lane.speed * t;
   const along = chord > 0 ? ((((gone + chord) % (2 * chord)) + 2 * chord) % (2 * chord)) - chord : 0;
-  out.x = cx + along * wx - lane.across * wy;
-  out.y = cy + along * wy + lane.across * wx;
+  out.x = cx + along * wx - across * wy;
+  out.y = cy + along * wy + across * wx;
   // a bounce for every `hopping` units gone: a weed on a breeze hops, and comes down
   out.hop = Math.abs(Math.sin((gone / lane.hopping) * Math.PI)) * DRIFT.hop;
   out.turn = gone / DRIFT.radius;
