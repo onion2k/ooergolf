@@ -195,22 +195,31 @@ export function mesa({ seed = 1, width = 1 } = {}): Model {
 }
 
 /**
- * A tumbleweed of radius `r`: three hoops of straw, each a ring of six thin rods, one flat, one on edge and one on the slant, so it
- * reads as a snarl and rolls as a ball does. Drawn only; nothing of the game is shaped like it.
+ * A tumbleweed of radius `r`: twenty short twigs of straw crossing in a rounded bundle, each a chord of the ball between two points
+ * of its surface that are a third to a half of the way round from one another, so it reads as a tangled ball and rolls as one does.
+ * Drawn only; nothing of the game is shaped like it.
  */
 export function tumbleweed(r: number): Model {
+  const random = seeded(23);
+  const point = (): V3 => {
+    const z = random() * 2 - 1,
+      a = random() * Math.PI * 2,
+      q = Math.sqrt(1 - z * z);
+    return [q * Math.cos(a), q * Math.sin(a), z];
+  };
   const mesh = built((b) => {
-    const hoop = (frame: (x: number, y: number) => V3) => {
-      const n = 6;
-      for (let i = 0; i < n; i++) {
-        const a0 = (i / n) * Math.PI * 2,
-          a1 = ((i + 1) / n) * Math.PI * 2;
-        rod(b, frame(Math.cos(a0) * r, Math.sin(a0) * r), frame(Math.cos(a1) * r, Math.sin(a1) * r), r * 0.13, 3);
+    for (let k = 0; k < 20; k++) {
+      const p = point();
+      // another point of the surface well away from it, so the twig crosses the bundle and is no short scratch
+      let q = point();
+      for (let tries = 0; tries < 30; tries++) {
+        const dot = p[0] * q[0] + p[1] * q[1] + p[2] * q[2];
+        if (dot < 0.5 && dot > -0.5) break;
+        q = point();
       }
-    };
-    hoop((x, y) => [x, y, 0]);
-    hoop((x, y) => [x, 0, y]);
-    hoop((x, y) => [0.6 * x + 0.1 * y, 0.45 * y, 0.65 * x - 0.45 * y]);
+      const shrink = r * (0.9 + random() * 0.1);
+      rod(b, [p[0] * shrink, p[1] * shrink, p[2] * shrink], [q[0] * shrink, q[1] * shrink, q[2] * shrink], r * 0.1, 3);
+    }
   });
   // (a snarl is not a solid: it has no tier of light to cut, so its part is not one the tones are named for)
   return {

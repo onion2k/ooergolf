@@ -382,7 +382,8 @@ const desert: Theme = {
 const moon: Theme = {
   name: 'moon',
   ground: ground(
-    ['b9b8b4', 'adaca8', '6c6b6e', '5a595d', 'dcdbd6', 'd0cfca', 'e8e6df', '8f8e8e', '2d2c30', '4a494d'],
+    // brought down from the sheet's, which clipped to white under the hard sun on the green and the tee: only a highlight clips now
+    ['9b9a96', '908f8c', '626164', '535256', '8f8e8a', '868582', '8c8b88', '7c7b7c', '2d2c30', '4a494d'],
     0.7,
     // no pan on the Moon: the lip is a crater's rim, the pale ejecta it throws up (and its own mid grey as it falls to the dust)
     ['8f8e8e', 'a9a8aa'],
@@ -390,8 +391,10 @@ const moon: Theme = {
   crest: lit('8d8c8e'),
   water: {
     crater: true,
-    bands: ['4c4b4e', '37363a', '232226', '141317'].map(lit),
-    shelf: lit('56555a'),
+    // from the lip in, the dust's own colour darkening down the bowl to a near black pit; the shelf (the water's tiles outside the curve,
+    // where the ground is level) is the dust itself, so a tile that sticks out reads as the bowl's lip and not a dark box
+    bands: ['6a696c', '4a494d', '2c2b2f', '17161a'].map(lit),
+    shelf: lit('6c6b6e'),
     stones: ['8c8b8e', '77767a', '636266'].map(lit),
     ocean: { ...OCEAN, body: lit('060608'), tint: lit('1c1c20'), tilt: 0.03 },
   },
@@ -402,7 +405,7 @@ const moon: Theme = {
     mountain: lit('4a4a50'),
     clouds: false,
     lake: false,
-    relief: 0.5,
+    relief: 0.35,
     stars: true,
     earth: true,
   },

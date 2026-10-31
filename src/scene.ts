@@ -1246,7 +1246,7 @@ export class Scene {
       };
       for (const made of [
         heavens.stars ? starsModel(name) : null,
-        heavens.earth ? earthModel(name, Math.atan2(layout.cup.y - layout.tee.y, layout.cup.x - layout.tee.x)) : null,
+        heavens.earth ? earthModel(name, Math.PI / 2) : null,
       ])
         if (made) this.clouds.push(pool(made, (m) => place(m, 0, middle.x, middle.y, 0, 0, this.sky ? 1 : 0)));
       // the tumbleweeds of a biome that has them, rolling downwind over the hole and the plain about it, by game time alone and

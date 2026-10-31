@@ -224,6 +224,17 @@ describe('the Moon’s and the future’s ground', () => {
     expect(THEMES.moon.backdrop.clouds).toBe(false);
   });
 
+  it('keeps the Moon’s fairway pale on dark, at least 1.9 times the rough’s lightness, with nothing of its ground bright enough to clip to white under its hard sun', () => {
+    const light = (c: readonly number[]) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+    const m = THEMES.moon.ground;
+    expect(light(m.grassMown) / light(m.playRough)).toBeGreaterThanOrEqual(1.9);
+    expect(light(m.grass) / light(m.playRough)).toBeGreaterThanOrEqual(1.9);
+    // the sun's colour times the ground's light, with the toon ramp's own share (1.37 measured on the sheet's), under one
+    const sun = THEMES.moon.look.sunColour[1] / 3.2;
+    for (const key of ['puttingGreen', 'puttingGreenMown', 'teeBox', 'grass', 'grassMown'] as const)
+      expect(light(m[key]) * 1.37 * sun, key).toBeLessThan(0.75);
+  });
+
   it('draws the Desert’s fairway against its rough with more difference than the sheet’s: lighter and more yellow', () => {
     const light = (c: readonly number[]) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
     const d = THEMES.desert.ground;

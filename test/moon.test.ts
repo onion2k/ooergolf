@@ -6,7 +6,8 @@
 import { describe, expect, it } from 'vitest';
 import { PATTERN_STRIDE } from 'artshape-render/game/renderer';
 import { STILL } from 'artshape-render/game/grass';
-import { WATER_LEVEL, layoutOf, tileAt } from '../src/arena';
+import { Camera } from 'artshape-render/gpu/camera';
+import { TILE, WATER_LEVEL, layoutOf, tileAt } from '../src/arena';
 import { BIOMES } from '../src/biome';
 import { backdropOf } from '../src/backdrop';
 import { craterDust, strikePuff } from '../src/bursts';
@@ -23,6 +24,10 @@ import { flagTurn } from '../src/sway';
 import { THEMES } from '../src/theme';
 import { windOf } from '../src/turf';
 import { CRATER, pondOf } from '../src/waterdraw';
+import { CameraRig, FLY_IN } from '../src/camera';
+import { Director } from '../src/director';
+import { ISLES_SPECS } from '../src/isles';
+import { FELLS_SPECS } from '../src/fells';
 import { golfGame, levelHole } from './helpers';
 
 const hole = (biome?: 'moon', name = 'Moon test') => {
@@ -39,7 +44,7 @@ describe('the Moon’s sky', () => {
     expect(earthAt('a', 1)).toEqual(earthAt('a', 1));
     expect(earthAt('a', 1).azimuth).not.toBeCloseTo(earthAt('b', 1).azimuth, 3);
     // the Earth is in the way the fly-in looks, within half a radian of the hole’s heading, and low over the hills
-    expect(Math.abs(earthAt('a', 1).azimuth - 1)).toBeLessThan(0.5);
+    expect(Math.abs(earthAt('a', 1).azimuth - 1)).toBeLessThan(0.06);
     expect(earthAt('a', 1).rise).toBe(SKY.earth.rise);
     // and the same mesh, vertex for vertex
     expect(Array.from(stars('a').parts[0].mesh.positions)).toEqual(Array.from(stars('a').parts[0].mesh.positions));
@@ -53,16 +58,19 @@ describe('the Moon’s sky', () => {
       expect(s.brightness).toBeLessThanOrEqual(1);
     }
     const sky = stars('Water Carry');
-    for (let i = 0; i < sky.parts[0].mesh.positions.length; i += 3) {
-      const [x, y, z] = [
-        sky.parts[0].mesh.positions[i],
-        sky.parts[0].mesh.positions[i + 1],
-        sky.parts[0].mesh.positions[i + 2],
-      ];
-      expect(z).toBeGreaterThan(0);
-      expect(Math.hypot(x, y, z)).toBeGreaterThan(SKY.dome - 20);
-      expect(Math.hypot(x, y, z)).toBeLessThan(SKY.dome + 20);
-    }
+    for (const part of sky.parts)
+      for (let i = 0; i < part.mesh.positions.length; i += 3) {
+        const [x, y, z] = [part.mesh.positions[i], part.mesh.positions[i + 1], part.mesh.positions[i + 2]];
+        expect(z).toBeGreaterThan(0);
+        expect(Math.hypot(x, y, z)).toBeGreaterThan(SKY.dome - 20);
+        expect(Math.hypot(x, y, z)).toBeLessThan(SKY.dome + 20);
+      }
+    // diamonds, not squares: four points each, and no star a pixel square (the smallest a few units, the biggest many times it)
+    const sizes = starsOf('Water Carry').map((s) => s.size);
+    expect(Math.min(...sizes)).toBeLessThan(4);
+    expect(Math.max(...sizes) / Math.min(...sizes)).toBeGreaterThan(3);
+    expect(sky.parts).toHaveLength(2);
+    expect(sky.parts[0].pattern!.glow).toBeGreaterThan(sky.parts[1].pattern!.glow!);
     expect(triangles(sky)).toBe(SKY.stars * 2);
     expect(triangles(sky)).toBeLessThanOrEqual(BUDGET.stars);
     expect(triangles(earth('Water Carry', 0))).toBeLessThanOrEqual(BUDGET.earth);
@@ -96,8 +104,86 @@ describe('the Moon’s sky', () => {
   });
 });
 
+describe('the Earth in the fly-in', () => {
+  // the fly-in's camera, as the page places it, on a desk and on a phone, on every hole of the courses there are as the Moon
+  const specs = [...LINKS_SPECS, ...ISLES_SPECS, ...FELLS_SPECS].map((spec, i) => ({ spec, i }));
+  for (const [what, aspect, height] of [
+    ['a desk', 1.6, 800],
+    ['a phone', 400 / 860, 860],
+  ] as const)
+    it(`is whole in a clear part of the sky on ${what}, on every hole of The Links, The Isles and The Fells`, () => {
+      let checked = 0;
+      for (const { spec } of specs) {
+        let def;
+        try {
+          def = golfHole({ ...spec, name: `${spec.name} Moon`, biome: 'moon', trees: 0 } as never);
+        } catch {
+          continue;
+        }
+        const { game } = golfGame(def);
+        const rig = new CameraRig();
+        const director = new Director(rig, { flyIn: true });
+        director.use(game);
+        director.setScreen(aspect, height);
+        director.started();
+        const centre = [
+          game.layout.originX + (game.layout.cols * TILE) / 2,
+          game.layout.originY + (game.layout.rows * TILE) / 2,
+        ];
+        const { azimuth, rise } = earthAt(def.name, Math.PI / 2);
+        const d = SKY.dome - 100;
+        const at = [
+          centre[0] + Math.cos(azimuth) * Math.cos(rise) * d,
+          centre[1] + Math.sin(azimuth) * Math.cos(rise) * d,
+          Math.sin(rise) * d,
+        ];
+        // while the fly-in holds, and as it begins to ease
+        for (const t of [game.t, game.t + FLY_IN.hold * 0.9]) {
+          const cam = new Camera();
+          cam.fov = rig.fov;
+          cam.aspect = aspect;
+          cam.far = rig.farPlaneAt(t);
+          rig.place(cam, t);
+          cam.update();
+          const m = cam.viewProjection;
+          const w = m[3] * at[0] + m[7] * at[1] + m[11] * at[2] + m[15];
+          expect(w, `${def.name}: in front of the camera`).toBeGreaterThan(0);
+          const x = (m[0] * at[0] + m[4] * at[1] + m[8] * at[2] + m[12]) / w,
+            y = (m[1] * at[0] + m[5] * at[1] + m[9] * at[2] + m[13]) / w;
+          // a radius as a share of the half screen: the ball's angle over the half field of view
+          const radius = Math.atan(SKY.earth.radius / d) / Math.tan((rig.fov * Math.PI) / 360) / (height > 0 ? 1 : 1);
+          expect(Math.abs(x) + radius / aspect, `${def.name} at ${t.toFixed(2)}: inside the sides`).toBeLessThan(0.92);
+          expect(y + radius, `${def.name} at ${t.toFixed(2)}: under the top`).toBeLessThan(0.85);
+          expect(y - radius, `${def.name} at ${t.toFixed(2)}: above the bottom`).toBeGreaterThan(-0.2);
+          // and clear of the page's own panels, as the pictures have them (the map and the hole's card on the left, the purse and the
+          // buttons on the right): the sky between them
+          const wide = radius / aspect;
+          const hits = (x0: number, x1: number, y0: number, y1: number) =>
+            x + wide > x0 && x - wide < x1 && y + radius > y0 && y - radius < y1;
+          if (aspect < 1) {
+            expect(hits(0.02, 1, 0.66, 1), `${def.name}: under the phone's buttons`).toBe(false);
+            expect(hits(-1, -0.4, 0.4, 1), `${def.name}: under the phone's map and card`).toBe(false);
+          } else {
+            expect(hits(0.5, 1, 0.78, 1), `${def.name}: under the purse`).toBe(false);
+            expect(hits(-1, -0.45, 0.7, 1), `${def.name}: under the card`).toBe(false);
+          }
+        }
+        checked++;
+      }
+      expect(checked, 'holes looked at').toBeGreaterThan(15);
+    });
+});
+
 describe('the Moon’s crater', () => {
-  const { layout } = hole('moon');
+  // a crater in ground as flat as a table, a round one, so the figures of its bowl are the bowl's and not the hills'
+  const level = levelHole({
+    name: 'pit',
+    par: 3,
+    length: 150,
+    biome: 'moon',
+    pond: { along: 70, across: 0, radius: 12 },
+  });
+  const layout = layoutOf(level.map, level.terrain, level.way, level.biome);
 
   it('is drawn on the water’s tiles and nowhere else, a bowl going down from the rim to a deep pit, matte and with no wave in it', () => {
     const { parts } = pondOf(layout);
@@ -120,8 +206,9 @@ describe('the Moon’s crater', () => {
       }
     }
     // from the water's level at the rim down to the pit's floor
-    expect(highest).toBeLessThanOrEqual(WATER_LEVEL + 1e-6);
-    expect(lowest).toBeCloseTo(WATER_LEVEL - CRATER.drop, 5);
+    // (the crest of the lip stands `CRATER.rim` over the ground, which is level here)
+    expect(highest, 'a lip standing proud of the ground').toBeCloseTo(CRATER.rim, 1);
+    expect(lowest, 'a pit under the water’s level').toBeCloseTo(WATER_LEVEL - CRATER.drop, 5);
     const deep = parts.find((q) => q.name === 'deep')!;
     expect(deep.pattern, 'no wave in the pit').toBeUndefined();
     // the bands go down dark: each darker than the one out from it
@@ -129,6 +216,33 @@ describe('the Moon’s crater', () => {
     const bands = parts.filter((q) => q.name !== 'shelf');
     for (let k = 1; k < bands.length; k++)
       expect(light(bands[k].material)).toBeLessThanOrEqual(light(bands[k - 1].material));
+  });
+
+  it('is a bowl with no wall: no triangle of it, the shelf’s too, leans toward the horizontal, and no vertical face meets the ground', () => {
+    let seen = 0,
+      steepest = 0;
+    for (const part of pondOf(layout).parts) {
+      const p = part.mesh.positions,
+        n = part.mesh.normals;
+      for (let k = 0; k < part.mesh.indices.length; k += 3) {
+        const [a, b, c] = [part.mesh.indices[k] * 3, part.mesh.indices[k + 1] * 3, part.mesh.indices[k + 2] * 3];
+        const u = [p[b] - p[a], p[b + 1] - p[a + 1], p[b + 2] - p[a + 2]],
+          v = [p[c] - p[a], p[c + 1] - p[a + 1], p[c + 2] - p[a + 2]];
+        const g = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+        const area = Math.hypot(g[0], g[1], g[2]);
+        if (area < 1e-6) continue;
+        seen++;
+        // how far up it faces, from nought (a wall) to one (flat)
+        const up = Math.abs(g[2]) / area;
+        steepest = Math.max(steepest, Math.sqrt(1 - up * up) / up);
+        expect(up, `${part.name}: a triangle that is nearly a wall`).toBeGreaterThan(0.45);
+        // and its vertices’ normals say the same, up and leaning down the bowl
+        for (const q of [a, b, c]) expect(n[q + 2], `${part.name}: a normal`).toBeGreaterThan(0.45);
+      }
+    }
+    expect(seen, 'a crater to look at').toBeGreaterThan(300);
+    // the bowl's steepest face is about forty-five degrees and a half or so, and never a vertical wall
+    expect(steepest).toBeLessThan(2);
   });
 
   it('is water to the game and earth’s water is as it was, flat and with its waves', () => {

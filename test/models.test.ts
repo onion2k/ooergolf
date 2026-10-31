@@ -282,6 +282,7 @@ const everyPart = (m: Model): Part[] => [...m.parts, ...m.moving];
  */
 const OPEN = new Set([
   'stars',
+  'dim stars',
   'liner',
   'door',
   'collar',

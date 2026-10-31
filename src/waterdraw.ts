@@ -14,7 +14,7 @@
  */
 import { type Mesh } from 'artshape-render/mesh/types';
 import { FastMeshBuilder as MeshBuilder } from './fastmesh';
-import { TILE, WATER_LEVEL, heightAt, type Layout } from './arena';
+import { TILE, WATER_LEVEL, heightAt, tileAt, type Layout } from './arena';
 import { WATER, oceanPattern } from './models/obstacles';
 import { ROUGH } from './models/palette';
 import { EARTH_BANDS, EARTH_SHELF, themeOf } from './theme';
@@ -24,7 +24,38 @@ import { hashed, seeded } from './random';
 import { ZONES, blur, distanceGrid, type Box, type Scratch } from './zones';
 
 /** How much deeper than the water's own level a crater's pit is, in yards: far enough for a ball to be seen to fall into it. */
-export const CRATER = { drop: 2.6 } as const;
+export const CRATER = {
+  drop: 2.6,
+  /** How high the crest of the lip stands over the ground, how far in from the curve the bowl takes to reach its floor, and how far out of the curve (in a tile that sticks out past it) the ground rises to the crest. */
+  rim: 0.5,
+  bowl: 3.2,
+  lip: 1.5,
+  /** Where each band begins, in yards in from the curve: the bowl is slow where earth's water is a step. */
+  edges: [0, 0.8, 1.6, 2.4, 3.2],
+} as const;
+
+const smoothstep = (t: number) => {
+  const u = Math.min(1, Math.max(0, t));
+  return u * u * (3 - 2 * u);
+};
+
+/**
+ * How high a crater stands at a point `v` yards in from the curve its water is drawn by, over ground `top` high: the ground out
+ * past the lip, a crest over it that the ground rises to over `lip` yards, and in from the crest a bowl falling smoothly to a
+ * floor `drop` under the water's own level over `bowl` yards. Smooth all the way (no step, no wall): its slope at the crest and at
+ * the floor is nought, and at the steepest the bowl's own is about 1.4.
+ */
+export function craterHeight(v: number, top: number): number {
+  if (v <= 0) return top + CRATER.rim * smoothstep(1 + v / CRATER.lip);
+  const floor = top + WATER_LEVEL - CRATER.drop;
+  return top + CRATER.rim - (top + CRATER.rim - floor) * smoothstep(v / CRATER.bowl);
+}
+
+/** The slope of `craterHeight` with the depth, in height over yards. */
+function craterSlope(v: number, top: number): number {
+  const h = 1e-3;
+  return (craterHeight(v + h, top) - craterHeight(v - h, top)) / (2 * h);
+}
 
 /** The shelf: how far above the water a water tile outside the curve stands, in the rock's warm brown. */
 export const SHELF = { rise: 0.18, colour: EARTH_SHELF } as const;
@@ -226,27 +257,62 @@ function build(l: Layout): Pond {
   const { cols, rows } = l;
   const kind = l.golf ? STONE_RING.golf : STONE_RING.minigolf;
   const shelf = new MeshBuilder();
-  const bands = EDGES.map(() => new MeshBuilder());
+  const crater = themeOf(l).water.crater;
+  // a crater's bands are wider than earth's, since it is a bowl and not a step
+  const edges: readonly number[] = crater ? CRATER.edges : EDGES;
+  const bands = edges.map(() => new MeshBuilder());
   const zShelf = WATER_LEVEL + SHELF.rise;
   const ground = (tx: number, ty: number) =>
     tx >= 0 && ty >= 0 && tx < cols && ty < rows && !l.water[ty * cols + tx] && !l.solid[ty * cols + tx];
-  const crater = themeOf(l).water.crater;
-  const zOf = (v: number) =>
-    crater ? WATER_LEVEL - CRATER.drop * Math.min(1, Math.max(0, v) / EDGES[EDGES.length - 1]) : WATER_LEVEL;
   const emit = (b: MeshBuilder, z: number, poly: readonly Vx[]) => {
     if (poly.length < 3) return;
-    const ids = poly.map((p) =>
-      b.vertex(
+    const ids = poly.map((p) => {
+      if (!crater)
+        return b.vertex(
+          p.x - l.originX,
+          p.y - l.originY,
+          z,
+          0,
+          0,
+          1,
+          (p.x - l.originX) / TILE,
+          (p.y - l.originY) / TILE,
+        );
+      // a crater is a bowl whose height is the depth's alone and whose face leans down the way the depth grows
+      const e = 0.3;
+      let gx = edge.depth(p.x + e, p.y) - edge.depth(p.x - e, p.y),
+        gy = edge.depth(p.x, p.y + e) - edge.depth(p.x, p.y - e);
+      const gl = Math.hypot(gx, gy) || 1;
+      gx /= gl;
+      gy /= gl;
+      // the ground the lip stands on, read where it is: just out past the curve, away from the water, and not from the tile's neighbour
+      // (the gradient of depth is only the curve's near it, so from the middle of the bowl in the ground's mean is used, blended in)
+      // (the first ground met going out from the point, a tile of ground and not a tile of water, whose floor is the pit's)
+      let near = meanTop;
+      for (const reach of [1.2, 2.4, 3.6, 4.8, 6]) {
+        const qx = p.x - gx * (Math.max(p.v, 0) + reach),
+          qy = p.y - gy * (Math.max(p.v, 0) + reach);
+        const t = tileAt(l, qx, qy);
+        if (t >= 0 && !l.water[t] && !l.solid[t]) {
+          near = heightAt(l, qx, qy);
+          break;
+        }
+      }
+      const deepen = smoothstep((p.v - CRATER.bowl * 0.3) / (CRATER.bowl * 0.5));
+      const top = p.v <= 0 ? near : near + (meanTop - near) * deepen;
+      const slope = craterSlope(p.v, top);
+      const k = 1 / Math.hypot(slope, 1);
+      return b.vertex(
         p.x - l.originX,
         p.y - l.originY,
-        z === WATER_LEVEL ? zOf(p.v) : z,
-        0,
-        0,
-        1,
+        craterHeight(p.v, top),
+        slope * gx * k,
+        slope * gy * k,
+        k,
         (p.x - l.originX) / TILE,
         (p.y - l.originY) / TILE,
-      ),
-    );
+      );
+    });
     for (let i = 1; i + 1 < poly.length; i++) {
       // a cut along a tile's side leaves slivers with no area, which draw nothing and would only be counted
       const area =
@@ -254,6 +320,29 @@ function build(l: Layout): Pond {
       if (Math.abs(area) > 1e-9) b.triangle(ids[0], ids[i], ids[i + 1]);
     }
   };
+
+  // the ground a crater lies in, on the whole: what its floor is measured from, since a floor is flat
+  let meanTop = 0;
+  if (crater) {
+    let sum = 0,
+      count = 0;
+    for (let t = 0; t < cols * rows; t++) {
+      if (!l.water[t]) continue;
+      const tx = t % cols,
+        ty = (t - tx) / cols;
+      for (const [ox, oy] of [
+        [0, 1],
+        [0, -1],
+        [1, 0],
+        [-1, 0],
+      ])
+        if (ground(tx + ox, ty + oy)) {
+          sum += heightAt(l, l.originX + (tx + ox + 0.5) * TILE, l.originY + (ty + oy + 0.5) * TILE);
+          count++;
+        }
+    }
+    meanTop = count ? sum / count : 0;
+  }
 
   // the stones' candidates, kept as numbers in flat lists: a lake has tens of thousands
   const random = seeded(mapSeed(l));
@@ -268,7 +357,7 @@ function build(l: Layout): Pond {
   const widest = 2 * kind.most;
 
   const per = PIECES;
-  const deep = EDGES[EDGES.length - 1];
+  const deep = edges[edges.length - 1];
   const at = (x: number, y: number, v: number): Vx => ({ x, y, v });
   for (let t = 0; t < cols * rows; t++) {
     if (!l.water[t]) continue;
@@ -308,17 +397,23 @@ function build(l: Layout): Pond {
       }
     const sides = gS || gE || gN || gW;
     if (!sides && lowest >= deep) {
-      emit(bands[EDGES.length - 1], WATER_LEVEL, [
+      emit(bands[edges.length - 1], WATER_LEVEL, [
         at(x0, y0, deep),
         at(x0 + TILE, y0, deep),
         at(x0 + TILE, y0 + TILE, deep),
         at(x0, y0 + TILE, deep),
       ]);
     } else if (highest < 0) {
-      emit(shelf, zShelf, [at(x0, y0, -1), at(x0 + TILE, y0, -1), at(x0 + TILE, y0 + TILE, -1), at(x0, y0 + TILE, -1)]);
+      const out = crater ? -CRATER.lip : -1;
+      emit(shelf, zShelf, [
+        at(x0, y0, out),
+        at(x0 + TILE, y0, out),
+        at(x0 + TILE, y0 + TILE, out),
+        at(x0, y0 + TILE, out),
+      ]);
     } else {
       // the depth is the curve's, or the tile's side where it meets ground, whichever is nearer
-      const dd = (x: number, y: number) => Math.min(edge.depth(x, y), sd(x, y));
+      const dd = (x: number, y: number) => (crater ? edge.depth(x, y) : Math.min(edge.depth(x, y), sd(x, y)));
       const step = TILE / per;
       const rowv: Vx[][] = [];
       for (let j = 0; j <= per; j++) {
@@ -338,15 +433,15 @@ function build(l: Layout): Pond {
             [quad[0], quad[2], quad[3]],
           ]) {
             let rest: Vx[] = tri;
-            for (let k = 0; k < EDGES.length; k++) {
-              const [lo, hi] = cut(rest, EDGES[k]);
+            for (let k = 0; k < edges.length; k++) {
+              const [lo, hi] = cut(rest, edges[k]);
               // below the first edge is the shelf; below each later one is the band before it
               if (k === 0) emit(shelf, zShelf, lo);
               else emit(bands[k - 1], WATER_LEVEL, lo);
               rest = hi;
               if (rest.length < 3) break;
             }
-            emit(bands[EDGES.length - 1], WATER_LEVEL, rest);
+            emit(bands[edges.length - 1], WATER_LEVEL, rest);
           }
         }
     }
@@ -368,7 +463,9 @@ function build(l: Layout): Pond {
       }
   }
 
-  const spots = pack(cx, cy, cd, cs, cz, random, kind);
+  // a crater's rim has a boulder here and there, a third of the ring and not a wall of them
+  const packed = pack(cx, cy, cd, cs, cz, random, kind);
+  const spots = crater ? packed.filter((_, i) => i % 3 === 0) : packed;
 
   // the water in the colours of the hole's biome: a layout has one, so the pond kept for it is right
   const water = themeOf(l).water;

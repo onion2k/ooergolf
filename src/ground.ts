@@ -17,7 +17,7 @@ import { fan, outside, overlaps, type Point, type Ring } from './clip';
 import { face, tri } from './meshes';
 import { LIE } from './surfaces';
 import { FIELDS, OUT, PAN, RULES, zonesOf, type Zone } from './zones';
-import { waterCurveOf, waterEdgeOf } from './waterdraw';
+import { CRATER, waterCurveOf, waterEdgeOf } from './waterdraw';
 
 type V3 = [number, number, number];
 
@@ -1045,8 +1045,9 @@ export function panLipOf(l: Layout): Mesh {
  * stands at the curve over the ground and `base` how high it still lies at its outer edge.
  */
 export const CRATER_RIM = {
-  pale: { width: 1.1, strips: 2, raise: 0.26, base: 0.04 },
-  soft: { width: 2.8, strips: 3, raise: 0.07, base: 0.03 },
+  // the pale ribbon begins at the height the bowl's crest stands at (`CRATER.rim`), so the lip is one smooth ridge over the ground
+  pale: { width: 1.8, strips: 3, raise: CRATER.rim, base: 0.04 },
+  soft: { width: 3.6, strips: 3, raise: 0.2, base: 0.03 },
 } as const;
 
 /**

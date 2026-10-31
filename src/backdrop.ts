@@ -230,7 +230,8 @@ export function backdropOf(layout: Layout, name: string, ground: number | Ground
   const mp = (i: number, k: 0 | 1 | 2): V3 => {
     const a = (i / M) * Math.PI * 2 + (k === 1 ? Math.PI / M : 0);
     const r = k === 0 ? R1 * 0.95 : k === 1 ? (R1 + R2) / 2 : R2;
-    const h = k === 1 ? BACKDROP.mountain[0] + BACKDROP.mountain[1] * peaks(a) : k === 0 ? 0 : 60;
+    const h =
+      k === 1 ? (BACKDROP.mountain[0] + BACKDROP.mountain[1] * peaks(a)) * relief ** 3 : k === 0 ? 0 : 60 * relief ** 3;
     const x = cx + Math.cos(a) * r,
       y = cy + Math.sin(a) * r;
     return [x, y, baseAt(x, y) + h];
