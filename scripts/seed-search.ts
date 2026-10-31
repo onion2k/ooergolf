@@ -43,7 +43,10 @@ export type CourseName =
   | 'badlands'
   | 'tranquility'
   | 'copernicus'
-  | 'farside';
+  | 'farside'
+  | 'neonpark'
+  | 'chrome'
+  | 'singularity';
 export const COURSE_NAMES: readonly CourseName[] = [
   'links',
   'fells',
@@ -57,6 +60,9 @@ export const COURSE_NAMES: readonly CourseName[] = [
   'tranquility',
   'copernicus',
   'farside',
+  'neonpark',
+  'chrome',
+  'singularity',
 ];
 
 /** The options a command line gives: the hole's name, the course and the numbers, with the defaults the script always had. */
@@ -101,6 +107,9 @@ const TITLES: Record<CourseName, string> = {
   tranquility: 'Tranquility',
   copernicus: 'Copernicus',
   farside: 'The Far Side',
+  neonpark: 'Neon Park',
+  chrome: 'Chrome Heights',
+  singularity: 'The Singularity',
 };
 
 /**
@@ -128,6 +137,13 @@ const MODULES: Record<Exclude<CourseName, 'links'>, { module: string; key: strin
     load: () => import('../src/copernicus' as string),
   },
   farside: { module: 'src/farside.ts', key: 'FARSIDE_SPECS', load: () => import('../src/farside' as string) },
+  neonpark: { module: 'src/neonpark.ts', key: 'NEON_PARK_SPECS', load: () => import('../src/neonpark' as string) },
+  chrome: { module: 'src/chrome.ts', key: 'CHROME_SPECS', load: () => import('../src/chrome' as string) },
+  singularity: {
+    module: 'src/singularity.ts',
+    key: 'SINGULARITY_SPECS',
+    load: () => import('../src/singularity' as string),
+  },
 };
 
 /** A course's spec list. Every course but The Links is loaded on request, so this script runs before it is built. */
