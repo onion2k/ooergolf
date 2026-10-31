@@ -64,7 +64,11 @@ export const WATCH: Partial<Record<string, { ceiling: number; climb?: Climb }>> 
   // two-figure scores, and the event round kept with its tour: 10,164 bytes, held to the byte; the ceiling raised to 10,800 on
   // 16 October 2026 at the user's word, which is that and about six holes more again. The caddie's two counts, held to its
   // limit of three, add 30: 10,194, held to the byte, under the same ceiling; and its count of spin 9 more, 10,203, on 17 October 2026)
-  'save bytes': { ceiling: 10_800 },
+  // 31 October 2026, the nine courses of the biomes: a best on each of the 162 holes (about 104 bytes each), a record of each of the
+  // eighteen courses, and the seasons of all five tours, the three new ones with a season less one event of two-figure scores, a
+  // title count of three figures and the longest grade: measured the same way at 19,732 bytes, held to the byte (the plan's
+  // estimate was 20,000); 20,400 is that and about six holes more, as the ceiling was at 10,800 over 10,228.
+  'save bytes': { ceiling: 20_400 },
   // emptied at every new round: never more than a score a hole
   'card scores': { ceiling: COURSE.length },
   // the bodies in the rehearsal a golf hole's shots are previewed in: the ball, however many shots are tried, and the
@@ -150,6 +154,13 @@ export const GOLF_COURSES = {
   woods: 'The Woods',
   isles: 'The Isles',
   old: 'The Old Course',
+  // one course of each biome and not the nine: a biome's three courses share every line of code a leak run watches (the
+  // surfaces, the trees, the hazard, the theme and its models are the biome's, not the course's), so a second and a third at
+  // ten minutes each would be the same run again. The plan's three: the desert's easiest, the moon's middle and the future's
+  // middle, whose holes carry the most of what a run adds to (trees, a hazard and a long hole).
+  saltpan: 'The Saltpan',
+  copernicus: 'Copernicus',
+  chrome: 'Chrome Heights',
 } as const;
 export type GolfCourseKey = keyof typeof GOLF_COURSES;
 

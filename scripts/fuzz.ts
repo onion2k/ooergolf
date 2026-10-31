@@ -5,12 +5,13 @@
  *   npm run fuzz -- --seeds 1-50 --frames 10000
  *   npm run fuzz -- --seed 17            one seed again, with what was done before it went wrong
  *   npm run fuzz -- --seed 17 --on links the seed's run on The Links again, if that is where it went wrong (or `heath`, `fells`, `woods`,
- *                                        `isles` or `old`, the other courses of golf, or `contoured`, The Links' holes with the steepest greens at
+ *                                        `isles` or `old`, the other courses of golf, `saltpan`, `mesa`, `badlands`, `tranquility`,
+ *                                        `copernicus`, `farside`, `neonpark`, `chrome` or `singularity`, the nine of the biomes, or `contoured`, The Links' holes with the steepest greens at
  *                                        every speed, `shed`, The Pinball Shed's holes, or `waterworks`, The Waterworks', each
  *                                        minigolf course played once more as its own run)
  *
- * Every seed is played several times: once as a player who chooses among the courses, once on each of the six courses of golf
- * alone (where the clubs, the trees, the water, the out of bounds and the wind are, since a monkey that chooses among nine
+ * Every seed is played several times: once as a player who chooses among the courses, once on each of the fifteen courses of golf
+ * alone (where the clubs, the trees, the water, the out of bounds and the wind are, since a monkey that chooses among eighteen
  * courses is on golf too seldom to hold it to anything), once on The Links with the steepest greens at every speed
  * (`contoured`), and once on each minigolf course with something on every hole. The Links' wind is its nine holes' own, 4 to 12 miles an hour.
  * Fails, and says how to play the failure again, if any seed breaks a rule
@@ -31,6 +32,16 @@ const GOLF = {
   woods: 'The Woods',
   isles: 'The Isles',
   old: 'The Old Course',
+  // the nine courses of the biomes, each alone as the six are
+  saltpan: 'The Saltpan',
+  mesa: 'The Mesa',
+  badlands: 'The Badlands',
+  tranquility: 'Tranquility',
+  copernicus: 'Copernicus',
+  farside: 'The Far Side',
+  neonpark: 'Neon Park',
+  chrome: 'Chrome Heights',
+  singularity: 'The Singularity',
   contoured: 'The Links, contoured',
   kickers: 'the holes with kickers',
   stream: 'a hole with a stream',
@@ -89,6 +100,15 @@ async function main() {
               { seed, on: 'woods' as const },
               { seed, on: 'isles' as const },
               { seed, on: 'old' as const },
+              { seed, on: 'saltpan' as const },
+              { seed, on: 'mesa' as const },
+              { seed, on: 'badlands' as const },
+              { seed, on: 'tranquility' as const },
+              { seed, on: 'copernicus' as const },
+              { seed, on: 'farside' as const },
+              { seed, on: 'neonpark' as const },
+              { seed, on: 'chrome' as const },
+              { seed, on: 'singularity' as const },
               { seed, on: 'contoured' as const },
               { seed, on: 'shed' as const },
               { seed, on: 'waterworks' as const },

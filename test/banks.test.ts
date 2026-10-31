@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { TILE, layoutOf, slopeAt, terrainAt, type Layout } from '../src/arena';
-import { CUP } from '../src/course';
+import { COURSES, CUP } from '../src/course';
 import { BANKS, golfHole, type GolfSpec } from '../src/golf';
 import { GREEN as GREEN_RULES } from '../src/green';
 import { HEATH_SPECS } from '../src/heath';
@@ -400,4 +400,105 @@ describe('rolling land: the banks', () => {
     expect(rolled).toBeGreaterThan(1000);
     void lost;
   }, 180_000);
+});
+
+/**
+ * The hazards, the tee and the cup of the nine biome courses' holes, hashed as `hazards` does from the code of 31 October 2026
+ * when they joined the game (they have no unrolled twin to be compared to, as the six above have): a hole that keeps its hazards
+ * keeps its layout, its seed and its par.
+ */
+const BIOME_HAZARDS: Record<string, number> = {
+  'The Saltpan/Salt Flat': 400008,
+  'The Saltpan/White Wash': 2708621779,
+  'The Saltpan/Mirage Road': 2157582067,
+  'The Saltpan/Dry Well': 2210665439,
+  'The Saltpan/Crust Walk': 2516026303,
+  'The Saltpan/Glass Pan': 1487205910,
+  'The Saltpan/Tumbleweed Run': 641342201,
+  'The Saltpan/Bone Flat': 3726391314,
+  'The Saltpan/Evening Glare': 3764256035,
+  'The Mesa/Sidewinder': 1709722718,
+  'The Mesa/Dry Wash': 3228973625,
+  'The Mesa/Mesa Edge': 748496100,
+  'The Mesa/The Anvil': 1983862750,
+  'The Mesa/Cholla Bend': 2156317113,
+  'The Mesa/Butte Drop': 3816729203,
+  'The Mesa/Ochre Ledge': 846632226,
+  'The Mesa/Red Rim': 2533000901,
+  'The Mesa/Canyon Mouth': 4105356147,
+  'The Badlands/Rattlesnake Ridge': 618623033,
+  'The Badlands/Skull Gulch': 3083100175,
+  'The Badlands/Scorpion Drop': 2357326140,
+  'The Badlands/Hell Hollow': 683167376,
+  'The Badlands/Gallows Wash': 3163233394,
+  'The Badlands/Buzzard Roost': 3446976780,
+  'The Badlands/Thirst': 2160404572,
+  'The Badlands/Boneyard': 1291930651,
+  'The Badlands/Last Water': 1971528154,
+  'Tranquility/Earthrise': 3175424445,
+  'Tranquility/Small Step': 2499349213,
+  'Tranquility/Mare Flat': 3911699361,
+  'Tranquility/Quiet Basin': 2112335959,
+  'Tranquility/Footprint': 1961823167,
+  'Tranquility/Dawn Plain': 855594489,
+  'Tranquility/Sea of Calm': 840718171,
+  'Tranquility/Lander\u2019s Rest': 1035613858,
+  'Tranquility/Moonrise': 2185035446,
+  'Copernicus/Sea of Rains': 4273967214,
+  'Copernicus/Eratosthenes': 3729374075,
+  'Copernicus/Apennine Climb': 3549059703,
+  'Copernicus/Kepler\u2019s Rim': 1413146328,
+  'Copernicus/The Central Peak': 3878349526,
+  'Copernicus/Ejecta': 2863253132,
+  'Copernicus/Terraced Wall': 3064941878,
+  'Copernicus/Crater Floor': 253104578,
+  'Copernicus/Gassendi': 3284311850,
+  'The Far Side/Terminator': 2582581121,
+  'The Far Side/The Rille': 2338372877,
+  'The Far Side/Shackleton': 1571884568,
+  'The Far Side/Aitken Basin': 180808706,
+  'The Far Side/Tsiolkovsky': 1492342324,
+  'The Far Side/Long Shadow': 3760392613,
+  'The Far Side/Moscoviense': 2383748643,
+  'The Far Side/Cold Trap': 4096879444,
+  'The Far Side/Last Light': 317693344,
+  'Neon Park/Neon Gate': 2678408314,
+  'Neon Park/Arcade Row': 1401689976,
+  'Neon Park/Hologram Alley': 2550589586,
+  'Neon Park/Laser Lawn': 3428145274,
+  'Neon Park/Pixel Plaza': 1391317809,
+  'Neon Park/Synth Drive': 2479342353,
+  'Neon Park/Light Rail': 2799931459,
+  'Neon Park/Glow Walk': 410889552,
+  'Neon Park/Encore': 131177576,
+  'Chrome Heights/Overclock': 3217624029,
+  'Chrome Heights/Heat Sink': 67343101,
+  'Chrome Heights/Server Rack': 3299007294,
+  'Chrome Heights/Mainframe': 4080266120,
+  'Chrome Heights/Uplink': 1411235852,
+  'Chrome Heights/Cold Boot': 790769618,
+  'Chrome Heights/Silicon Spur': 1094926717,
+  'Chrome Heights/Datum Ridge': 3679688573,
+  'Chrome Heights/Terminal': 596262581,
+  'The Singularity/Redshift': 434375814,
+  'The Singularity/Dead Pixel': 1260860832,
+  'The Singularity/Null Pointer': 1017398926,
+  'The Singularity/Warp Gate': 1719021287,
+  'The Singularity/Dark Matter': 3709111103,
+  'The Singularity/Zero Day': 529411733,
+  'The Singularity/Stack Overflow': 348319229,
+  'The Singularity/Last Packet': 1151862311,
+  'The Singularity/Event Horizon': 3956685475,
+};
+
+describe('the biome courses’ hazards', () => {
+  it('stand on the tiles they stood on when the courses joined the game, hole for hole', () => {
+    const got = Object.fromEntries(
+      COURSES.filter((c) => c.biome).flatMap((c) =>
+        c.holes.map((hole) => [`${c.name}/${hole.name}`, hazards(hole.map)]),
+      ),
+    );
+    expect(Object.keys(BIOME_HAZARDS)).toHaveLength(81);
+    expect(got).toEqual(BIOME_HAZARDS);
+  });
 });

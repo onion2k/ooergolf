@@ -102,6 +102,26 @@ export const BEFORE: Record<string, string> = {
   'The Woods/11': '43d7f46e',
   'The Old Course/3': '9e08d130',
   'The Old Course/11': '0d1e0070',
+  // the nine courses of the biomes, hashed as they landed in the game on 31 October 2026 (Part 12 of the biomes plan): a game with
+  // no kit plays each as it does now, which is all these hold
+  'The Saltpan/3': 'c8d7c338',
+  'The Saltpan/11': 'c3d6535e',
+  'The Mesa/3': '0ee1b75b',
+  'The Mesa/11': '3c3d3d5c',
+  'The Badlands/3': '63ebfa8c',
+  'The Badlands/11': '843c6efc',
+  'Tranquility/3': '7e8b750c',
+  'Tranquility/11': 'a121fd40',
+  'Copernicus/3': 'f46b5780',
+  'Copernicus/11': '2065316a',
+  'The Far Side/3': '8a94debc',
+  'The Far Side/11': 'c72edb35',
+  'Neon Park/3': 'c1f4acef',
+  'Neon Park/11': '1865b9ff',
+  'Chrome Heights/3': 'ca9bab47',
+  'Chrome Heights/11': '5cd16cc7',
+  'The Singularity/3': '720a6ee5',
+  'The Singularity/11': 'a2a544ce',
 };
 
 describe('a game with no kit is the game as it was', () => {
