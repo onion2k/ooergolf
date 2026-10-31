@@ -579,8 +579,10 @@ export function checkInvariants(game: Game): string[] {
     const postTop = heightAt(layout, world.x[ball], world.y[ball]) + BUMPER.height;
     if (into > 0.1 && world.z[ball] < postTop) out.push(`the ball is inside a post, ${into.toFixed(2)} into it`);
     out.push(...kickerProblems(game));
-    // a ball played never lies out of bounds: it is lost the moment it is on the ground there
-    if (layout.golf && world.asleep[ball]) {
+    // a ball played never lies out of bounds: it is lost the moment it is on the ground there. A hole that is over has no ball in
+    // play: the last stroke's ball, picked up when it had been rolling `KEPT_MOVING` seconds, goes on rolling and may stop out of
+    // bounds before the next hole begins, and costs nothing, since the card is the limit whether it was lost or not
+    if (layout.golf && phase === 'play' && world.asleep[ball]) {
       const t = tileAt(layout, world.x[ball], world.y[ball]);
       if (t >= 0 && zonesOf(layout).at(world.x[ball], world.y[ball]) === 'oob')
         out.push(`the ball is at rest out of bounds: ${at(ball)}`);

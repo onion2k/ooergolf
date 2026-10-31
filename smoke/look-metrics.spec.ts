@@ -21,8 +21,10 @@ import { expect, test, type Page } from '@playwright/test';
 import { TILE, heightAt, layoutOf, slopeAt, tileAt } from '../src/arena';
 import { VOLCANO } from '../test/hills';
 import { SUN } from '../src/sun';
+import { COURSES } from '../src/course';
+import { LIE } from '../src/surfaces';
 import { start, watch } from './game';
-import { figuresOf, type Figures, type Rgb, type Samples } from './metrics';
+import { figuresOf, luminance, medianColour, type Figures, type Rgb, type Samples } from './metrics';
 
 /**
  * What the look may not fall below: the clean toy of stages 3 and 4 of
@@ -184,3 +186,90 @@ test('the look holds its colour, the course stands out, the sun is told from the
     expect(figures[key], `${key}, against its floor`).toBeGreaterThanOrEqual(FLOORS[key]);
   expect(problems).toEqual([]);
 });
+
+/**
+ * The one figure of the look that means something on every biome: the fairway stands out from the rough. The Moon is the
+ * reason (one hue, and the plan's risk was grey on grey), and the Desert's fairway is a lighter gold on a red ground, and the
+ * Future's a lavender plate under holograms. How many times apart, in light, the middle fairway colour and the middle rough
+ * colour are, from the hole's own tee, sampled at tiles of each well clear of trees, sand and water. A floor for each, from
+ * what each was when its look was looked at (31 October 2026), less a twentieth: so a fairway lost into its rough, or a rough
+ * lit up to the fairway, is caught.
+ *
+ * The others of this file's figures are not set for a biome, each for its reason. The green's saturation is earth's: the Moon
+ * is grey by design and a floor of 0.66 would be a lie there. The rail's sunlit top against its shade is the minigolf rail's,
+ * and a golf hole has none. The shade's coolness is the sun's colour against the sky's, which three skies each answer
+ * differently by design (dusk's sun is pink, the Moon's has no sky to cool it). The shape of a hill by its flanks needs a hill
+ * drawn flat to have been seen to fail it, and the Moon's and the Future's holes have none made for it; the form light that
+ * reads it is one shader on every biome, held on earth by the Volcano.
+ */
+export const APART: Record<'desert' | 'moon' | 'future', { course: string; hole: number; floor: number }> = {
+  desert: { course: 'The Badlands', hole: 4, floor: 1.34 },
+  moon: { course: 'The Far Side', hole: 2, floor: 1.42 },
+  future: { course: 'Chrome Heights', hole: 2, floor: 1.24 },
+};
+
+for (const [biome, want] of Object.entries(APART) as [keyof typeof APART, (typeof APART)[keyof typeof APART]][])
+  test(`the fairway stands out from the rough in the ${biome}, from the tee of ${want.course} hole ${want.hole + 1}`, async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    const def = COURSES.find((c) => c.name === want.course)!.holes[want.hole];
+    const l = layoutOf(def.map, def.terrain, def.way, def.biome);
+    // tiles of a lie, ahead of the tee, with the same lie on every side two tiles out and no tree within two
+    const lieAt = (x: number, y: number) => {
+      const t = tileAt(l, x, y);
+      return t < 0 || l.solid[t] || l.water[t] || l.sand[t] ? -1 : l.lie[t];
+    };
+    const pick = (lie: number) => {
+      const found: { x: number; y: number; z: number }[] = [];
+      for (let y = l.originY + 2 * TILE; y < l.originY + (l.rows - 2) * TILE; y += TILE)
+        for (let x = l.originX + 2 * TILE; x < l.originX + (l.cols - 2) * TILE; x += TILE) {
+          const d = Math.hypot(x - l.tee.x, y - l.tee.y);
+          if (d < 14 || d > 70) continue;
+          let all = true;
+          for (const [dx, dy] of [
+            [0, 0],
+            [2, 0],
+            [-2, 0],
+            [0, 2],
+            [0, -2],
+          ])
+            if (lieAt(x + dx * TILE, y + dy * TILE) !== lie) all = false;
+          if (!all || l.trees.some((t) => Math.hypot(t.x - x, t.y - y) < 2 * TILE)) continue;
+          found.push({ x, y, z: heightAt(l, x, y) });
+        }
+      return found
+        .sort((a, b) => Math.hypot(a.x - l.tee.x, a.y - l.tee.y) - Math.hypot(b.x - l.tee.x, b.y - l.tee.y))
+        .slice(0, 14);
+    };
+    const fairway = pick(LIE.fairway),
+      rough = pick(LIE.rough);
+    expect(fairway.length, 'fairway tiles to sample').toBeGreaterThanOrEqual(5);
+    expect(rough.length, 'rough tiles to sample').toBeGreaterThanOrEqual(5);
+    await start(page, { seed: 11, paused: true });
+    const points = await page.evaluate(
+      ([course, hole, fairway, rough]) => {
+        const g = window.game!;
+        g.chooseCourse(course);
+        g.startHole(hole);
+        g.step(75);
+        for (const el of Array.from(document.querySelectorAll<HTMLElement>('.panel, #boot, #stats')))
+          el.style.visibility = 'hidden';
+        const to = (list: { x: number; y: number; z: number }[]) => list.map((p) => g.project(p.x, p.y, p.z));
+        return { fairway: to(fairway), rough: to(rough) };
+      },
+      [want.course, want.hole, fairway, rough] as const,
+    );
+    await page.evaluate(() => window.game!.grass());
+    const seen = await colours(page, points);
+    expect(seen.fairway.length, 'fairway points in view').toBeGreaterThanOrEqual(5);
+    expect(seen.rough.length, 'rough points in view').toBeGreaterThanOrEqual(5);
+    const a = luminance(medianColour(seen.fairway)),
+      b = luminance(medianColour(seen.rough));
+    const apart = Math.max(a, b) / Math.min(a, b);
+    console.log(
+      `look, ${biome}: the fairway and the rough are ${apart.toFixed(3)} times apart in light (fairway ${a.toFixed(3)}, rough ${b.toFixed(3)})`,
+    );
+    expect(apart, `${biome}: fairway against rough`).toBeGreaterThanOrEqual(want.floor);
+    expect(problems).toEqual([]);
+  });

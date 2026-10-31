@@ -14,11 +14,11 @@
  */
 import { type Mesh } from 'artshape-render/mesh/types';
 import { FastMeshBuilder as MeshBuilder } from './fastmesh';
-import { TILE, WATER_LEVEL, heightAt, tileAt, type Layout } from './arena';
+import { TILE, WATER_LEVEL, heightAt, slopeAt, tileAt, type Layout } from './arena';
 import { WATER, oceanPattern } from './models/obstacles';
 import { ROUGH } from './models/palette';
 import { EARTH_BANDS, EARTH_SHELF, themeOf } from './theme';
-import { PATTERN, matte, type Part } from './models/part';
+import { matte, type Part } from './models/part';
 import { BANK_STONE } from './models/lowpoly';
 import { hashed, seeded } from './random';
 import { ZONES, blur, distanceGrid, type Box, type Scratch } from './zones';
@@ -121,6 +121,12 @@ export interface WaterEdge {
 
 /** The blur of the water's tile indicator, in tiles. */
 const SIGMA = 1.2;
+/**
+ * Quicksilver's, in tiles: a lake with a kerb is drawn by its curve alone and must lie over the water's own tiles, and at 1.2 the
+ * curve strayed up to three yards onto the ground beside them at a corner of the shore, where the ground's square bank wall stood
+ * in view as a step; at a half it strays no more than three quarters of a yard, and the corners are still round.
+ */
+const SIGMA_QUICKSILVER = 0.5;
 /** The level the curve is drawn at, at most, and the least it is lowered to. */
 const LEVEL = { most: 0.45, least: 0.25, margin: 0.9 };
 /** Where each band begins, in yards in from the edge: foam, two bands of shallows, the mid water, then deep. */
@@ -133,6 +139,32 @@ const REACH = 6;
 /** The colours of the bands on earth, from the foam in (a biome's are its theme's). */
 export const BAND_COLOURS = EARTH_BANDS;
 const BAND_NAMES = ['foam', 'shallows', 'shallows 2', 'mid'];
+
+/**
+ * How high the ground stands at (x, y), a point at the water's side or past it: the height of the nearest ground (not water, not
+ * rock) found in a ring of rings round it, carried back to the point by that ground's own slope, so it is what the point would stand
+ * at were it ground and not the pit's floor. Looking every way for the nearest and not along a direction, which is the water's
+ * depth's gradient and has none well out past its curve, so no tile of the shelf reads another reach's ground and sticks up as a
+ * step. `fallback` where none is met.
+ */
+export function groundBeside(l: Layout, x: number, y: number, fallback: number) {
+  for (const reach of [0.6, 1.2, 2, 3, 4.5, 6]) {
+    let best: { qx: number; qy: number } | null = null;
+    for (let k = 0; k < 24; k++) {
+      const a = (k / 24) * Math.PI * 2;
+      const qx = x + Math.cos(a) * reach,
+        qy = y + Math.sin(a) * reach;
+      const t = tileAt(l, qx, qy);
+      if (t < 0 || l.water[t] || l.solid[t]) continue;
+      if (!best) best = { qx, qy };
+    }
+    if (best) {
+      const [sx, sy] = slopeAt(l, best.qx, best.qy);
+      return heightAt(l, best.qx, best.qy) - sx * (best.qx - x) - sy * (best.qy - y);
+    }
+  }
+  return fallback;
+}
 
 /** The water's curve: the 0.45 level set of its blurred tiles, lowered where a channel would vanish; null on a hole with no water. */
 export function waterEdgeOf(l: Layout): WaterEdge | null {
@@ -162,13 +194,14 @@ function edgeOf(
     value[t] = l.water[t] ? 1 : 0;
     weight[t] = l.solid[t] && !l.water[t] ? 0 : 1;
   }
-  const r = Math.ceil(SIGMA * 3);
+  const sigma = themeOf(l).water.quicksilver ? SIGMA_QUICKSILVER : SIGMA;
+  const r = Math.ceil(sigma * 3);
   box.x0 = Math.max(0, box.x0 - r);
   box.y0 = Math.max(0, box.y0 - r);
   box.x1 = Math.min(cols - 1, box.x1 + r);
   box.y1 = Math.min(rows - 1, box.y1 + r);
   const scratch: Scratch = { a: new Float32Array(n), w: new Float32Array(n), tb: new Float32Array(n) };
-  blur(value, weight, cols, rows, SIGMA, box, scratch);
+  blur(value, weight, cols, rows, sigma, box, scratch);
   // a half where every water tile's middle is above it, lower where a channel is thin, or it would be drawn away
   let low = 1;
   for (let t = 0; t < n; t++) if (l.water[t]) low = Math.min(low, scratch.tb[t]);
@@ -259,11 +292,11 @@ function build(l: Layout): Pond {
   const shelf = new MeshBuilder();
   const crater = themeOf(l).water.crater;
   // a crater's bands are wider than earth's, since it is a bowl and not a step
-  const mirror = themeOf(l).water.mirror;
+  const quicksilver = themeOf(l).water.quicksilver;
   const edges: readonly number[] = crater ? CRATER.edges : EDGES;
-  // a mirror is one sheet of clear water at the water's level, and not a band of foam, shallows and deep: every band is one mesh
+  // quicksilver is one sheet at the water's level, and not a band of foam, shallows and deep: every band is one mesh
   const one = new MeshBuilder();
-  const bands = edges.map(() => (mirror ? one : new MeshBuilder()));
+  const bands = edges.map(() => (quicksilver ? one : new MeshBuilder()));
   const zShelf = WATER_LEVEL + SHELF.rise;
   const ground = (tx: number, ty: number) =>
     tx >= 0 && ty >= 0 && tx < cols && ty < rows && !l.water[ty * cols + tx] && !l.solid[ty * cols + tx];
@@ -280,19 +313,13 @@ function build(l: Layout): Pond {
   const emit = (b: MeshBuilder, z: number, poly: readonly Vx[]) => {
     if (poly.length < 3) return;
     const ids = poly.map((p) => {
-      // a mirror's shelf (the water's tiles outside its curve) lies on the level of the ground beside it, read where it is, and its
+      // a quicksilver's shelf (the water's tiles outside its curve) lies on the level of the ground beside it, read where it is, and its
       // sheet at the water's level: so no tile sticks out as a step past the curve
-      if (mirror && b === shelf) {
-        const e = 0.3;
-        let gx = edge.depth(p.x + e, p.y) - edge.depth(p.x - e, p.y),
-          gy = edge.depth(p.x, p.y + e) - edge.depth(p.x, p.y - e);
-        const gl = Math.hypot(gx, gy) || 1;
-        gx /= gl;
-        gy /= gl;
+      if (quicksilver && b === shelf) {
         return b.vertex(
           p.x - l.originX,
           p.y - l.originY,
-          groundBeyond(p.x, p.y, gx, gy, Math.max(p.v, 0)),
+          groundBeside(l, p.x, p.y, meanTop),
           0,
           0,
           1,
@@ -347,7 +374,7 @@ function build(l: Layout): Pond {
 
   // the ground a crater lies in, on the whole: what its floor is measured from, since a floor is flat
   let meanTop = 0;
-  if (crater || mirror) {
+  if (crater || quicksilver) {
     let sum = 0,
       count = 0;
     for (let t = 0; t < cols * rows; t++) {
@@ -384,9 +411,9 @@ function build(l: Layout): Pond {
   const deep = edges[edges.length - 1];
   const at = (x: number, y: number, v: number): Vx => ({ x, y, v });
   for (let t = 0; t < cols * rows; t++) {
-    if (!l.water[t]) continue;
     const tx = t % cols,
       ty = (t - tx) / cols;
+    if (!l.water[t]) continue;
     const x0 = l.originX + tx * TILE,
       y0 = l.originY + ty * TILE;
     const gS = ground(tx, ty - 1),
@@ -428,7 +455,7 @@ function build(l: Layout): Pond {
         at(x0, y0 + TILE, deep),
       ]);
     } else if (highest < 0) {
-      const out = crater || mirror ? -CRATER.lip : -1;
+      const out = crater || quicksilver ? -CRATER.lip : -1;
       emit(shelf, zShelf, [
         at(x0, y0, out),
         at(x0 + TILE, y0, out),
@@ -437,7 +464,8 @@ function build(l: Layout): Pond {
       ]);
     } else {
       // the depth is the curve's, or the tile's side where it meets ground, whichever is nearer
-      const dd = (x: number, y: number) => (crater || mirror ? edge.depth(x, y) : Math.min(edge.depth(x, y), sd(x, y)));
+      const dd = (x: number, y: number) =>
+        crater || quicksilver ? edge.depth(x, y) : Math.min(edge.depth(x, y), sd(x, y));
       const step = TILE / per;
       const rowv: Vx[][] = [];
       for (let j = 0; j <= per; j++) {
@@ -489,8 +517,8 @@ function build(l: Layout): Pond {
 
   // a crater's rim has a boulder here and there, a third of the ring and not a wall of them
   const packed = pack(cx, cy, cd, cs, cz, random, kind);
-  // and none round a mirror, whose kerb is clean chrome
-  const spots = mirror ? [] : crater ? packed.filter((_, i) => i % 3 === 0) : packed;
+  // and none round a quicksilver, whose kerb is clean chrome
+  const spots = quicksilver ? [] : crater ? packed.filter((_, i) => i % 3 === 0) : packed;
 
   // the water in the colours of the hole's biome: a layout has one, so the pond kept for it is right
   const water = themeOf(l).water;
@@ -500,23 +528,16 @@ function build(l: Layout): Pond {
     parts.push({
       name: 'shelf',
       mesh: shelf.build(),
-      material: matte(water.shelf as [number, number, number], mirror ? 0.12 : ROUGH.rock),
+      material: matte(water.shelf as [number, number, number], quicksilver ? 0.12 : ROUGH.rock),
     });
-  if (mirror) {
-    // one sheet of clear water, silver: the shallows' colour where it is thin and the deep's where nothing is under it
+  if (quicksilver) {
+    // one sheet of quicksilver following the curve, dark polished liquid metal in the open water's own waves and glints
     if (one.vertexCount)
       parts.push({
         name: 'deep',
         mesh: one.build(),
         material: w(water.ocean.body),
-        pattern: {
-          kind: PATTERN.clear,
-          scale: 1,
-          seed: 0,
-          speed: 0,
-          glow: 0,
-          second: water.ocean.tint as [number, number, number],
-        },
+        pattern: oceanPattern(l.golf ? water.ocean.scale : water.ocean.minigolfScale, water.ocean),
       });
     return { parts, spots };
   }

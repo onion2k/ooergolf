@@ -11,6 +11,7 @@ import { AIM_DEAD, AIM_TURN, ARRIVED, Director, FOLLOW } from '../src/director';
 import { Camera } from 'artshape-render/gpu/camera';
 import { safeBox } from '../src/aimview';
 import { heightAt } from '../src/arena';
+import type { BiomeName } from '../src/biome';
 import { KICKER_HOLES } from '../scripts/fuzzer';
 import { Progress, memoryStore } from '../src/progress';
 import { Game } from '../src/game';
@@ -680,8 +681,15 @@ describe('the turn to the aim', () => {
 
 describe('following the ball one shot in five', () => {
   /** A drive struck full at the cup's end of the field, the director told as the page tells it, and every frame's ball seen as the camera draws it. */
-  function drive(aspect: number, height: number, mode: 'always' | 'never' | 'drawn', club = 'driver', power = 1) {
-    const { game } = golfGame(field('f'));
+  function drive(
+    aspect: number,
+    height: number,
+    mode: 'always' | 'never' | 'drawn',
+    club = 'driver',
+    power = 1,
+    biome?: BiomeName,
+  ) {
+    const { game } = golfGame(field('f', 130, 41, undefined, 1, biome));
     const rig = new CameraRig();
     const director = new Director(rig);
     director.use(game);
@@ -840,6 +848,36 @@ describe('following the ball one shot in five', () => {
       );
     });
   }
+
+  // the Moon's ball hangs 1.53 times as long over the same distance: the hold, the hand-over and the follow are by game time and
+  // must still keep the ball on the screen, and not lurch, on both screens
+  for (const [aspect, height] of [
+    [1.6, 800],
+    [400 / 860, 860],
+  ] as const)
+    for (const mode of ['never', 'always'] as const)
+      it(`keeps the fastest drive on the Moon on the screen, the camera told ${mode}, with no lurch, on ${aspect.toFixed(2)}`, () => {
+        const { seen, box, game } = drive(aspect, height, mode, 'driver', 1, 'moon');
+        const earth = drive(aspect, height, mode, 'driver', 1);
+        // slower in the air by the pace, so the flight is seen for as many more frames
+        expect(seen.length / earth.seen.length).toBeGreaterThan(1.3);
+        expect(game.layout.biome).toBe('moon');
+        for (const s of seen.filter((s) => !s.ready)) {
+          expect(Math.abs(s.nx), `at ${s.t.toFixed(2)}`).toBeLessThanOrEqual(box.x + 0.02);
+          expect(s.ny, `at ${s.t.toFixed(2)}`).toBeLessThanOrEqual(box.top + 0.02);
+          expect(s.ny, `at ${s.t.toFixed(2)}`).toBeGreaterThanOrEqual(box.bottom - 0.02);
+        }
+        // the hand-over is as smooth as it is on earth (held to its cap when the camera holds, and no worse than earth's when it follows)
+        const lurch = (d: { seen: typeof seen }) => {
+          const f = d.seen.filter((s) => !s.ready);
+          const sp = f.slice(1).map((s, i) => Math.hypot(...s.at.map((v, k) => v - f[i].at[k])) / DT);
+          let m = 0;
+          for (let i = 1; i < sp.length; i++) m = Math.max(m, Math.abs(sp[i] - sp[i - 1]) / DT);
+          return m;
+        };
+        if (mode === 'never') expect(lurch({ seen })).toBeLessThan(HANDOVER_ACCEL);
+        else expect(lurch({ seen })).toBeLessThanOrEqual(lurch(earth) * 1.05);
+      });
 
   it('holds the target at the strike point for a putt that stays inside the box, and eases to the ball when it is ready', () => {
     const { seen, game, rig, director } = drive(1.6, 800, 'never', 'putter', 0.1);

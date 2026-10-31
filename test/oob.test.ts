@@ -131,6 +131,17 @@ describe('a ball out of bounds', () => {
     expect(checkInvariants(game).join('\n')).toMatch(/at rest out of bounds/);
   });
 
+  it('is not the rule’s business once the hole is over: a ball picked up at the limit while still rolling may stop out of bounds', () => {
+    const { game } = golfGame(withBand(38, 46));
+    const l = game.layout;
+    game.world.x[game.ball] = l.tee.x + 3;
+    game.world.y[game.ball] = l.originY + (l.rows - 1 - 42 + 0.5) * 3;
+    game.world.asleep[game.ball] = 1;
+    expect(checkInvariants(game).join('\n')).toMatch(/at rest out of bounds/);
+    game.phase = 'done';
+    expect(checkInvariants(game).join('\n')).not.toMatch(/at rest out of bounds/);
+  });
+
   it('is what a rehearsal calls lost, so a plan never counts on ground out of bounds', async () => {
     const { Rehearsal } = await import('../src/planner');
     const { game } = golfGame(withBand(38, 46));

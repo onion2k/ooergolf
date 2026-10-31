@@ -682,7 +682,7 @@ export class Scene {
         [panLipOf(layout), P.panLip, 'plain'],
       );
     // a mirror's kerb: clean chrome along the curve of its water, a wall and a lip
-    if (golf && theme.water.mirror) laid.push([kerbOf(layout), KERB_CHROME, 'plain']);
+    if (golf && theme.water.quicksilver) laid.push([kerbOf(layout), KERB_CHROME, 'plain']);
     // a crater's rim, two ribbons of ejecta on the ground round the pit, the soft one under the pale and falling to the dust
     if (golf && theme.water.crater) {
       const rims = craterRimsOf(layout);
@@ -1812,7 +1812,7 @@ export class Scene {
   /** A ball went into the water at (x, y) at game time `t`: a ring spreads from there until it fades. */
   splashedAt(x: number, y: number, t: number) {
     // open water draws no ring, so none is kept for the page to read back
-    if (this.layout && lookOf(this.layout) === 'ocean' && !themeOf(this.layout).water.mirror) return;
+    if (this.layout && lookOf(this.layout) === 'ocean' && !themeOf(this.layout).water.quicksilver) return;
     this.splashed = { x, y, at: t };
   }
 

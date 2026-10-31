@@ -10,7 +10,7 @@ tool holds it in is the one to trust.
 What is in `src/` is a round of
 a course, chosen on a start screen: holes drawn as maps, each played from
 its tee to its cup with a drag pulled back and let go, scored against par,
-and the card at the end. Nine courses are here, on artshape-physics v0.8.0, three of minigolf and six of golf.
+and the card at the end. Eighteen courses are here, on artshape-physics v0.8.0: three of minigolf, six of golf and nine of golf in the three biomes (below).
 The Meadow is nine holes of grass, rail, sand, water, raised grass, posts,
 sliding barriers, a windmill and a conveyor, with a green that lets a putt
 die, a rail and obstacles that bounce, posts that throw a ball back faster
@@ -64,6 +64,40 @@ gone. Its holes' names are unknown to the game now, and a save that names one
 still loads (a best is kept by name, and an unknown name is carried). What the tests used it for, a golf hole with level
 ground, is `FLAT` and `levelHole` in `test/level.ts` (re-exported by `test/helpers.ts`).
 
+### The biomes
+
+Nine more courses of golf, built from `~/.claude/plans/fizzy-percolating-balloon.md` and landed on 31 October 2026 (ccd62a9; 162
+holes in all, every name unique): **the Desert** (`src/saltpan.ts`, `mesa.ts`, `badlands.ts`), **the Moon** (`tranquility.ts`,
+`copernicus.ts`, `farside.ts`) and **the Future** (`neonpark.ts`, `chrome.ts`, `singularity.ts`), each an easy, a middle and a hard
+course by the pace figures (below), each from `X_SPECS`, with a test holding every count of its table as `test/woods.test.ts` does.
+Only these nine are in a biome: minigolf and the six older courses are earth, which is a hole that names no biome, and every
+hash, pace figure and picture of earth is as it was (`golf-hash`, `kit-hash` and `begin-same` hold it).
+
+**The seam.** `HoleDef.biome` (and `GolfSpec.biome`; absent means earth and is left out of a hole's hash) is copied by `layoutOf` to
+`layout.biome`, and every read of a figure of play goes through it: `biome.ts` is the game's side (`BIOMES[name]`: `pace`, `calm`,
+`surfaces`, `hazard`, `tree` and `words`) and `theme.ts` the picture's (`THEMES[name]`: ground colours, bank tint, water bands, grass
+kinds or none, texture layers, the look and the model sets, which are built lazily one a biome). `applyLook` swaps the look as a hole
+begins, so a hole of one biome after another's takes every field of its own, and an earth hole after any takes earth's back, the title's
+sky too (`smoke/biome.spec.ts`, from `smoke/biomes.ts`'s hand-written figures, which `test/theme.test.ts` holds equal to the themes).
+`test/biome.test.ts` and `test/theme.test.ts` hold the seam.
+
+**What each biome changes.** _Desert:_ a cactus for a tree (a post and a small cone, `glance` almost nothing, so a ball drops at its
+foot), a lake that is a hardpan (`LIE.pan`, map char `d`: ground a ball skitters across fast and high and is never lost to, a row in
+the desert's surfaces; a ball that runs off it may go out of bounds), a firmer fairway, yellow tufts for rough, red sand, strong wind.
+_Moon:_ no trees (`trees` and `woods` are refused by name on a spec), no wind, craters for lakes (water to the game: a stroke, a ball put
+back, their own words), regolith with no blades, and the world's clock at `pace` 0.655, which is the root of 30 over 70, so a ball hangs
+1.53 times as long and every distance, the autopilot and the rules stay as they were; `PHYSICS.gravity` is not touched. _Future:_
+holograms for trees (no trunk body in `physics.ts`; the canopy test in `game.ts` slows a ball by about half and never turns it, and
+tells `flickered` for the picture; excused from "never at rest inside a canopy"; the route allows it), quicksilver for lakes
+(water to the game, drawn as one sheet of the open water's waves in a dark steel-blue body with a chrome kerb; the true mirror of the scene was built and went, see LOOK.md), plates for rough, livelier bounce, no blades,
+the `dusk` environment. The Moon and the Future grow no grass, on any rung. Landing throws dust of the biome's colour (`dust()`),
+and the Moon's dust plume and rigid flag, the desert's tumbleweeds and the future's sparks are drawn from game time alone.
+
+**The tours.** Each biome is a tour of three events, its three courses easiest first, as the mini tour is; the golf tour stays six
+and an old save's season is unchanged (`TOURS` appended, never reordered; the defaults are in `progress.ts`, and `test/saves/12-biomes.json`
+is a save in the new shape). The start screen's picker has five tabs, Golf, Desert, Moon, Future and Minigolf, held to fit at 400 px
+(`test/picker.test.ts`). `field.json` and `previews.json` hold the rivals' table and the holes' pictures for all eighteen.
+
 ## Budgets and pace
 
 A budget is what the game may cost at all; a baseline is what it cost at
@@ -106,7 +140,10 @@ today, and what the next features must hand it:
   shape, how much brighter a hill's sunward flank is than the one turned
   from the sun, which reads one for a hill drawn as flat. The pictures are
   written again whenever a change is meant; the floors stay, so a greyer or
-  flatter look is caught even then.
+  flatter look is caught even then. For the biomes, one figure means something and is held: how many times apart in light the
+  middle fairway and the middle rough colours are, from a tee of each (`APART` in `smoke/look-metrics.spec.ts`: Desert 1.41, Moon
+  1.49, Future 1.31, on 31 October 2026, each floored a twentieth less). The saturation, rail, cool shade and hill's shape are
+  earth's and are not held for a biome, for the reasons the file gives; the Future's rough is the lighter of the two.
 - **Fuzz:** the monkey strikes the ball any way at any power, strikes it
   well at the cup (the autopilot's shot, slipped), tries to strike it while
   it rolls or between holes, waits, reloads, asks for another round when
@@ -212,6 +249,15 @@ today, and what the next features must hand it:
   the one its game time alone says, worked out afresh, its root has not moved and its box has no speed but its turn
   (`flipperProblems`); every tile of a stream is a belt's and no water, rock or out of bounds (`streamProblems`); and the
   ball is inside no moving box, which a flipper's turned frame is held to as a barrier's is.
+- **Perf, and the frames of the biomes:** `perf` holds the earth's: boot 306 ms, a frame 3.13 ms, download 298 kB (264.2 before the
+  biomes, the sound and nine courses of content), the biggest minigolf hole's begin 49 ms and frame 3.43 ms and the biggest
+  golf hole's (The Isles' Home Waters) 175 ms and 4.14 ms, each in `smoke/perf-baseline.json`. `biggestGolfHole` in `perf.spec.ts`
+  skips the nine biome courses on purpose, so that a course added to a biome moves none of these. Their own scenes are
+  `smoke/biome-frames.spec.ts`, held to the budget alone with no baseline: the heaviest tee of each biome, read from the layouts
+  (Gallows Wash's 182 cacti, Skull Gulch, the biggest map of the desert; Shackleton's craters and Apennine Climb; Server Rack's 129
+  holograms and Null Pointer's quicksilver among 100 of them, and Dark Matter), on a desk and a phone inside 6 ms, and the longest
+  hole (Boneyard, 760 yards) and the biggest map begun inside 400 ms. `smoke/biome.spec.ts` holds a heavy tee of test holes on
+  every rung of the ladder.
 - **Determinism:** the autopilot plays, with a player's slips from its own
   chance, round after round, and the hash takes in the hole and the card.
 - **Pace:** the strokes a round of each course takes; see above (the minigolf courses: The Meadow 16.63 for par 26, The
@@ -253,9 +299,10 @@ today, and what the next features must hand it:
   retune them is for the user. Before that, 5 October 2026, when the Fells' hole five was renamed The Plunge (its wind is a
   name's, and it moved the figure from 34.63 to 35.44).
 - **Leaks:** ten minutes of the autopilot playing round after round, on The
-  Meadow and again on each golf course (`GOLF_COURSES` in `scripts/leaks.ts`: the six, under
-  the Links' ceilings but for the save's bytes, 10,800 since 16 October 2026 for eighty-one holes' bests, the career's nine
-  course records, both tours' seasons at their longest, an event kept and the caddie's three counts at their limit (10,203 measured, held to the byte by `test/leaks.test.ts`); `leaks:check` queues the seven, an hour and ten minutes, and `--on` narrows a run to one kind for a short look; a test holds that a hole
+  Meadow and again on each golf course (`GOLF_COURSES` in `scripts/leaks.ts`: the six, and one course of each biome, The
+  Saltpan, Copernicus and Chrome Heights, since a biome's three courses share every line a run watches; under
+  the Links' ceilings but for the save's bytes, 20,400 since 31 October 2026 for a hundred and sixty-two holes' bests, the career's eighteen
+  course records, all five tours' seasons at their longest, an event kept and the caddie's three counts at their limit (19,732 measured, held to the byte by `test/leaks.test.ts`; it was 10,800 for eighty-one holes' bests, 10,203 measured); `leaks:check` queues the ten, an hour and forty minutes of play in parallel, and `--on` narrows a run to one kind for a short look; a test holds that a hole
   with a lane is collectable, so `laneOf`'s cache keeps nothing alive, and one each that `zonesOf`'s and `pondOf`'s tables are weak; the
   arena's reused ground weights are emptied at 256, held by a test, and nothing of the new caches is kept for a game's life, so
   nothing was added to `scripts/leaks.ts`). The card is emptied each round and
@@ -1252,7 +1299,10 @@ it. Time: `pause`, `resume`, `step(frames)`, `seed(n)`, and `?seed=N` and
 `ball`, `bodies`, `content` (the hole's grass, tee and cup, its sand and
 posts, kickers, trees, `zones(x, y)` (the golf ground's zone at a point, null on minigolf), the hardest shot, and every hole's name and par), `events`,
 `invariants`, and `aiming`,
-the shot a drag under way would make. `state` has the hole, its par, the
+the shot a drag under way would make. `theme()` reports the look the renderer has on now: the biome's `name`, its sky (`zenith`,
+`horizon`, `height`), `background`, `sunDir`, `fog`, the baked `environment` (`daylight` or `dusk`), and whether the hole grows blades (`grass`); `dust()` is the colour the last stroke or landing threw up, as
+the biome has it, or null before one. `smoke/biomes.ts` writes each biome's figures out by hand for a smoke test to hold the page to, and
+`test/theme.test.ts` holds them equal to the themes. `state` has the hole, its par, the
 phase (`play`, `done`, `over`), the card, the coins and gems, the club in
 hand, the items owned and the kit worn (`kit`: club, ball, accessory), the hardest shot the club in hand strikes, the
 course's name, whether the start screen is up (`choosing`), and whether the
@@ -1324,6 +1374,14 @@ ball down at a lie.
 
 ## What is not there yet
 
+- The biomes, as they are. **No person has played a biome course** (they landed on 31 October 2026 before the full pass, which
+  this section's gates came from), so how the Desert's firm ground, the Moon's slower flight and the Future's holograms feel to
+  play is for the user to judge, as is each course's hardness: over seeds 17 to 48 The Far Side's Aitken Basin was picked up 3 times in 32,
+  past the one in sixteen held; Chrome Heights' running share is low (4 to 24 per cent). **The quicksilver is chosen** (dark liquid metal, 31 October 2026): from a tee on Server Rack its small ponds read as dark ovals with a gold
+  rim; every picture of the Future has it (named `quicksilver`, the last of `smoke/look.spec.ts`), and its outline is the map's own, rounded. The
+  Moon's Earth is a low-poly blue ball and its stars are seen in the fly-in only (the play view looks under the horizon). The
+  career was not looked at on a desk 901 to 1000 px wide. A caddie's tip card covers the lower left of a phone's fly-in on a hole
+  with sand and hides the ball, as it does on earth.
 - The Fells and The Isles, as they are. The preview shows only the first landing, so how far a ball runs down The Fells' slopes
   after it lands is not seen, which is the biggest risk to how the course feels and is for the user to judge by playing. The
   autopilot and the pace player know no slope and play round the wood, so a lane is a human's shortcut that no gate plays.

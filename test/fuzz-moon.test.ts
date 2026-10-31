@@ -6,6 +6,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { fuzz } from '../scripts/fuzzer';
+import { COURSES } from '../src/course';
 import { copernicus } from '../src/copernicus';
 import { farside } from '../src/farside';
 import { tranquility } from '../src/tranquility';
@@ -22,4 +23,12 @@ describe('the monkey on the Moon', () => {
         expect(r.failure, `seed ${seed}: ${JSON.stringify(r.failure)}`).toBe(null);
         expect(r.happened.struck || 0, 'strokes were taken').toBeGreaterThan(30);
       }, 120_000);
+
+  // found by `npm run fuzz -- --seeds 1-24` on 31 October 2026: a 3-wood aimed from the rough of Sea of Rains and struck with a
+  // sideways miss came down on ground two yards lower than the ring the preview showed, and flew on past the box the check drew
+  it('plays seed 22 on Copernicus as the gate does: a shot that misses sideways onto lower ground is held to the ground it found', () => {
+    const course = COURSES.find((c) => c.name === 'Copernicus')!;
+    const r = fuzz(22, 4000, course.holes, { name: course.name, purse: course.purse });
+    expect(r.failure, JSON.stringify(r.failure)).toBe(null);
+  }, 120_000);
 });

@@ -529,6 +529,42 @@ pictures (kept in `~/.claude/plans/ooergolf-3d-title-evidence/`):
 What is left open: the traced shapes are as good as the picture is, and the colours of the outline and the faces were set by eye
 against the picture, a matter of taste for the user to judge in play.
 
+## After the stages: the biomes
+
+Three looks beside the earth's, for the nine courses of golf of 31 October 2026 (`~/.claude/plans/fizzy-percolating-balloon.md`).
+Each is a theme (`src/theme.ts`) the picture applies as a hole begins, and the earth's is what it always was, held equal by a test.
+The user chose each from a sheet of candidates on 31 October 2026 (`~/.claude/plans/ooergolf-biomes-evidence/`): **Desert B**, **Moon A**
+and **Future A**.
+
+- **The Desert:** red earth, a low hot sun and a pale orange haze; the rough a sparse yellow tuft on bare ground, the fairway a pale
+  straw gold made more different from the rough than the sheet had it, the green a tended oasis, red sand, and a lake that is a
+  hardpan of cracked clay. Its trees are saguaros of sage green in flower, in a hundred and more on a hole; past the hole mesas, scrub,
+  tumbleweeds and bleached stones. Dust at a landing is the sand's colour.
+- **The Moon:** a hard white sun, near-black shade and no haze under a black sky; the rough regolith with no blades, the fairway pale
+  grey on dark dust, craters for lakes (a dark pit and an ejecta rim). No trees, boulders instead, and grey hills; the Earth and stars
+  are seen in the fly-in only, since the play view looks under the horizon. The flag is rigid, and a landing throws a plume that
+  settles slowly. The ball is held legible on grey by its own colour (a contrast of 2.6).
+- **The Future:** bright brushed steel at dusk, with bloom on the neon; the rough a plate with seams and no blades, the green a
+  polished plate, sand a grit plate. Its trees are holograms of cyan rings with no sheet between (the renderer has no alpha on the
+  game's path) that flicker from game time, and a ball passes through; past the hole a skyline of lit windows and pylons. A lake is
+  quicksilver, dark polished liquid metal: the open water's own waves and white glints on a steel-blue body (5a6684), one smooth sheet
+  that follows a rounded curve, past it the steel's own shelf and a thin chrome kerb; a ball's fall throws a ring and silver droplets.
+  The cup glows. **The true mirror was built and went:** quicksilver was for a time the renderer's clear water with the scene drawn
+  again upside down in it, and it cost 0.9 ms of a frame on a desk and 0.4 on a phone, and from a tee it mirrored plain sky and read
+  as a flat grey, so the user chose "the dark version to finish" (31 October 2026). It is out of the code and not off, so it is not to
+  be built again without knowing this.
+
+**What the pictures hold** (`smoke/look.spec.ts`, from 31 October 2026): a hole of each, from its tee, with a shot aimed from the aim
+view, and in its fly-in, on a desk and a phone, and a close cactus, hardpan and crater (the Desert's, the Moon's); the Future's, which
+are last in the file, are named for the quicksilver that is in every one of them. `look:metrics` holds each biome's fairway at least
+1.34 (Desert), 1.42 (Moon) and 1.24 (Future) times apart in light from its rough.
+
+**What is left to the user.** The quicksilver is chosen. A lake on its first tee is small and far (Server Rack's read as dark ovals
+with a gold rim; Null Pointer's, the largest, is a grey-brown patch at the top of the tee picture) and is seen well only from near
+(`biome-future-quicksilver-lake.png`); a lake's outline is the map's own, a tile's jogs rounded at their corners, since a smoother
+curve strays onto the ground beside it. How the Moon's grey reads at a distance on a phone, the Earth's low-poly look, and the Future's tee on a hole
+with sand, where the caddie's tip card hides the ball on a phone's fly-in. No person had looked at a biome in play before it landed.
+
 ## Across every stage
 
 - **The frame:** measured before and after at the standard view and the
