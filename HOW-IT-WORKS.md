@@ -89,7 +89,7 @@ back, their own words), regolith with no blades, and the world's clock at `pace`
 1.53 times as long and every distance, the autopilot and the rules stay as they were; `PHYSICS.gravity` is not touched. _Future:_
 holograms for trees (no trunk body in `physics.ts`; the canopy test in `game.ts` slows a ball by about half and never turns it, and
 tells `flickered` for the picture; excused from "never at rest inside a canopy"; the route allows it), quicksilver for lakes
-(water to the game, drawn as a mirror of the scene: `mirror` in the theme's report), plates for rough, livelier bounce, no blades,
+(water to the game, drawn as one sheet of the open water's waves in a dark steel-blue body with a chrome kerb; the true mirror of the scene was built and went, see LOOK.md), plates for rough, livelier bounce, no blades,
 the `dusk` environment. The Moon and the Future grow no grass, on any rung. Landing throws dust of the biome's colour (`dust()`),
 and the Moon's dust plume and rigid flag, the desert's tumbleweeds and the future's sparks are drawn from game time alone.
 
@@ -1300,8 +1300,7 @@ it. Time: `pause`, `resume`, `step(frames)`, `seed(n)`, and `?seed=N` and
 posts, kickers, trees, `zones(x, y)` (the golf ground's zone at a point, null on minigolf), the hardest shot, and every hole's name and par), `events`,
 `invariants`, and `aiming`,
 the shot a drag under way would make. `theme()` reports the look the renderer has on now: the biome's `name`, its sky (`zenith`,
-`horizon`, `height`), `background`, `sunDir`, `fog`, the baked `environment` (`daylight` or `dusk`), whether the hole grows blades (`grass`) and whether
-the renderer is asked to mirror the scene in its water (`mirror`, a Future hole's alone); `dust()` is the colour the last stroke or landing threw up, as
+`horizon`, `height`), `background`, `sunDir`, `fog`, the baked `environment` (`daylight` or `dusk`), and whether the hole grows blades (`grass`); `dust()` is the colour the last stroke or landing threw up, as
 the biome has it, or null before one. `smoke/biomes.ts` writes each biome's figures out by hand for a smoke test to hold the page to, and
 `test/theme.test.ts` holds them equal to the themes. `state` has the hole, its par, the
 phase (`play`, `done`, `over`), the card, the coins and gems, the club in
@@ -1378,9 +1377,8 @@ ball down at a lie.
 - The biomes, as they are. **No person has played a biome course** (they landed on 31 October 2026 before the full pass, which
   this section's gates came from), so how the Desert's firm ground, the Moon's slower flight and the Future's holograms feel to
   play is for the user to judge, as is each course's hardness: over seeds 17 to 48 The Far Side's Aitken Basin was picked up 3 times in 32,
-  past the one in sixteen held; Chrome Heights' running share is low (4 to 24 per cent). **The quicksilver's look is the user's to
-  choose**: it reads as a flat pale mirror of the dusk sky, and from a tee on Server Rack its small ponds read as dark ovals with a gold
-  rim, the mirror itself not seen; every picture of the Future has it (named `quicksilver`, the last of `smoke/look.spec.ts`). The
+  past the one in sixteen held; Chrome Heights' running share is low (4 to 24 per cent). **The quicksilver is chosen** (dark liquid metal, 31 October 2026): from a tee on Server Rack its small ponds read as dark ovals with a gold
+  rim; every picture of the Future has it (named `quicksilver`, the last of `smoke/look.spec.ts`), and its outline is the map's own, rounded. The
   Moon's Earth is a low-poly blue ball and its stars are seen in the fly-in only (the play view looks under the horizon). The
   career was not looked at on a desk 901 to 1000 px wide. A caddie's tip card covers the lower left of a phone's fly-in on a hole
   with sand and hides the ball, as it does on earth.

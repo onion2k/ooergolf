@@ -547,17 +547,22 @@ and **Future A**.
 - **The Future:** bright brushed steel at dusk, with bloom on the neon; the rough a plate with seams and no blades, the green a
   polished plate, sand a grit plate. Its trees are holograms of cyan rings with no sheet between (the renderer has no alpha on the
   game's path) that flicker from game time, and a ball passes through; past the hole a skyline of lit windows and pylons. A lake is
-  quicksilver, which mirrors the scene, and the cup glows.
+  quicksilver, dark polished liquid metal: the open water's own waves and white glints on a steel-blue body (5a6684), one smooth sheet
+  that follows a rounded curve, past it the steel's own shelf and a thin chrome kerb; a ball's fall throws a ring and silver droplets.
+  The cup glows. **The true mirror was built and went:** quicksilver was for a time the renderer's clear water with the scene drawn
+  again upside down in it, and it cost 0.9 ms of a frame on a desk and 0.4 on a phone, and from a tee it mirrored plain sky and read
+  as a flat grey, so the user chose "the dark version to finish" (31 October 2026). It is out of the code and not off, so it is not to
+  be built again without knowing this.
 
 **What the pictures hold** (`smoke/look.spec.ts`, from 31 October 2026): a hole of each, from its tee, with a shot aimed from the aim
 view, and in its fly-in, on a desk and a phone, and a close cactus, hardpan and crater (the Desert's, the Moon's); the Future's, which
 are last in the file, are named for the quicksilver that is in every one of them. `look:metrics` holds each biome's fairway at least
 1.34 (Desert), 1.42 (Moon) and 1.24 (Future) times apart in light from its rough.
 
-**What is left to the user.** The quicksilver's look: on the pictures it is a flat pale mirror of the dusk sky with a gold rim,
-and from a tee on Server Rack its ponds read as dark ovals, so the mirror and the holograms upside down in it are seen only up
-close (`biome-future-quicksilver-lake.png`), and it will likely change; every picture with it in is then written again together and
-looked at. Also how the Moon's grey reads at a distance on a phone, the Earth's low-poly look, and the Future's tee on a hole
+**What is left to the user.** The quicksilver is chosen. A lake on its first tee is small and far (Server Rack's read as dark ovals
+with a gold rim; Null Pointer's, the largest, is a grey-brown patch at the top of the tee picture) and is seen well only from near
+(`biome-future-quicksilver-lake.png`); a lake's outline is the map's own, a tile's jogs rounded at their corners, since a smoother
+curve strays onto the ground beside it. How the Moon's grey reads at a distance on a phone, the Earth's low-poly look, and the Future's tee on a hole
 with sand, where the caddie's tip card hides the ball on a phone's fly-in. No person had looked at a biome in play before it landed.
 
 ## Across every stage

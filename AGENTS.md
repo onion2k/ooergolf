@@ -282,8 +282,8 @@ Each of the kit's checks, as surveyed on 17 October 2026, and the order the miss
 - **Mutation checks are by hand,** in the work's report, with no tool to record them.
 - **What only a person can judge:** how a course feels to play, a matter of taste in the look, and the limits listed in
   `HOW-IT-WORKS.md`'s _What is not there yet_.
-- **The biomes were not played by a person** before they landed (31 October 2026), and the quicksilver's look is the
-  user's to choose. **Leak runs are one course a biome** (The Saltpan, Copernicus and Chrome Heights, not nine): a biome's
+- **The biomes were not played by a person** before they landed (31 October 2026), and the quicksilver's look was chosen by
+  the user (dark liquid metal, 31 October 2026). **Leak runs are one course a biome** (The Saltpan, Copernicus and Chrome Heights, not nine): a biome's
   three courses share every line a leak run watches. **A biome's frames are held to the budget alone** (`smoke/biome-frames.spec.ts`,
   its heaviest tees) and not to a baseline, so `perf`'s biggest hole stays the earth's; and only the fairway against the
   rough is a floor for a biome (`look-metrics.spec.ts` says why not the rest).
