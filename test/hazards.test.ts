@@ -448,7 +448,9 @@ describe('a desert’s lake', () => {
     expect(desert.biome).toBe('desert');
     expect(desert.map.some((row) => row.includes('~'))).toBe(false);
     expect(desert.map.some((row) => row.includes('d'))).toBe(true);
-    expect(desert.map.map((row) => row.replaceAll('d', '~'))).toEqual(earth.map);
+    // (the desert's cacti are felled where a tree is not, which is the trees' business and not the lake's: compared but for them)
+    const bare = (rows: readonly string[]) => rows.map((row) => row.replaceAll('^', 'r'));
+    expect(bare(desert.map.map((row) => row.replaceAll('d', '~')))).toEqual(bare(earth.map));
     const l = layoutOf(desert.map, desert.terrain, desert.way, 'desert');
     expect(l.water.every((w) => w === 0)).toBe(true);
     expect(panProblems(l)).toEqual([]);

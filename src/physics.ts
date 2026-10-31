@@ -23,9 +23,8 @@ import {
 } from './arena';
 import type { Random } from './random';
 import { NO_KIT, type Kit } from './items';
-import { surfacesOf } from './biome';
+import { surfacesOf, treeOf } from './biome';
 import { LIE, groundRoll, rollScale } from './surfaces';
-import { TREE } from './trees';
 
 export { World, type Belt, type Pusher } from 'artshape-physics/world';
 
@@ -154,15 +153,18 @@ export function makeWorld(
   }));
   // and each tree's trunk, a post too, as high as the canopy's base, which is all the physics can be given of a tree:
   // the canopy over it is the game's own to test
-  world.bumpers.push(
-    ...layout.trees.map((t) => ({
-      x: t.x,
-      y: t.y,
-      radius: TREE.trunk,
-      top: heightAt(layout, t.x, t.y) + TREE.base,
-      restitution: TREE.restitution * bounce,
-    })),
-  );
+  // (none for a tree a ball passes through: a hologram has no trunk, and nothing stands at its foot)
+  const tree = treeOf(layout);
+  if (tree && !tree.passes)
+    world.bumpers.push(
+      ...layout.trees.map((t) => ({
+        x: t.x,
+        y: t.y,
+        radius: tree.trunk,
+        top: heightAt(layout, t.x, t.y) + tree.base,
+        restitution: tree.restitution * bounce,
+      })),
+    );
   // and each kicker, a post as far as the physics knows, with a bounce of its own
   world.bumpers.push(
     ...layout.kickers.map((k) => ({

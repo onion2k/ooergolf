@@ -16,7 +16,7 @@
  */
 import { TILE, type Layout } from './arena';
 import { LIE } from './surfaces';
-import { TREE } from './trees';
+import { treeOf } from './biome';
 
 /** How much harder a ball is played over each kind of ground, as a multiple of the same distance of fairway. */
 const COST: Record<number, number> = { [LIE.sand]: 2, [LIE.rough]: 1.25, [LIE.cut]: 1.1 };
@@ -57,21 +57,24 @@ export class Route {
     this.canopy = new Uint8Array(n);
     const blocked = new Uint8Array(n);
     for (let t = 0; t < n; t++) blocked[t] = layout.solid[t] | layout.water[t] | layout.oob[t];
-    for (const tree of layout.trees)
-      for (
-        let ty = Math.max(0, Math.floor((tree.y - layout.originY) / TILE) - 3);
-        ty <= Math.min(rows - 1, Math.floor((tree.y - layout.originY) / TILE) + 3);
-        ty++
-      )
+    // a canopy a ball passes through (a hologram) is no canopy to go round
+    const figures = treeOf(layout);
+    if (figures && !figures.passes)
+      for (const tree of layout.trees)
         for (
-          let tx = Math.max(0, Math.floor((tree.x - layout.originX) / TILE) - 3);
-          tx <= Math.min(cols - 1, Math.floor((tree.x - layout.originX) / TILE) + 3);
-          tx++
-        ) {
-          const x = layout.originX + (tx + 0.5) * TILE,
-            y = layout.originY + (ty + 0.5) * TILE;
-          if (Math.hypot(x - tree.x, y - tree.y) < TREE.radius * UNDER) this.canopy[ty * cols + tx] = 1;
-        }
+          let ty = Math.max(0, Math.floor((tree.y - layout.originY) / TILE) - 3);
+          ty <= Math.min(rows - 1, Math.floor((tree.y - layout.originY) / TILE) + 3);
+          ty++
+        )
+          for (
+            let tx = Math.max(0, Math.floor((tree.x - layout.originX) / TILE) - 3);
+            tx <= Math.min(cols - 1, Math.floor((tree.x - layout.originX) / TILE) + 3);
+            tx++
+          ) {
+            const x = layout.originX + (tx + 0.5) * TILE,
+              y = layout.originY + (ty + 0.5) * TILE;
+            if (Math.hypot(x - tree.x, y - tree.y) < figures.radius * UNDER) this.canopy[ty * cols + tx] = 1;
+          }
     const cup =
       Math.floor((layout.cup.y - layout.originY) / TILE) * cols + Math.floor((layout.cup.x - layout.originX) / TILE);
     // the ground a way may go over: open, and not under a canopy, but for the cup's own tile

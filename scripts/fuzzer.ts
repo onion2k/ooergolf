@@ -1434,6 +1434,35 @@ export function fuzz(
       }
     };
     /**
+     * A player driving at a tree: the driver, or the longest club that carries so far, at full power at the nearest tree within a
+     * driver's carry and ahead of the ball, a few degrees off, with a player's slips. Done on a chance of its own and only on a hole
+     * in a biome (a cactus, a hologram), which is no hole of any course there is, so every old seed plays as it did. Whatever comes of
+     * it (the post, the cone, a passage through a hologram) the game's rules hold.
+     */
+    const treer = seeded(seed * 37 + 1);
+    const driveAtATree = () => {
+      if (!game.ready || input.aim !== null || game.phase !== 'play' || !game.layout.golf) return;
+      const { world, ball, layout } = game;
+      if (!layout.trees.length) return;
+      const lie = lieAt(layout, world.x[ball], world.y[ball]);
+      let near: { x: number; y: number } | null = null,
+        away = Infinity;
+      for (const t of layout.trees) {
+        const d = Math.hypot(t.x - world.x[ball], t.y - world.y[ball]);
+        if (d >= 15 && d < away) [near, away] = [t, d];
+      }
+      if (!near || away > carryFrom(BAG[0], 1, lie)) return;
+      game.pick(BAG[0].id);
+      game.setShape(0);
+      game.setSpin(0);
+      const bearing = Math.atan2(near.y - world.y[ball], near.x - world.x[ball]);
+      if (game.shoot(bearing + (treer() - 0.5) * 0.1, 1 - treer() * 0.1)) {
+        spent();
+        did('drive at a tree');
+        busy = Math.floor(between(10, 90));
+      }
+    };
+    /**
      * Flies a ball to a pan, a desert's dried lake, when the hole has one in a driver's carry: the very shape of `flyToIsland`, on a
      * chance of its own and only on a hole with a pan, so no other hole plays differently and the old seeds stay as they were. A
      * ball that lands on a pan runs on across it, hops, is struck from it again, and is never lost to it; whatever comes of it the
@@ -1785,6 +1814,7 @@ export function fuzz(
       if (laneOf(game.def) && driver() < 0.03) driveTheLane();
       if (game.layout.golf && islandsOf(game.def).length && islander() < 0.03) flyToIsland();
       if (game.layout.golf && pansOf(game.layout).length && panner() < 0.03) flyToPan();
+      if (game.layout.biome !== 'earth' && game.layout.trees.length && treer() < 0.03) driveAtATree();
       count(itemFrames, `${game.slots.club || '-'}|${game.slots.ball || '-'}|${game.slots.accessory || '-'}`);
       if (seed % 5 === 0 && wardrobe() < 0.004) tryOn();
       if (retaker() < 0.01) retake();

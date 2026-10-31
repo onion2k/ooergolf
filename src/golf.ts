@@ -19,7 +19,7 @@
  * made is refused, by name, and never returned as a hole that cannot be played. It is content's tool: handed a spec and
  * giving back a `HoleDef`, importing no content, only the type of a hole.
  */
-import { BIOMES, isBiome, type BiomeName } from './biome';
+import { BIOMES, isBiome, treeOf, type BiomeName } from './biome';
 import { BALL, KIND_RADIUS, TILE, heightAt, layoutOf, type Layout } from './arena';
 import type { HoleDef } from './course';
 import { GREEN as GREEN_RULES } from './green';
@@ -38,7 +38,7 @@ import { seeded, type Random } from './random';
 import { WIND } from './shaping';
 import { drainFault, holdsBall } from './slopes';
 import { GREENS, LIE } from './surfaces';
-import { TREE, insideCanopy, treeCone } from './trees';
+import { insideCanopy, treeCone } from './trees';
 import { atan2, cos, hypot, sin } from './fixedmath';
 
 /** A pond: how far along the way of play it lies, which side of it (nought is across it, on the line) and how big, in tiles of radius. */
@@ -232,13 +232,16 @@ export const CROWN = { step: 0.5 };
  */
 export function restUnderCrown(layout: Layout, x: number, y: number): number {
   const r = KIND_RADIUS[BALL];
-  const cone = treeCone(x, y, heightAt(layout, x, y));
-  const reach = TREE.radius + r;
+  const tree = treeOf(layout);
+  // a tree a ball may lie in (a hologram) is never buried in a hillside to its cost, and a biome with none has none to fell
+  if (!tree || tree.passes) return 0;
+  const cone = treeCone(x, y, heightAt(layout, x, y), tree);
+  const reach = tree.radius + r;
   let deepest = 0;
   for (let dx = -reach; dx <= reach; dx += CROWN.step)
     for (let dy = -reach; dy <= reach; dy += CROWN.step) {
       const rho = hypot(dx, dy);
-      if (rho > reach || rho <= TREE.trunk + r) continue;
+      if (rho > reach || rho <= tree.trunk + r) continue;
       const c = Math.floor((x + dx - layout.originX) / TILE),
         row = Math.floor((y + dy - layout.originY) / TILE);
       if (c < 0 || row < 0 || c >= layout.cols || row >= layout.rows) continue;
@@ -384,6 +387,12 @@ function refuse(spec: GolfSpec) {
     if (!Number.isInteger(n) || n < 0 || n > 12)
       throw fault(`its ${what} are a whole number from nought to twelve, not ${n}`);
   if (!Number.isInteger(trees) || trees < 0) throw fault(`its trees are a whole number from nought, not ${trees}`);
+  // a biome with no tree (the Moon) has none to plant, nor a wood, nor a lane cut through one
+  if (biome !== undefined && BIOMES[biome].tree === null) {
+    if (trees > 0) throw fault(`it asks for ${trees} trees, and the ${biome} has none`);
+    if (woods) throw fault(`it asks for a wood, and the ${biome} has no trees`);
+    if (gap) throw fault(`it asks for a gap through a wood, and the ${biome} has no trees`);
+  }
   if (bunkers.island !== undefined && (!Number.isInteger(bunkers.island) || bunkers.island < 0 || bunkers.island > 12))
     throw fault(`its island bunkers are a whole number from nought to twelve, not ${bunkers.island}`);
   if (bunkers.fairway + (bunkers.island ?? 0) > 12)

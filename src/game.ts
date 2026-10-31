@@ -51,9 +51,9 @@ import { PRIZE, TOURS, type Grade, type Tour } from './season';
 import { eventsIn, finishEvent, nextEvent, withdrawn, closedIfFull, type SeasonContext } from './tournament';
 import type { Random } from './random';
 import { PUTT_SHAPE, bendRate, curveRate, puttSpinFactor, spunKeep, windDirection, windPush } from './shaping';
-import { BIOMES, surfacesOf } from './biome';
+import { BIOMES, surfacesOf, treeOf } from './biome';
 import { LANDING, LIE, groundRoll, rollScale } from './surfaces';
-import { hitCanopy, treeCone, turned, type Cone } from './trees';
+import { hitCanopy, insideCanopy, treeCone, turned, type Cone } from './trees';
 
 /** What happens, for whoever shows it. Every one may be left out. */
 export interface GameEvents {
@@ -73,6 +73,8 @@ export interface GameEvents {
    * in a step, by the rail, a post, a box, the cup or the ground it dropped
    * onto, which pushed it along the unit (dx, dy, dz). See `KNOCK`.
    */
+  /** The ball entered a hologram's canopy at (x, y), losing half its speed to it: told once for each time it goes in, for the picture to flicker it. */
+  flickered?(x: number, y: number): void;
   knocked?(hard: number, x: number, y: number, dx: number, dy: number, dz: number): void;
   /** The ball in the cup, in `strokes`, on a hole of `par`. */
   holed?(strokes: number, par: number): void;
@@ -574,7 +576,8 @@ export class Game {
     this.hole = index;
     this.layout = layoutOf(this.def.map, this.def.terrain, this.def.way, this.def.biome);
     this.obstacles = new Obstacles(this.def.obstacles ?? [], this.layout);
-    this.cones = this.layout.trees.map((t) => treeCone(t.x, t.y, heightAt(this.layout, t.x, t.y)));
+    const tree = treeOf(this.layout);
+    this.cones = tree ? this.layout.trees.map((t) => treeCone(t.x, t.y, heightAt(this.layout, t.x, t.y), tree)) : [];
     // what changes the world itself is read once, here, and the world is made with it: the cup's width and the rail's
     // bounce (the ball's roll joins them when the ground figures are wired)
     const kit = this.kit;
@@ -963,15 +966,16 @@ export class Game {
         py = world.y[ball],
         pz = world.z[ball];
       world.step(PHYSICS.step, collect);
-      this.canopies(px, py, pz);
-      this.landing(vx, vy, vz);
+      // a ball that went through a hologram lost half its speed to it, which is not a landing's or a knock's to count
+      const kept = this.canopies(px, py, pz);
+      this.landing(vx * kept, vy * kept, vz * kept);
       // on the ground out of bounds it is lost, as in water; in the air over the line it is not
       if (this.isOut()) {
         Object.assign(fell, { out: true, x: world.x[ball], y: world.y[ball] });
         break;
       }
       this.heldToFastest();
-      this.knock(vx, vy, vz);
+      this.knock(vx * kept, vy * kept, vz * kept);
       if (fell.holed || fell.wet) break;
     }
     if (this.phase !== 'play') return;
@@ -1073,15 +1077,37 @@ export class Game {
    * drops; and one that rose into the underside is knocked down. Told as a knock, since it turned the ball as one
    * does. A ball that missed every canopy, over the tip or under the base or round, is left as the physics has it.
    */
-  private canopies(px: number, py: number, pz: number) {
+  private canopies(px: number, py: number, pz: number): number {
     const { world, ball, cones } = this;
-    if (!cones.length || !world.alive[ball]) return;
+    if (!cones.length || !world.alive[ball]) return 1;
+    const tree = treeOf(this.layout)!;
     const x = world.x[ball],
       y = world.y[ball],
       z = world.z[ball];
     const r = world.r[ball];
     // only the trees near enough to be met by this step: the canopy's width and a ball's, from either end of it
     const step = Math.hypot(x - px, y - py, z - pz);
+    if (tree.passes) {
+      // a ball goes through a hologram: it loses a share of its speed as it enters, once, and is not turned. Whether it entered is
+      // whether it was outside the canopy at the step's start and met it in the step, so a ball that begins a step inside one
+      // (rolled to rest under it and struck again, or put down in it) is not slowed for being there, and there is nothing to
+      // keep for a tree or clear at a new hole
+      let entered: { x: number; y: number } | null = null;
+      for (const c of cones) {
+        const reach = c.radius + r + 2 + step;
+        if (Math.abs(x - c.x) > reach || Math.abs(y - c.y) > reach) continue;
+        if (insideCanopy(c, [px, py, pz], r) > 0) continue;
+        const hit = hitCanopy(c, [px, py, pz], [x, y, z], r);
+        if (hit) entered = { x: px + (x - px) * hit.t, y: py + (y - py) * hit.t };
+      }
+      if (!entered) return 1;
+      const keep = tree.passes.keep;
+      world.vx[ball] *= keep;
+      world.vy[ball] *= keep;
+      world.vz[ball] *= keep;
+      this.events.flickered?.(entered.x, entered.y);
+      return keep;
+    }
     let first: { t: number; nx: number; ny: number; nz: number } | null = null;
     for (const c of cones) {
       const reach = c.radius + r + 2 + step;
@@ -1089,16 +1115,17 @@ export class Game {
       const hit = hitCanopy(c, [px, py, pz], [x, y, z], r);
       if (hit && (!first || hit.t < first.t)) first = hit;
     }
-    if (!first) return;
+    if (!first) return 1;
     const { t, nx, ny, nz } = first;
     // put on the face, a hair out of it, and turned by it: the underside is the one that looks straight down
     world.x[ball] = px + (x - px) * t + nx * 1e-3;
     world.y[ball] = py + (y - py) * t + ny * 1e-3;
     world.z[ball] = pz + (z - pz) * t + nz * 1e-3;
-    const out = turned([world.vx[ball], world.vy[ball], world.vz[ball]], first);
+    const out = turned([world.vx[ball], world.vy[ball], world.vz[ball]], first, tree);
     world.vx[ball] = out[0];
     world.vy[ball] = out[1];
     world.vz[ball] = out[2];
+    return 1;
   }
 
   /**

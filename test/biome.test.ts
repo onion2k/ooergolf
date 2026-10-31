@@ -127,9 +127,11 @@ describe('the biomes', () => {
   it('is carried by a generated hole, and left out of one that has none', () => {
     const spec = LINKS_SPECS[0];
     expect('biome' in golfHole(spec)).toBe(false);
-    expect(golfHole({ ...spec, biome: 'moon' }).biome).toBe('moon');
+    // (the Moon has no tree, so a spec on it plants none)
+    const bare = { ...spec, trees: 0 };
+    expect(golfHole({ ...bare, biome: 'moon' }).biome).toBe('moon');
     // the generator does not see it: the same ground, tile for tile
-    expect(golfHole({ ...spec, biome: 'moon' }).map).toEqual(golfHole(spec).map);
+    expect(golfHole({ ...bare, biome: 'moon' }).map).toEqual(golfHole(bare).map);
   });
 });
 
@@ -504,7 +506,7 @@ describe('the rules for a biome', () => {
   });
 
   it('keep The Links’ nine holes on the Moon clean through a round played by the autopilot (a throwaway biome, not a course)', () => {
-    const holes = LINKS_SPECS.slice(0, 3).map((s) => golfHole({ ...s, biome: 'moon' }));
+    const holes = LINKS_SPECS.slice(0, 3).map((s) => golfHole({ ...s, trees: 0, biome: 'moon' }));
     const game = new Game(new Progress(memoryStore()), {}, { random: seeded(11), course: holes });
     const pilot = new Autopilot(game, { random: seeded(13) });
     let checked = 0;

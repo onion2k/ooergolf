@@ -5,9 +5,8 @@
  * logic: the game reads it and the page draws it, and the lower modules go
  * on knowing nothing of any hole.
  */
-import { BIOMES, isBiome, type BiomeName } from './biome';
+import { BIOMES, isBiome, treeOf, type BiomeName } from './biome';
 import { LIE, type Lie } from './surfaces';
-import { TREE } from './trees';
 import { TILE } from './tile';
 import { zonesOf, type Zone } from './zones';
 
@@ -282,7 +281,11 @@ export function layoutOf(
         minigolf = true;
         kickers.push({ x, y });
       } else if (c === '^') {
-        // a tree stands in the rough: a trunk and a canopy
+        // a tree stands in the rough: a trunk and a canopy; but not in a biome that has none
+        if (BIOMES[biome].tree === null)
+          throw new Error(
+            `a hole's map has a tree (^) in it at column ${tx} of row ${r}, which the ${biome} has none of`,
+          );
         golf = true;
         trees.push({ x, y });
         treeTiles.push(t);
@@ -608,10 +611,13 @@ export function onFloor(g: Ground, x: number, y: number): boolean {
   return t >= 0 && g.solid[t] === 0 && g.water[t] === 0;
 }
 
-/** How far a point is from the side of the nearest tree's trunk, or Infinity on a hole with none. */
+/** How far a point is from the side of the nearest tree's trunk, or Infinity on a hole with none, or whose trees a ball passes through. */
 export function fromTrees(l: Layout, x: number, y: number): number {
+  const tree = treeOf(l);
+  // a tree with no trunk (a hologram) has no side to be far from: nothing is in its way on the ground
+  if (!tree || tree.passes) return Infinity;
   let near = Infinity;
-  for (const t of l.trees) near = Math.min(near, Math.hypot(x - t.x, y - t.y) - TREE.trunk);
+  for (const t of l.trees) near = Math.min(near, Math.hypot(x - t.x, y - t.y) - tree.trunk);
   return near;
 }
 

@@ -11,13 +11,12 @@
  */
 import { fromTrees, lieAt, type Layout } from './arena';
 import type { BagClub } from './bag';
-import { surfacesOf } from './biome';
+import { surfacesOf, treeOf } from './biome';
 import { lossOf, maxScatter } from './flight';
 import type { Kit } from './items';
 import type { Game } from './game';
 import type { Route } from './route';
 import { LIE } from './surfaces';
-import { TREE } from './trees';
 
 /** How long a trial is let run, in seconds of game time, before the ball is taken to be at rest: far longer than any shot. */
 const LONGEST = 25;
@@ -175,7 +174,9 @@ export function strokesToGo({ layout, route }: Ground, x: number, y: number): nu
   if (lie === LIE.green) return putts(d);
   let way = route.distance(x, y);
   if (!Number.isFinite(way)) way = d * 1.6;
-  const under = layout.trees.length && fromTrees(layout, x, y) + TREE.trunk < TREE.radius ? UNDER_A_TREE : 0;
+  const tree = treeOf(layout);
+  // (a hologram's trunk is none, and fromTrees is infinity: no one is under it)
+  const under = tree && layout.trees.length && fromTrees(layout, x, y) + tree.trunk < tree.radius ? UNDER_A_TREE : 0;
   return 1 + putts(0.06 * way + 4) + Math.max(0, way - 100) / 220 + (LIE_COST[lie] ?? 0) + under;
 }
 

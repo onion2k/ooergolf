@@ -12,7 +12,7 @@ import { tileAt, type Layout } from './arena';
 import { zonesOf, type Zone } from './zones';
 import { PALETTE } from './models/palette';
 import { LIE } from './surfaces';
-import { TREE } from './trees';
+import { treeOf } from './biome';
 
 /** What size a hole's map is, and where it lies on the ground. */
 export interface MapSize {
@@ -155,7 +155,7 @@ export function paintMap(
       else out.set([0, 0, 0, 0], o);
     }
   }
-  const radius = Math.max(1.5, TREE.radius * TREE_SHARE * scale);
+  const radius = Math.max(1.5, (treeOf(layout)?.radius ?? 0) * TREE_SHARE * scale);
   for (const tree of layout.trees) {
     const [cx, cy] = mapPoint(layout, size, tree.x, tree.y);
     for (let py = Math.max(0, Math.floor(cy - radius)); py <= Math.min(height - 1, Math.ceil(cy + radius)); py++)

@@ -5,6 +5,7 @@
  * the bit; without this seam the Moon would be a global changed in place, and every course would play on it.
  */
 import { LIE, SURFACES, type Surface } from './surfaces';
+import { CACTUS, HOLOGRAM, TREE, type TreeFigures } from './trees';
 
 export type BiomeName = 'earth' | 'desert' | 'moon' | 'future';
 
@@ -29,6 +30,8 @@ export interface Biome {
    * which the map draws `d` where earth's would draw `~`.
    */
   hazard: Hazard;
+  /** The figures of the tree a hole in the biome has (earth's own `TREE`, a cactus, a hologram), or null for a biome that has none. */
+  tree: TreeFigures | null;
   /** The words a lake is told in: `lake` is its noun, as in "In the water!", "finds the crater", "runs into the quicksilver". */
   words: { lake: string };
 }
@@ -46,7 +49,15 @@ function table(over: Partial<Record<number, Partial<Surface>>>): readonly Surfac
  * ball dead, and the future's plates are lively.
  */
 export const BIOMES: Record<BiomeName, Biome> = {
-  earth: { name: 'earth', pace: 1, calm: false, surfaces: SURFACES, hazard: 'water', words: { lake: 'water' } },
+  earth: {
+    name: 'earth',
+    pace: 1,
+    calm: false,
+    surfaces: SURFACES,
+    hazard: 'water',
+    tree: TREE,
+    words: { lake: 'water' },
+  },
   desert: {
     name: 'desert',
     pace: 1,
@@ -57,6 +68,7 @@ export const BIOMES: Record<BiomeName, Biome> = {
     }),
     // a dried lake bed: ground, so it is never told, and its word is the one a stroke is never lost to
     hazard: 'pan',
+    tree: CACTUS,
     words: { lake: 'pan' },
   },
   moon: {
@@ -66,6 +78,7 @@ export const BIOMES: Record<BiomeName, Biome> = {
     calm: true,
     surfaces: table({ [LIE.rough]: { keep: 0.05, bounce: 0.03, power: 0.7 } }),
     hazard: 'crater',
+    tree: null,
     words: { lake: 'crater' },
   },
   future: {
@@ -77,6 +90,7 @@ export const BIOMES: Record<BiomeName, Biome> = {
       [LIE.rough]: { roll: 40, keep: 0.4, bounce: 0.45, power: 0.9, wild: 1.1 },
     }),
     hazard: 'mirror',
+    tree: HOLOGRAM,
     words: { lake: 'quicksilver' },
   },
 };
@@ -84,6 +98,11 @@ export const BIOMES: Record<BiomeName, Biome> = {
 /** Whether `name` is the name of a biome: a hole is held to it, since what is read from a map or a save is read as if anyone wrote it. */
 export function isBiome(name: unknown): name is BiomeName {
   return typeof name === 'string' && Object.hasOwn(BIOMES, name);
+}
+
+/** The figures of the tree a layout's biome has, or null where it has none: what every read of a tree's size goes through. */
+export function treeOf(on: { biome: BiomeName }): TreeFigures | null {
+  return BIOMES[on.biome].tree;
 }
 
 /** The surface table of the biome a layout (or anything that names one) is in: what every read of a ground's figures goes through. */

@@ -15,6 +15,28 @@
 import { hypot } from './fixedmath';
 
 /** A tree's figures, in units, which are yards: the sizes of a tree a golf ball is played round, and what its canopy does to a ball. */
+export interface TreeFigures {
+  /** The trunk's radius: a post, met by the physics, which stands up to the canopy's base. Nought for a tree with none. */
+  readonly trunk: number;
+  /** How high the canopy's base is, and its tip, above the ground at the trunk. */
+  readonly base: number;
+  readonly apex: number;
+  /** How wide the canopy is at its base. */
+  readonly radius: number;
+  /** How much a ball keeps of its speed into the trunk, going back off it. */
+  readonly restitution: number;
+  /** What a ball meeting the canopy's side keeps of its speed into the face (`bounce`) and of its speed along it (`keep`). */
+  readonly glance: { readonly bounce: number; readonly keep: number };
+  /** The same for a ball rising into the underside. */
+  readonly under: { readonly bounce: number; readonly keep: number };
+  /**
+   * Present on a tree a ball passes through (a hologram): there is no trunk body and the canopy turns nothing; a ball entering it
+   * keeps this share of its speed, once, and goes on.
+   */
+  readonly passes?: { readonly keep: number };
+}
+
+/** Earth's tree, and the figures every other kind is a variation of. */
 export const TREE = {
   /** The trunk's radius: a post, met by the physics, which stands up to the canopy's base. */
   trunk: 0.9,
@@ -32,7 +54,28 @@ export const TREE = {
   glance: { bounce: 0.2, keep: 0.35 },
   /** The same for a ball rising into the underside, which is knocked down and nearly dead. */
   under: { bounce: 0.1, keep: 0.3 },
-} as const;
+} as const satisfies TreeFigures;
+
+/**
+ * The desert's cactus (a saguaro), first figures to be tuned with the desert courses: smaller than a tree, its post a
+ * hand's breadth and its cone narrow, and a ball that meets either drops at its foot. Part 6's model has to fit inside this
+ * cone: its arms reach at most 2 yards from the post at 9 high (the cone is 4 yards wide at 2 high, and 15 tall, so 2.5 wide at 9).
+ */
+export const CACTUS = {
+  trunk: 0.8,
+  base: 2,
+  apex: 15,
+  radius: 4,
+  restitution: 0.1,
+  glance: { bounce: 0.05, keep: 0.1 },
+  under: { bounce: 0.05, keep: 0.1 },
+} as const satisfies TreeFigures;
+
+/**
+ * The future's hologram: the very cone of earth's tree, and no trunk. A ball goes through it at half its speed, once for each
+ * time it enters, and is neither turned nor knocked down. First figures, to be tuned with the future's courses.
+ */
+export const HOLOGRAM = { ...TREE, trunk: 0, restitution: 0, passes: { keep: 0.5 } } as const satisfies TreeFigures;
 
 type V3 = [number, number, number];
 
@@ -45,9 +88,9 @@ export interface Cone {
   radius: number;
 }
 
-/** The canopy of the tree standing at (x, y) on ground `ground` high. */
-export function treeCone(x: number, y: number, ground: number): Cone {
-  return { x, y, base: ground + TREE.base, apex: ground + TREE.apex, radius: TREE.radius };
+/** The canopy of the tree standing at (x, y) on ground `ground` high, of the figures `tree` (earth's where none is given). */
+export function treeCone(x: number, y: number, ground: number, tree: TreeFigures = TREE): Cone {
+  return { x, y, base: ground + tree.base, apex: ground + tree.apex, radius: tree.radius };
 }
 
 /** Where a step first met the canopy: how far along it, of the step, and the way the face looks there, a unit vector. */
@@ -169,6 +212,6 @@ export function deflect(v: V3, n: V3, { bounce, keep }: { bounce: number; keep: 
  * The velocity of a ball turned by the face `hit` met: what the underside does (knocks it down, nearly dead) where it is
  * the underside, which looks straight down, and what the side does anywhere else.
  */
-export function turned(v: V3, hit: Hit): V3 {
-  return deflect(v, [hit.nx, hit.ny, hit.nz], hit.nz === -1 ? TREE.under : TREE.glance);
+export function turned(v: V3, hit: Hit, tree: TreeFigures = TREE): V3 {
+  return deflect(v, [hit.nx, hit.ny, hit.nz], hit.nz === -1 ? tree.under : tree.glance);
 }

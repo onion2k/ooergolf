@@ -72,12 +72,12 @@ import type { Preview } from './preview';
 import { troubleOf, type Caddie, type Tip } from './caddie';
 import type { Bank } from './bank';
 import { GREEN, READER, breakOf, greenArrows, leansOnMinigolf, readerArrows, type Arrow, type Break } from './green';
-import { BIOMES, isBiome, surfacesOf } from './biome';
+import { BIOMES, isBiome, surfacesOf, treeOf } from './biome';
 import { GREENS, LANDING, LIE, rollScale } from './surfaces';
 import { BARRIER, WINDMILL, flipperYaw, type Obstacles } from './obstacles';
 import { WIND, windPush, windReach } from './shaping';
 import { zonesOf } from './zones';
-import { TREE, insideCanopy } from './trees';
+import { insideCanopy } from './trees';
 
 /** How many broken rules of one sort are reported before the rest are only counted. */
 const EACH = 3;
@@ -343,6 +343,31 @@ export function panProblems(layout: Layout): string[] {
 }
 
 /**
+ * What is wrong with a hole's trees, which are the biome's: none on a biome that has none; a trunk's post in the world at each
+ * tree of a biome whose trees have one, and no body standing at the foot of one a ball passes through (a hologram has no trunk);
+ * and a cone to each, of the biome's figures.
+ */
+export function treeProblems(game: Game): string[] {
+  const { layout, world } = game;
+  const out: string[] = [];
+  const tree = treeOf(layout);
+  if (!tree) {
+    if (layout.trees.length) out.push(`${layout.trees.length} trees on a hole in the ${layout.biome}, which has none`);
+    return out;
+  }
+  if (game.cones.length !== layout.trees.length)
+    out.push(`${game.cones.length} canopies for ${layout.trees.length} trees`);
+  for (const t of layout.trees) {
+    const posts = world.bumpers.filter((b) => Math.hypot(b.x - t.x, b.y - t.y) < 0.01).length;
+    if (tree.passes && posts > 0)
+      out.push(`a body stands at the foot of a hologram at ${t.x.toFixed(1)},${t.y.toFixed(1)}`);
+    if (!tree.passes && posts !== 1)
+      out.push(`${posts} posts at the trunk of the tree at ${t.x.toFixed(1)},${t.y.toFixed(1)}, not one`);
+  }
+  return out;
+}
+
+/**
  * What is wrong with the arrows laid over a green (the hole's own, as `greenArrows` says them, unless given): each is
  * numbers, stands on a tile of putting green (on a hole of minigolf, a tile of its floor: not rail and not water), and there
  * are no more of them than the green has tiles.
@@ -500,6 +525,7 @@ export function checkInvariants(game: Game): string[] {
   if (layout.golf) {
     report('the ground', [...groundProblems(layout, { slope: greens !== undefined }), ...arrowProblems(layout)]);
     report('the pan', panProblems(layout));
+    report('the trees', treeProblems(game));
     report('the break', breakProblems(game));
     // the chalk's arrows round the ball are held to the ground a ball is played from, and to their bound
     if (game.kit.chalk && world.alive[game.ball])
@@ -530,14 +556,17 @@ export function checkInvariants(game: Game): string[] {
     if (speed > fastest(game, world.x[ball], world.y[ball]) * 1.001 + blown)
       out.push(`the ball is going ${speed.toFixed(2)} along the ground, faster than a post and a slope may make it`);
     // inside a tree: a trunk is a post, met by the physics, and a canopy is met by the game; the ball is in neither
-    if (layout.trees.length) {
+    const tree = treeOf(layout);
+    if (tree && layout.trees.length) {
       const trunk = -fromTrees(layout, world.x[ball], world.y[ball]) + world.r[ball];
-      if (trunk > 0.1 && world.z[ball] < heightAt(layout, world.x[ball], world.y[ball]) + TREE.base)
+      if (trunk > 0.1 && world.z[ball] < heightAt(layout, world.x[ball], world.y[ball]) + tree.base)
         out.push(`the ball is inside a tree's trunk, ${trunk.toFixed(2)} into it`);
-      for (const c of game.cones) {
-        const depth = insideCanopy(c, [world.x[ball], world.y[ball], world.z[ball]], world.r[ball]);
-        if (depth > 0.05) out.push(`the ball is inside a tree's canopy, ${depth.toFixed(2)} into it`);
-      }
+      // a hologram's canopy is one a ball goes through, and may lie in: it is the cone of a tree with a trunk that it is not in
+      if (!tree.passes)
+        for (const c of game.cones) {
+          const depth = insideCanopy(c, [world.x[ball], world.y[ball], world.z[ball]], world.r[ball]);
+          if (depth > 0.05) out.push(`the ball is inside a tree's canopy, ${depth.toFixed(2)} into it`);
+        }
     }
     // a lofted ball's speed in all: no club sends it faster than it has, and a fall only adds what the height gives
     if (layout.golf) {
