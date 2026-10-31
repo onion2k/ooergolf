@@ -23,6 +23,7 @@ import {
 } from './arena';
 import type { Random } from './random';
 import { NO_KIT, type Kit } from './items';
+import { surfacesOf } from './biome';
 import { LIE, groundRoll, rollScale } from './surfaces';
 import { TREE } from './trees';
 
@@ -127,7 +128,7 @@ export function makeWorld(
       { drag: 0, roll: ROLL.roll * rollScale(LIE.none, kit) },
       { drag: 0, roll: 0 },
       { drag: 0, roll: SAND.roll * rollScale(LIE.sand, kit) },
-      ...(layout.golf ? GOLF_LIES.map((k) => ({ drag: 0, roll: groundRoll(k, greens, kit) })) : []),
+      ...(layout.golf ? GOLF_LIES.map((k) => ({ drag: 0, roll: groundRoll(k, greens, kit, surfacesOf(layout)) })) : []),
     ],
     random,
     // a step is met as a change of floor and not as a ledge with an edge: with v0.8.0's edges a ball climbs a riser only

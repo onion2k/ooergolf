@@ -11,6 +11,7 @@
  */
 import { fromTrees, lieAt, type Layout } from './arena';
 import type { BagClub } from './bag';
+import { surfacesOf } from './biome';
 import { lossOf, maxScatter } from './flight';
 import type { Kit } from './items';
 import type { Game } from './game';
@@ -232,7 +233,7 @@ export function choose(
     let e = cand.main;
     // a club with no scatter is as good struck a little off as struck true, and a ball lost is lost already
     if (!r.trial.lost && c.club.spread > 0) {
-      const delta = 0.5 * maxScatter(c.club, lie, r.power, rehearsal.kit);
+      const delta = 0.5 * maxScatter(c.club, lie, r.power, rehearsal.kit, surfacesOf(ground.layout));
       const short = r.power * (1 - lossOf(rehearsal.kit, c.club) * r.power);
       const off = [
         rehearsal.shot(from, c.club.id, r.angle - delta, r.power),

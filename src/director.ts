@@ -14,6 +14,7 @@
  * It holds a fixed set of numbers and a string, never a list, and it never draws the game's chance.
  */
 import { BALL, KIND_RADIUS, heightAt, lieAt, rollsFor } from './arena';
+import { surfacesOf } from './biome';
 import { aimView, fitsHome, floorFor, reachOf, reachOnMinigolf, safeBox, screenOf } from './aimview';
 import { CameraRig, FLY_IN, LEAD, TILT, VIEW, catchUp, facing, standOf, tallOf, wrap } from './camera';
 import type { Game } from './game';
@@ -234,7 +235,14 @@ export class Director {
     this.aimedFor = this.keyOf(inHand.id, lie);
     this.rig.aimAt(
       aimView(
-        reachOf(inHand, lie, game.wind.speed, game.kit, game.opening ? game.kit.firstStroke.power : 1),
+        reachOf(
+          inHand,
+          lie,
+          game.wind.speed,
+          game.kit,
+          game.opening ? game.kit.firstStroke.power : 1,
+          surfacesOf(layout),
+        ),
         this.aspect,
         this.height,
       ),
@@ -293,7 +301,14 @@ export class Director {
     const { world, ball, layout, inHand } = game;
     const [x, y, t] = [world.x[ball], world.y[ball], Math.PI / 2 - this.rig.headed];
     const reach = layout.golf
-      ? reachOf(inHand, lieAt(layout, x, y), game.wind.speed, game.kit, game.opening ? game.kit.firstStroke.power : 1)
+      ? reachOf(
+          inHand,
+          lieAt(layout, x, y),
+          game.wind.speed,
+          game.kit,
+          game.opening ? game.kit.firstStroke.power : 1,
+          surfacesOf(layout),
+        )
       : reachOnMinigolf(layout, x, y, t, rollsFor(game.hardest, game.putRoll));
     out.x = x + reach * Math.cos(t);
     out.y = y + reach * Math.sin(t);

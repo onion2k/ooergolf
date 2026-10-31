@@ -50,7 +50,8 @@ import type { Random } from './random';
 import type { Shot } from './shot';
 import { windReach } from './shaping';
 import { NO_KIT, type Kit } from './items';
-import { LANDING, LIE, SURFACES, groundRoll, rollScale, surfaceFor, type Lie } from './surfaces';
+import { surfacesOf } from './biome';
+import { LANDING, LIE, SURFACES, groundRoll, rollScale, surfaceFor, type Lie, type Surface } from './surfaces';
 
 /** How fast a ball it means for the cup is going when it gets there: inside what the cup catches off its middle, 7. */
 const ARRIVE = 4;
@@ -93,7 +94,7 @@ function slowingAt(l: Layout, x: number, y: number, greens?: number, kit: Kit = 
   if (!l.golf) return ROLL.roll * rollScale(LIE.none, kit);
   // by the tile, as the physics rolls a ball (`lieAt` is the zone, for a strike and a landing)
   const lie = tileLieAt(l, x, y);
-  return lie === LIE.green || lie === LIE.cut ? groundRoll(lie, greens, kit) : ROLL.roll * kit.roll;
+  return lie === LIE.green || lie === LIE.cut ? groundRoll(lie, greens, kit, surfacesOf(l)) : ROLL.roll * kit.roll;
 }
 
 /**
@@ -215,12 +216,17 @@ const LAY_UP = { share: 0.94, within: 0.98, most: 4 };
  * It lands short of the cup by this much, and a putt finishes the hole. The share is the same at every power to within
  * a hair (a driver's 20.4 per cent at full power is 20.1 at half), so it is worked out at the hardest.
  */
-export function runOn(club: BagClub, lie: Lie = LIE.fairway, kit: Kit = NO_KIT): number {
+export function runOn(
+  club: BagClub,
+  lie: Lie = LIE.fairway,
+  kit: Kit = NO_KIT,
+  table: readonly Surface[] = SURFACES,
+): number {
   if (!(club.loft > 0)) return 0;
-  const from = surfaceFor(lie, kit);
+  const from = surfaceFor(lie, kit, table);
   // a ball played out of a hazard is guessed to come down in it, where nothing runs on, and any other onto the fairway
   const landsIn = lie === LIE.rough || lie === LIE.sand ? lie : LIE.fairway;
-  const land = SURFACES[landsIn];
+  const land = table[landsIn];
   const speed = strikeSpeed(1, club.hardest) * from.power;
   // the loft the kit strikes it at (a club that lowers or lifts every flight), which the carry and the angle it comes down at both follow
   const struck = loftOf(club, kit) + from.loft;
@@ -234,7 +240,7 @@ export function runOn(club: BagClub, lie: Lie = LIE.fairway, kit: Kit = NO_KIT):
     into *= land.bounce * kit.hop;
     run += (along * 2 * into) / PHYSICS.gravity;
   }
-  run += (along * along) / (2 * groundRoll(landsIn, undefined, kit));
+  run += (along * along) / (2 * groundRoll(landsIn, undefined, kit, table));
   return run / carrying(speed, struck);
 }
 
@@ -247,7 +253,7 @@ export function windCarry(game: Game, club: BagClub, lie: Lie, angle: number): n
   const { x, y, speed } = game.wind;
   if (!(speed > 0)) return 0;
   const along = speed * (x * Math.cos(angle) + y * Math.sin(angle));
-  return Math.sign(along) * windReach(club, 1, Math.abs(along), lie, game.kit);
+  return Math.sign(along) * windReach(club, 1, Math.abs(along), lie, game.kit, surfacesOf(game.layout));
 }
 
 /**
@@ -277,7 +283,9 @@ export function golfCandidates(game: Game, x: number, y: number): Plan[] {
   const reaching: Plan[] = [];
   for (const club of BAG.filter((c) => c !== PUTTER).reverse()) {
     const held = game.club(club);
-    const reach = (carryFrom(held, 1, lie, kit) + windCarry(game, held, lie, angle)) * (1 + runOn(held, lie, kit));
+    const table = surfacesOf(game.layout);
+    const reach =
+      (carryFrom(held, 1, lie, kit, 1, table) + windCarry(game, held, lie, angle)) * (1 + runOn(held, lie, kit, table));
     if (reach >= distance) reaching.push({ angle, power: distance / reach, club: club.id });
   }
   const out = reaching.length ? reaching.slice(0, 2) : [{ angle, power: 1, club: BAG[0].id }];
@@ -297,6 +305,7 @@ export function golfCandidates(game: Game, x: number, y: number): Plan[] {
  */
 export function golfLayUps(game: Game, route: Route, x: number, y: number): Candidate[] {
   const { layout } = game;
+  const table = surfacesOf(layout);
   const lie = lieAt(layout, x, y);
   const way = route.distance(x, y);
   if (!Number.isFinite(way) || lie === LIE.green) return [];
@@ -305,7 +314,8 @@ export function golfLayUps(game: Game, route: Route, x: number, y: number): Cand
   for (const club of BAG.filter((c) => c !== PUTTER).reverse()) {
     const held = game.club(club);
     const reach =
-      (carryFrom(held, 1, lie, game.kit) + windCarry(game, held, lie, bearing)) * (1 + runOn(held, lie, game.kit));
+      (carryFrom(held, 1, lie, game.kit, 1, table) + windCarry(game, held, lie, bearing)) *
+      (1 + runOn(held, lie, game.kit, table));
     if (reach >= way * LAY_UP.within) continue;
     const to = route.waypoint(x, y, reach * LAY_UP.share);
     const distance = Math.hypot(to.x - x, to.y - y);

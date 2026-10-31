@@ -6,6 +6,7 @@
  * of a hole's fairway is ground a ball runs down; without one place for it the two would drift apart.
  */
 import { PHYSICS, TILE, slopeAt, terrainAt, tileAt, type Layout } from './arena';
+import { surfacesOf } from './biome';
 import { LIE, rollOf } from './surfaces';
 import { hypot } from './fixedmath';
 
@@ -18,7 +19,8 @@ export function holdsBall(l: Layout, t: number, greens?: number): boolean {
   );
   const s = hypot(sx, sy);
   return (
-    s / Math.sqrt(1 + s * s) <= (0.97 * rollOf(l.lie[t] as Parameters<typeof rollOf>[0], greens)) / PHYSICS.gravity
+    s / Math.sqrt(1 + s * s) <=
+    (0.97 * rollOf(l.lie[t] as Parameters<typeof rollOf>[0], greens, surfacesOf(l))) / PHYSICS.gravity
   );
 }
 

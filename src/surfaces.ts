@@ -53,15 +53,17 @@ export const SURFACES: readonly Surface[] = [
   { name: 'first cut', roll: 23, keep: 0.36, bounce: 0.3, power: 0.97, loft: 0, wild: 1.1 },
 ];
 
-/** The surfaces a club's strike override has made, one for each override: asked for on every read, and a copy made each time would be made every frame. */
-const OVERRIDDEN = new WeakMap<SandStrike | RoughStrike, Surface>();
+/** The surfaces a club's strike override has made, one for each override on each base: asked for on every read, and a copy made each time would be made every frame. */
+const OVERRIDDEN = new WeakMap<SandStrike | RoughStrike, WeakMap<Surface, Surface>>();
 
 /** `base` with only what a club takes from it changed by `over`, and how the ball lands and rolls on it as it was. */
 function overridden(base: Surface, over: SandStrike | RoughStrike): Surface {
-  let s = OVERRIDDEN.get(over);
+  let bases = OVERRIDDEN.get(over);
+  if (!bases) OVERRIDDEN.set(over, (bases = new WeakMap()));
+  let s = bases.get(base);
   if (!s) {
     s = { ...base, ...over };
-    OVERRIDDEN.set(over, s);
+    bases.set(base, s);
   }
   return s;
 }
@@ -69,12 +71,13 @@ function overridden(base: Surface, over: SandStrike | RoughStrike): Surface {
 /**
  * The surface a club is struck from at `lie`, which is the table's own unless the kit says sand or rough takes less
  * off the shot: read by the strike, the aim's carry, the time in the air and the scatter alike, so that the marker, the
- * preview and the shot agree. The landing and the roll read `SURFACES` itself.
+ * preview and the shot agree. The landing and the roll read the table itself. `table` is the hole's biome's (`surfacesOf`
+ * in `biome.ts`, which imports this file and so cannot be read from it): earth's, the `SURFACES` above, where none is given.
  */
-export function surfaceFor(lie: Lie, kit: Kit): Surface {
-  if (lie === LIE.sand && kit.sandStrike) return overridden(SURFACES[lie], kit.sandStrike);
-  if (lie === LIE.rough && kit.roughStrike) return overridden(SURFACES[lie], kit.roughStrike);
-  return SURFACES[lie];
+export function surfaceFor(lie: Lie, kit: Kit, table: readonly Surface[] = SURFACES): Surface {
+  if (lie === LIE.sand && kit.sandStrike) return overridden(table[lie], kit.sandStrike);
+  if (lie === LIE.rough && kit.roughStrike) return overridden(table[lie], kit.roughStrike);
+  return table[lie];
 }
 
 /**
@@ -87,11 +90,11 @@ export function surfaceFor(lie: Lie, kit: Kit): Surface {
  */
 export const GREENS = { fast: 11, normal: 14, slow: 19.5 } as const;
 
-/** How steadily `lie` slows a rolling ball, in yards a second a second, on a hole whose greens run at `greens`: the table's own on all but the green and its first cut. */
-export function rollOf(lie: Lie, greens: number = GREENS.normal): number {
+/** How steadily `lie` slows a rolling ball, in yards a second a second, on a hole whose greens run at `greens`: the table's own (a biome's, if `table` is given) on all but the green and its first cut. */
+export function rollOf(lie: Lie, greens: number = GREENS.normal, table: readonly Surface[] = SURFACES): number {
   if (lie === LIE.green) return greens;
-  if (lie === LIE.cut) return SURFACES[LIE.cut].roll * (greens / GREENS.normal);
-  return SURFACES[lie].roll;
+  if (lie === LIE.cut) return table[LIE.cut].roll * (greens / GREENS.normal);
+  return table[lie].roll;
 }
 
 /**
@@ -112,8 +115,13 @@ export function rollScale(lie: Lie, kit: Kit): number {
 }
 
 /** How steadily `lie` slows the kit's ball, in yards a second a second: `rollOf` scaled by `rollScale`, the one place the physics, the rules and the arithmetic all read it. */
-export function groundRoll(lie: Lie, greens: number | undefined, kit: Kit): number {
-  return rollOf(lie, greens) * rollScale(lie, kit);
+export function groundRoll(
+  lie: Lie,
+  greens: number | undefined,
+  kit: Kit,
+  table: readonly Surface[] = SURFACES,
+): number {
+  return rollOf(lie, greens, table) * rollScale(lie, kit);
 }
 
 /**

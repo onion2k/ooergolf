@@ -14,7 +14,7 @@ import { PHYSICS, strikeSpeed } from './arena';
 import { loftOf, type BagClub } from './bag';
 import { seeded } from './random';
 import { NO_KIT, type Kit } from './items';
-import { LIE, surfaceFor, type Lie } from './surfaces';
+import { LIE, SURFACES, surfaceFor, type Lie, type Surface } from './surfaces';
 
 /**
  * The wind: how hard it pushes a ball, in yards a second a second for each mile an hour of it, and the most any hole has
@@ -114,11 +114,18 @@ export function spunKeep(keep: number, spin: number, kit: Kit = NO_KIT, gain = 1
 /**
  * How long a ball struck with `club` at `power` from a ball that lies on `lie` is in the air, on the level, in seconds:
  * nought for a club that has no loft. The carry's own arithmetic (twice the climb over gravity), with what the lie does to
- * the speed and the loft; measured against the game, it is within a physics step of it.
+ * the speed and the loft; measured against the game, it is within a physics step of it. In the world's seconds, which a
+ * biome's `pace` makes more than the clock's, and off the ground `table` (the hole's biome's: earth's where none is given).
  */
-export function airTime(club: BagClub, power: number, lie: Lie = LIE.tee, kit: Kit = NO_KIT): number {
+export function airTime(
+  club: BagClub,
+  power: number,
+  lie: Lie = LIE.tee,
+  kit: Kit = NO_KIT,
+  table: readonly Surface[] = SURFACES,
+): number {
   if (!(club.loft > 0)) return 0;
-  const surface = surfaceFor(lie, kit);
+  const surface = surfaceFor(lie, kit, table);
   const speed = strikeSpeed(Math.max(0, Math.min(1, power)), club.hardest) * surface.power;
   return (2 * speed * Math.sin(((loftOf(club, kit) + surface.loft) * Math.PI) / 180)) / PHYSICS.gravity;
 }
@@ -128,7 +135,14 @@ export function airTime(club: BagClub, power: number, lie: Lie = LIE.tee, kit: K
  * (and how far a headwind takes off it, and a crosswind turns it aside at the landing): a steady push for as long as it is in the
  * air, so half its push times the time in the air, squared.
  */
-export function windReach(club: BagClub, power: number, speed: number, lie: Lie = LIE.tee, kit: Kit = NO_KIT): number {
-  const t = airTime(club, power, lie, kit);
+export function windReach(
+  club: BagClub,
+  power: number,
+  speed: number,
+  lie: Lie = LIE.tee,
+  kit: Kit = NO_KIT,
+  table: readonly Surface[] = SURFACES,
+): number {
+  const t = airTime(club, power, lie, kit, table);
   return 0.5 * windPush(speed) * kit.wind * t * t;
 }

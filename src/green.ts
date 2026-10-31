@@ -9,6 +9,7 @@
  */
 import { PHYSICS, TILE, heightAt, tileLieAt, slopeAt, slopeInto, tileAt, type Layout } from './arena';
 import { NO_KIT, type Kit } from './items';
+import { surfacesOf } from './biome';
 import { GREENS, LIE, groundRoll, rollScale } from './surfaces';
 
 /** The steepest a contoured green is, as a slope (rise over run): 10 per cent, at a contour of one. A green's tilt is most of it; at a 3-yard cup and a 2-yard ball a break under the cup's radius is lost in the cup, and 5 per cent was. */
@@ -205,13 +206,15 @@ export function puttFrom(
 
   let work = 0;
   const slope: [number, number] = [0, 0];
-  const arriving = Math.sqrt(2 * groundRoll(tileLieAt(layout, cup.x, cup.y), greens, kit) * PUTT.dead);
+  const arriving = Math.sqrt(
+    2 * groundRoll(tileLieAt(layout, cup.x, cup.y), greens, kit, surfacesOf(layout)) * PUTT.dead,
+  );
   /** How the ball's velocity changes as it goes: slowed by the ground it rolls over and pulled down the slope, per second. */
   const accel = (px: number, py: number, ux: number, uy: number, out: [number, number]) => {
     work++;
     slopeInto(layout, px, py, slope);
     const speed = Math.hypot(ux, uy) || 1;
-    const roll = groundRoll(tileLieAt(layout, px, py), greens, kit);
+    const roll = groundRoll(tileLieAt(layout, px, py), greens, kit, surfacesOf(layout));
     const pull = PHYSICS.gravity / (1 + slope[0] * slope[0] + slope[1] * slope[1]);
     out[0] = -(roll * ux) / speed - pull * slope[0];
     out[1] = -(roll * uy) / speed - pull * slope[1];

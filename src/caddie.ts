@@ -14,6 +14,7 @@
  */
 import { lieAt } from './arena';
 import { BAG, type BagClub } from './bag';
+import { surfacesOf } from './biome';
 import { carryFrom } from './flight';
 import type { Game } from './game';
 import { PLAY_AHEAD, lookAlong } from './lineofplay';
@@ -219,7 +220,7 @@ export class Caddie {
     this.heading = lookAlong(layout.way, x, y, PLAY_AHEAD, this.look, cup)
       ? Math.atan2(this.look.y - y, this.look.x - x)
       : this.cupHeading;
-    this.handCarry = carryFrom(this.inHand, 1, lieAt(layout, x, y), game.kit);
+    this.handCarry = carryFrom(this.inHand, 1, lieAt(layout, x, y), game.kit, 1, surfacesOf(layout));
     this.phase = 'start';
   }
 
@@ -267,7 +268,7 @@ export class Caddie {
       let pick = -1;
       for (let k = BAG.length - 1; k > hand; k--) {
         const c = BAG[k];
-        if (c.loft > 0 && carryFrom(c, 1, lie, this.game.kit) >= this.cupYards) {
+        if (c.loft > 0 && carryFrom(c, 1, lie, this.game.kit, 1, surfacesOf(this.game.layout)) >= this.cupYards) {
           pick = k;
           break;
         }

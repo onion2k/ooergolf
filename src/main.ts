@@ -82,6 +82,7 @@ import type { GameGroup } from 'artshape-render/game/renderer';
 import { roll } from './roll';
 import { fieldOf, flattenFor, grassOptionsOf, windOf } from './turf';
 import { AIM_REACH, Scene, boxOf, sunFitOf } from './scene';
+import { surfacesOf } from './biome';
 import { carryFrom } from './flight';
 import { CADDIE, CaddieTalk } from './caddie';
 import { clearings } from './scenery';
@@ -1525,6 +1526,7 @@ async function main() {
           lieAt(played.layout, world.x[ball], world.y[ball]),
           played.kit,
           played.opening ? played.kit.firstStroke.power : 1,
+          surfacesOf(played.layout),
         ) / AIM_REACH
       : rollsFor(played.hardest, played.putRoll) / rollsFor(HARDEST_SHOT);
     // and a putt on a hole whose greens are set is drawn as its roll as well, so the break is seen as a curve across the green

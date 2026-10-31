@@ -8,6 +8,7 @@
  * a preview worked out on every frame of a drag makes nothing, and the page turns it into an arc and a ring and never
  * works a flight out itself.
  */
+import { surfacesOf } from './biome';
 import { lieAt, slopeAt, type Layout } from './arena';
 import type { BagClub } from './bag';
 import { lossOf, maxScatter } from './flight';
@@ -478,7 +479,7 @@ export class Previewer {
     if (p.rolled) return;
     const { kit } = this.rehearsal;
     const spread =
-      maxScatter(club, lieAt(layout, from.x, from.y), power, kit) *
+      maxScatter(club, lieAt(layout, from.x, from.y), power, kit, surfacesOf(layout)) *
       (this.rehearsal.opening ? kit.firstStroke.scatter : 1);
     const shortest = p.carry * (1 - lossOf(kit, club) * Math.min(1, power)) ** 2;
     p.footprint.across = p.carry * Math.sin(spread);

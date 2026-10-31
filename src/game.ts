@@ -51,7 +51,8 @@ import { PRIZE, TOURS, type Grade, type Tour } from './season';
 import { eventsIn, finishEvent, nextEvent, withdrawn, closedIfFull, type SeasonContext } from './tournament';
 import type { Random } from './random';
 import { PUTT_SHAPE, bendRate, curveRate, puttSpinFactor, spunKeep, windDirection, windPush } from './shaping';
-import { LANDING, LIE, SURFACES, groundRoll, rollScale } from './surfaces';
+import { surfacesOf } from './biome';
+import { LANDING, LIE, groundRoll, rollScale } from './surfaces';
 import { hitCanopy, treeCone, turned, type Cone } from './trees';
 
 /** What happens, for whoever shows it. Every one may be left out. */
@@ -416,7 +417,7 @@ export class Game {
    */
   rollAt(x: number, y: number): number {
     return this.layout.golf
-      ? groundRoll(tileLieAt(this.layout, x, y), this.greens, this.builtKit)
+      ? groundRoll(tileLieAt(this.layout, x, y), this.greens, this.builtKit, surfacesOf(this.layout))
       : ROLL.roll * rollScale(LIE.none, this.builtKit);
   }
 
@@ -868,6 +869,7 @@ export class Game {
         this.random,
         this.kit,
         first.scatter,
+        surfacesOf(this.layout),
       );
       // a putt out of a bunker is struck as much harder as the kit says
       if (!lofted && lie === LIE.sand && this.kit.sandPutt !== 1) {
@@ -1201,7 +1203,7 @@ export class Game {
     if (out + into <= 2 * PHYSICS.gravity * PHYSICS.step) return;
     const r = world.r[ball];
     if (Math.abs(world.z[ball] - heightAt(layout, x, y) - restingAbove(layout, x, y, r)) > 0.3) return;
-    const surface = SURFACES[lieAt(layout, x, y)];
+    const surface = surfacesOf(layout)[lieAt(layout, x, y)];
     // along the ground, scrubbed, and more the steeper it came down; away from it, the surface's own hop
     const ax = world.vx[ball] - nx * out,
       ay = world.vy[ball] - ny * out,

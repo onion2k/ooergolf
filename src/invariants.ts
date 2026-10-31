@@ -72,7 +72,8 @@ import type { Preview } from './preview';
 import { troubleOf, type Caddie, type Tip } from './caddie';
 import type { Bank } from './bank';
 import { GREEN, READER, breakOf, greenArrows, leansOnMinigolf, readerArrows, type Arrow, type Break } from './green';
-import { GREENS, LANDING, LIE, SURFACES, rollScale } from './surfaces';
+import { surfacesOf } from './biome';
+import { GREENS, LANDING, LIE, rollScale } from './surfaces';
 import { BARRIER, WINDMILL, flipperYaw, type Obstacles } from './obstacles';
 import { WIND, windPush, windReach } from './shaping';
 import { zonesOf } from './zones';
@@ -539,7 +540,7 @@ export function checkInvariants(game: Game): string[] {
       const holds = Math.tan(Math.asin(Math.min(1, game.rollAt(world.x[ball], world.y[ball]) / PHYSICS.gravity)));
       if (!(slope <= holds * HOLDS.share + HOLDS.hair))
         out.push(
-          `at rest on a slope of ${slope.toFixed(3)}, which the ${SURFACES[tileLieAt(layout, world.x[ball], world.y[ball])].name} holds no ball on past ${holds.toFixed(3)}: ${at(ball)}`,
+          `at rest on a slope of ${slope.toFixed(3)}, which the ${surfacesOf(layout)[tileLieAt(layout, world.x[ball], world.y[ball])].name} holds no ball on past ${holds.toFixed(3)}: ${at(ball)}`,
         );
     }
     // at rest with nothing under it: asleep where a bounce left it, which a player could never strike from

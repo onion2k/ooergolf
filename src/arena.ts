@@ -5,6 +5,7 @@
  * logic: the game reads it and the page draws it, and the lower modules go
  * on knowing nothing of any hole.
  */
+import { BIOMES, isBiome, type BiomeName } from './biome';
 import { LIE, type Lie } from './surfaces';
 import { TREE } from './trees';
 import { TILE } from './tile';
@@ -169,6 +170,8 @@ export interface Layout extends Ground {
   lie: Uint8Array;
   /** Whether this is a golf hole, drawn with golf's tiles: a ball on it is struck with a club from the bag, and lands. */
   golf: boolean;
+  /** The biome the hole is in, which its ground's figures are read through (`surfacesOf`): earth where the hole says none. */
+  biome: BiomeName;
   /**
    * One byte a tile, of a golf hole: 1 where the ground is out of bounds, drawn `x`: rough to the physics, and lost the
    * moment a ball is on it, as one in water is. All nought on a hole of minigolf, whose edge is a rail.
@@ -203,13 +206,14 @@ export interface Layout extends Ground {
  * shape of the map with a digit a tile, or real heights, one a tile, row by
  * row from the south as a layout has them, which is how ground made from
  * noise comes (see `noise.ts`). Whether the physics will take it is the
- * physics' to say: see `terrainRefusal`. The grid is centred on the origin. A golf hole may also be given its `way`, the line of play in world units, which its fairway is striped along. A map with anything else in it, not exactly one tee and one cup, or
+ * physics' to say: see `terrainRefusal`. The grid is centred on the origin. A golf hole may also be given its `way`, the line of play in world units, which its fairway is striped along, and its `biome` (earth where none), which the layout names and the ground's figures are read through. A map with anything else in it, not exactly one tee and one cup, or
  * grass on its edge, where a ball would leave the world, is refused.
  */
 export function layoutOf(
   map: readonly string[],
   terrain?: readonly string[] | Float32Array,
   way?: readonly (readonly [number, number])[],
+  biome: BiomeName = 'earth',
 ): Layout {
   const rows = map.length;
   const cols = Math.max(...map.map((r) => r.length));
@@ -294,6 +298,8 @@ export function layoutOf(
       bounds.maxY = Math.max(bounds.maxY, y + TILE / 2);
     }
   }
+  if (!isBiome(biome))
+    throw new Error(`a hole's biome is one of ${Object.keys(BIOMES).join(', ')}, not ${String(biome)}`);
   if (tees.length !== 1) throw new Error(`a hole's map has ${tees.length} tees, not one`);
   if (cups.length !== 1) throw new Error(`a hole's map has ${cups.length} cups, not one`);
   const [[teeX, teeY]] = tees,
@@ -323,6 +329,7 @@ export function layoutOf(
     sand,
     lie,
     golf,
+    biome,
     oob,
     trees,
     bumpers,
