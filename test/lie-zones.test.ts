@@ -29,6 +29,7 @@ const LIE_OF: Record<Zone, Lie> = {
   tee: LIE.tee,
   putting: LIE.green,
   cut: LIE.cut,
+  pan: LIE.pan,
   fairway: LIE.fairway,
   rough: LIE.rough,
 };

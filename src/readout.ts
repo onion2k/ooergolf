@@ -65,12 +65,12 @@ export function shapingWords(shape = 0, spin = 0): string[] {
  * one, then how far and what it comes down on, which is the news where it is the water or out of bounds; or that it
  * drops in the cup.
  */
-export function landingText(l: Landing): string {
+export function landingText(l: Landing, lake = 'water'): string {
   const shaped = shapingWords(l.shape, l.spin).map((w) => `${w} \u00b7 `);
   if (l.end === 'holed') return `${shaped.join('')}drops in the cup`;
   const yards = `lands ${Math.round(l.carry)} yd`;
   const where =
-    l.end === 'water' ? 'in the water' : l.end === 'out' ? 'out of bounds' : (SURFACES[l.lie]?.name ?? 'ground');
+    l.end === 'water' ? `in the ${lake}` : l.end === 'out' ? 'out of bounds' : (SURFACES[l.lie]?.name ?? 'ground');
   const rests = l.rest !== undefined && l.end === 'landed' ? ` \u00b7 rests ${Math.round(l.rest)} yd` : '';
   return `${shaped.join('')}${l.hit ? 'hits a tree \u00b7 ' : ''}${yards} \u00b7 ${where}${rests}`;
 }

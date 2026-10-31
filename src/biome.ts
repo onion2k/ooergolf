@@ -23,7 +23,17 @@ export interface Biome {
   calm: boolean;
   /** The ground's figures, by `LIE`: earth's is the `SURFACES` table itself, and another biome's is a copy with rows changed. */
   surfaces: readonly Surface[];
+  /**
+   * What a hole's lake is. Water, a crater and a mirror are water to the game: a ball is lost in them, costs a stroke and is put
+   * back, and they differ only in the words told. A pan is ground, in play: a hardpan a ball skitters across and is never lost in,
+   * which the map draws `d` where earth's would draw `~`.
+   */
+  hazard: Hazard;
+  /** The words a lake is told in: `lake` is its noun, as in "In the water!", "finds the crater", "runs into the quicksilver". */
+  words: { lake: string };
 }
+
+export type Hazard = 'water' | 'pan' | 'crater' | 'mirror';
 
 /** `SURFACES` with the rows `over` changed, by `LIE`: the rest are earth's own rows, the very objects. */
 function table(over: Partial<Record<number, Partial<Surface>>>): readonly Surface[] {
@@ -36,7 +46,7 @@ function table(over: Partial<Record<number, Partial<Surface>>>): readonly Surfac
  * ball dead, and the future's plates are lively.
  */
 export const BIOMES: Record<BiomeName, Biome> = {
-  earth: { name: 'earth', pace: 1, calm: false, surfaces: SURFACES },
+  earth: { name: 'earth', pace: 1, calm: false, surfaces: SURFACES, hazard: 'water', words: { lake: 'water' } },
   desert: {
     name: 'desert',
     pace: 1,
@@ -45,6 +55,9 @@ export const BIOMES: Record<BiomeName, Biome> = {
       [LIE.fairway]: { keep: 0.55, roll: 18 },
       [LIE.rough]: { roll: 30, keep: 0.3, bounce: 0.2, power: 0.85, wild: 1.3 },
     }),
+    // a dried lake bed: ground, so it is never told, and its word is the one a stroke is never lost to
+    hazard: 'pan',
+    words: { lake: 'pan' },
   },
   moon: {
     name: 'moon',
@@ -52,6 +65,8 @@ export const BIOMES: Record<BiomeName, Biome> = {
     pace: 0.655,
     calm: true,
     surfaces: table({ [LIE.rough]: { keep: 0.05, bounce: 0.03, power: 0.7 } }),
+    hazard: 'crater',
+    words: { lake: 'crater' },
   },
   future: {
     name: 'future',
@@ -61,6 +76,8 @@ export const BIOMES: Record<BiomeName, Biome> = {
       [LIE.fairway]: { keep: 0.6, bounce: 0.6 },
       [LIE.rough]: { roll: 40, keep: 0.4, bounce: 0.45, power: 0.9, wild: 1.1 },
     }),
+    hazard: 'mirror',
+    words: { lake: 'quicksilver' },
   },
 };
 

@@ -98,7 +98,14 @@ export const KNOCK = { least: 6, apart: 0.1 } as const;
 export const TERRAIN = { step: 0.5 } as const;
 
 /** The characters of a golf hole's map that name a kind of ground. */
-const GOLF_TILES: Record<string, Lie> = { f: LIE.fairway, r: LIE.rough, g: LIE.green, t: LIE.tee, c: LIE.cut };
+const GOLF_TILES: Record<string, Lie> = {
+  f: LIE.fairway,
+  r: LIE.rough,
+  g: LIE.green,
+  t: LIE.tee,
+  c: LIE.cut,
+  d: LIE.pan,
+};
 
 /** How far a ball struck at `speed` rolls on the green before it stops: on the green's own slowing, or on `roll` if the ball is one that rolls otherwise. */
 export function rollsFor(speed: number, roll: number = ROLL.roll): number {
@@ -200,7 +207,7 @@ export interface Layout extends Ground {
  * first, one character a tile: `#` rail, `.` grass, `T` the tee and `C` the
  * cup on level grass, a digit for grass raised that many steps, `~` water,
  * `s` sand, `o` a post standing on grass, and a space for off the course. A golf hole is drawn in `f` fairway, `r` rough,
- * `g` green, `t` the tee's box and `x` out of bounds instead of `.` and the digits, with the same `T`, `C`, `s`, `~` and `o`, and `^`, a tree: the tee is
+ * `g` green, `c` the first cut, `d` a pan (a desert's dried lake, refused in any other biome), `t` the tee's box and `x` out of bounds instead of `.` and the digits, with the same `T`, `C`, `s`, `~` and `o`, and `^`, a tree: the tee is
  * a tee and the cup a green whatever they are drawn on, and a post stands in the rough.
  * `terrain`, if given, is how high the ground slopes on each tile: a grid the
  * shape of the map with a digit a tile, or real heights, one a tile, row by
@@ -215,6 +222,8 @@ export function layoutOf(
   way?: readonly (readonly [number, number])[],
   biome: BiomeName = 'earth',
 ): Layout {
+  if (!isBiome(biome))
+    throw new Error(`a hole's biome is one of ${Object.keys(BIOMES).join(', ')}, not ${String(biome)}`);
   const rows = map.length;
   const cols = Math.max(...map.map((r) => r.length));
   const originX = -(cols * TILE) / 2,
@@ -283,6 +292,11 @@ export function layoutOf(
         lie[t] = LIE.rough;
         oob[t] = 1;
       } else if (c in GOLF_TILES) {
+        // a pan is a desert's lake bed, and no other biome has one to draw: refused by name, since it would be hardpan on earth
+        if (c === 'd' && BIOMES[biome].hazard !== 'pan')
+          throw new Error(
+            `a hole's map has a pan (d) in it at column ${tx} of row ${r}, which only a hole in a biome whose lake is a pan may have, and this one is in the ${biome}`,
+          );
         golf = true;
         lie[t] = GOLF_TILES[c];
       } else if (c >= '1' && c <= '9') {
@@ -298,8 +312,6 @@ export function layoutOf(
       bounds.maxY = Math.max(bounds.maxY, y + TILE / 2);
     }
   }
-  if (!isBiome(biome))
-    throw new Error(`a hole's biome is one of ${Object.keys(BIOMES).join(', ')}, not ${String(biome)}`);
   if (tees.length !== 1) throw new Error(`a hole's map has ${tees.length} tees, not one`);
   if (cups.length !== 1) throw new Error(`a hole's map has ${cups.length} cups, not one`);
   const [[teeX, teeY]] = tees,
@@ -556,6 +568,7 @@ const LIE_OF_ZONE: Record<Zone, Lie> = {
   tee: LIE.tee,
   putting: LIE.green,
   cut: LIE.cut,
+  pan: LIE.pan,
   fairway: LIE.fairway,
   rough: LIE.rough,
 };

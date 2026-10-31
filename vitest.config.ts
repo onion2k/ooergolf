@@ -22,6 +22,7 @@ const SLOW = [
   'test/determinism.test.ts',
   'test/engine.test.ts',
   'test/fells-ground.test.ts',
+  'test/fuzz-pan.test.ts',
   'test/fells.test.ts',
   'test/field.test.ts',
   'test/flipper.test.ts',

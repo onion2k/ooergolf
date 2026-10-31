@@ -19,12 +19,13 @@ export const FAIRWAY = 0,
   GREEN = 1,
   TEE = 2,
   SAND = 3,
-  OUT = 4;
-export const FIELDS = 5;
+  OUT = 4,
+  PAN = 5;
+export const FIELDS = 6;
 
 export const ZONES = {
   /** Gaussian blur, in tiles, by field; the tee's is smaller so its corners are only softened. */
-  sigma: [1.5, 1.5, 0.7, 1.2, 1.5] as readonly number[],
+  sigma: [1.5, 1.5, 0.7, 1.2, 1.5, 1.2] as readonly number[],
   /** Pieces to a tile side: four keeps a curve smooth (the band-width test holds it), and an even number keeps the grid on the blur's tile middles. */
   per: 4,
   /** The first cut's width, in yards: a tile. */
@@ -41,7 +42,7 @@ export const ZONES = {
   far: 99,
 };
 
-export type Zone = 'sand' | 'lip' | 'oob' | 'tee' | 'putting' | 'cut' | 'fairway' | 'rough';
+export type Zone = 'sand' | 'lip' | 'oob' | 'tee' | 'pan' | 'putting' | 'cut' | 'fairway' | 'rough';
 
 /** The rules in priority order: the first whose field is below its threshold is the zone; where none is, rough. */
 export const RULES: readonly [field: number, below: number, zone: Zone][] = [
@@ -49,6 +50,8 @@ export const RULES: readonly [field: number, below: number, zone: Zone][] = [
   [SAND, 0, 'lip'],
   [OUT, 0, 'oob'],
   [TEE, 0, 'tee'],
+  // above the green and the cuts: a pan beside either keeps its edge, and a first cut is not laid over hardpan
+  [PAN, 0, 'pan'],
   [GREEN, 0, 'putting'],
   [GREEN, ZONES.band, 'cut'],
   [FAIRWAY, 0, 'fairway'],
@@ -379,8 +382,10 @@ export function zonesOf(l: Layout): Zones {
     const oob = l.oob[t] === 1;
     // fairway: counts on every tile of ground that is not sand, green, tee or out of bounds
     const wf = ground && !sand && !oob && lie !== LIE.green && lie !== LIE.tee && t !== cupTile ? 1 : 0;
-    weight[FAIRWAY][t] = wf;
-    vw[FAIRWAY][t] = lie === LIE.fairway ? wf : 0;
+    // a pan is no push on the fairway's edge, as water is none: the fairway runs on to it
+    const wp = wf && lie !== LIE.pan ? 1 : 0;
+    weight[FAIRWAY][t] = wp;
+    vw[FAIRWAY][t] = lie === LIE.fairway ? wp : 0;
     const wg = ground && !sand && !oob ? 1 : 0;
     weight[GREEN][t] = wg;
     vw[GREEN][t] = lie === LIE.green || t === cupTile ? wg : 0;
@@ -389,6 +394,10 @@ export function zonesOf(l: Layout): Zones {
     vw[TEE][t] = lie === LIE.tee ? wt : 0;
     weight[SAND][t] = ground ? 1 : 0;
     vw[SAND][t] = sand ? 1 : 0;
+    // a pan: a tile of the kind, counted as the ground it is, and nothing of sand, out of bounds or rock
+    const wpan = ground && !oob ? 1 : 0;
+    weight[PAN][t] = wpan;
+    vw[PAN][t] = lie === LIE.pan ? wpan : 0;
     const wo = l.solid[t] || l.water[t] ? 0 : 1;
     weight[OUT][t] = wo;
     vw[OUT][t] = oob ? wo : 0;

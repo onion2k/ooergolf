@@ -259,6 +259,9 @@ export function groundOf(l: Layout, mouth?: Ring): Ground {
         return odd ? puttingMown : putting;
       case 'cut':
         return cut;
+      case 'pan':
+        // a plain mown tone for now, which Part 6 of the biomes plan replaces with a ground of its own (cracks, bleached stones)
+        return cut;
       case 'fairway':
         // a fairway with a way is mown in stripes, by the piece being cut; without one, in the checker's tone of the tile
         return (l.way ? stripedAt(l, pieceX, pieceY) : odd) ? mown : green;

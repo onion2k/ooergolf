@@ -16,8 +16,10 @@ import type { Kit, RoughStrike, SandStrike } from './items';
 /**
  * The kinds of ground, the byte a tile of a golf hole names; nought is none, the minigolf's own grass. `cut` is the short
  * rough round a green (its fringe) and along a fairway (the first cut): mown, but longer than either, so a little slower.
+ * `pan` is a desert's dried lake, hardpan a ball skitters across and is never lost in. Appended, never reordered: a lie's number is
+ * the byte a tile of the layout is saved as and the index the physics' surfaces are laid out by.
  */
-export const LIE = { none: 0, tee: 1, fairway: 2, rough: 3, green: 4, sand: 5, cut: 6 } as const;
+export const LIE = { none: 0, tee: 1, fairway: 2, rough: 3, green: 4, sand: 5, cut: 6, pan: 7 } as const;
 export type Lie = (typeof LIE)[keyof typeof LIE];
 
 export interface Surface {
@@ -51,6 +53,8 @@ export const SURFACES: readonly Surface[] = [
   { name: 'putting green', roll: 14, keep: 0.58, bounce: 0.45, power: 1, loft: 0, wild: 1 },
   { name: 'sand', roll: 60, keep: 0.03, bounce: 0.03, power: 0.66, loft: 6, wild: 1.25 },
   { name: 'first cut', roll: 23, keep: 0.36, bounce: 0.3, power: 0.97, loft: 0, wild: 1.1 },
+  // first figures, to be tuned with the desert courses: fast and lively, and a club loses nothing striking from it
+  { name: 'hardpan', roll: 10, keep: 0.85, bounce: 0.55, power: 1, loft: 0, wild: 1 },
 ];
 
 /** The surfaces a club's strike override has made, one for each override on each base: asked for on every read, and a copy made each time would be made every frame. */

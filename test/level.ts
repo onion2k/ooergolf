@@ -19,6 +19,8 @@ export interface LevelSpec {
   /** The wind, in miles an hour, and the greens' speed: the hole's own, calm and normal where not said. */
   wind?: number;
   greens?: number;
+  /** A pan (hardpan), a disc as a pond is, drawn `d`: only a desert's hole may have one. */
+  pan?: { along: number; across: number; radius: number };
   /** How many tiles of rough either side of the fairway: 9 where not said. */
   rough?: number;
   /** The biome the hole belongs to: earth where not said, and then the hole carries none, as a hole always did. */
@@ -56,6 +58,12 @@ export function levelHole(spec: LevelSpec): HoleDef {
     for (let r = 1; r < rows - 1; r++)
       for (let c = 1; c < cols - 1; c++)
         if (Math.hypot((c - middle) * TILE - across, (r - teeRow) * TILE - along) <= radius) grid[r][c] = '~';
+  }
+  if (spec.pan) {
+    const { along, across, radius } = spec.pan;
+    for (let r = 1; r < rows - 1; r++)
+      for (let c = 1; c < cols - 1; c++)
+        if (Math.hypot((c - middle) * TILE - across, (r - teeRow) * TILE - along) <= radius) grid[r][c] = 'd';
   }
   for (let r = teeRow - 1; r <= teeRow + 1; r++) for (let c = middle - 1; c <= middle + 1; c++) grid[r][c] = 't';
   grid[teeRow][middle] = 'T';

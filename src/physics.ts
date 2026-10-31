@@ -65,12 +65,12 @@ export interface Cup {
   pull: number;
 }
 
-/** The surfaces by index: the green, a belt, and sand; and on a golf hole, after them, its tee, fairway, rough, green and first cut. */
+/** The surfaces by index: the green, a belt, and sand; and on a golf hole, after them, its tee, fairway, rough, green, first cut and pan. */
 const BELT = 1,
   SAND_SURFACE = 2;
-/** Which of the world's surfaces each golf `LIE` is rolled on, from the green's index for none: sand is the sand's, and the first cut's is the last of them. */
-const GOLF_SURFACE: readonly number[] = [0, 3, 4, 5, 6, SAND_SURFACE, 7];
-const GOLF_LIES = [LIE.tee, LIE.fairway, LIE.rough, LIE.green, LIE.cut] as const;
+/** Which of the world's surfaces each golf `LIE` is rolled on, from the green's index for none: sand is the sand's, the first cut's is the seventh and the pan's the last. */
+const GOLF_SURFACE: readonly number[] = [0, 3, 4, 5, 6, SAND_SURFACE, 7, 8];
+const GOLF_LIES = [LIE.tee, LIE.fairway, LIE.rough, LIE.green, LIE.cut, LIE.pan] as const;
 
 /** The cup's index among the world's holes: the only one, so what goes down a hole and not out of the bottom is holed. */
 export const THE_CUP = 0;

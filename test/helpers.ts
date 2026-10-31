@@ -84,7 +84,7 @@ export function onGreen(seed = 1) {
  * on the cup gives it room).
  */
 export function field(
-  surface: 'f' | 'r' | 'g' | 's',
+  surface: 'f' | 'r' | 'g' | 's' | 'd',
   rows = 130,
   cols = 41,
   terrain?: Float32Array,

@@ -14,7 +14,7 @@
  */
 import { lieAt } from './arena';
 import { BAG, type BagClub } from './bag';
-import { surfacesOf } from './biome';
+import { BIOMES, surfacesOf } from './biome';
 import { carryFrom } from './flight';
 import type { Game } from './game';
 import { PLAY_AHEAD, lookAlong } from './lineofplay';
@@ -75,12 +75,12 @@ export function troubleOf(p: Preview): Trouble | null {
   return null;
 }
 
-/** The trouble in words, after the club's name: "finds the water at 240 yd". */
-function troubleWords(trouble: Trouble, yards: number): string {
+/** The trouble in words, after the club's name: "finds the water at 240 yd", the `lake` being the hole's biome's word for it. */
+export function troubleWords(trouble: Trouble, yards: number, lake = 'water'): string {
   const at = `${Math.round(yards)} yd`;
   switch (trouble) {
     case 'water':
-      return `finds the water at ${at}`;
+      return `finds the ${lake} at ${at}`;
     case 'out':
       return `goes out of bounds at ${at}`;
     case 'sand':
@@ -123,8 +123,8 @@ function restGood(p: Preview): boolean {
 }
 
 /** What a flat roll does after it lands, in words: "runs into the water", or "runs off it" for one that lands on the green and leaves it. */
-function runsOff(end: string, lie: number): string {
-  if (end === 'water') return 'runs into the water';
+export function runsOff(end: string, lie: number, lake = 'water'): string {
+  if (end === 'water') return `runs into the ${lake}`;
   if (end === 'out') return 'runs out of bounds';
   if (lie === LIE.sand) return 'runs into the sand';
   return 'runs off it';
@@ -260,6 +260,11 @@ export class Caddie {
   }
 
   /** The first step: a shorter club where the club in hand flies the pin, and otherwise the club in hand tried. */
+  /** What the hole's lake is called, in the hole's biome's words: water on earth. */
+  private lake(): string {
+    return BIOMES[this.game.layout.biome].words.lake;
+  }
+
   private started() {
     const lie = lieAt(this.game.layout, this.from.x, this.from.y);
     if (this.handCarry > this.cupYards + CADDIE.past) {
@@ -315,7 +320,7 @@ export class Caddie {
           spin: 0,
           angle: this.heading,
           carry: this.bestCarry,
-          text: `${this.inHand.name} ${troubleWords(this.trouble, this.troubleYards)}. ${fix}`,
+          text: `${this.inHand.name} ${troubleWords(this.trouble, this.troubleYards, this.lake())}. ${fix}`,
           button: s === 0 ? 'Hit it straight' : `Try a ${SHAPE_NAME[s]}`,
         };
         this.phase = 'done';
@@ -353,7 +358,7 @@ export class Caddie {
       spin: 0,
       angle: this.heading,
       carry: p.carry,
-      text: `${this.inHand.name} ${troubleWords(this.trouble, this.troubleYards)}. The ${lower(club)} lays up at ${Math.round(p.carry)} yd ${where}.`,
+      text: `${this.inHand.name} ${troubleWords(this.trouble, this.troubleYards, this.lake())}. The ${lower(club)} lays up at ${Math.round(p.carry)} yd ${where}.`,
       button: `Take the ${lower(club)}`,
     };
     this.phase = 'done';
@@ -461,9 +466,9 @@ export class Caddie {
     const rest = { end: spun.holed[k] ? 'holed' : 'rest', lie: spun.restLie[k] };
     let said: string;
     if (best < 0 && spun.landedOnGreen && !holdsGreen(0))
-      said = `${tip ? 'It' : `The ${lower(club)}`} lands on the green and ${runsOff(spun.flatEnd, spun.flatLie)}. Back spin ${stops}.`;
+      said = `${tip ? 'It' : `The ${lower(club)}`} lands on the green and ${runsOff(spun.flatEnd, spun.flatLie, this.lake())}. Back spin ${stops}.`;
     else if (!spun.ok[0])
-      said = `Struck flat, ${it} ${runsOff(spun.flatEnd, spun.flatLie)}. ${Name} keeps it ${restGround(rest)}, ${Math.round(spun.miss[k])} yd from the pin.`;
+      said = `Struck flat, ${it} ${runsOff(spun.flatEnd, spun.flatLie, this.lake())}. ${Name} keeps it ${restGround(rest)}, ${Math.round(spun.miss[k])} yd from the pin.`;
     else if (best < 0) said = `Back spin ${stops}, ${Math.round(spun.miss[0] - spun.miss[k])} yd nearer.`;
     else
       said = `Top spin runs ${it} on to ${Math.round(spun.restYards[k])} yd, ${spun.holed[k] ? 'in the cup' : `${Math.round(spun.miss[k])} yd from the pin`}.`;

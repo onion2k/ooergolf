@@ -327,6 +327,22 @@ export function groundProblems(layout: Layout, { slope: leans = true }: { slope?
 }
 
 /**
+ * What is wrong with a hole's pans, a desert's dried lakes: no pan tile is water (a ball on it is in play and never lost), and
+ * none stands on a hole whose biome has no pan for a lake. A pan that were water would take a ball a player is shown rolling on.
+ */
+export function panProblems(layout: Layout): string[] {
+  const out: string[] = [];
+  const pans = BIOMES[layout.biome].hazard === 'pan';
+  for (let t = 0; t < layout.cols * layout.rows; t++) {
+    if (layout.lie[t] !== LIE.pan) continue;
+    if (layout.water[t]) out.push(`pan on water at ${place(layout, t)}`);
+    if (!pans) out.push(`pan at ${place(layout, t)} on a hole in the ${layout.biome}, whose lake is not one`);
+    if (out.length >= 3) break;
+  }
+  return out;
+}
+
+/**
  * What is wrong with the arrows laid over a green (the hole's own, as `greenArrows` says them, unless given): each is
  * numbers, stands on a tile of putting green (on a hole of minigolf, a tile of its floor: not rail and not water), and there
  * are no more of them than the green has tiles.
@@ -411,6 +427,11 @@ export function lieProblems(game: Game, x: number, y: number, told: number = lie
     out.push(
       `the ball lies on lie ${told} at ${x.toFixed(2)},${y.toFixed(2)}, where the ground is ${zone}, lie ${lieOfZone(zone)}`,
     );
+  // a pan is ground a ball lies on, never water, and only a desert's
+  if (zone === 'pan' && BIOMES[layout.biome].hazard !== 'pan')
+    out.push(
+      `the ball lies on a pan at ${x.toFixed(2)},${y.toFixed(2)} on a hole in the ${layout.biome}, whose lake is not one`,
+    );
   if (zone === 'putting' && game.inHand.id !== PUTTER.id)
     out.push(`the ball is at rest on the putting green with ${game.inHand.id} in hand, not the putter`);
   return out;
@@ -478,6 +499,7 @@ export function checkInvariants(game: Game): string[] {
   }
   if (layout.golf) {
     report('the ground', [...groundProblems(layout, { slope: greens !== undefined }), ...arrowProblems(layout)]);
+    report('the pan', panProblems(layout));
     report('the break', breakProblems(game));
     // the chalk's arrows round the ball are held to the ground a ball is played from, and to their bound
     if (game.kit.chalk && world.alive[game.ball])

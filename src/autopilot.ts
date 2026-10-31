@@ -94,7 +94,9 @@ function slowingAt(l: Layout, x: number, y: number, greens?: number, kit: Kit = 
   if (!l.golf) return ROLL.roll * rollScale(LIE.none, kit);
   // by the tile, as the physics rolls a ball (`lieAt` is the zone, for a strike and a landing)
   const lie = tileLieAt(l, x, y);
-  return lie === LIE.green || lie === LIE.cut ? groundRoll(lie, greens, kit, surfacesOf(l)) : ROLL.roll * kit.roll;
+  return lie === LIE.green || lie === LIE.cut || lie === LIE.pan
+    ? groundRoll(lie, greens, kit, surfacesOf(l))
+    : ROLL.roll * kit.roll;
 }
 
 /**

@@ -82,7 +82,7 @@ import type { GameGroup } from 'artshape-render/game/renderer';
 import { roll } from './roll';
 import { fieldOf, flattenFor, grassOptionsOf, windOf } from './turf';
 import { AIM_REACH, Scene, boxOf, sunFitOf } from './scene';
-import { surfacesOf } from './biome';
+import { BIOMES, surfacesOf } from './biome';
 import { carryFrom } from './flight';
 import { CADDIE, CaddieTalk } from './caddie';
 import { clearings } from './scenery';
@@ -975,7 +975,7 @@ async function main() {
     // into the water: a splash where it went in, and a word, and the stroke it cost; the ball put back is round
     splash(x, y) {
       hud.setStrokes(game?.strokes ?? 0);
-      hud.splash(wadedNow);
+      hud.splash(wadedNow, game ? BIOMES[game.layout.biome].words.lake : undefined);
       wadedNow = false;
       squash.clear();
       trail.clear();
@@ -1337,15 +1337,18 @@ async function main() {
           const p = previewer.run({ x, y }, inHand, flying.angle, flying.power, shape, spin);
           hud.setLanding(
             p.n
-              ? landingText({
-                  carry: p.carry,
-                  end: p.end,
-                  lie: p.lie,
-                  hit: p.hit !== null,
-                  shape,
-                  spin,
-                  ...(p.rest.shown && p.rest.settled ? { rest: p.rest.carry } : {}),
-                })
+              ? landingText(
+                  {
+                    carry: p.carry,
+                    end: p.end,
+                    lie: p.lie,
+                    hit: p.hit !== null,
+                    shape,
+                    spin,
+                    ...(p.rest.shown && p.rest.settled ? { rest: p.rest.carry } : {}),
+                  },
+                  BIOMES[layout.biome].words.lake,
+                )
               : null,
           );
         } else previewer.roll({ x, y }, inHand, aimed.angle, aimed.power);

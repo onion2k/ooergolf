@@ -254,8 +254,12 @@ export function restUnderCrown(layout: Layout, x: number, y: number): number {
  * went: a felled tree's tile is the rough it stood on. Done once the ground is final, since the banks and the hills are
  * what raise it. It spends no chance, so everything else of the hole is what it would have been.
  */
-export function felled(map: readonly string[], terrain: Float32Array): { map: string[]; felled: number } {
-  const layout = layoutOf(map, terrain);
+export function felled(
+  map: readonly string[],
+  terrain: Float32Array,
+  biome?: BiomeName,
+): { map: string[]; felled: number } {
+  const layout = layoutOf(map, terrain, undefined, biome);
   const rows = map.map((row) => row.split(''));
   let count = 0;
   for (const t of layout.trees) {
@@ -529,7 +533,8 @@ function at(points: Pt[], s: number): { p: Pt; dir: Pt } {
 function rests(l: ReturnType<typeof layoutOf>, greens: number | undefined, only?: Uint8Array): boolean {
   for (let t = 0; t < l.cols * l.rows; t++) {
     const lie = l.lie[t];
-    if (l.solid[t] || l.oob[t] || (lie !== LIE.fairway && lie !== LIE.green && lie !== LIE.tee)) continue;
+    if (l.solid[t] || l.oob[t] || (lie !== LIE.fairway && lie !== LIE.green && lie !== LIE.tee && lie !== LIE.pan))
+      continue;
     if (only && !only[t]) continue;
     if (!holdsBall(l, t, greens)) return false;
   }
@@ -1235,10 +1240,15 @@ export function golfHole(spec: GolfSpec): HoleDef {
       .map((row) => row.join(''));
   // the ground is made against the hole as it was drawn, and the first cut laid on it after, so that the cut changes
   // what a ball rolls on and not the hills it rolls over
-  const drawn = rowsOf(grid);
+  // a lake is water on earth, the Moon and in the future, and a pan in the desert: drawn `d`, ground a ball is in play on, the same
+  // shapes from the same chance. Only the map is told so; the ground below is made against the lakes as water (`flat`), so the
+  // hills and the hollows a lake is set in are the very ones the same spec has on earth, and what a pan must hold is judged after
+  const pans = BIOMES[biome ?? 'earth'].hazard === 'pan';
+  const panned = (rows: string[]) => (pans ? rows.map((row) => row.replaceAll('~', 'd')) : rows);
+  const flat = layoutOf(rowsOf(grid));
+  const drawn = panned(rowsOf(grid));
   const kinds = mown(grid);
-  const map = rowsOf(kinds);
-  const flat = layoutOf(drawn);
+  const map = panned(rowsOf(kinds));
   // the green's swells and swales, if it is to have any: made once, for the tiles of green the hole is drawn with
   const greenTiles: number[] = [];
   for (let t = 0; t < flat.cols * flat.rows; t++) if (flat.lie[t] === LIE.green) greenTiles.push(t);
@@ -1348,7 +1358,7 @@ export function golfHole(spec: GolfSpec): HoleDef {
       const hole: HoleDef = {
         name,
         par,
-        map: felled(map, ground).map,
+        map: felled(map, ground, biome).map,
         terrain: ground,
         ...(wind ? { wind } : {}),
         ...(greens !== undefined ? { greens } : {}),

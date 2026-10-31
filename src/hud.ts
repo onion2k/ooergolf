@@ -28,6 +28,7 @@ import {
   placeText,
   promotionLine,
   seasonLine,
+  splashWords,
   stickerText,
   toParText,
 } from './eventwords';
@@ -1379,8 +1380,8 @@ export class Hud {
   }
 
   /** The ball into the water: a word for it, until the next stroke. */
-  splash(waded = false) {
-    this.callout(waded ? 'In the water! Waders: free' : 'In the water! +1', 'splash');
+  splash(waded = false, lake = 'water') {
+    this.callout(splashWords(waded, lake), 'splash');
   }
 
   /** The ball out of bounds: a word for it, until the next stroke. */

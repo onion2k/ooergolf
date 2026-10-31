@@ -52,6 +52,8 @@ const COLOUR = {
   green: screen(PALETTE.puttingGreenMown),
   cut: screen(PALETTE.firstCut),
   sand: screen(PALETTE.sand),
+  // a plain tan for a desert's pan, which Part 6 of the biomes plan gives a colour of its own
+  pan: [201, 170, 118] as Rgb,
   water: screen(PALETTE.waterMid),
   out: screen(PALETTE.oobGround),
   tree: [31, 107, 90] as Rgb,
@@ -104,6 +106,8 @@ function kindOf(layout: Layout, t: number, streams?: ReadonlySet<number>): Rgb |
       return COLOUR.green;
     case LIE.cut:
       return COLOUR.cut;
+    case LIE.pan:
+      return COLOUR.pan;
     case LIE.rough:
       return COLOUR.rough;
     default:
@@ -119,6 +123,7 @@ export const ZONE_COLOUR: Record<Zone, Rgb> = {
   tee: COLOUR.tee,
   putting: COLOUR.green,
   cut: COLOUR.cut,
+  pan: COLOUR.pan,
   fairway: COLOUR.fairway,
   rough: COLOUR.rough,
 };
