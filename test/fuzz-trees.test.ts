@@ -15,22 +15,14 @@ import { seeded } from '../src/random';
 import { WOODS_SPECS } from '../src/woods';
 import { DT } from './helpers';
 
-/**
- * The first three holes of The Woods on gentle land (a tenth of its hills, unrolled): a cactus's crown stands two yards over its
- * foot, so on The Woods' own hills every one is felled for the crown a ball at rest beside it would lie in (`felled`), which is
- * for the desert's courses to remember and not for this test to wait on.
- */
-const holesIn = (biome: BiomeName) =>
-  WOODS_SPECS.slice(0, 3).map((s) =>
-    golfHole({ ...s, steepness: s.steepness * 0.1, rolling: false, heighten: undefined, biome }),
-  );
+const holesIn = (biome: BiomeName) => WOODS_SPECS.slice(0, 3).map((s) => golfHole({ ...s, biome }));
 
 describe('a round among cacti and holograms', () => {
   for (const biome of ['desert', 'future'] as const) {
     it(`is played by the autopilot to the end in the ${biome}, the rules held`, () => {
       const holes = holesIn(biome);
       expect(
-        holes.some((h) => h.map.some((row) => row.includes('^'))),
+        holes.every((h) => h.map.some((row) => row.includes('^'))),
         'a wood',
       ).toBe(true);
       const game = new Game(new Progress(memoryStore()), {}, { random: seeded(11), course: holes });
@@ -65,7 +57,7 @@ describe('a round among cacti and holograms', () => {
     it(`keeps the drive through a wood's lane fair in the ${biome}`, () => {
       const holes = WOODS_SPECS.filter((s) => s.gap)
         .slice(0, 2)
-        .map((s) => golfHole({ ...s, steepness: s.steepness * 0.1, rolling: false, heighten: undefined, biome }));
+        .map((s) => golfHole({ ...s, biome }));
       expect(holes.length).toBeGreaterThan(0);
       let drove = 0;
       for (const seed of [1, 2, 3]) {

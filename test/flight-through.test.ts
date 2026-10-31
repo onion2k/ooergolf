@@ -53,7 +53,7 @@ function through(def: HoleDef, club: string, power: number, from?: { x: number; 
 describe('the figures of a tree', () => {
   it('are earth’s own object on earth, a cactus’s in the desert, a hologram’s in the future and none on the Moon', () => {
     expect(BIOMES.earth.tree).toBe(TREE);
-    expect(BIOMES.desert.tree).toMatchObject({ trunk: 0.8, base: 2, apex: 15, radius: 4, restitution: 0.1 });
+    expect(BIOMES.desert.tree).toMatchObject({ trunk: 0.8, base: 5, apex: 15, radius: 3.5, restitution: 0.1 });
     expect(BIOMES.desert.tree?.glance).toEqual({ bounce: 0.05, keep: 0.1 });
     expect(BIOMES.future.tree).toMatchObject({ base: TREE.base, apex: TREE.apex, radius: TREE.radius });
     expect(BIOMES.future.tree?.passes).toEqual({ keep: 0.5 });
@@ -162,8 +162,8 @@ describe('a cactus', () => {
 
   it('is smaller than a tree: the cone a ball meets is the cactus’s, not earth’s', () => {
     const { game } = golfGame(treed('desert', 150));
-    expect(game.cones[0].radius).toBe(4);
-    expect(game.cones[0].apex - game.cones[0].base).toBe(13);
+    expect(game.cones[0].radius).toBe(3.5);
+    expect(game.cones[0].apex - game.cones[0].base).toBe(10);
     expect(golfGame(treed('earth', 150)).game.cones[0].radius).toBe(TREE.radius);
   });
 });
