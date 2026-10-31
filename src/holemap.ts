@@ -10,7 +10,7 @@
  */
 import { tileAt, type Layout } from './arena';
 import { zonesOf, type Zone } from './zones';
-import { PALETTE } from './models/palette';
+import { THEMES, themeOf, type Theme } from './theme';
 import { LIE } from './surfaces';
 import { treeOf } from './biome';
 
@@ -44,21 +44,59 @@ function byte(linear: number): number {
 /** A palette colour as the map paints it, in bytes: the one conversion, which the course previews' minigolf painter reads too. */
 export const screen = (c: readonly number[]): Rgb => [byte(c[0]), byte(c[1]), byte(c[2])];
 
-/** The ground's kinds, in the colours the map paints them, made once. */
-const COLOUR = {
-  tee: screen(PALETTE.teeBox),
-  fairway: screen(PALETTE.grassMown),
-  rough: screen(PALETTE.playRough),
-  green: screen(PALETTE.puttingGreenMown),
-  cut: screen(PALETTE.firstCut),
-  sand: screen(PALETTE.sand),
-  // a plain tan for a desert's pan, which Part 6 of the biomes plan gives a colour of its own
-  pan: [201, 170, 118] as Rgb,
-  water: screen(PALETTE.waterMid),
-  out: screen(PALETTE.oobGround),
-  tree: [31, 107, 90] as Rgb,
-  ground: screen(PALETTE.grass),
-};
+/** The ground's kinds in the colours the map paints them, and what each zone is painted, for a biome's theme. */
+interface Colours {
+  tee: Rgb;
+  fairway: Rgb;
+  rough: Rgb;
+  green: Rgb;
+  cut: Rgb;
+  sand: Rgb;
+  pan: Rgb;
+  water: Rgb;
+  out: Rgb;
+  tree: Rgb;
+  ground: Rgb;
+  zone: Record<Zone, Rgb>;
+}
+const COLOURS = new Map<string, Colours>();
+/** A biome's map colours, made once for each (four at the most) and kept. */
+function coloursOf(theme: Theme): Colours {
+  let made = COLOURS.get(theme.name);
+  if (!made) {
+    const g = theme.ground;
+    const c = {
+      tee: screen(g.teeBox),
+      fairway: screen(g.grassMown),
+      rough: screen(g.playRough),
+      green: screen(g.puttingGreenMown),
+      cut: screen(g.firstCut),
+      sand: screen(theme.map.sand),
+      // a plain tan for a desert's pan, which Part 6 of the biomes plan gives a colour of its own
+      pan: [201, 170, 118] as Rgb,
+      water: screen(theme.map.water),
+      out: screen(g.oobGround),
+      tree: [31, 107, 90] as Rgb,
+      ground: screen(g.grass),
+    };
+    made = {
+      ...c,
+      zone: {
+        sand: c.sand,
+        lip: c.sand,
+        oob: c.out,
+        tee: c.tee,
+        putting: c.green,
+        cut: c.cut,
+        pan: c.pan,
+        fairway: c.fairway,
+        rough: c.rough,
+      },
+    };
+    COLOURS.set(theme.name, made);
+  }
+  return made;
+}
 
 /**
  * The map's size in pixels for a box of `maxWidth` by `maxHeight`: the box round the hole's ground fitted to it, at its
@@ -93,6 +131,7 @@ export function mapPoint(_layout: Layout, size: MapSize, x: number, y: number): 
 
 /** The colour of the ground at a tile, or none for ground that is off the course. */
 function kindOf(layout: Layout, t: number, streams?: ReadonlySet<number>): Rgb | null {
+  const COLOUR = coloursOf(themeOf(layout));
   if (t < 0 || layout.solid[t]) return null;
   if (layout.water[t] || streams?.has(t)) return COLOUR.water;
   if (layout.sand[t]) return COLOUR.sand;
@@ -115,24 +154,14 @@ function kindOf(layout: Layout, t: number, streams?: ReadonlySet<number>): Rgb |
   }
 }
 
-/** What each zone of a golf hole's ground is painted: the curves the course is drawn by, so the map shows what is played. */
-export const ZONE_COLOUR: Record<Zone, Rgb> = {
-  sand: COLOUR.sand,
-  lip: COLOUR.sand,
-  oob: COLOUR.out,
-  tee: COLOUR.tee,
-  putting: COLOUR.green,
-  cut: COLOUR.cut,
-  pan: COLOUR.pan,
-  fairway: COLOUR.fairway,
-  rough: COLOUR.rough,
-};
+/** What each zone of a golf hole's ground is painted on earth: the curves the course is drawn by, so the map shows what is played. */
+export const ZONE_COLOUR: Record<Zone, Rgb> = coloursOf(THEMES.earth).zone;
 
 /** The colour at a point: on a golf hole the zone's, except over rock and water, which keep their tiles'. */
 function colourAt(layout: Layout, x: number, y: number, streams?: ReadonlySet<number>): Rgb | null {
   const t = tileAt(layout, x, y);
   if (!layout.golf || t < 0 || layout.solid[t] || layout.water[t]) return kindOf(layout, t, streams);
-  return ZONE_COLOUR[zonesOf(layout).at(x, y)];
+  return coloursOf(themeOf(layout)).zone[zonesOf(layout).at(x, y)];
 }
 
 /**
@@ -156,11 +185,12 @@ export function paintMap(
     }
   }
   const radius = Math.max(1.5, (treeOf(layout)?.radius ?? 0) * TREE_SHARE * scale);
+  const { tree: dot } = coloursOf(themeOf(layout));
   for (const tree of layout.trees) {
     const [cx, cy] = mapPoint(layout, size, tree.x, tree.y);
     for (let py = Math.max(0, Math.floor(cy - radius)); py <= Math.min(height - 1, Math.ceil(cy + radius)); py++)
       for (let px = Math.max(0, Math.floor(cx - radius)); px <= Math.min(width - 1, Math.ceil(cx + radius)); px++)
         if (Math.hypot(px + 0.5 - cx, py + 0.5 - cy) <= radius)
-          out.set([COLOUR.tree[0], COLOUR.tree[1], COLOUR.tree[2], 255], (py * width + px) * 4);
+          out.set([dot[0], dot[1], dot[2], 255], (py * width + px) * 4);
   }
 }

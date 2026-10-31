@@ -24,7 +24,7 @@ import { isles } from '../src/isles';
 import { FLAT } from '../test/level';
 import { noiseGround } from '../src/noise';
 import { clearings } from '../src/scenery';
-import { BLADE_ROOM, GOLF_FAIRWAY_DENSITY, GOLF_ROUGH_DENSITY, cellFor } from '../src/turf';
+import { BLADE_ROOM, GOLF_FAIRWAY_DENSITY, GOLF_ROUGH_DENSITY, cellFor } from '../src/cells';
 import { BUDGET } from './budget';
 import { drag, intoThePond, start, touches, watch } from './game';
 import { holeOut, read, toCard } from './panels';

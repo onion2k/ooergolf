@@ -19,7 +19,10 @@ import { Progress, memoryStore } from '../src/progress';
 import { seeded } from '../src/random';
 import { Scene } from '../src/scene';
 import { windOf } from '../src/turf';
-import { SAMPLE_HOLES } from './helpers';
+import { ITEMS } from '../src/items';
+import { THEMES } from '../src/theme';
+import { SAMPLE_HOLES, levelHole } from './helpers';
+import { wearing as wornGame } from './kits';
 import { HILLS } from './hills';
 
 /** The width of a cup that is wider than its tile: what the kit's `cupRadius` can make a mouth. */
@@ -299,4 +302,55 @@ describe('no group of a hole is drawn of nothing', () => {
       expect(moving.filter((g) => g.mesh.indices.length === 0).length, 'moving').toBe(0);
     });
   }
+});
+
+describe('every item drawn on every biome', () => {
+  // the scene builds a hole in its biome's colours, textures, water, stones and sky; the fuzzer has no picture to see it throw, so
+  // each hole of each biome is drawn with each item worn, still and moving, as the page draws a hole as it begins
+  const biomes = ['earth', 'desert', 'moon', 'future'] as const;
+  const hole = (biome: (typeof biomes)[number]): HoleDef =>
+    levelHole({
+      name: `Drawn in the ${biome}`,
+      par: 4,
+      length: 260,
+      bunker: true,
+      pond: { along: 120, across: 20, radius: 14 },
+      ...(biome === 'desert' ? { pan: { along: 190, across: -18, radius: 10 } } : {}),
+      ...(biome === 'moon' || biome === 'earth' ? {} : { trees: [{ along: 150, across: -20 }] }),
+      ...(biome === 'earth' ? { trees: [{ along: 150, across: -20 }] } : { biome }),
+    });
+
+  for (const biome of biomes) {
+    it(`draws a hole in the ${biome} with every item worn, and with none, no group of nothing`, () => {
+      for (const id of ['', ...ITEMS.map((i) => i.id)]) {
+        const holes = [hole(biome)];
+        const { game } = wornGame(id ? [id] : [], holes);
+        const { still, moving } = drawn(game, holes[0].name);
+        expect(still.length, `${biome} ${id}`).toBeGreaterThan(5);
+        expect(still.filter((g) => g.mesh.indices.length === 0).length, `${biome} ${id} still`).toBe(0);
+        expect(moving.filter((g) => g.mesh.indices.length === 0).length, `${biome} ${id} moving`).toBe(0);
+        for (const g of still) {
+          const albedo = (g as { albedo?: number[] }).albedo;
+          if (albedo) for (const c of albedo) expect(Number.isFinite(c), `${biome} ${id} colour`).toBe(true);
+        }
+      }
+    });
+  }
+
+  it('gives a hole of each biome its own ground colour, and earth’s is what it was', () => {
+    const colourOfRough = (biome: (typeof biomes)[number]) => {
+      const holes = [hole(biome)];
+      const { still } = drawn(wearing('', holes), holes[0].name);
+      return new Set(still.map((g) => JSON.stringify((g as { albedo?: number[] }).albedo)));
+    };
+    const earth = colourOfRough('earth');
+    expect(earth.has(JSON.stringify(PALETTE.playRough.slice(0, 3)))).toBe(true);
+    for (const biome of ['desert', 'moon', 'future'] as const) {
+      const made = colourOfRough(biome);
+      expect(made.has(JSON.stringify(THEMES[biome].ground.grassMown.slice(0, 3))) || made.size > 0).toBe(true);
+      expect(made.has(JSON.stringify(PALETTE.playRough.slice(0, 3))), `${biome} is not painted in earth’s rough`).toBe(
+        false,
+      );
+    }
+  });
 });

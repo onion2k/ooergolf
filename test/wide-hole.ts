@@ -7,7 +7,7 @@
  */
 import { layoutOf } from '../src/arena';
 import type { HoleDef } from '../src/course';
-import { cellFor } from '../src/turf';
+import { cellFor } from '../src/cells';
 
 /** The most tiles the longest hole could be, before the search for the width the grass refuses gives up. */
 const MOST = 4096;

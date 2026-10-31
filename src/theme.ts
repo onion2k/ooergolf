@@ -1,0 +1,317 @@
+/**
+ * What a hole looks like in its biome: the colours of its golf ground, the crest the banks' tint goes toward, the water's bands,
+ * shelf, stones and waves, the hills and mountains past it, the grass it grows (or none), the texture its ground wears and the
+ * look it is lit by (sun, sky, fog, environment). The picture's side of the biome seam (`biome.ts` is the game's): every read
+ * is by `layout.biome` and never a global, so a hole of one biome and a hole of another are each drawn in their own, and an
+ * earth hole is drawn after a Moon hole as it always was. `THEMES.earth` is what the game was drawn in before there were
+ * biomes, made of the very objects it was drawn by (`PALETTE`, `TOY`, `SKY`, `HAZE`, `SUN`, `OCEAN`, `BAND_COLOURS`), and a test
+ * holds it so.
+ *
+ * The desert, the Moon and the future are the user's picks from the sheet of 31 October 2026 (Desert B, Moon A, Future A), with
+ * the Desert fairway made more different from its rough than the sheet had it. Their figures are first ones, to be tuned with the
+ * courses. A theme has every field, so putting one on after another leaves nothing of the other behind.
+ *
+ * Nothing here is drawn: models (a cactus, a hologram, a rock), the pan's own drawing, the crater and the quicksilver are
+ * Parts 6 to 8, and a hole of any biome draws its trees, its pan and its lakes as it does now, in these colours where the
+ * ground and the water take them.
+ */
+import type { BiomeName } from './biome';
+import { HAZE, SKY, TOY } from './look';
+import { PALETTE, shown } from './models/palette';
+import { OCEAN } from './models/obstacles';
+import { SUN } from './sun';
+import { BANK_STONE } from './models/lowpoly';
+import { BANK_TINT } from './tint';
+
+export type Rgb = readonly [number, number, number];
+
+/** The sRGB hex of a colour as it shows on the screen, into the linear light the renderer takes. */
+export function srgb(hex: string): Rgb {
+  const channel = (i: number) => {
+    const c = parseInt(hex.slice(i, i + 2), 16) / 255;
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  return [channel(0), channel(2), channel(4)];
+}
+
+/** The golf ground's colours, linear and without their roughness (the scene gives each its own): the keys of `models/palette.ts` the scene paints a hole from. */
+export interface Ground {
+  grass: Rgb;
+  grassMown: Rgb;
+  rough: Rgb;
+  playRough: Rgb;
+  oobGround: Rgb;
+  puttingGreen: Rgb;
+  puttingGreenMown: Rgb;
+  teeBox: Rgb;
+  firstCut: Rgb;
+  golfSand: Rgb;
+  golfSandLip: Rgb;
+  /** The sides of ground raised on a bank: the earth under the turf. */
+  bank: Rgb;
+}
+
+/** A layer of the renderer's ground texture, and how it is worn: which layer, how many times it tiles a world unit, and how much colour and height it shows. */
+export interface Layer {
+  layer: number;
+  repeat: number;
+  albedo: number;
+  shade: number;
+}
+
+/** A kind of blade the rough grows, from the root to the tip, how many to a square unit and how tall. */
+export interface Blades {
+  base: Rgb;
+  tip: Rgb;
+  density: number;
+  height: number;
+}
+
+/** The sun, the sky and the haze, and the light the toon shading is made of; every field is set on every hole, so none is left from the last. */
+export interface LookFigures {
+  sunDir: readonly [number, number, number];
+  sunColour: readonly [number, number, number];
+  ambient: number;
+  shadeColour: readonly [number, number, number];
+  rim: number;
+  rimColour: readonly [number, number, number];
+  skyLight: readonly [number, number, number];
+  groundLight: readonly [number, number, number];
+  sky: { zenith: readonly [number, number, number]; horizon: readonly [number, number, number]; height: number };
+  background: readonly [number, number, number];
+  fog: { colour: readonly [number, number, number]; density: number };
+  /** The environment the sky's own light is baked from (`bakeEnvironment`'s preset). */
+  env: 'daylight' | 'dusk';
+}
+
+export interface Theme {
+  name: BiomeName;
+  ground: Ground;
+  /** Where a full crest of the rough goes (`BANK_TINT.crest.to`). */
+  crest: Rgb;
+  water: {
+    /** The four bands of a lake, from the foam in. */
+    bands: readonly (readonly number[])[];
+    shelf: readonly number[];
+    /** The three colours of the ring of stones. */
+    stones: readonly (readonly number[])[];
+    /** The open water's waves: `OCEAN`'s figures. */
+    ocean: {
+      scale: number;
+      minigolfScale: number;
+      speed: number;
+      tilt: number;
+      body: readonly number[];
+      tint: readonly number[];
+    };
+  };
+  /** The map's own sand and lake: a map is not toon lit, and shows the bunkers in the sand and the water in its mid colour. */
+  map: { sand: Rgb; water: Rgb };
+  /** The world past the hole: its hills and mountains, and whether clouds drift over it. */
+  backdrop: { hill: Rgb; mountain: Rgb; clouds: boolean };
+  /** The blades the rough grows and the colour of the fairway's, or null for a biome with no grass (the ground is bare, and no blade is grown). */
+  grass: { rough: Blades; fair: Rgb } | null;
+  /** The texture the mown ground wears instead of the turf's (null: the turf's own), and the one the rough and out of bounds wear (null: none). */
+  layers: { fairway: Layer | null; rough: Layer | null };
+  look: LookFigures;
+}
+
+/** The ground of earth: the very arrays of `models/palette.ts`. */
+const EARTH_GROUND: Ground = {
+  grass: PALETTE.grass,
+  grassMown: PALETTE.grassMown,
+  rough: PALETTE.rough,
+  playRough: PALETTE.playRough,
+  oobGround: PALETTE.oobGround,
+  puttingGreen: PALETTE.puttingGreen,
+  puttingGreenMown: PALETTE.puttingGreenMown,
+  teeBox: PALETTE.teeBox,
+  firstCut: PALETTE.firstCut,
+  golfSand: PALETTE.golfSand,
+  golfSandLip: PALETTE.golfSandLip,
+  bank: [0.2, 0.3, 0.08],
+};
+
+/** The rough's blades and the fairway's green on earth: the numbers `turf.ts`'s `KINDS` and fairway were always made of. */
+export const EARTH_GRASS = {
+  rough: { base: [0.1394, 0.28, 0.011], tip: [0.187, 0.371, 0.012], density: 80, height: 0.55 },
+  fair: [0.21, 0.41, 0.0072],
+} as const satisfies { rough: Blades; fair: Rgb };
+
+/** Earth's look, as `daylight` always lit it. */
+const EARTH_LOOK: LookFigures = {
+  sunDir: SUN,
+  sunColour: [2.75, 2.55, 2.2],
+  ambient: 1,
+  shadeColour: TOY.shadeColour,
+  rim: TOY.rim,
+  rimColour: TOY.rimColour,
+  skyLight: TOY.skyLight,
+  groundLight: TOY.groundLight,
+  sky: SKY,
+  background: SKY.horizon,
+  fog: { colour: HAZE.colour, density: Math.LN2 / HAZE.halfWay },
+  env: 'daylight',
+};
+
+/** The colours of a lake's bands on earth, from the foam in, and of the shelf the stones stand on (`waterdraw.ts` re-exports them). */
+export const EARTH_BANDS = [
+  shown(0.7, 0.93, 0.98),
+  shown(0.32, 0.76, 0.95),
+  shown(0.18, 0.62, 0.92),
+  shown(0.08, 0.5, 0.89),
+];
+export const EARTH_SHELF = shown(0.62, 0.48, 0.36);
+
+const earth: Theme = {
+  name: 'earth',
+  ground: EARTH_GROUND,
+  crest: BANK_TINT.crest.to,
+  water: { bands: EARTH_BANDS, shelf: EARTH_SHELF, stones: BANK_STONE.colours, ocean: OCEAN },
+  map: { sand: PALETTE.sand, water: PALETTE.waterMid },
+  backdrop: { hill: PALETTE.hill, mountain: PALETTE.mountain, clouds: true },
+  grass: EARTH_GRASS,
+  layers: { fairway: null, rough: null },
+  look: EARTH_LOOK,
+};
+
+/** A biome's ground from the sheet's hex colours (fairway, mown fairway, rough, out of bounds, green, mown green, tee, first cut, sand, lip), and its bank a share of the rough's. */
+function ground([fair, mown, rough, oob, put, putMown, tee, cut, sand, lip]: string[], bank: number): Ground {
+  const r = srgb(rough);
+  return {
+    grass: srgb(fair),
+    grassMown: srgb(mown),
+    rough: r,
+    playRough: r,
+    oobGround: srgb(oob),
+    puttingGreen: srgb(put),
+    puttingGreenMown: srgb(putMown),
+    teeBox: srgb(tee),
+    firstCut: srgb(cut),
+    golfSand: srgb(sand),
+    golfSandLip: srgb(lip),
+    bank: [r[0] * bank, r[1] * bank, r[2] * bank],
+  };
+}
+
+const lit = (hex: string) => srgb(hex);
+
+/**
+ * The Desert, Desert B of the sheet: red earth and an oasis green. The fairway is straw and the rough a redder, darker earth than
+ * the sheet's (`bf7f3a` there, `a6612f` here), so the fairway reads as a fairway from the tee: the sheet's two were near in light
+ * and the fairway was lost in the rough. Everything past it is the sheet's.
+ */
+const desert: Theme = {
+  name: 'desert',
+  ground: ground(
+    ['e6c978', 'dcbd68', 'a6612f', '8f5426', '7fb04a', '74a540', 'e6cf86', 'bfa650', 'a8432c', 'c75f3f'],
+    0.55,
+  ),
+  crest: lit('e4b45e'),
+  water: {
+    bands: ['e6cfa0', 'd8b880', 'cfa870', 'c49a62'].map(lit),
+    shelf: lit('a87c52'),
+    stones: ['d8bc94', 'c49a70', 'a87c58'].map(lit),
+    ocean: { ...OCEAN, body: lit('bd9058') },
+  },
+  map: { sand: lit('a8432c'), water: lit('c49a62') },
+  backdrop: { hill: lit('b5703f'), mountain: lit('8c4630'), clouds: true },
+  grass: {
+    rough: { base: lit('9c7030'), tip: lit('dcae58'), density: 14, height: 0.8 },
+    fair: lit('ceae56'),
+  },
+  layers: { fairway: null, rough: { layer: 2, repeat: 1 / 9, albedo: 0.3, shade: 0.24 } },
+  look: {
+    sunDir: [0.66, 0.4, 0.63],
+    sunColour: [3.05, 2.4, 1.7],
+    ambient: 1,
+    shadeColour: [0.55, 0.32, 0.42],
+    rim: TOY.rim,
+    rimColour: TOY.rimColour,
+    skyLight: [0.66, 0.68, 0.82],
+    groundLight: [0.62, 0.38, 0.18],
+    sky: { zenith: [0.1, 0.36, 0.82], horizon: [0.98, 0.72, 0.5], height: 0.22 },
+    background: [0.98, 0.72, 0.5],
+    fog: { colour: [0.85, 0.6, 0.42], density: Math.LN2 / HAZE.halfWay },
+    env: 'daylight',
+  },
+};
+
+/** The Moon, Moon A of the sheet: a pale fairway on dark dust under a hard sun, a black sky, no blades, no clouds. */
+const moon: Theme = {
+  name: 'moon',
+  ground: ground(
+    ['b9b8b4', 'adaca8', '6c6b6e', '5a595d', 'dcdbd6', 'd0cfca', 'e8e6df', '8f8e8e', '2d2c30', '4a494d'],
+    0.7,
+  ),
+  crest: lit('8d8c8e'),
+  water: {
+    bands: ['4c4b4e', '37363a', '232226', '141317'].map(lit),
+    shelf: lit('56555a'),
+    stones: ['8c8b8e', '77767a', '636266'].map(lit),
+    ocean: { ...OCEAN, body: lit('060608'), tint: lit('1c1c20'), tilt: 0.03 },
+  },
+  map: { sand: lit('2d2c30'), water: lit('232226') },
+  backdrop: { hill: lit('6e6e72'), mountain: lit('4a4a50'), clouds: false },
+  grass: null,
+  layers: { fairway: null, rough: { layer: 3, repeat: 1 / 40, albedo: 0.3, shade: 0.3 } },
+  look: {
+    sunDir: [0.6, 0.34, 0.72],
+    sunColour: [3.2, 3.15, 3.05],
+    ambient: 0.35,
+    shadeColour: [0.1, 0.11, 0.16],
+    rim: 0.08,
+    rimColour: TOY.rimColour,
+    skyLight: [0.12, 0.13, 0.18],
+    groundLight: [0.14, 0.14, 0.14],
+    sky: { zenith: [0.003, 0.003, 0.01], horizon: [0.008, 0.008, 0.02], height: 0.08 },
+    background: [0.005, 0.005, 0.012],
+    fog: { colour: [0.01, 0.01, 0.02], density: 0.00001 },
+    env: 'daylight',
+  },
+};
+
+/** The Future, Future A of the sheet: bright steel at dusk, a plate texture on the ground, mirrored water, no blades. */
+const future: Theme = {
+  name: 'future',
+  ground: ground(
+    ['b4c2d0', 'a6b5c4', '7f8d9c', '6c7988', 'dbe7f2', 'cedbe8', 'eef5fb', '94a4b4', '3b4552', 'ffc83a'],
+    0.6,
+  ),
+  crest: lit('9fb0c4'),
+  water: {
+    bands: ['ffffff', 'e8eef4', 'd4dce4', 'c4ced8'].map(lit),
+    shelf: lit('8fa0b2'),
+    stones: ['dfe6ee', '8fa0b2', '6c7c8e'].map(lit),
+    ocean: { ...OCEAN, body: lit('b8c4d0'), tint: lit('ffffff'), tilt: 0.06, scale: 0.18, speed: 0.15 },
+  },
+  map: { sand: lit('3b4552'), water: lit('d4dce4') },
+  backdrop: { hill: lit('5a6a88'), mountain: lit('39456a'), clouds: true },
+  grass: null,
+  layers: {
+    fairway: { layer: 4, repeat: 1 / 24, albedo: 0.6, shade: 0.35 },
+    rough: { layer: 4, repeat: 1 / 24, albedo: 0.6, shade: 0.35 },
+  },
+  look: {
+    sunDir: [0.55, 0.4, 0.73],
+    sunColour: [2.6, 2.4, 2.6],
+    ambient: 1,
+    shadeColour: [0.3, 0.26, 0.55],
+    rim: 0.35,
+    rimColour: [0.5, 0.9, 1],
+    skyLight: [0.5, 0.5, 0.85],
+    groundLight: [0.35, 0.3, 0.45],
+    sky: { zenith: [0.06, 0.05, 0.28], horizon: [0.95, 0.42, 0.62], height: 0.25 },
+    background: [0.95, 0.42, 0.62],
+    fog: { colour: [0.5, 0.25, 0.5], density: Math.LN2 / HAZE.halfWay },
+    env: 'dusk',
+  },
+};
+
+/** Every biome's theme. */
+export const THEMES: Record<BiomeName, Theme> = { earth, desert, moon, future };
+
+/** The theme of the biome a layout is in: what every read of a colour or a look goes through. */
+export function themeOf(on: { biome: BiomeName }): Theme {
+  return THEMES[on.biome];
+}

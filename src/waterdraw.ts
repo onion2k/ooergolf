@@ -15,15 +15,16 @@
 import { type Mesh } from 'artshape-render/mesh/types';
 import { FastMeshBuilder as MeshBuilder } from './fastmesh';
 import { TILE, WATER_LEVEL, heightAt, type Layout } from './arena';
-import { WATER, OCEAN, oceanPattern } from './models/obstacles';
-import { ROUGH, shown } from './models/palette';
+import { WATER, oceanPattern } from './models/obstacles';
+import { ROUGH } from './models/palette';
+import { EARTH_BANDS, EARTH_SHELF, themeOf } from './theme';
 import { matte, type Part } from './models/part';
 import { BANK_STONE } from './models/lowpoly';
 import { hashed, seeded } from './random';
 import { ZONES, blur, distanceGrid, type Box, type Scratch } from './zones';
 
 /** The shelf: how far above the water a water tile outside the curve stands, in the rock's warm brown. */
-export const SHELF = { rise: 0.18, colour: shown(0.62, 0.48, 0.36) } as const;
+export const SHELF = { rise: 0.18, colour: EARTH_SHELF } as const;
 
 /**
  * The ring of stones. A stone's radius is drawn from `least` to `most` for a kind of course (a yard on golf, where the ball
@@ -95,13 +96,8 @@ const PIECES = 4;
 /** How far from the curve the distance is worked out, in yards: the widest the ring reaches and a little more. */
 const REACH = 6;
 
-/** The colours of the bands, from the foam in. */
-export const BAND_COLOURS = [
-  shown(0.7, 0.93, 0.98),
-  shown(0.32, 0.76, 0.95),
-  shown(0.18, 0.62, 0.92),
-  shown(0.08, 0.5, 0.89),
-];
+/** The colours of the bands on earth, from the foam in (a biome's are its theme's). */
+export const BAND_COLOURS = EARTH_BANDS;
 const BAND_NAMES = ['foam', 'shallows', 'shallows 2', 'mid'];
 
 /** The water's curve: the 0.45 level set of its blurred tiles, lowered where a channel would vanish; null on a hole with no water. */
@@ -349,19 +345,26 @@ function build(l: Layout): Pond {
 
   const spots = pack(cx, cy, cd, cs, cz, random, kind);
 
+  // the water in the colours of the hole's biome: a layout has one, so the pond kept for it is right
+  const water = themeOf(l).water;
   const w = (c: readonly number[]) => matte([c[0], c[1], c[2]], ROUGH.water);
   const parts: Part[] = [];
-  if (shelf.vertexCount) parts.push({ name: 'shelf', mesh: shelf.build(), material: matte(SHELF.colour, ROUGH.rock) });
+  if (shelf.vertexCount)
+    parts.push({
+      name: 'shelf',
+      mesh: shelf.build(),
+      material: matte(water.shelf as [number, number, number], ROUGH.rock),
+    });
   bands.forEach((b, k) => {
     if (!b.vertexCount) return;
     const mesh: Mesh = b.build();
-    if (k < BAND_COLOURS.length) parts.push({ name: BAND_NAMES[k], mesh, material: w(BAND_COLOURS[k]) });
+    if (k < water.bands.length) parts.push({ name: BAND_NAMES[k], mesh, material: w(water.bands[k]) });
     else
       parts.push({
         name: 'deep',
         mesh,
-        material: w(OCEAN.body),
-        pattern: oceanPattern(l.golf ? OCEAN.scale : OCEAN.minigolfScale),
+        material: w(water.ocean.body),
+        pattern: oceanPattern(l.golf ? water.ocean.scale : water.ocean.minigolfScale, water.ocean),
       });
   });
   return { parts, spots };

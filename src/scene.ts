@@ -35,6 +35,7 @@ import {
 } from './arena';
 import { CUP } from './course';
 import { tintOf, tinted, valueOfStep } from './tint';
+import { themeOf, type Theme } from './theme';
 import { splitByTint } from './tintmesh';
 import { GREEN, greenArrows, leansOnMinigolf, READER, type Arrow } from './green';
 import { place, placeOnSlope } from './matrix';
@@ -80,7 +81,6 @@ import {
   bankStone,
   cloud,
   farTree,
-  OCEAN,
   PATTERN,
   RIPPLE,
 } from './models';
@@ -140,8 +140,66 @@ const isCloth = (name: string) => name.startsWith('flag');
 export const TURF = { layer: 1, repeat: 1 / 1.4, albedo: 0.3, shade: 0.22 } as const;
 /** The same on a golf hole, calmer: the lawn there is seen from two hundred yards back, and a grain that reads as turf from ten reads as noise from that far (9 October 2026, from the title picture). */
 export const TURF_GOLF = { ...TURF, albedo: 0.13, shade: 0.09 } as const;
-function turf(golf: boolean): Float32Array {
-  return packTexture(new Float32Array(TEXTURE_STRIDE), 0, golf ? TURF_GOLF : TURF);
+function turf(golf: boolean, theme: Theme): Float32Array {
+  return packTexture(new Float32Array(TEXTURE_STRIDE), 0, (golf && theme.layers.fairway) || (golf ? TURF_GOLF : TURF));
+}
+/** The texture the rough and out of bounds wear in a biome that gives them one (the Moon's dust, the future's plate): none on earth. */
+function dust(theme: Theme): Float32Array | null {
+  return theme.layers.rough ? packTexture(new Float32Array(TEXTURE_STRIDE), 0, theme.layers.rough) : null;
+}
+/** How rough each of a biome's ground colours is: the roughness `PALETTE` gives the same ground on earth. */
+const GROUND_ROUGH = {
+  grass: 0.85,
+  grassMown: 0.85,
+  rough: 0.95,
+  playRough: 0.95,
+  oobGround: 0.95,
+  puttingGreen: 0.8,
+  puttingGreenMown: 0.8,
+  teeBox: 0.85,
+  firstCut: 0.85,
+  golfSand: 0.9,
+  golfSandRaked: 0.9,
+  golfSandLip: 0.9,
+  bank: 0.9,
+} as const;
+type GroundKey = keyof typeof GROUND_ROUGH;
+type Rgba = [number, number, number, number];
+const PALETTES = new Map<Theme['name'], Record<GroundKey, Rgba>>();
+/** The ground's colours, each with its roughness after, as a biome has them: made once for each (four at the most) and kept. Earth's are `PALETTE`'s own, equal. */
+export function paletteOf(theme: Theme): Record<GroundKey, Rgba> {
+  let made = PALETTES.get(theme.name);
+  if (!made) {
+    const g = theme.ground;
+    const rough = (c: readonly number[], key: GroundKey): Rgba => [c[0], c[1], c[2], GROUND_ROUGH[key]];
+    made = {
+      grass: rough(g.grass, 'grass'),
+      grassMown: rough(g.grassMown, 'grassMown'),
+      rough: rough(g.rough, 'rough'),
+      playRough: rough(g.playRough, 'playRough'),
+      oobGround: rough(g.oobGround, 'oobGround'),
+      puttingGreen: rough(g.puttingGreen, 'puttingGreen'),
+      puttingGreenMown: rough(g.puttingGreenMown, 'puttingGreenMown'),
+      teeBox: rough(g.teeBox, 'teeBox'),
+      firstCut: rough(g.firstCut, 'firstCut'),
+      golfSand: rough(g.golfSand, 'golfSand'),
+      golfSandRaked: rough(
+        g.golfSand.map((c) => c * 0.975),
+        'golfSandRaked',
+      ),
+      golfSandLip: rough(g.golfSandLip, 'golfSandLip'),
+      bank: rough(g.bank, 'bank'),
+    };
+    PALETTES.set(theme.name, made);
+  }
+  return made;
+}
+/** The ring of stones' three kinds in a biome's colours, built once for each biome (four at the most) and kept: each a unit in radius, lit from above. */
+const STONES = new Map<Theme['name'], Model[]>();
+function stonesOf(theme: Theme): Model[] {
+  let made = STONES.get(theme.name);
+  if (!made) STONES.set(theme.name, (made = [0, 1, 2].map((kind) => bankStone(kind, theme.water.stones))));
+  return made;
 }
 /**
  * The colours, and how rough each is. Deeper than they look written down:
@@ -242,8 +300,6 @@ const drawnAs = (p: Piece): Exclude<SceneryKind, 'flowers'> =>
   p.kind === 'bush' && p.variant === 1 ? 'fern' : (p.kind as Exclude<SceneryKind, 'flowers'>);
 /** A post, built once, to the physics' figures for one. */
 const POST = bumper(BUMPER.radius, { height: BUMPER.height });
-/** The ring of stones' three kinds, built once: each a unit in radius, lit from above, to be squashed and scaled to its place. */
-const BANK_STONES = [0, 1, 2].map((kind) => bankStone(kind));
 /** The far forest's two trees, built once, and how tall one is at a scale of one; the lake's waves, finer than a pond's, since it is seen from far off. */
 export const FAR_WOODS = {
   conifer: toneSet(() => farTree('conifer')),
@@ -544,14 +600,10 @@ export class Scene {
       for (const side of [-1, 1]) underTower.add(tileAt(layout, w.x + side * TILE, w.y));
     // the cup's collar is the colour of the ground it is cut in: a green's on a golf hole
     const odd = (t: number) => mownAt(layout, t % cols, Math.floor(t / cols));
+    const theme = themeOf(layout);
+    const P = paletteOf(theme);
     const stripe = (t: number) =>
-      layout.golf
-        ? odd(t)
-          ? PALETTE.puttingGreenMown
-          : PALETTE.puttingGreen
-        : odd(t)
-          ? PALETTE.grassMown
-          : PALETTE.grass;
+      layout.golf ? (odd(t) ? P.puttingGreenMown : P.puttingGreen) : odd(t) ? P.grassMown : P.grass;
     // the grass as one mesh over the hole, following its slopes, and the earth down its steps; a cup whose mouth is wider than its
     // tile, as the magnet's is, is a hole the grass beside the cup's own tile is cut to as well, so no tile of it covers the mouth
     const wide = cupRadius >= TILE / 2;
@@ -589,32 +641,33 @@ export class Scene {
     // the mown kinds are textured; the rough painted under its blades and out of bounds are left to their colour (a speckle painted under blades read as noise from golf's distance, and the turf texture is the mown ground's grain),
     // and the sand is a plain colour of its own. On a golf hole the checker's two tones are pulled together (`CONTRAST`)
     const golf = !!ground.golf;
-    const laid: [Mesh, readonly number[], 'turf' | 'plain'][] = [
-      [ground.green, toned(PALETTE.grass, PALETTE.grassMown, golf), 'turf'],
-      [ground.mown, toned(PALETTE.grassMown, PALETTE.grass, golf), 'turf'],
+    const laid: [Mesh, readonly number[], 'turf' | 'plain' | 'dust'][] = [
+      [ground.green, toned(P.grass, P.grassMown, golf), 'turf'],
+      [ground.mown, toned(P.grassMown, P.grass, golf), 'turf'],
     ];
     // the banks' tint (`tint.ts`): the rough and out of bounds each divided into a mesh for every step of the hole's field, painted its step's colour
     const tint = tintOf(layout);
     const stepped = (mesh: Mesh, c: readonly number[], oob: boolean) =>
       tint
-        ? splitByTint(mesh, tint).map((m, k): [Mesh, readonly number[], 'turf' | 'plain'] => [
+        ? splitByTint(mesh, tint).map((m, k): [Mesh, readonly number[], 'turf' | 'plain' | 'dust'] => [
             m,
-            tinted(c, valueOfStep(k), oob),
-            'plain',
+            tinted(c, valueOfStep(k), oob, theme.crest),
+            'dust',
           ])
-        : [[mesh, c, 'plain'] as [Mesh, readonly number[], 'turf' | 'plain']];
+        : [[mesh, c, 'dust'] as [Mesh, readonly number[], 'turf' | 'plain' | 'dust']];
     if (ground.golf)
       laid.push(
-        ...stepped(ground.golf.rough, PALETTE.playRough, false),
-        [ground.golf.putting, toned(PALETTE.puttingGreen, PALETTE.puttingGreenMown, true), 'turf'],
-        [ground.golf.puttingMown, toned(PALETTE.puttingGreenMown, PALETTE.puttingGreen, true), 'turf'],
-        [ground.golf.cut, PALETTE.firstCut, 'turf'],
-        [ground.golf.tee, PALETTE.teeBox, 'turf'],
-        ...stepped(ground.golf.oob, PALETTE.oobGround, true),
-        [ground.golf.sand, PALETTE.golfSand, 'plain'],
-        [ground.golf.sandRaked, PALETTE.golfSandRaked, 'plain'],
-        [ground.golf.lip, PALETTE.golfSandLip, 'plain'],
+        ...stepped(ground.golf.rough, P.playRough, false),
+        [ground.golf.putting, toned(P.puttingGreen, P.puttingGreenMown, true), 'turf'],
+        [ground.golf.puttingMown, toned(P.puttingGreenMown, P.puttingGreen, true), 'turf'],
+        [ground.golf.cut, P.firstCut, 'turf'],
+        [ground.golf.tee, P.teeBox, 'turf'],
+        ...stepped(ground.golf.oob, P.oobGround, true),
+        [ground.golf.sand, P.golfSand, 'plain'],
+        [ground.golf.sandRaked, P.golfSandRaked, 'plain'],
+        [ground.golf.lip, P.golfSandLip, 'plain'],
       );
+    const dusty = dust(theme);
     const out: GameGroup[] = [
       ...laid
         .filter(([mesh]) => !ground.golf || mesh.indices.length)
@@ -622,7 +675,12 @@ export class Scene {
           mesh,
           matrices: still,
           ...look(c),
-          ...(finish === 'turf' ? { texture: turf(golf) } : {}),
+          // (the rough and out of bounds wear their biome's dust, where it has one)
+          ...(finish === 'turf'
+            ? { texture: turf(golf, theme) }
+            : finish === 'dust' && dusty
+              ? { texture: dusty }
+              : {}),
         })),
       { ...group({ ...collarPart, material: stripe(cupTile) }, atCup) },
       // a golf hole has no rail, and a group of no triangles is drawn by the GPU with an index count of nought, each frame
@@ -634,9 +692,9 @@ export class Scene {
         ? {
             mesh: planeOf(layout, world!, (Math.max(layout.cols, layout.rows) * TILE) / 2 + GOLF_GROUND_REACH),
             matrices: level,
-            ...look(PALETTE.oobGround),
+            ...look(P.oobGround),
           }
-        : { mesh: plane(ROUGH_SIZE), matrices: rough, ...look(PALETTE.rough) },
+        : { mesh: plane(ROUGH_SIZE), matrices: rough, ...look(P.rough) },
       ...groups(cup(cupRadius, round), atCup),
       // the pin and its knob stand still; the flag's cloth swings in the breeze, and is among what moves
       ...groups({ parts: flag(FLAG_COLOURS.red).parts.filter((p) => !isCloth(p.name)) } as Model, flagAt),
@@ -654,7 +712,7 @@ export class Scene {
       ...this.stones(layout),
       ...this.beyondTheHills(layout, name, world),
     ];
-    if (ground.banks.indices.length) out.push({ mesh: ground.banks, matrices: still, ...look(PALETTE.bank) });
+    if (ground.banks.indices.length) out.push({ mesh: ground.banks, matrices: still, ...look(P.bank) });
     out.push(...this.streamSheets(layout, obstacles));
     for (const w of obstacles?.windmills ?? []) {
       const at = new Float32Array(16);
@@ -770,7 +828,7 @@ export class Scene {
     if (!oceanFor(layout.golf)) return [];
     const { spots } = pondOf(layout);
     const out: GameGroup[] = [];
-    BANK_STONES.forEach((model, k) => {
+    stonesOf(themeOf(layout)).forEach((model, k) => {
       const of = spots.filter((p) => p.kind === k);
       if (!of.length) return;
       const at = new Float32Array(of.length * 16);
@@ -926,9 +984,10 @@ export class Scene {
     const b = backdropOf(layout, name, world ?? -ROUGH_DEPTH);
     const still = new Float32Array(16);
     place(still, 0, 0, 0, 0);
+    const { backdrop, water } = themeOf(layout);
     const out: GameGroup[] = [
-      group({ name: 'hills', mesh: b.hills, material: [...COLOURS.hill, 0.95] }, still),
-      group({ name: 'mountains', mesh: b.mountains, material: [...COLOURS.mountain, 0.95] }, still),
+      group({ name: 'hills', mesh: b.hills, material: [...backdrop.hill, 0.95] }, still),
+      group({ name: 'mountains', mesh: b.mountains, material: [...backdrop.mountain, 0.95] }, still),
       // the far lake is a hole's water too: open water where the hole's is, in finer waves since it is seen from far off,
       // and rippling where `OCEAN_ON` gives the hole its ripples back
       group(
@@ -936,14 +995,14 @@ export class Scene {
           ? {
               name: 'lake',
               mesh: b.lake,
-              material: [OCEAN.body[0], OCEAN.body[1], OCEAN.body[2], ROUGH.water],
+              material: [water.ocean.body[0], water.ocean.body[1], water.ocean.body[2], ROUGH.water],
               pattern: {
                 kind: PATTERN.ocean,
-                scale: OCEAN.scale * BACKDROP_WAVES,
+                scale: water.ocean.scale * BACKDROP_WAVES,
                 seed: 0,
-                speed: OCEAN.speed,
-                glow: OCEAN.tilt,
-                second: OCEAN.tint,
+                speed: water.ocean.speed,
+                glow: water.ocean.tilt,
+                second: water.ocean.tint as [number, number, number],
               },
             }
           : {
@@ -1128,6 +1187,8 @@ export class Scene {
         });
       // the clouds over the world past the hole, drifting along the wind the grass and the flag go in, by game time
       const sky = backdropOf(layout, name, -ROUGH_DEPTH).clouds;
+      // (a biome with no clouds draws them a matrix of no size, as a view that does not see the sky does)
+      const cloudy = themeOf(layout).backdrop.clouds;
       const along = Math.hypot(wind.direction[0], wind.direction[1]) > 0 ? wind.direction : ([1, 0] as const);
       const way: [number, number] = [
         along[0] / Math.hypot(along[0], along[1]),
@@ -1144,7 +1205,7 @@ export class Scene {
             (m, t) =>
               of.forEach((c, i) => {
                 const at = cloudAt(c, t, way);
-                place(m, i, at.x, at.y, c.z, c.yaw, this.sky ? c.scale : 0);
+                place(m, i, at.x, at.y, c.z, c.yaw, this.sky && cloudy ? c.scale : 0);
               }),
             of.length,
           ),

@@ -18,6 +18,7 @@ import { frameCost } from './frame-cost';
 import { railsOf } from './ground';
 import { TREE } from './trees';
 import { daylight } from './look';
+import { THEMES } from './theme';
 import { place } from './matrix';
 import { square } from './meshes';
 import {
@@ -364,7 +365,7 @@ async function main() {
   const ctx = await createContext(canvas);
   bootMsg.textContent = 'compiling shaders…';
   const renderer = new GameRenderer(ctx, 16, 16, 64, MM_PER_UNIT);
-  await daylight(renderer, ctx);
+  await daylight(renderer, ctx, THEMES.earth);
   const cam = renderer.camera;
   cam.near = 1;
   cam.far = 1200;

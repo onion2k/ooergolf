@@ -50,7 +50,8 @@ import { mapInto, mapSize, paintMap, type MapSize } from './holemap';
 import { Previewer, type Preview } from './preview';
 import { breakAids, breakOf, leansOnMinigolf, readerArrows } from './green';
 import { greensText, heldHint, landingText, pinReadout, pinText, puttText, windArrow } from './readout';
-import { daylight } from './look';
+import { applyLook, daylight } from './look';
+import { THEMES, themeOf } from './theme';
 import { Progress } from './progress';
 import { seeded } from './random';
 import { GameSound, LazySound, strikeOf } from './sound';
@@ -80,9 +81,10 @@ import { LINKS_SPECS } from './links';
 import { group } from './models/part';
 import type { GameGroup } from 'artshape-render/game/renderer';
 import { roll } from './roll';
-import { fieldOf, flattenFor, grassOptionsOf, windOf } from './turf';
+import { bladeless, fieldOf, flattenFor, grassOptionsOf, windOf } from './turf';
 import { AIM_REACH, Scene, boxOf, sunFitOf } from './scene';
-import { BIOMES, surfacesOf } from './biome';
+import { BIOMES, surfacesOf, type BiomeName } from './biome';
+import { STILL } from 'artshape-render/game/grass';
 import { carryFrom } from './flight';
 import { CADDIE, CaddieTalk } from './caddie';
 import { clearings } from './scenery';
@@ -249,7 +251,7 @@ async function main() {
   // the daylight look, the same one the models' showcase is drawn in. Its pipelines compile on the GPU's side while the page
   // makes the hole, the letters and the scene, so it is started now and waited for where a frame needs it (`looked`); its
   // failure is the boot's, and is said there
-  const looked = daylight(renderer, ctx);
+  const looked = daylight(renderer, ctx, THEMES.earth);
   looked.catch(() => undefined);
   let pipelined = false;
   void looked.then(
@@ -709,6 +711,11 @@ async function main() {
   const flatten = { x: 0, y: 0, radius: 0 };
   /** The grass of the hole being grown, which the first frame waits for so it is never drawn bare. */
   let grown: Promise<void> = Promise.resolve();
+  /** Which biome's look the renderer has on it: earth's from the boot. */
+  let lookedAs: BiomeName = 'earth';
+  /** The environment baked for it, and whether the hole grows blades. */
+  let lookedEnv = 'daylight';
+  let blades = true;
   /** The screen's shape, which how far back the camera stands depends on: kept from the camera's own, which is made after the first hole. */
   let aspect = 1.6;
   /** The previews of this golf hole's shots, worked out in a rehearsal of it: none on a hole of minigolf. */
@@ -804,7 +811,9 @@ async function main() {
       booted('letters');
       yield 'letters';
       // the hole's own wind, which the grass bends in and the flag and the trees follow
-      const wind = windOf(name);
+      // (a biome with no air, the Moon's, has none: the flag and the trees hang, the clouds do not drift, and nothing is blown)
+      const calm = BIOMES[layout.biome].calm;
+      const wind = calm ? STILL : windOf(name);
       const fixed = scene.static(layout, name, game.obstacles, game.cup.radius);
       // the kit's accessories that show more are drawn on the holes begun with them (the pennant is still the flag in rainbow stripes until it is drawn fresh), which is where their previews are made too
       const moving = scene.dynamic(game.obstacles, layout, name, wind, {
@@ -821,7 +830,8 @@ async function main() {
         moving.push(...lettered.groups);
       }
       // the hole's rough, round the painted green: a hole too big for a field of grass is refused here, by its size
-      const field = fieldOf(layout, name, clearings(layout, name));
+      // (a biome with bare ground grows no blades, and makes no field of them)
+      const field = bladeless(layout) ? null : fieldOf(layout, name, clearings(layout, name));
       const grass = grassOptionsOf(layout);
       // the preview of this hole's shots is worked out in a rehearsal of it, made once here and let go with the hole
       const slopes = leansOnMinigolf(layout);
@@ -842,6 +852,13 @@ async function main() {
       if (lettered) document.documentElement.setAttribute('data-title', '');
       renderer.setStatic(fixed);
       renderer.setDynamic(moving);
+      // the look of the hole's biome goes on with the hole, and not before it: a hole after another biome's is lit as its own is,
+      // earth's after the Moon's among them, and the title (an earth hole) takes the sky back
+      if (layout.biome !== lookedAs) {
+        lookedEnv = applyLook(renderer, ctx, themeOf(layout));
+        lookedAs = layout.biome;
+      }
+      blades = field !== null;
       grown = renderer.setGrass(field, grass);
       // nothing is pressed on a new hole: the grass stands as it was grown
       renderer.clearPresses();
@@ -869,7 +886,7 @@ async function main() {
       pinned.x = NaN;
       if (!layout.golf) hud.setPin(null);
       // the wind is told on a golf hole, as a number or as calm, and is not there on a hole of minigolf
-      hud.setWind(layout.golf ? windNow.speed : null);
+      hud.setWind(layout.golf && !calm ? windNow.speed : null);
       // the greens' speed is told on a hole that has set one (The Links), and the putt's break when the ball rests on its green
       hud.setGreens(layout.golf ? greensText(game.def.greens) : null);
       hud.setPutt(null);
@@ -2109,6 +2126,18 @@ async function main() {
       const drawn = await renderer.grassDrawn();
       const { direction, strength } = renderer.wind;
       return { ...drawn, wind: { direction: [direction[0], direction[1]], strength } };
+    },
+    theme() {
+      const { sky, background, sunDir } = renderer.look;
+      return {
+        name: lookedAs,
+        sky: { zenith: [...(sky?.zenith ?? [])], horizon: [...(sky?.horizon ?? [])], height: sky?.height ?? 0 },
+        background: [...background],
+        sunDir: [...sunDir],
+        fog: [...renderer.fog.colour],
+        environment: lookedEnv,
+        grass: blades,
+      };
     },
     async bladesAround(x, y, radius) {
       await grown;

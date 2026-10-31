@@ -120,14 +120,20 @@ export const fieldFrom = (over: number, bend: number) => clamp(riseTint(over) + 
  * `c` (linear, with its roughness after) at a field value `s`: from -1, darker and cooler by `valley`, through itself at
  * nought, to 1, `share` of the way toward the crest's yellow-green, or for out of bounds, toward its own colour brightened.
  */
-export function tinted(c: readonly number[], s: number, oob = false): number[] {
+export function tinted(
+  c: readonly number[],
+  s: number,
+  oob = false,
+  /** Where a crest of the rough goes: the hole's biome's (`Theme.crest`), earth's where none is given. */
+  crest: readonly number[] = BANK_TINT.crest.to,
+): number[] {
   const out = [c[0], c[1], c[2], ...c.slice(3)];
   if (s < 0) {
     for (let i = 0; i < 3; i++) out[i] *= 1 - BANK_TINT.valley[i] * -s;
   } else if (s > 0) {
     const share = (oob ? BANK_TINT.oob.share : BANK_TINT.crest.share) * s;
     for (let i = 0; i < 3; i++) {
-      const to = oob ? c[i] * BANK_TINT.oob.gain[i] : BANK_TINT.crest.to[i];
+      const to = oob ? c[i] * BANK_TINT.oob.gain[i] : crest[i];
       out[i] = c[i] + (to - c[i]) * share;
     }
   }
