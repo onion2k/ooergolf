@@ -15,7 +15,8 @@ import { FastMeshBuilder } from './fastmesh';
 import { TILE, WATER_LEVEL, groundInto, heightAt, slopeAt, stepAt, terrainAt, tileAt, type Layout } from './arena';
 import { fan, outside, overlaps, type Point, type Ring } from './clip';
 import { face, tri } from './meshes';
-import { FIELDS, OUT, RULES, zonesOf, type Zone } from './zones';
+import { LIE } from './surfaces';
+import { FIELDS, OUT, PAN, RULES, zonesOf, type Zone } from './zones';
 
 type V3 = [number, number, number];
 
@@ -200,6 +201,8 @@ export interface Ground {
     sand: Mesh;
     sandRaked: Mesh;
     lip: Mesh;
+    /** The desert's pan, a dried lake bed: a ground of its own, empty on a hole with none. */
+    pan: Mesh;
   };
 }
 
@@ -238,7 +241,8 @@ export function groundOf(l: Layout, mouth?: Ring): Ground {
     oob = new FastMeshBuilder(),
     sand = new FastMeshBuilder(),
     sandRaked = new FastMeshBuilder(),
-    lip = new FastMeshBuilder();
+    lip = new FastMeshBuilder(),
+    pan = new FastMeshBuilder();
   const n = GROUND.pieces;
   const zones = l.golf ? zonesOf(l) : null;
   // the middle of the piece being cut, which the fairway's stripe is read at
@@ -260,8 +264,7 @@ export function groundOf(l: Layout, mouth?: Ring): Ground {
       case 'cut':
         return cut;
       case 'pan':
-        // a plain mown tone for now, which Part 6 of the biomes plan replaces with a ground of its own (cracks, bleached stones)
-        return cut;
+        return pan;
       case 'fairway':
         // a fairway with a way is mown in stripes, by the piece being cut; without one, in the checker's tone of the tile
         return (l.way ? stripedAt(l, pieceX, pieceY) : odd) ? mown : green;
@@ -625,6 +628,7 @@ export function groundOf(l: Layout, mouth?: Ring): Ground {
       sand: sand.build(),
       sandRaked: sandRaked.build(),
       lip: lip.build(),
+      pan: pan.build(),
     };
   return out;
 }
@@ -992,4 +996,44 @@ export function stakesOf(l: Layout): { x: number; y: number; z: number }[] {
     }
   }
   return out;
+}
+
+/**
+ * How wide the soft lip along a pan's edge is, in yards, across the curve (half of it on the pan and half on the ground beside), and
+ * how far above the ground it lies so it is not lost in it.
+ */
+export const PAN_LIP = { width: 1.1, lift: 0.04 } as const;
+
+/**
+ * The soft lip of a hole's pan: a ribbon laid along the curve the pan is drawn and played by (`zonesOf`), each segment of it a quad
+ * across the curve, on the ground there, facing as the ground does. Cut along the same curve the pan is, so it follows it as the
+ * pan's own edge does. Empty on a hole with no pan.
+ */
+export function panLipOf(l: Layout): Mesh {
+  const b = new FastMeshBuilder();
+  if (!l.golf || !l.lie.includes(LIE.pan)) return b.build();
+  const seg = zonesOf(l).curves[PAN];
+  const half = PAN_LIP.width / 2;
+  const corner = (x: number, y: number) => {
+    const [sx, sy] = slopeAt(l, x, y);
+    const k = 1 / Math.hypot(sx, sy, 1);
+    return b.vertex(x, y, heightAt(l, x, y) + PAN_LIP.lift, -sx * k, -sy * k, k, 0, 0);
+  };
+  for (let s = 0; s < seg.length; s += 4) {
+    const [ax, ay, bx, by] = [seg[s], seg[s + 1], seg[s + 2], seg[s + 3]];
+    const len = Math.hypot(bx - ax, by - ay);
+    if (len < 1e-6) continue;
+    // across the curve: the segment turned a quarter
+    const nx = (-(by - ay) / len) * half,
+      ny = ((bx - ax) / len) * half;
+    const [p0, p1, p2, p3] = [
+      corner(ax - nx, ay - ny),
+      corner(bx - nx, by - ny),
+      corner(bx + nx, by + ny),
+      corner(ax + nx, ay + ny),
+    ];
+    b.triangle(p0, p1, p2);
+    b.triangle(p0, p2, p3);
+  }
+  return b.build();
 }

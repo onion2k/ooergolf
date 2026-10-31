@@ -46,6 +46,13 @@ import {
   flowers,
   golfBall,
   golfTree,
+  golfCactus,
+  barrel,
+  mesa,
+  saguaro,
+  scrub,
+  tuft,
+  tumbleweed,
   group,
   placeBlades,
   stake,
@@ -60,7 +67,7 @@ import {
 import { flipper, titleModel } from '../src/models';
 import titleTrace from '../src/titletrace.json';
 import { BALL, KIND_RADIUS, WATER_LEVEL } from '../src/arena';
-import { TREE, insideCanopy, treeCone } from '../src/trees';
+import { CACTUS, TREE, insideCanopy, treeCone } from '../src/trees';
 import { SCALE } from '../src/scenery';
 import { KINDS, ROUGH } from '../src/turf';
 
@@ -139,6 +146,14 @@ function catalogue(): [string, Model][] {
     ['fern', fern(2.2)],
     ['cloud', cloud()],
     ['bank stone', bankStone(1)],
+    ['golf cactus', golfCactus(CACTUS, { seed: 2 })],
+    ['saguaro', saguaro(13, { seed: 3 })],
+    ['barrel', barrel(2.6)],
+    ['scrub', scrub(2.8)],
+    ['tuft', tuft(3.2)],
+    ['mesa', mesa()],
+    ['butte', mesa({ seed: 2, width: 0.5 })],
+    ['tumbleweed', tumbleweed(1.3)],
   ];
 }
 
@@ -1332,6 +1347,13 @@ describe('every model keeps to its triangle budget', () => {
       ['fern', fern(3, { seed: 9 })],
       ['cloud', cloud({ seed: 9 })],
       ['bank stone', bankStone(2)],
+      ['golfCactus', golfCactus(CACTUS, { seed: 9 })],
+      ['saguaro', saguaro(15, { seed: 9 })],
+      ['barrel', barrel(3.2, { seed: 9 })],
+      ['scrub', scrub(3.4, { seed: 9 })],
+      ['tuft', tuft(3.2, { seed: 9 })],
+      ['mesa', mesa({ seed: 9 })],
+      ['tumbleweed', tumbleweed(1.6)],
       ['title', titleModel(titleTrace)],
     ];
     for (const [name, m] of at) expect(triangles(m), name).toBeLessThanOrEqual(BUDGET[name]);
@@ -1750,5 +1772,109 @@ describe('a stream bed is one channel over the tiles of every belt drawn as wate
       return a && Math.abs(a[0] - fr) < 1e-6 && Math.abs(a[1] - fg) < 1e-6 && Math.abs(a[2] - fb) < 1e-6;
     });
     expect(foams.length).toBe(1);
+  });
+});
+
+describe('the desert’s plants and its rock', () => {
+  /** What the physics' cone is at a height above the ground: a cactus is held inside it from the base up. */
+  const coneAt = (z: number) => (CACTUS.radius * Math.max(0, CACTUS.apex - z)) / (CACTUS.apex - CACTUS.base);
+  /** A flower's width over the cone's, at the tip, where the cone is a point: the one thing allowed past it. */
+  const MARGIN = 0.35;
+
+  it('a golf cactus stands on the ground to the tip the physics gives it, and below its base is no wider than its post', () => {
+    for (const seed of [1, 2, 3, 4, 5, 6]) {
+      const m = golfCactus(CACTUS, { seed });
+      const all = bounds(m.parts);
+      expect(all.min[2], 'on the ground').toBeCloseTo(0, 5);
+      expect(all.max[2], 'to the tip, and no higher').toBeLessThanOrEqual(CACTUS.apex + 1e-6);
+      expect(all.max[2]).toBeGreaterThan(CACTUS.apex - 0.1);
+      for (const part of m.parts)
+        for (const [x, y, z] of points(part.mesh))
+          if (z < CACTUS.base)
+            expect(
+              Math.hypot(x, y),
+              `${part.name} at ${z.toFixed(2)}: inside the post the ball meets`,
+            ).toBeLessThanOrEqual(CACTUS.trunk);
+    }
+  });
+
+  it('a golf cactus is, from its base up, inside the cone the game tests a ball against (its flower a flower’s width past it at the most): what is seen is what the ball meets', () => {
+    for (const seed of [1, 2, 3, 4, 5, 6]) {
+      const m = golfCactus(CACTUS, { seed });
+      for (const part of m.parts) {
+        const room = part.name === 'flower' ? MARGIN : 0;
+        for (const [x, y, z] of points(part.mesh))
+          if (z >= CACTUS.base)
+            expect(
+              Math.hypot(x, y),
+              `${part.name} of seed ${seed} at ${z.toFixed(2)} high: ${Math.hypot(x, y).toFixed(2)} out of ${coneAt(z).toFixed(2)}`,
+            ).toBeLessThanOrEqual(coneAt(z) + room + 1e-6);
+      }
+    }
+  });
+
+  it('has arms that begin above the base and reach no more than two yards out at nine high, and some of the cone is arm', () => {
+    for (const seed of [1, 2, 3]) {
+      const cactus = partNamed(golfCactus(CACTUS, { seed }), 'cactus');
+      // a point is on an arm where it is further from the stem's own axis than the stem is wide
+      const arm = points(cactus.mesh).filter(([x, y]) => Math.hypot(x, y) > CACTUS.trunk);
+      expect(arm.length, 'arms there').toBeGreaterThan(20);
+      for (const [x, y, z] of arm) {
+        expect(z, 'an arm is above the base').toBeGreaterThanOrEqual(CACTUS.base);
+        if (z >= 9 - 0.05 && z <= 9 + 0.05) expect(Math.hypot(x, y)).toBeLessThanOrEqual(2 + 1e-6);
+      }
+    }
+  });
+
+  it('a saguaro is the golf cactus in proportion, as tall as it is asked, on the ground, with its flower on its tip', () => {
+    for (const h of [7, 13, 15, 22]) {
+      const m = saguaro(h, { seed: 2 });
+      const b = bounds(m.parts);
+      expect(b.min[2]).toBeCloseTo(0, 5);
+      expect(b.max[2]).toBeCloseTo(h, 4);
+      expect(partNamed(m, 'flower')).toBeDefined();
+      // its arms start above a third of its height and keep inside a cone a quarter as wide as it is tall at its base
+      for (const [x, y, z] of points(partNamed(m, 'cactus').mesh)) {
+        if (Math.hypot(x, y) > 0.8 * (h / 15)) expect(z).toBeGreaterThanOrEqual(h / 3 - 1e-6);
+        expect(Math.hypot(x, y)).toBeLessThanOrEqual(
+          ((3.5 * h) / 15) * Math.max(0, (h - Math.max(z, h / 3)) / ((2 * h) / 3)) + 1e-6,
+        );
+      }
+    }
+  });
+
+  it('are different for a different seed and the same for the same', () => {
+    const at = (seed: number) => Array.from(partNamed(saguaro(13, { seed }), 'cactus').mesh.positions);
+    expect(at(1)).not.toEqual(at(2));
+    expect(at(1)).toEqual(at(1));
+    const rock = (seed: number) => Array.from(partNamed(scrub(2.8, { seed }), 'scrub').mesh.positions);
+    expect(rock(1)).not.toEqual(rock(2));
+  });
+
+  it('keep the size they are asked for, standing on the ground: a barrel, a scrub, a tuft, a mesa and a butte', () => {
+    const wide = (m: Model) => {
+      const b = bounds(m.parts);
+      return Math.max(b.max[0] - b.min[0], b.max[1] - b.min[1]);
+    };
+    for (const size of [1.6, 2.6, 3.2]) {
+      const m = barrel(size, { seed: 2 });
+      expect(wide(m)).toBeGreaterThan(size * 0.8);
+      expect(wide(m)).toBeLessThanOrEqual(size * 1.05);
+      expect(bounds(m.parts).min[2]).toBeGreaterThanOrEqual(-size * 0.2);
+    }
+    expect(wide(scrub(2.8))).toBeGreaterThan(2.8 * 0.9);
+    expect(bounds(tuft(3.2).parts).max[2]).toBeGreaterThan(2);
+    expect(bounds(tuft(3.2).parts).max[2]).toBeLessThanOrEqual(3.2);
+    const m = bounds(mesa().parts),
+      butte = bounds(mesa({ width: 0.5 }).parts);
+    expect(m.min[2]).toBeCloseTo(0, 5);
+    expect(m.max[2], 'a unit tall, to be scaled').toBeCloseTo(1, 5);
+    // flat on top: the cap is the one face at the top
+    const top = points(partNamed(mesa(), 'rock').mesh).filter((q) => q[2] > 0.99);
+    expect(top.length).toBeGreaterThan(6);
+    expect(butte.max[0] - butte.min[0], 'a butte is narrower').toBeLessThan((m.max[0] - m.min[0]) * 0.6);
+    const w = bounds(tumbleweed(1.3).parts);
+    expect(w.max[2] - w.min[2]).toBeGreaterThan(2.0);
+    expect(w.max[2] - w.min[2]).toBeLessThanOrEqual(2.7);
   });
 });

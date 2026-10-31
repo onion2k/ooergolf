@@ -21,7 +21,7 @@ const HOLES = [
   ...isles().map((h) => ({ name: `Isles ${h.name}`, def: h })),
 ];
 
-const ZONE_ID: Zone[] = ['sand', 'lip', 'oob', 'tee', 'putting', 'cut', 'fairway', 'rough'];
+const ZONE_ID: Zone[] = ['sand', 'lip', 'oob', 'tee', 'pan', 'putting', 'cut', 'fairway', 'rough'];
 
 /** Every mesh of a golf ground, with the zone it is the colour of. */
 function meshesOf(l: Layout): [Mesh, Zone][] {
@@ -39,6 +39,8 @@ function meshesOf(l: Layout): [Mesh, Zone][] {
     [golf.sand, 'sand'],
     [golf.sandRaked, 'sand'],
     [golf.lip, 'lip'],
+    // (none of the courses has a pan: it is the desert's, and `pan-drawn.test.ts` holds it)
+    [golf.pan, 'pan'],
   ];
 }
 

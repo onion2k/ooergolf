@@ -58,7 +58,7 @@ describe('earth’s theme', () => {
     expect(earth.backdrop.hill).toBe(COLOURS.hill);
     expect(earth.backdrop.mountain).toBe(COLOURS.mountain);
     expect(earth.backdrop.clouds).toBe(true);
-    expect(earth.layers).toEqual({ fairway: null, rough: null });
+    expect(earth.layers).toEqual({ fairway: null, rough: null, pan: null });
     expect(earth.map.water).toBe(COLOURS.waterMid);
     expect(earth.map.sand).toBe(COLOURS.sand);
   });
@@ -108,7 +108,7 @@ describe('every theme', () => {
       );
       expect(Object.keys(t.ground).sort(), name).toEqual(Object.keys(THEMES.earth.ground).sort());
       expect(Object.keys(t.look).sort(), name).toEqual(Object.keys(THEMES.earth.look).sort());
-      expect(Object.keys(t.layers).sort()).toEqual(['fairway', 'rough']);
+      expect(Object.keys(t.layers).sort()).toEqual(['fairway', 'pan', 'rough']);
       expect(t.water.bands.length).toBe(4);
       expect(t.water.stones.length).toBe(3);
     }
@@ -170,7 +170,7 @@ describe('every theme', () => {
 
   it('wears the layers of the texture the page makes: a layer is a place in the kinds made, counted from one', () => {
     for (const t of Object.values(THEMES))
-      for (const layer of [t.layers.fairway, t.layers.rough]) {
+      for (const layer of [t.layers.fairway, t.layers.rough, t.layers.pan]) {
         if (!layer) continue;
         expect(Number.isInteger(layer.layer)).toBe(true);
         expect(layer.layer).toBeGreaterThan(1);
@@ -179,6 +179,7 @@ describe('every theme', () => {
         expect(layer.albedo).toBeLessThanOrEqual(1);
       }
     expect(TURF_KINDS[THEMES.desert.layers.rough!.layer - 1]).toBe('tuft');
+    expect(TURF_KINDS[THEMES.desert.layers.pan!.layer - 1]).toBe('crack');
     expect(TURF_KINDS[THEMES.moon.layers.rough!.layer - 1]).toBe('regolith');
     expect(TURF_KINDS[THEMES.future.layers.fairway!.layer - 1]).toBe('plate');
   });
@@ -257,6 +258,7 @@ describe('what the smoke test holds the page to', () => {
       expect(want.fog, name).toEqual([...l.fog.colour]);
       expect(want.sunDir, name).toEqual([...l.sunDir]);
       expect(want.grass, name).toBe(THEMES[name].grass !== null);
+      expect(want.dust, name).toEqual([...THEMES[name].puff.grass]);
     }
   });
 });

@@ -10,6 +10,7 @@
  * It is handed a hole's layout and says what stands where; the scene draws it.
  */
 import { TILE, tileAt, type Layout } from './arena';
+import type { BiomeName } from './biome';
 import { seeded } from './random';
 
 /**
@@ -333,6 +334,7 @@ function pick(weights: [SceneryKind, number][], random: () => number): SceneryKi
  */
 export function beyond(layout: Layout, name: string): Piece[] {
   if (!layout.golf) return [];
+  const dressed = DRESSED[layout.biome];
   const random = seeded(seedOf(`${name} beyond`));
   const x0 = layout.originX,
     y0 = layout.originY,
@@ -354,7 +356,7 @@ export function beyond(layout: Layout, name: string): Piece[] {
     }
     return true;
   };
-  const clumps = Math.ceil(2 * (x1 - x0 + y1 - y0) * BEYOND.per);
+  const clumps = Math.ceil(2 * (x1 - x0 + y1 - y0) * dressed.per);
   const pieces: Piece[] = [];
   for (let c = 0; c < clumps && pieces.length < BEYOND.most; c++) {
     // a clump's middle anywhere free: drawn in the box round the map until it falls there
@@ -368,14 +370,14 @@ export function beyond(layout: Layout, name: string): Piece[] {
       if (free(cx, cy) && random() < Math.max(BEYOND.thin, 1 - away / reach)) break;
     }
     if (!free(cx, cy)) continue;
-    const wood = random() < BEYOND.wood;
-    const count = 3 + Math.floor(random() * (BEYOND.size - 2));
+    const wood = random() < dressed.woodShare;
+    const count = 3 + Math.floor(random() * (dressed.size - 2));
     for (let k = 0; k < count && pieces.length < BEYOND.most; k++) {
       const a = random() * Math.PI * 2,
         r = Math.sqrt(random()) * BEYOND.clump * 0.75;
       const x = cx + Math.cos(a) * r,
         y = cy + Math.sin(a) * r;
-      const kind = pick(wood ? WOOD : SCRUB, random);
+      const kind = pick(wood ? dressed.wood : dressed.scrub, random);
       const yaw = random() * Math.PI * 2,
         scale = SCALE.least + random() * SCALE.spread,
         variant = Math.floor(random() * 3);
@@ -386,7 +388,7 @@ export function beyond(layout: Layout, name: string): Piece[] {
           x,
           y,
           yaw,
-          scale: kind === 'broadleaf' ? scale * broadleafSize(x, y, away) : scale,
+          scale: kind === 'broadleaf' && dressed.great ? scale * broadleafSize(x, y, away) : scale,
           variant,
         });
       }
@@ -403,16 +405,69 @@ export function beyond(layout: Layout, name: string): Piece[] {
  */
 export const FAR = { from: 140, to: 440, most: 2400, clump: 22, size: 9, scale: 9, spread: 8, thin: 0.6 } as const;
 
+/**
+ * How a biome dresses the ground past a hole of golf: what its clumps are made of (`wood`, which is the biome's trees, and
+ * `scrub`), how often a clump is the first and not the second, how many clumps it has for each unit of the map's perimeter
+ * (`per`) and how many pieces a clump has at the most (`size`), whether the woods' broadleaves vary by size and stand great by the
+ * course (`great`: the title picture's few big trees, which a desert's barrel cactus does not), and the far woods (`far`: how many
+ * pieces at the most, how many clumps for every unit of length, how wide a clump is, how many more than two a clump has at the
+ * most, and how big each stands). The kinds are roles, which the biome's theme says the species of (`Theme.scenery`). Earth's is
+ * what it always was, and a biome not named is earth's; the desert's has its cacti in groves further apart, with scrub and rock
+ * between, since the sheet's crowd of tall things beside the fairway read badly, and a few mesas for the far ground in place of woods.
+ */
+export interface Dressed {
+  wood: [SceneryKind, number][];
+  scrub: [SceneryKind, number][];
+  woodShare: number;
+  per: number;
+  size: number;
+  great: boolean;
+  far: { most: number; per: number; clump: number; size: number; scale: number; spread: number };
+}
+const EARTH_DRESSED: Dressed = {
+  wood: WOOD,
+  scrub: SCRUB,
+  woodShare: BEYOND.wood,
+  per: BEYOND.per,
+  size: BEYOND.size,
+  great: true,
+  far: { most: FAR.most, per: 55, clump: FAR.clump, size: FAR.size, scale: FAR.scale, spread: FAR.spread },
+};
+export const DRESSED: Record<BiomeName, Dressed> = {
+  earth: EARTH_DRESSED,
+  // (Parts 7 and 8 give the Moon and the future their own: for now they are dressed as earth is)
+  desert: {
+    wood: [
+      ['conifer', 3],
+      ['broadleaf', 3],
+      ['bush', 3],
+    ],
+    scrub: [
+      ['bush', 3],
+      ['fern', 3],
+      ['rock', 3],
+    ],
+    woodShare: 0.35,
+    per: BEYOND.per * 0.7,
+    size: 6,
+    great: false,
+    far: { most: 260, per: 130, clump: 30, size: 2, scale: 7, spread: 6 },
+  },
+  moon: EARTH_DRESSED,
+  future: EARTH_DRESSED,
+};
+
 export function farWoods(layout: Layout, name: string): Piece[] {
   if (!layout.golf) return [];
+  const { far } = DRESSED[layout.biome];
   const random = seeded(seedOf(`${name} far woods`));
   const x0 = layout.originX,
     y0 = layout.originY,
     x1 = x0 + layout.cols * TILE,
     y1 = y0 + layout.rows * TILE;
   const out: Piece[] = [];
-  const clumps = Math.ceil(((x1 - x0 + y1 - y0) * 2 + 2 * Math.PI * 300) / 55);
-  for (let c = 0; c < clumps && out.length < FAR.most; c++) {
+  const clumps = Math.ceil(((x1 - x0 + y1 - y0) * 2 + 2 * Math.PI * 300) / far.per);
+  for (let c = 0; c < clumps && out.length < far.most; c++) {
     let cx = 0,
       cy = 0,
       ok = false;
@@ -423,16 +478,16 @@ export function farWoods(layout: Layout, name: string): Piece[] {
       ok = d > FAR.from && d < FAR.to && random() < 1 - ((d - FAR.from) / (FAR.to - FAR.from)) * FAR.thin;
     }
     if (!ok) continue;
-    const count = 3 + Math.floor(random() * FAR.size);
-    for (let k = 0; k < count && out.length < FAR.most; k++) {
+    const count = 3 + Math.floor(random() * far.size);
+    for (let k = 0; k < count && out.length < far.most; k++) {
       const a = random() * Math.PI * 2,
-        r = Math.sqrt(random()) * FAR.clump;
+        r = Math.sqrt(random()) * far.clump;
       out.push({
         kind: random() < 0.5 ? 'conifer' : 'broadleaf',
         x: cx + Math.cos(a) * r,
         y: cy + Math.sin(a) * r,
         yaw: 0,
-        scale: FAR.scale + random() * FAR.spread,
+        scale: far.scale + random() * far.spread,
         variant: 0,
       });
     }

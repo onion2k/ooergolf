@@ -18,10 +18,22 @@ const CONFETTI: [number, number, number][] = [
 ];
 
 /** The colour of what a stroke throws up from under the ball: grass, or sand where the ball lay in a bunker. */
-const PUFF = { grass: [0.3, 0.75, 0.25], sand: [0.96, 0.82, 0.52] } as const;
+export const PUFF = { grass: [0.3, 0.75, 0.25], sand: [0.96, 0.82, 0.52] } as const;
+
+/** The colours of the puff a stroke throws up, for a ground of each kind: earth's own `PUFF`, or a biome's, which its theme says (`Theme.puff`). */
+export interface Puffs {
+  readonly grass: readonly number[];
+  readonly sand: readonly number[];
+}
 
 /** A puff from under the ball at (x, y), struck at `power` of the hardest shot: grass, or sand from a bunker. */
-export function strikePuff(x: number, y: number, power: number, ground: 'grass' | 'sand' = 'grass'): Emit[] {
+export function strikePuff(
+  x: number,
+  y: number,
+  power: number,
+  ground: 'grass' | 'sand' = 'grass',
+  puffs: Puffs = PUFF,
+): Emit[] {
   return [
     {
       position: [x, y, 0.1],
@@ -32,7 +44,7 @@ export function strikePuff(x: number, y: number, power: number, ground: 'grass' 
       lifeSpread: 0.2,
       size: 0.12,
       growth: 0.3,
-      colour: [...PUFF[ground]],
+      colour: [puffs[ground][0], puffs[ground][1], puffs[ground][2]],
       alpha: 0.9,
       gravity: 1,
       floor: 0,

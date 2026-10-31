@@ -372,6 +372,8 @@ export interface GameApi {
   bladesAround(x: number, y: number, radius: number): Promise<number>;
   /** The look the picture has on now, read off the renderer: the biome it is of, its sky, background, sun and haze, the environment baked for it, and whether the hole grows any blades. */
   theme(): ThemeReport;
+  /** The colour of the dust the last stroke or landing threw up, as the biome's theme has it, or null before one. */
+  dust(): number[] | null;
 }
 
 /** What the renderer is lit and coloured by, as the test API reports it. */
@@ -526,6 +528,7 @@ export interface DebugHost {
   grass(): Promise<GrassDrawn>;
   bladesAround(x: number, y: number, radius: number): Promise<number>;
   theme(): ThemeReport;
+  dust(): number[] | null;
   /** The course being played, and whether the start screen is up; and a course chosen, as the screen does it. */
   course(): string;
   choosing(): boolean;
@@ -760,6 +763,7 @@ export function createApi(host: DebugHost): GameApi {
     motions: () => host.motions(),
     grass: () => host.grass(),
     theme: () => host.theme(),
+    dust: () => host.dust(),
     bladesAround: (x, y, radius) => host.bladesAround(x, y, radius),
   };
 }

@@ -1,7 +1,8 @@
 /** The bursts of particles for what happens: a puff of grass at a stroke, confetti and sparkles at the cup, and a splash. */
 import { describe, expect, it } from 'vitest';
 import { WATER_LEVEL } from '../src/arena';
-import { cupBurst, splash, strikePuff } from '../src/bursts';
+import { PUFF, cupBurst, splash, strikePuff } from '../src/bursts';
+import { THEMES } from '../src/theme';
 
 describe('the bursts', () => {
   it('puff grass from under the ball when it is struck, more of it for a harder shot', () => {
@@ -95,5 +96,37 @@ describe('the bursts', () => {
     expect(s.position).toEqual([5, 6, WATER_LEVEL]);
     expect(s.floor).toBeLessThan(WATER_LEVEL);
     expect(s.colour[2]).toBeGreaterThan(s.colour[0]);
+  });
+});
+
+describe('what a stroke throws up in a biome', () => {
+  it('is earth’s own grass and sand where nothing is said, and the very figures of `PUFF` on earth’s theme', () => {
+    expect(THEMES.earth.puff).toBe(PUFF);
+    expect(strikePuff(3, 4, 0.6, 'grass', THEMES.earth.puff)).toEqual(strikePuff(3, 4, 0.6));
+    expect(strikePuff(3, 4, 0.6, 'sand', THEMES.earth.puff)).toEqual(strikePuff(3, 4, 0.6, 'sand'));
+  });
+
+  it('is the dust of the desert in its theme’s colours, as much of it as earth’s grass, and not green', () => {
+    const dust = strikePuff(3, 4, 0.6, 'grass', THEMES.desert.puff),
+      green = strikePuff(3, 4, 0.6);
+    expect(dust.reduce((a, e) => a + e.count, 0)).toBe(green.reduce((a, e) => a + e.count, 0));
+    for (const e of dust) {
+      expect(e.colour).toEqual([...THEMES.desert.puff.grass]);
+      // a pale dust: red over green over blue, and nothing like grass
+      expect(e.colour[0]).toBeGreaterThan(e.colour[1]);
+      expect(e.colour[1]).toBeGreaterThan(e.colour[2]);
+    }
+    for (const e of strikePuff(3, 4, 0.6, 'sand', THEMES.desert.puff))
+      expect(e.colour).toEqual([...THEMES.desert.puff.sand]);
+  });
+
+  it('has a colour for the ground of every biome, a bladeless one’s included, so a stroke on it throws up something of its own', () => {
+    for (const t of Object.values(THEMES))
+      for (const ground of ['grass', 'sand'] as const)
+        for (const c of t.puff[ground]) {
+          expect(Number.isFinite(c), t.name).toBe(true);
+          expect(c).toBeGreaterThanOrEqual(0);
+          expect(c).toBeLessThanOrEqual(1);
+        }
   });
 });

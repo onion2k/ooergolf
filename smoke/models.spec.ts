@@ -121,6 +121,34 @@ test.describe('the models', () => {
   });
 });
 
+test.describe('the desert’s models', () => {
+  test('the row: a saguaro, the golf cactus made to the physics’ cone, a barrel, scrub, a tuft, a rock, a mesa, a butte and a tumbleweed', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await showcase(page, 1, 'desert');
+    await look(page, 'desert');
+    await expect(page).toHaveScreenshot('desert-models.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
+  test('close: the golf cactus, its arms above the base and inside the cone, a flower on its tip', async ({ page }) => {
+    const problems = watch(page);
+    await showcase(page, 1, 'desert-golf-cactus');
+    await look(page, 'desert-golf-cactus');
+    await expect(page).toHaveScreenshot('desert-golf-cactus.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
+  test('close: the saguaro, which past the hole is the same shape made in proportion', async ({ page }) => {
+    const problems = watch(page);
+    await showcase(page, 1, 'desert-saguaro');
+    await look(page, 'desert-saguaro');
+    await expect(page).toHaveScreenshot('desert-saguaro.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+});
+
 test.describe('the kicker', () => {
   test('close: a mushroom bumper, wider at the cap than the foot, in colours of its own', async ({ page }) => {
     const problems = watch(page);

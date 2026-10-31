@@ -22,6 +22,8 @@ export interface SceneryModels {
   golfTree: Model[] | null;
   /** What drifts on the wind, baked for the one turn it is drawn at; null where the biome has nothing that does. */
   drift: Model[] | null;
+  /** How many of the far trees on the hills are one drawn. */
+  hills: number;
 }
 
 const toneSet = (make: Maker) => bucketed(make, TONE_SUN, sceneryRule);
@@ -50,6 +52,7 @@ export function sceneryOf(theme: Theme): SceneryModels {
       far: bake(s.far),
       golfTree: s.golfTree && tree ? bucketed(() => s.golfTree!(tree), TONE_SUN, sceneryRule, 1) : null,
       drift: s.drift ? bucketed(s.drift, TONE_SUN, sceneryRule, 1) : null,
+      hills: s.hills,
     };
     SETS.set(theme.name, made);
   }

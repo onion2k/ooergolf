@@ -60,6 +60,7 @@ export {
   bankStone,
   BANK_STONE,
 } from './models/lowpoly';
+export { DESERT, barrel, golfCactus, mesa, saguaro, scrub, tuft, tumbleweed } from './models/desert';
 export { kicker } from './models/kicker';
 export {
   PIXEL,
@@ -127,6 +128,15 @@ export const BUDGET = {
   fern: 40,
   cloud: 100,
   'bank stone': 40,
+  /** The Desert's: a saguaro is a stem of three pieces and two arms of three each, a flower on its tip; the golf cactus is the same made to the physics' cone. */
+  saguaro: 220,
+  golfCactus: 220,
+  barrel: 100,
+  scrub: 90,
+  tuft: 40,
+  /** A mesa, and a butte, are seven sides in three stacked pieces. */
+  mesa: 60,
+  tumbleweed: 120,
   /** The world past a hole: its hills, mountains and lake, a far tree for each of its trees, and its clouds. */
   backdrop: 24000,
   farTree: 16,

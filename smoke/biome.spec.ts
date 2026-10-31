@@ -9,6 +9,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { golfHole } from '../src/golf';
 import { LINKS_SPECS } from '../src/links';
+import { WOODS_SPECS } from '../src/woods';
 import { BIOMES, type BiomeName } from '../src/biome';
 import { LOOKS } from './biomes';
 import { BUDGET } from './budget';
@@ -133,5 +134,82 @@ test('a hole in each biome is drawn inside the frame budget on its tee, and the 
   }
   info.annotations.push({ type: 'frames', description: JSON.stringify(figures) });
   console.log(`biome frames on a tee (ms): ${JSON.stringify(figures)}`);
+  expect(problems).toEqual([]);
+});
+
+/** The heaviest desert tee there is: the biggest wood of The Woods made a desert, which is a hundred and more cacti on a hole of golf. */
+function heavyDesert() {
+  const hole = golfHole({ ...WOODS_SPECS[6], name: 'Heavy desert', biome: 'desert' });
+  return { ...hole, terrain: Array.from(hole.terrain as Float32Array) };
+}
+
+for (const [screen, width, height] of [
+  ['a desk', 1280, 800],
+  ['a phone', 400, 860],
+] as const)
+  test(`a heavy desert tee is drawn inside the frame budget on ${screen}, on every rung of the ladder, and no dearer a rung down`, async ({
+    page,
+  }, info) => {
+    test.setTimeout(240_000);
+    await page.setViewportSize({ width, height });
+    const costs: number[] = [];
+    for (let rung = 0; rung < 4; rung++) {
+      const problems = watch(page);
+      await start(page, { seed: 5, paused: true, rung });
+      await page.evaluate((hole) => {
+        window.game!.playCourse([{ ...hole, terrain: Float32Array.from(hole.terrain) }]);
+        window.game!.step(60);
+      }, heavyDesert());
+      // what is drawn is the desert's: its sky, its blades (sparse tufts) and its cacti
+      const report = await page.evaluate(() => window.game!.theme());
+      expect(report.name).toBe('desert');
+      expect(report.grass, `rung ${rung}: the tufts survive every rung`).toBe(true);
+      const trees = await page.evaluate(() => window.game!.content().trees.length);
+      expect(trees, 'a wood of cacti').toBeGreaterThan(50);
+      costs.push(
+        await alone(() =>
+          page.evaluate(async () => {
+            const g = window.game!;
+            g.step(1);
+            return g.measureFrame(300);
+          }),
+        ),
+      );
+      // the tufts are drawn on this rung: some blades in the rough near the tee
+      const grass = await page.evaluate(() => window.game!.grass());
+      expect(grass.near + grass.far, `rung ${rung}: blades drawn`).toBeGreaterThan(200);
+      expect(problems).toEqual([]);
+    }
+    const shown = costs.map((c) => Math.round(c * 100) / 100);
+    info.annotations.push({ type: 'frames', description: JSON.stringify(shown) });
+    console.log(`a heavy desert tee on ${screen}, each rung (ms): ${shown.join(', ')}`);
+    for (const [rung, ms] of costs.entries())
+      expect(ms, `rung ${rung}: inside the ${BUDGET.frameMs} ms budget`).toBeLessThanOrEqual(BUDGET.frameMs);
+    for (let rung = 1; rung < costs.length; rung++)
+      expect(costs[rung], `rung ${rung} against the one above`).toBeLessThan(costs[rung - 1] + 0.5);
+  });
+
+test('a stroke from the grass of the desert throws up its dust, in its theme’s colour, and earth’s is the green it always was', async ({
+  page,
+}) => {
+  test.setTimeout(150_000);
+  const problems = watch(page);
+  await start(page, { seed: 5, paused: true });
+  expect(await page.evaluate(() => window.game!.dust()), 'nothing thrown before a stroke').toBeNull();
+  for (const biome of ['earth', 'desert'] as const) {
+    await begin(page, biome);
+    await page.evaluate(() => {
+      const g = window.game!;
+      g.club('7-iron');
+      g.shoot(Math.PI / 2, 0.5);
+    });
+    expect(await page.evaluate(() => window.game!.motions().puff), `${biome}: from the grass`).toBe('grass');
+    const dust = await page.evaluate(() => window.game!.dust());
+    expect(dust, biome).toEqual(LOOKS[biome].dust);
+    // and the ball's first landing throws the same dust up again, in the same colour
+    await page.evaluate(() => window.game!.step(240));
+    expect(await page.evaluate(() => window.game!.dust()), `${biome}: after the landing`).toEqual(LOOKS[biome].dust);
+    expect(await page.evaluate(() => window.game!.invariants()), biome).toEqual([]);
+  }
   expect(problems).toEqual([]);
 });

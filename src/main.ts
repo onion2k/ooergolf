@@ -697,6 +697,8 @@ async function main() {
     trail: 0,
     confetti: 0,
     puff: null as 'sand' | 'grass' | null,
+    // and the colour of it, which is the biome's: the test API reads it back
+    dust: null as number[] | null,
     // the grass pressed flat this frame round a ball lying in the rough, as it was asked of the renderer
     press: null as { x: number; y: number; radius: number } | null,
     // whether the renderer took it: it does not where the field has no trample, or off it
@@ -952,7 +954,9 @@ async function main() {
         sound.struck(kind, power, ground === 'sand');
         log(`sound struck ${kind} ${power.toFixed(2)}${ground === 'sand' ? ' sand' : ''}`);
       }
-      for (const e of strikePuff(x, y, power, ground)) renderer.emit(e);
+      const puffs = game ? themeOf(game.layout).puff : undefined;
+      for (const e of strikePuff(x, y, power, ground, puffs)) renderer.emit(e);
+      if (puffs) drawn.dust = [...puffs[ground]];
     },
     // a lofted ball come down: the first landing is marked, and throws up the ground it came down on
     landed(x, y, speed, first) {
@@ -963,7 +967,9 @@ async function main() {
       const fall = Math.min(1, speed / 60);
       sound.landed(fall, ground === 'sand');
       log(`sound landed ${fall.toFixed(2)}${ground === 'sand' ? ' sand' : ''}`);
-      for (const e of strikePuff(x, y, Math.min(1, speed / 60), ground)) renderer.emit(e);
+      const puffs = themeOf(game.layout).puff;
+      for (const e of strikePuff(x, y, Math.min(1, speed / 60), ground, puffs)) renderer.emit(e);
+      drawn.dust = [...puffs[ground]];
     },
     // knocked off the rail, a post or the ground it dropped onto: squashed along it, and sprung back
     knocked(hard, x, y, dx, dy, dz) {
@@ -2127,6 +2133,7 @@ async function main() {
       const { direction, strength } = renderer.wind;
       return { ...drawn, wind: { direction: [direction[0], direction[1]], strength } };
     },
+    dust: () => drawn.dust,
     theme() {
       const { sky, background, sunDir } = renderer.look;
       return {

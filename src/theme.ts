@@ -21,8 +21,10 @@ import { PALETTE, shown } from './models/palette';
 import { OCEAN } from './models/obstacles';
 import { SUN } from './sun';
 import { BANK_STONE, boulder, broadleaf, bush, conifer, farTree, fern, golfTree } from './models/lowpoly';
+import { DESERT, barrel, golfCactus, mesa, saguaro, scrub, tuft, tumbleweed } from './models/desert';
 import type { Model } from './models/part';
 import { BANK_TINT } from './tint';
+import { PUFF, type Puffs } from './bursts';
 import { ROCK_SIZE, type SceneryKind } from './scenery';
 import type { TreeFigures } from './trees';
 
@@ -50,6 +52,9 @@ export interface Ground {
   firstCut: Rgb;
   golfSand: Rgb;
   golfSandLip: Rgb;
+  /** A pan, the dried lake bed a desert plays on, and the soft lip along its edge. */
+  pan: Rgb;
+  panLip: Rgb;
   /** The sides of ground raised on a bank: the earth under the turf. */
   bank: Rgb;
 }
@@ -111,6 +116,8 @@ export interface Scenery {
   golfTree: ((tree: TreeFigures) => Model) | null;
   /** A thing that drifts over the ground on the wind and is drawn only, with no body in the world (the desert's tumbleweed). */
   drift: Maker | null;
+  /** How many of the far trees on the backdrop's hills are one drawn: one for each `hills`, so one is all of them. */
+  hills: number;
 }
 
 /** Earth's scenery, as the scene always drew it: a copy of the records, the very makers, so a biome may replace a slot. */
@@ -133,6 +140,7 @@ export function earthScenery(): Scenery {
     far: { conifer: () => farTree('conifer'), broadleaf: () => farTree('broadleaf') },
     golfTree: (tree) => golfTree(tree),
     drift: null,
+    hills: 1,
   };
 }
 
@@ -164,10 +172,12 @@ export interface Theme {
   /** The blades the rough grows and the colour of the fairway's, or null for a biome with no grass (the ground is bare, and no blade is grown). */
   grass: { rough: Blades; fair: Rgb } | null;
   /** The texture the mown ground wears instead of the turf's (null: the turf's own), and the one the rough and out of bounds wear (null: none). */
-  layers: { fairway: Layer | null; rough: Layer | null };
+  layers: { fairway: Layer | null; rough: Layer | null; pan: Layer | null };
   look: LookFigures;
   /** The models of the scenery (see `Scenery`). */
   scenery: Scenery;
+  /** What a stroke and a ball landing throw up: the dust a desert's ground gives, a Moon's regolith, the sparks of a future's plates. Earth's is the grass and sand it always threw. */
+  puff: Puffs;
 }
 
 /** The ground of earth: the very arrays of `models/palette.ts`. */
@@ -183,6 +193,8 @@ const EARTH_GROUND: Ground = {
   firstCut: PALETTE.firstCut,
   golfSand: PALETTE.golfSand,
   golfSandLip: PALETTE.golfSandLip,
+  pan: PALETTE.pan,
+  panLip: PALETTE.panLip,
   bank: [0.2, 0.3, 0.08],
 };
 
@@ -225,13 +237,18 @@ const earth: Theme = {
   map: { sand: PALETTE.sand, water: PALETTE.waterMid },
   backdrop: { hill: PALETTE.hill, mountain: PALETTE.mountain, clouds: true },
   grass: EARTH_GRASS,
-  layers: { fairway: null, rough: null },
+  layers: { fairway: null, rough: null, pan: null },
   look: EARTH_LOOK,
   scenery: earthScenery(),
+  puff: PUFF,
 };
 
 /** A biome's ground from the sheet's hex colours (fairway, mown fairway, rough, out of bounds, green, mown green, tee, first cut, sand, lip), and its bank a share of the rough's. */
-function ground([fair, mown, rough, oob, put, putMown, tee, cut, sand, lip]: string[], bank: number): Ground {
+function ground(
+  [fair, mown, rough, oob, put, putMown, tee, cut, sand, lip]: string[],
+  bank: number,
+  pan: [string, string] = [cut, lip],
+): Ground {
   const r = srgb(rough);
   return {
     grass: srgb(fair),
@@ -245,6 +262,8 @@ function ground([fair, mown, rough, oob, put, putMown, tee, cut, sand, lip]: str
     firstCut: srgb(cut),
     golfSand: srgb(sand),
     golfSandLip: srgb(lip),
+    pan: srgb(pan[0]),
+    panLip: srgb(pan[1]),
     bank: [r[0] * bank, r[1] * bank, r[2] * bank],
   };
 }
@@ -261,6 +280,8 @@ const desert: Theme = {
   ground: ground(
     ['e6c978', 'dcbd68', 'a6612f', '8f5426', '7fb04a', '74a540', 'e6cf86', 'bfa650', 'a8432c', 'c75f3f'],
     0.55,
+    // the pan: a pale clay, paler and greyer than the straw beside it, and a lip of the clay baked brown where it meets the red earth
+    ['e6d4ae', 'c9a577'],
   ),
   crest: lit('e4b45e'),
   water: {
@@ -275,7 +296,12 @@ const desert: Theme = {
     rough: { base: lit('9c7030'), tip: lit('dcae58'), density: 14, height: 0.8 },
     fair: lit('ceae56'),
   },
-  layers: { fairway: null, rough: { layer: 2, repeat: 1 / 9, albedo: 0.3, shade: 0.24 } },
+  layers: {
+    fairway: null,
+    rough: { layer: 2, repeat: 1 / 9, albedo: 0.3, shade: 0.24 },
+    // the cracks of a dried lake: polygons about two yards across, the dark of a crack a good way into the clay's colour
+    pan: { layer: 5, repeat: 1 / 10, albedo: 0.55, shade: 0.5 },
+  },
   look: {
     sunDir: [0.66, 0.4, 0.63],
     sunColour: [3.05, 2.4, 1.7],
@@ -290,8 +316,31 @@ const desert: Theme = {
     fog: { colour: [0.85, 0.6, 0.42], density: Math.LN2 / HAZE.halfWay },
     env: 'daylight',
   },
-  // Part 6 fills the desert's own in: saguaros, barrels, scrub and mesas (`models/desert.ts`)
-  scenery: earthScenery(),
+  scenery: {
+    // the roles of `scenery.ts` in the desert: a conifer is a saguaro, a broadleaf a barrel cactus, a bush dry scrub, a fern a tuft
+    // of straw, and a rock the red of the sheet's; and in the far ground a mesa for a conifer and a butte for a broadleaf
+    scatter: {
+      broadleaf: () => barrel(1.6),
+      conifer: () => saguaro(7),
+      bush: () => scrub(1.8),
+      fern: () => tuft(2.2),
+      rock: () => boulder(ROCK_SIZE, { colour: DESERT.rock }),
+    },
+    beyond: {
+      broadleaf: () => barrel(2.6, { seed: 4 }),
+      conifer: () => saguaro(13, { seed: 2 }),
+      bush: () => scrub(2.8, { seed: 6 }),
+      fern: () => tuft(3.2, { seed: 8 }),
+      rock: () => boulder(2.6, { seed: 9, colour: DESERT.rock }),
+    },
+    far: { conifer: () => mesa({ seed: 1 }), broadleaf: () => mesa({ seed: 2, width: 0.5 }) },
+    golfTree: (tree) => golfCactus(tree),
+    drift: () => tumbleweed(1.3),
+    hills: 6,
+  },
+  // the dry earth the ball lands in comes up as a pale dust, and the sand of a bunker as the red it is (as particles are coloured, on
+  // the screen's own scale, as `PUFF`'s are)
+  puff: { grass: [0.86, 0.68, 0.44], sand: [0.8, 0.42, 0.28] },
 };
 
 /** The Moon, Moon A of the sheet: a pale fairway on dark dust under a hard sun, a black sky, no blades, no clouds. */
@@ -311,7 +360,7 @@ const moon: Theme = {
   map: { sand: lit('2d2c30'), water: lit('232226') },
   backdrop: { hill: lit('6e6e72'), mountain: lit('4a4a50'), clouds: false },
   grass: null,
-  layers: { fairway: null, rough: { layer: 3, repeat: 1 / 40, albedo: 0.3, shade: 0.3 } },
+  layers: { fairway: null, rough: { layer: 3, repeat: 1 / 40, albedo: 0.3, shade: 0.3 }, pan: null },
   look: {
     sunDir: [0.6, 0.34, 0.72],
     sunColour: [3.2, 3.15, 3.05],
@@ -328,6 +377,8 @@ const moon: Theme = {
   },
   // Part 7 fills the Moon's in: boulders and no trees, and a crater's rim for a rock
   scenery: earthScenery(),
+  // Part 7: regolith that settles slowly, in its own grey (the green puff of earth is a placeholder where there is no grass)
+  puff: PUFF,
 };
 
 /** The Future, Future A of the sheet: bright steel at dusk, a plate texture on the ground, mirrored water, no blades. */
@@ -350,6 +401,7 @@ const future: Theme = {
   layers: {
     fairway: { layer: 4, repeat: 1 / 24, albedo: 0.6, shade: 0.35 },
     rough: { layer: 4, repeat: 1 / 24, albedo: 0.6, shade: 0.35 },
+    pan: null,
   },
   look: {
     sunDir: [0.55, 0.4, 0.73],
@@ -367,6 +419,8 @@ const future: Theme = {
   },
   // Part 8 fills the future's in: holograms for trees, pylons and a skyline for the far woods
   scenery: earthScenery(),
+  // Part 8: the sparks of a plate, where earth's green puff stands for them for now
+  puff: PUFF,
 };
 
 /** Every biome's theme. */

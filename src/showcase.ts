@@ -16,7 +16,7 @@ import { createContext } from 'artshape-render/gpu/context';
 import { KICKER, layoutOf } from './arena';
 import { frameCost } from './frame-cost';
 import { railsOf } from './ground';
-import { TREE } from './trees';
+import { CACTUS, TREE } from './trees';
 import { daylight } from './look';
 import { THEMES } from './theme';
 import { place } from './matrix';
@@ -41,6 +41,14 @@ import {
   BALL_LOOK,
   group,
   golfTree,
+  golfCactus,
+  saguaro,
+  barrel,
+  scrub,
+  tuft,
+  mesa,
+  tumbleweed,
+  DESERT,
   boulder,
   broadleaf,
   bush,
@@ -105,7 +113,7 @@ const TITLE_POLAR = 1.5;
 /** How big the title is stood, as a multiple of its own units (a picture pixel is a hundredth), and how high its middle is off the grass. */
 const TITLE = { scale: 2.4, lift: 12 };
 
-type Row = 'course' | 'obstacles' | 'decoration';
+type Row = 'course' | 'obstacles' | 'decoration' | 'desert';
 interface Item {
   model: Model;
   x: number;
@@ -308,6 +316,33 @@ function ballExhibits(): Exhibit[] {
 }
 
 /**
+ * The desert's plants and rock as `?model=desert` shows them, in a row across the front of the patch, each its own exhibit so it is
+ * labelled and can be looked at close (`?model=desert-saguaro`): the saguaro and the golf cactus beside it (the same shape made to
+ * the physics' cone), a barrel, scrub and a tuft, a rock, a mesa and a butte, and a tumbleweed. Only when asked for, so the
+ * showcase's other views and the pictures held of them are as they were.
+ */
+function desertExhibits(seed: number): Exhibit[] {
+  const at = (k: number) => -30 + k * 6.6;
+  const row = (name: string, label: string, model: Model, k: number, z = 0, scale = 1): Exhibit => ({
+    name: `desert-${name}`,
+    label,
+    row: 'desert',
+    items: [{ model, x: at(k), y: -12, z, scale }],
+  });
+  return [
+    row('saguaro', 'saguaro', lit(saguaro(15, { seed })), 0),
+    row('golf-cactus', 'golf cactus', lit(golfCactus(CACTUS, { seed: seed + 1 })), 1),
+    row('barrel', 'barrel cactus', lit(barrel(3, { seed })), 2),
+    row('scrub', 'scrub', lit(scrub(3, { seed })), 3),
+    row('tuft', 'tuft', lit(tuft(3.2, { seed })), 4),
+    row('rock', 'rock', lit(boulder(2.4, { seed, colour: DESERT.rock })), 5),
+    row('mesa', 'mesa', lit(mesa({ seed })), 6, 0, 2),
+    row('butte', 'butte', lit(mesa({ seed: seed + 1, width: 0.5 })), 7, 0, 3),
+    row('tumbleweed', 'tumbleweed', tumbleweed(1.3), 8, 1.1),
+  ];
+}
+
+/**
  * The title's lettering as `?model=title` shows it: the model's own frame has x across, y up and z toward the viewer, as a
  * screen has it, so it is stood up in the showcase's (z up, the viewer to the south) by turning it a quarter about x, and made `TITLE.scale`
  * times as big (in its own mesh and not as the item's scale, which the exhibit's box does not read).
@@ -365,7 +400,8 @@ async function main() {
   const ctx = await createContext(canvas);
   bootMsg.textContent = 'compiling shaders…';
   const renderer = new GameRenderer(ctx, 16, 16, 64, MM_PER_UNIT);
-  await daylight(renderer, ctx, THEMES.earth);
+  // (the desert's models are looked at in the desert's own light, as the game draws them)
+  await daylight(renderer, ctx, query.get('model')?.startsWith('desert') ? THEMES.desert : THEMES.earth);
   const cam = renderer.camera;
   cam.near = 1;
   cam.far = 1200;
@@ -376,6 +412,8 @@ async function main() {
   const shown = exhibits(seed);
   if (query.get('model') === 'balls') shown.push(...ballExhibits());
   if (query.get('model') === 'title') shown.push(titleExhibit());
+  // the desert's own row stands alone on its patch: the rest of the showcase is earth's, and not what is looked at
+  if (query.get('model')?.startsWith('desert')) shown.splice(0, shown.length, ...desertExhibits(seed));
   /** Where the grass is left out: under the water and the bunker, which lie at or below it, and the cups' collars. */
   const cut: [number, number, number, number][] = [];
   for (const e of shown)
@@ -504,6 +542,9 @@ async function main() {
   for (const row of ['course', 'obstacles', 'decoration'] as Row[])
     views.set(row, { ...union(boxes.filter((b) => b.e.row === row).map((b) => b.box)), polar: POLAR.row });
   for (const { e, box: b } of boxes) views.set(e.name, { ...b, polar: e.name === 'title' ? TITLE_POLAR : POLAR.one });
+  // the desert's row, when it is asked for, as one view: `?model=desert`, or `?model=desert-golf-cactus` for one of them close
+  const planted = boxes.filter((b) => b.e.row === 'desert');
+  if (planted.length) views.set('desert', { ...union(planted.map((b) => b.box)), polar: POLAR.row });
   // the lineup of balls, when it is asked for, as one view
   const lined = boxes.filter((b) => b.e.name.startsWith('ball-'));
   if (lined.length) views.set('balls', { ...union(lined.map((b) => b.box)), polar: POLAR.one });

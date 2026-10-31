@@ -120,6 +120,9 @@ export const PALETTE = {
   /** A golf hole's bunker, drawn by its zone and not by its tiles: paler and smoother than minigolf's, its rake nearly its own colour, and a soft pale lip. */
   golfSand: shown(0.88, 0.75, 0.5),
   golfSandLip: shown(0.93, 0.84, 0.62),
+  /** A dried lake's clay, and the lip of it, as a desert has them: unused on earth, which has no pan, and here so every theme's ground has the same keys. */
+  pan: shown(0.91, 0.85, 0.72),
+  panLip: shown(0.79, 0.65, 0.47),
   belt: shown(0.2, 0.2, 0.24),
   steel: shown(0.74, 0.77, 0.82),
 

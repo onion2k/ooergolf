@@ -37,6 +37,7 @@ import { CUP } from './course';
 import { tintOf, tinted, valueOfStep } from './tint';
 import { THEMES, themeOf, type ModelKind, type Theme } from './theme';
 import { sceneryOf } from './sceneryset';
+import { DRIFT, tumbleweedAt } from './drift';
 import { splitByTint } from './tintmesh';
 import { GREEN, greenArrows, leansOnMinigolf, READER, type Arrow } from './green';
 import { place, placeOnSlope } from './matrix';
@@ -87,7 +88,7 @@ import { SHADOW } from './look';
 import { BEYOND, SCENERY, beyond, dress, farWoods, scatter, type Piece, type SceneryKind } from './scenery';
 import { groundZOf, hillsTop, planeOf, type GroundZ } from './hills';
 import { backdropOf, cloudAt } from './backdrop';
-import { GROUND, cupGround, groundOf, mownAt, railsOf, stakesOf, toned } from './ground';
+import { GROUND, cupGround, groundOf, mownAt, panLipOf, railsOf, stakesOf, toned } from './ground';
 import { STONE_RING, pondOf } from './waterdraw';
 import {
   RIPPLES,
@@ -140,6 +141,10 @@ function turf(golf: boolean, theme: Theme): Float32Array {
 function dust(theme: Theme): Float32Array | null {
   return theme.layers.rough ? packTexture(new Float32Array(TEXTURE_STRIDE), 0, theme.layers.rough) : null;
 }
+/** The texture a pan wears in a biome that has one (the desert's cracked clay): none where it has none, and then the pan is its plain colour. */
+function crack(theme: Theme): Float32Array | null {
+  return theme.layers.pan ? packTexture(new Float32Array(TEXTURE_STRIDE), 0, theme.layers.pan) : null;
+}
 /** How rough each of a biome's ground colours is: the roughness `PALETTE` gives the same ground on earth. */
 const GROUND_ROUGH = {
   grass: 0.85,
@@ -154,6 +159,8 @@ const GROUND_ROUGH = {
   golfSand: 0.9,
   golfSandRaked: 0.9,
   golfSandLip: 0.9,
+  pan: 0.92,
+  panLip: 0.92,
   bank: 0.9,
 } as const;
 type GroundKey = keyof typeof GROUND_ROUGH;
@@ -181,6 +188,8 @@ export function paletteOf(theme: Theme): Record<GroundKey, Rgba> {
         'golfSandRaked',
       ),
       golfSandLip: rough(g.golfSandLip, 'golfSandLip'),
+      pan: rough(g.pan, 'pan'),
+      panLip: rough(g.panLip, 'panLip'),
       bank: rough(g.bank, 'bank'),
     };
     PALETTES.set(theme.name, made);
@@ -216,6 +225,9 @@ export const PALETTE = {
   golfSand: [...COLOURS.golfSand, 0.9],
   golfSandRaked: [...COLOURS.golfSand.map((c) => c * 0.975), 0.9],
   golfSandLip: [...COLOURS.golfSandLip, 0.9],
+  /** A desert's pan, and the soft lip along its edge: earth has none, so these are never drawn there. */
+  pan: [...COLOURS.pan, 0.92],
+  panLip: [...COLOURS.panLip, 0.92],
   /** The rail's timber sides, and the cap painted along its top, rounded over its edges. */
   rail: [...COLOURS.rail, 0.6],
   railCap: [...COLOURS.railCap, 0.45],
@@ -564,6 +576,8 @@ export class Scene {
 
   /** The hole being drawn, for the height of the ground under what moves on it. */
   private layout: Layout | null = null;
+  /** The ground past a golf hole, which what drifts over it stands on: null on a hole of minigolf. */
+  private world: GroundZ | null = null;
   /** When the ball dropped into this hole's cup, in game time, which the flag waggles from: none until it has. */
   holedAt = -Infinity;
 
@@ -595,6 +609,7 @@ export class Scene {
     place(rough, 0, 0, 0, -ROUGH_DEPTH);
     // past a golf hole the ground rolls, and everything that stands there stands on it where it stands
     const world = layout.golf ? groundZOf(layout, name) : null;
+    this.world = world;
     const level = new Float32Array(16);
     place(level, 0, 0, 0, 0);
 
@@ -619,7 +634,7 @@ export class Scene {
     // the mown kinds are textured; the rough painted under its blades and out of bounds are left to their colour (a speckle painted under blades read as noise from golf's distance, and the turf texture is the mown ground's grain),
     // and the sand is a plain colour of its own. On a golf hole the checker's two tones are pulled together (`CONTRAST`)
     const golf = !!ground.golf;
-    const laid: [Mesh, readonly number[], 'turf' | 'plain' | 'dust'][] = [
+    const laid: [Mesh, readonly number[], 'turf' | 'plain' | 'dust' | 'crack'][] = [
       [ground.green, toned(P.grass, P.grassMown, golf), 'turf'],
       [ground.mown, toned(P.grassMown, P.grass, golf), 'turf'],
     ];
@@ -627,12 +642,12 @@ export class Scene {
     const tint = tintOf(layout);
     const stepped = (mesh: Mesh, c: readonly number[], oob: boolean) =>
       tint
-        ? splitByTint(mesh, tint).map((m, k): [Mesh, readonly number[], 'turf' | 'plain' | 'dust'] => [
+        ? splitByTint(mesh, tint).map((m, k): [Mesh, readonly number[], 'turf' | 'plain' | 'dust' | 'crack'] => [
             m,
             tinted(c, valueOfStep(k), oob, theme.crest),
             'dust',
           ])
-        : [[mesh, c, 'dust'] as [Mesh, readonly number[], 'turf' | 'plain' | 'dust']];
+        : [[mesh, c, 'dust'] as [Mesh, readonly number[], 'turf' | 'plain' | 'dust' | 'crack']];
     if (ground.golf)
       laid.push(
         ...stepped(ground.golf.rough, P.playRough, false),
@@ -644,8 +659,12 @@ export class Scene {
         [ground.golf.sand, P.golfSand, 'plain'],
         [ground.golf.sandRaked, P.golfSandRaked, 'plain'],
         [ground.golf.lip, P.golfSandLip, 'plain'],
+        // a pan has its own paint, cracked where the theme gives it a layer, and its lip a plain colour along its edge
+        [ground.golf.pan, P.pan, 'crack'],
+        [panLipOf(layout), P.panLip, 'plain'],
       );
     const dusty = dust(theme);
+    const cracked = crack(theme);
     const out: GameGroup[] = [
       ...laid
         .filter(([mesh]) => !ground.golf || mesh.indices.length)
@@ -658,7 +677,9 @@ export class Scene {
             ? { texture: turf(golf, theme) }
             : finish === 'dust' && dusty
               ? { texture: dusty }
-              : {}),
+              : finish === 'crack' && cracked
+                ? { texture: cracked }
+                : {}),
         })),
       { ...group({ ...collarPart, material: stripe(cupTile) }, atCup) },
       // a golf hole has no rail, and a group of no triangles is drawn by the GPU with an index count of nought, each frame
@@ -1000,11 +1021,13 @@ export class Scene {
         still,
       ),
     ];
-    const far = sceneryOf(theme).far;
+    const { far, hills } = sceneryOf(theme);
+    // a biome draws one of every `hills` of the far trees on the backdrop's hills (every one on earth)
+    const thinned = hills > 1 ? b.forest.filter((_, i) => i % hills === 0) : b.forest;
     for (const kind of ['conifer', 'broadleaf'] as const) {
       const models = far[kind];
       if (!models) continue;
-      byBucket(b.forest.filter((t) => t.kind === kind)).forEach((trees, k) => {
+      byBucket(thinned.filter((t) => t.kind === kind)).forEach((trees, k) => {
         if (!trees.length) return;
         const at = new Float32Array(trees.length * 16);
         trees.forEach((t, i) => place(at, i, t.x, t.y, t.z, bucketYaw(k), t.scale * FAR_TREE_HEIGHT));
@@ -1202,6 +1225,31 @@ export class Scene {
           ),
         );
       });
+      // the tumbleweeds of a biome that has them, rolling downwind over the hole and the plain about it, by game time alone and
+      // drawn only: their place is `drift.ts`'s, the ground under each is the world's
+      const weed = sceneryOf(themeOf(layout)).drift?.[0];
+      if (weed) {
+        const world = this.world;
+        const at = { x: 0, y: 0, hop: 0, turn: 0 };
+        const q = new Float32Array(4);
+        pool(
+          weed,
+          (m, t) => {
+            for (let k = 0; k < DRIFT.count; k++) {
+              tumbleweedAt(layout, name, k, t, way, at);
+              // a ball's turn for the distance gone: about the line across the wind, which is horizontal
+              const half = at.turn / 2,
+                s = Math.sin(half);
+              q[0] = -way[1] * s;
+              q[1] = way[0] * s;
+              q[2] = 0;
+              q[3] = Math.cos(half);
+              placeRolling(m, k, q, at.x, at.y, standing(world, at.x, at.y) + DRIFT.radius * 0.85 + at.hop);
+            }
+          },
+          DRIFT.count,
+        );
+      }
       this.rings(layout, out);
     }
     obstacles?.barriers.forEach((b) => {

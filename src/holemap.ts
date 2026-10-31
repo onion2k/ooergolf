@@ -61,7 +61,7 @@ interface Colours {
 }
 const COLOURS = new Map<string, Colours>();
 /** A biome's map colours, made once for each (four at the most) and kept. */
-function coloursOf(theme: Theme): Colours {
+export function coloursOf(theme: Theme): Colours {
   let made = COLOURS.get(theme.name);
   if (!made) {
     const g = theme.ground;
@@ -72,8 +72,7 @@ function coloursOf(theme: Theme): Colours {
       green: screen(g.puttingGreenMown),
       cut: screen(g.firstCut),
       sand: screen(theme.map.sand),
-      // a plain tan for a desert's pan, which Part 6 of the biomes plan gives a colour of its own
-      pan: [201, 170, 118] as Rgb,
+      pan: screen(g.pan),
       water: screen(theme.map.water),
       out: screen(g.oobGround),
       tree: [31, 107, 90] as Rgb,
