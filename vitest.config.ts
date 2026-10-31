@@ -69,6 +69,8 @@ const SLOW = [
   'test/timed-holes.test.ts',
   'test/tint-colours.test.ts',
   'test/tint.test.ts',
+  'test/tranquility-play.test.ts',
+  'test/tranquility.test.ts',
   'test/tree-ground.test.ts',
   'test/trees-game.test.ts',
   'test/turf.test.ts',
