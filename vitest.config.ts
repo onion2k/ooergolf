@@ -16,6 +16,8 @@ const SLOW = [
   'test/bumper.test.ts',
   'test/caddie.test.ts',
   'test/contour.test.ts',
+  'test/copernicus-play.test.ts',
+  'test/copernicus.test.ts',
   'test/course.test.ts',
   'test/courses.test.ts',
   'test/cup-drawn.test.ts',
