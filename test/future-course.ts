@@ -66,7 +66,11 @@ export function sharedChecks(course: Course) {
   it('has a name of its own on every hole: unique across the game and these courses, and each draws a wind of its own', () => {
     const names = course.specs.map((s) => s.name);
     expect(new Set(names).size).toBe(names.length);
-    const taken = [...COURSES.flatMap((c) => c.holes.map((h) => h.name)), ...course.others.map((s) => s.name)];
+    // every other course's holes (this course, once it is in COURSES, is not its own neighbour), and the other new courses' specs
+    const taken = [
+      ...COURSES.filter((c) => c.name !== course.title).flatMap((c) => c.holes.map((h) => h.name)),
+      ...course.others.map((s) => s.name),
+    ];
     for (const name of names) {
       expect(taken, name).not.toContain(name);
       const w = windOf(name);
