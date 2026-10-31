@@ -99,7 +99,7 @@ export function sharedChecks(course: Course) {
       }
       expect(d, `${holes[i].name}: nearest hologram to the cup`).toBeGreaterThanOrEqual(KEEP_GREEN * TILE - 1e-6);
       // a ball put under its canopy is played: it is not held, lost or stuck, and a stroke from there goes
-      const { game } = golfGame(holes[i]);
+      const { game, calls } = golfGame(holes[i]);
       game.place(near.x, near.y);
       for (let f = 0; f < 30; f++) game.step(DT);
       expect(game.ready, `${holes[i].name}: at rest under a hologram`).toBe(true);
@@ -110,7 +110,9 @@ export function sharedChecks(course: Course) {
         game.step(DT);
         expect(checkInvariants(game), `${holes[i].name}: frame ${f}`).toEqual([]);
       }
-      expect(game.strokes, holes[i].name).toBe(before + 1);
+      // a stroke, and a penalty more where it was lost to a mirror or out of bounds on the way (Dead Pixel’s cup is on an island)
+      const lost = calls.filter(([n]) => n === 'splash' || n === 'outOfBounds').length;
+      expect(game.strokes, holes[i].name).toBe(before + 1 + lost);
       // it comes to rest, or goes in: a hole in one off the shade of a hologram is a hole, and the round is over
       expect(game.ready || game.phase === 'over', `${holes[i].name}: comes to rest again`).toBe(true);
     }
@@ -133,7 +135,7 @@ export function sharedChecks(course: Course) {
     angle: number,
     wanted: (told: string[]) => boolean = () => true,
   ) {
-    for (const club of ['driver', '5-iron', '9-iron', 'wedge'])
+    for (const club of ['driver', '5-iron', '9-iron', 'sand-wedge'])
       for (let power = 0.3; power <= 1.0001; power += 0.05) {
         const { game, calls } = golfGame(def);
         if (from) game.place(from.x, from.y);
