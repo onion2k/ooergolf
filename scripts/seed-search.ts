@@ -11,7 +11,7 @@
  *   npm run seed-search -- "Long Bend" --seeds 15 --rounds 48        (the figures of one seed, as it stands)
  *
  *   npm run seed-search -- --course fells "Tight Left" --seeds 1-20 --rounds 16
- *   --course links (the default), fells, isles, heath, woods or old chooses the list the hole is named from. The lists after The Links' are
+ *   --course links (the default), fells, isles, heath, woods, old, saltpan, mesa or badlands chooses the list the hole is named from. The lists after The Links' are
  *   loaded only when asked for, since they are other parts' modules; asked for before they exist, the script says which is
  *   missing and stops. A hole of either also prints the share of its fairway that runs a ball down (`running`, from
  *   `runningShare`, "n/a" until that helper exists), and the lake carries are `water`, the balls lost to a lake a round.
@@ -31,8 +31,18 @@ import { PLAYER, mean, round } from './pace';
 
 const DT = 1 / 60;
 
-export type CourseName = 'links' | 'fells' | 'isles' | 'heath' | 'woods' | 'old';
-export const COURSE_NAMES: readonly CourseName[] = ['links', 'fells', 'isles', 'heath', 'woods', 'old'];
+export type CourseName = 'links' | 'fells' | 'isles' | 'heath' | 'woods' | 'old' | 'saltpan' | 'mesa' | 'badlands';
+export const COURSE_NAMES: readonly CourseName[] = [
+  'links',
+  'fells',
+  'isles',
+  'heath',
+  'woods',
+  'old',
+  'saltpan',
+  'mesa',
+  'badlands',
+];
 
 /** The options a command line gives: the hole's name, the course and the numbers, with the defaults the script always had. */
 export interface Options {
@@ -70,6 +80,9 @@ const TITLES: Record<CourseName, string> = {
   heath: 'The Heath',
   woods: 'The Woods',
   old: 'The Old Course',
+  saltpan: 'The Saltpan',
+  mesa: 'The Mesa',
+  badlands: 'The Badlands',
 };
 
 /**
@@ -83,6 +96,9 @@ const MODULES: Record<Exclude<CourseName, 'links'>, { module: string; key: strin
   heath: { module: 'src/heath.ts', key: 'HEATH_SPECS', load: () => import('../src/heath' as string) },
   woods: { module: 'src/woods.ts', key: 'WOODS_SPECS', load: () => import('../src/woods' as string) },
   old: { module: 'src/old.ts', key: 'OLD_SPECS', load: () => import('../src/old' as string) },
+  saltpan: { module: 'src/saltpan.ts', key: 'SALTPAN_SPECS', load: () => import('../src/saltpan' as string) },
+  mesa: { module: 'src/mesa.ts', key: 'MESA_SPECS', load: () => import('../src/mesa' as string) },
+  badlands: { module: 'src/badlands.ts', key: 'BADLANDS_SPECS', load: () => import('../src/badlands' as string) },
 };
 
 /** A course's spec list. Every course but The Links is loaded on request, so this script runs before it is built. */
