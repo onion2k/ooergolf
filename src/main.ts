@@ -39,7 +39,7 @@ import { PRIZE, PROMOTED, TOURS, YOU, standings, type Tour } from './season';
 import type { TourSeason } from './career';
 import type { Board, EventCard, Results } from './hud';
 import type { Placement } from './game';
-import { Picker, type PickerCourse } from './picker';
+import { Picker, kindOfCourse, tourOfKind, KINDS, type PickerCourse } from './picker';
 import type { CoursePreview } from './previews';
 import previewData from './previews.json';
 import { Game, type GameEvents } from './game';
@@ -50,7 +50,8 @@ import { mapInto, mapSize, paintMap, type MapSize } from './holemap';
 import { Previewer, type Preview } from './preview';
 import { breakAids, breakOf, leansOnMinigolf, readerArrows } from './green';
 import { greensText, heldHint, landingText, pinReadout, pinText, puttText, windArrow } from './readout';
-import { daylight } from './look';
+import { applyLook, daylight } from './look';
+import { THEMES, themeOf } from './theme';
 import { Progress } from './progress';
 import { seeded } from './random';
 import { GameSound, LazySound, strikeOf } from './sound';
@@ -80,12 +81,15 @@ import { LINKS_SPECS } from './links';
 import { group } from './models/part';
 import type { GameGroup } from 'artshape-render/game/renderer';
 import { roll } from './roll';
-import { fieldOf, flattenFor, grassOptionsOf, windOf } from './turf';
+import { bladeless, fieldOf, flattenFor, grassOptionsOf, windOf } from './turf';
 import { AIM_REACH, Scene, boxOf, sunFitOf } from './scene';
+import { BIOMES, surfacesOf, type BiomeName } from './biome';
+import { STILL } from 'artshape-render/game/grass';
 import { carryFrom } from './flight';
 import { CADDIE, CaddieTalk } from './caddie';
 import { clearings } from './scenery';
-import { FIREWORK_STEPS, cupBurst, fireworkAt, fireworkEmits, splash, strikePuff } from './bursts';
+import { FIREWORK_STEPS, craterDust, cupBurst, fireworkAt, fireworkEmits, splash, strikePuff } from './bursts';
+import { CRATER } from './waterdraw';
 import { Input } from './input';
 import { SPARKLE, flash, glint, kickFlash } from './glints';
 import { Squash, squashInto, squashOf } from './squash';
@@ -248,7 +252,7 @@ async function main() {
   // the daylight look, the same one the models' showcase is drawn in. Its pipelines compile on the GPU's side while the page
   // makes the hole, the letters and the scene, so it is started now and waited for where a frame needs it (`looked`); its
   // failure is the boot's, and is said there
-  const looked = daylight(renderer, ctx);
+  const looked = daylight(renderer, ctx, THEMES.earth);
   looked.catch(() => undefined);
   let pipelined = false;
   void looked.then(
@@ -381,6 +385,7 @@ async function main() {
     return {
       name: c.name,
       golf: !!c.golf,
+      biome: c.biome,
       holes: c.summary.holes,
       par: c.summary.par,
       yards: p.yards,
@@ -390,6 +395,8 @@ async function main() {
     };
   });
   const picker = new Picker(pickable, progress.save.best);
+  /** The start screen's tab that holds a tour's events, pressed by the test API as a player does. */
+  const tabOfTour = (tour: Tour) => document.getElementById(`tab-${KINDS.find((k) => tourOfKind(k) === tour)}`)!;
   /** The start screen up with the picker, the save's bests and the career as they now are, held back while the title's letters drop. */
   const openStart = (wait: boolean) => {
     picker.setBests((game ?? { progress }).progress.save.best);
@@ -694,6 +701,8 @@ async function main() {
     trail: 0,
     confetti: 0,
     puff: null as 'sand' | 'grass' | null,
+    // and the colour of it, which is the biome's: the test API reads it back
+    dust: null as number[] | null,
     // the grass pressed flat this frame round a ball lying in the rough, as it was asked of the renderer
     press: null as { x: number; y: number; radius: number } | null,
     // whether the renderer took it: it does not where the field has no trample, or off it
@@ -708,6 +717,11 @@ async function main() {
   const flatten = { x: 0, y: 0, radius: 0 };
   /** The grass of the hole being grown, which the first frame waits for so it is never drawn bare. */
   let grown: Promise<void> = Promise.resolve();
+  /** Which biome's look the renderer has on it: earth's from the boot. */
+  let lookedAs: BiomeName = 'earth';
+  /** The environment baked for it, and whether the hole grows blades. */
+  let lookedEnv = 'daylight';
+  let blades = true;
   /** The screen's shape, which how far back the camera stands depends on: kept from the camera's own, which is made after the first hole. */
   let aspect = 1.6;
   /** The previews of this golf hole's shots, worked out in a rehearsal of it: none on a hole of minigolf. */
@@ -803,7 +817,9 @@ async function main() {
       booted('letters');
       yield 'letters';
       // the hole's own wind, which the grass bends in and the flag and the trees follow
-      const wind = windOf(name);
+      // (a biome with no air, the Moon's, has none: the flag and the trees hang, the clouds do not drift, and nothing is blown)
+      const calm = BIOMES[layout.biome].calm;
+      const wind = calm ? STILL : windOf(name);
       const fixed = scene.static(layout, name, game.obstacles, game.cup.radius);
       // the kit's accessories that show more are drawn on the holes begun with them (the pennant is still the flag in rainbow stripes until it is drawn fresh), which is where their previews are made too
       const moving = scene.dynamic(game.obstacles, layout, name, wind, {
@@ -820,7 +836,8 @@ async function main() {
         moving.push(...lettered.groups);
       }
       // the hole's rough, round the painted green: a hole too big for a field of grass is refused here, by its size
-      const field = fieldOf(layout, name, clearings(layout, name));
+      // (a biome with bare ground grows no blades, and makes no field of them)
+      const field = bladeless(layout) ? null : fieldOf(layout, name, clearings(layout, name));
       const grass = grassOptionsOf(layout);
       // the preview of this hole's shots is worked out in a rehearsal of it, made once here and let go with the hole
       const slopes = leansOnMinigolf(layout);
@@ -841,6 +858,13 @@ async function main() {
       if (lettered) document.documentElement.setAttribute('data-title', '');
       renderer.setStatic(fixed);
       renderer.setDynamic(moving);
+      // the look of the hole's biome goes on with the hole, and not before it: a hole after another biome's is lit as its own is,
+      // earth's after the Moon's among them, and the title (an earth hole) takes the sky back
+      if (layout.biome !== lookedAs) {
+        lookedEnv = applyLook(renderer, ctx, themeOf(layout));
+        lookedAs = layout.biome;
+      }
+      blades = field !== null;
       grown = renderer.setGrass(field, grass);
       // nothing is pressed on a new hole: the grass stands as it was grown
       renderer.clearPresses();
@@ -868,7 +892,7 @@ async function main() {
       pinned.x = NaN;
       if (!layout.golf) hud.setPin(null);
       // the wind is told on a golf hole, as a number or as calm, and is not there on a hole of minigolf
-      hud.setWind(layout.golf ? windNow.speed : null);
+      hud.setWind(layout.golf && !calm ? windNow.speed : null);
       // the greens' speed is told on a hole that has set one (The Links), and the putt's break when the ball rests on its green
       hud.setGreens(layout.golf ? greensText(game.def.greens) : null);
       hud.setPutt(null);
@@ -934,7 +958,9 @@ async function main() {
         sound.struck(kind, power, ground === 'sand');
         log(`sound struck ${kind} ${power.toFixed(2)}${ground === 'sand' ? ' sand' : ''}`);
       }
-      for (const e of strikePuff(x, y, power, ground)) renderer.emit(e);
+      const puffs = game ? themeOf(game.layout).puff : undefined;
+      for (const e of strikePuff(x, y, power, ground, puffs)) renderer.emit(e);
+      if (puffs) drawn.dust = [...puffs[ground]];
     },
     // a lofted ball come down: the first landing is marked, and throws up the ground it came down on
     landed(x, y, speed, first) {
@@ -945,7 +971,16 @@ async function main() {
       const fall = Math.min(1, speed / 60);
       sound.landed(fall, ground === 'sand');
       log(`sound landed ${fall.toFixed(2)}${ground === 'sand' ? ' sand' : ''}`);
-      for (const e of strikePuff(x, y, Math.min(1, speed / 60), ground)) renderer.emit(e);
+      const puffs = themeOf(game.layout).puff;
+      for (const e of strikePuff(x, y, Math.min(1, speed / 60), ground, puffs)) renderer.emit(e);
+      drawn.dust = [...puffs[ground]];
+    },
+    // through a hologram: a burst of light from where it went in, and that tree flares
+    flickered(x, y) {
+      if (!game) return;
+      scene.flaredAt(x, y, game.t);
+      for (const e of strikePuff(x, y, 0.6, 'grass', themeOf(game.layout).puff)) renderer.emit(e);
+      log('flickered');
     },
     // knocked off the rail, a post or the ground it dropped onto: squashed along it, and sprung back
     knocked(hard, x, y, dx, dy, dz) {
@@ -974,15 +1009,19 @@ async function main() {
     // into the water: a splash where it went in, and a word, and the stroke it cost; the ball put back is round
     splash(x, y) {
       hud.setStrokes(game?.strokes ?? 0);
-      hud.splash(wadedNow);
+      hud.splash(wadedNow, game ? BIOMES[game.layout.biome].words.lake : undefined);
       wadedNow = false;
       squash.clear();
       trail.clear();
-      // a splash up, and a ring spreading over the water from where it went in
-      if (game) scene.splashedAt(x, y, game.t);
+      // a splash up, and a ring spreading over the water from where it went in; into a crater, a burst of dust and no ring
+      const crater = game !== undefined && themeOf(game.layout).water.crater;
+      if (game && !crater) scene.splashedAt(x, y, game.t);
       sound.splashed();
       log('sound splash');
-      for (const e of splash(x, y)) renderer.emit(e);
+      if (crater && game) {
+        const theme = themeOf(game.layout);
+        for (const e of craterDust(x, y, theme.puff.grass, CRATER.drop)) renderer.emit(e);
+      } else for (const e of splash(x, y, game ? themeOf(game.layout).puff.splash : undefined)) renderer.emit(e);
     },
     // out of bounds: a word for it, and the stroke it cost; the ball put back is round
     outOfBounds() {
@@ -1336,15 +1375,18 @@ async function main() {
           const p = previewer.run({ x, y }, inHand, flying.angle, flying.power, shape, spin);
           hud.setLanding(
             p.n
-              ? landingText({
-                  carry: p.carry,
-                  end: p.end,
-                  lie: p.lie,
-                  hit: p.hit !== null,
-                  shape,
-                  spin,
-                  ...(p.rest.shown && p.rest.settled ? { rest: p.rest.carry } : {}),
-                })
+              ? landingText(
+                  {
+                    carry: p.carry,
+                    end: p.end,
+                    lie: p.lie,
+                    hit: p.hit !== null,
+                    shape,
+                    spin,
+                    ...(p.rest.shown && p.rest.settled ? { rest: p.rest.carry } : {}),
+                  },
+                  BIOMES[layout.biome].words.lake,
+                )
               : null,
           );
         } else previewer.roll({ x, y }, inHand, aimed.angle, aimed.power);
@@ -1525,6 +1567,7 @@ async function main() {
           lieAt(played.layout, world.x[ball], world.y[ball]),
           played.kit,
           played.opening ? played.kit.firstStroke.power : 1,
+          surfacesOf(played.layout),
         ) / AIM_REACH
       : rollsFor(played.hardest, played.putRoll) / rollsFor(HARDEST_SHOT);
     // and a putt on a hole whose greens are set is drawn as its roll as well, so the break is seen as a curve across the green
@@ -1786,7 +1829,8 @@ async function main() {
     const { world, ball } = played;
     if (!world.alive[ball]) return;
     // the ball seen to roll, as far as it went this frame
-    roll(scene.ballTurn, world.vx[ball], world.vy[ball], KIND_RADIUS[BALL], dt);
+    // (by the world's seconds, which a biome's pace makes fewer than the clock's: a ball's speed is the world's, and so is its roll)
+    roll(scene.ballTurn, world.vx[ball], world.vy[ball], KIND_RADIUS[BALL], played.worldSeconds(dt));
   }
   /**
    * The framing as the camera is placed now, for the test API: where the ball and the furthest reach are on the screen
@@ -2060,14 +2104,14 @@ async function main() {
     },
     // a tour's event card's buttons, pressed as a player does: its tab, then the button, if it is there to be pressed
     enter: (tour) => {
-      document.getElementById(tour === 'golf' ? 'tab-golf' : 'tab-minigolf')!.click();
+      tabOfTour(tour).click();
       const button = document.getElementById('enterEvent') as HTMLButtonElement;
       if (button.hidden || button.disabled) return false;
       button.click();
       return true;
     },
     practise: (tour) => {
-      document.getElementById(tour === 'golf' ? 'tab-golf' : 'tab-minigolf')!.click();
+      tabOfTour(tour).click();
       const button = document.getElementById('practise') as HTMLButtonElement;
       if (button.hidden) return false;
       button.click();
@@ -2092,7 +2136,7 @@ async function main() {
       const course = pickable.find((c) => c.name === name);
       if (!course) throw new Error(`no course called ${name} on the start screen`);
       hud.setEvents(null);
-      (document.getElementById(course.golf ? 'tab-golf' : 'tab-minigolf') as HTMLButtonElement).click();
+      document.getElementById(`tab-${kindOfCourse(course)}`)!.click();
       const next = document.getElementById('courseNext') as HTMLButtonElement;
       const shown = () => document.getElementById('courseName')!.textContent;
       for (let k = 0; k < COURSES.length && shown() !== name; k++) next.click();
@@ -2104,6 +2148,20 @@ async function main() {
       const drawn = await renderer.grassDrawn();
       const { direction, strength } = renderer.wind;
       return { ...drawn, wind: { direction: [direction[0], direction[1]], strength } };
+    },
+    dust: () => drawn.dust,
+    theme() {
+      const { sky, background, sunDir } = renderer.look;
+      return {
+        name: lookedAs,
+        sky: { zenith: [...(sky?.zenith ?? [])], horizon: [...(sky?.horizon ?? [])], height: sky?.height ?? 0 },
+        background: [...background],
+        sunDir: [...sunDir],
+        fog: [...renderer.fog.colour],
+        environment: lookedEnv,
+        grass: blades,
+        mirror: renderer.look.clear?.mirrorScene === true,
+      };
     },
     async bladesAround(x, y, radius) {
       await grown;

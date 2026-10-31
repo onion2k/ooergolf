@@ -13,6 +13,7 @@ import { TILE, heightAt, type Layout } from './arena';
 import { LAKE_SHORE, lakeShapeOf, type LakeShape } from './backdrop';
 import { gradientNoise } from './noise';
 import { nameSeed } from './shaping';
+import { themeOf } from './theme';
 
 /**
  * The hills' figures: the edge's own height is taken out over `taper` yards; the hills are `near` high at their lowest
@@ -77,7 +78,8 @@ export const hillsTop = (out: number) => HILLS.near + (HILLS.far - HILLS.near) *
  */
 export function groundZOf(layout: Layout, name: string): GroundZ {
   const raw = hillsOf(layout, name);
-  const carving = carvingOf(lakeShapeOf(layout, name), raw);
+  // a biome with no lake past its hills (the Moon's) has no hollow cut for one, or the ground would dip where nothing lies
+  const carving = themeOf(layout).backdrop.lake ? carvingOf(lakeShapeOf(layout, name), raw) : NO_HOLLOW;
   const { box, apply } = carving;
   const z: GroundZ = (x, y) => {
     const h = raw(x, y);
@@ -261,6 +263,15 @@ export function planeOf(layout: Layout, ground: GroundZ, half: number): Mesh {
   flat(3, fx1, fy0, hi, fy1);
   return { positions, normals, uvs, indices: indices.slice(0, used) };
 }
+
+/** The hollow of no lake: nothing is carved, and no point is any of it. */
+const NO_HOLLOW: Carving = {
+  level: 0,
+  bed: 0,
+  apply: (_x, _y, hills) => hills,
+  weight: () => 0,
+  box: { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity },
+};
 
 /**
  * The hollow of a lake: the ground carved down to a bed `HOLLOW.depth` under the water over the lake's fan, and falling back to

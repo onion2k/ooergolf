@@ -15,7 +15,9 @@ import { FastMeshBuilder } from './fastmesh';
 import { TILE, WATER_LEVEL, groundInto, heightAt, slopeAt, stepAt, terrainAt, tileAt, type Layout } from './arena';
 import { fan, outside, overlaps, type Point, type Ring } from './clip';
 import { face, tri } from './meshes';
-import { FIELDS, OUT, RULES, zonesOf, type Zone } from './zones';
+import { LIE } from './surfaces';
+import { FIELDS, OUT, PAN, RULES, zonesOf, type Zone } from './zones';
+import { CRATER, waterCurveOf, waterEdgeOf } from './waterdraw';
 
 type V3 = [number, number, number];
 
@@ -200,6 +202,8 @@ export interface Ground {
     sand: Mesh;
     sandRaked: Mesh;
     lip: Mesh;
+    /** The desert's pan, a dried lake bed: a ground of its own, empty on a hole with none. */
+    pan: Mesh;
   };
 }
 
@@ -238,7 +242,8 @@ export function groundOf(l: Layout, mouth?: Ring): Ground {
     oob = new FastMeshBuilder(),
     sand = new FastMeshBuilder(),
     sandRaked = new FastMeshBuilder(),
-    lip = new FastMeshBuilder();
+    lip = new FastMeshBuilder(),
+    pan = new FastMeshBuilder();
   const n = GROUND.pieces;
   const zones = l.golf ? zonesOf(l) : null;
   // the middle of the piece being cut, which the fairway's stripe is read at
@@ -259,6 +264,8 @@ export function groundOf(l: Layout, mouth?: Ring): Ground {
         return odd ? puttingMown : putting;
       case 'cut':
         return cut;
+      case 'pan':
+        return pan;
       case 'fairway':
         // a fairway with a way is mown in stripes, by the piece being cut; without one, in the checker's tone of the tile
         return (l.way ? stripedAt(l, pieceX, pieceY) : odd) ? mown : green;
@@ -622,6 +629,7 @@ export function groundOf(l: Layout, mouth?: Ring): Ground {
       sand: sand.build(),
       sandRaked: sandRaked.build(),
       lip: lip.build(),
+      pan: pan.build(),
     };
   return out;
 }
@@ -989,4 +997,194 @@ export function stakesOf(l: Layout): { x: number; y: number; z: number }[] {
     }
   }
   return out;
+}
+
+/**
+ * How wide the soft lip along a pan's edge is, in yards, across the curve (half of it on the pan and half on the ground beside), and
+ * how far above the ground it lies so it is not lost in it.
+ */
+export const PAN_LIP = { width: 1.1, lift: 0.04 } as const;
+
+/**
+ * The soft lip of a hole's pan: a ribbon laid along the curve the pan is drawn and played by (`zonesOf`), each segment of it a quad
+ * across the curve, on the ground there, facing as the ground does. Cut along the same curve the pan is, so it follows it as the
+ * pan's own edge does. Empty on a hole with no pan.
+ */
+export function panLipOf(l: Layout): Mesh {
+  const b = new FastMeshBuilder();
+  if (!l.golf || !l.lie.includes(LIE.pan)) return b.build();
+  const seg = zonesOf(l).curves[PAN];
+  const half = PAN_LIP.width / 2;
+  const corner = (x: number, y: number) => {
+    const [sx, sy] = slopeAt(l, x, y);
+    const k = 1 / Math.hypot(sx, sy, 1);
+    return b.vertex(x, y, heightAt(l, x, y) + PAN_LIP.lift, -sx * k, -sy * k, k, 0, 0);
+  };
+  for (let s = 0; s < seg.length; s += 4) {
+    const [ax, ay, bx, by] = [seg[s], seg[s + 1], seg[s + 2], seg[s + 3]];
+    const len = Math.hypot(bx - ax, by - ay);
+    if (len < 1e-6) continue;
+    // across the curve: the segment turned a quarter
+    const nx = (-(by - ay) / len) * half,
+      ny = ((bx - ax) / len) * half;
+    const [p0, p1, p2, p3] = [
+      corner(ax - nx, ay - ny),
+      corner(bx - nx, by - ny),
+      corner(bx + nx, by + ny),
+      corner(ax + nx, ay + ny),
+    ];
+    b.triangle(p0, p1, p2);
+    b.triangle(p0, p2, p3);
+  }
+  return b.build();
+}
+
+/**
+ * How a crater's rim lies: a pale ejecta ribbon, narrow and raised, and a wider soft one under it that falls to the dust, each laid
+ * outward from the curve the water is drawn by in strips across, and `strips` of them to the width. `raise` is how high the ribbon
+ * stands at the curve over the ground and `base` how high it still lies at its outer edge.
+ */
+export const CRATER_RIM = {
+  // the pale ribbon begins at the height the bowl's crest stands at (`CRATER.rim`), so the lip is one smooth ridge over the ground
+  pale: { width: 1.8, strips: 3, raise: CRATER.rim, base: 0.04 },
+  soft: { width: 3.6, strips: 3, raise: 0.2, base: 0.03 },
+} as const;
+
+/**
+ * The rims of a hole's crater, as two meshes (the pale and the soft), laid on the ground outside the water's tiles and nowhere on
+ * them: a strip of a ribbon any corner of which is on a water tile is left out, so nothing of the rim is ever drawn over the pit,
+ * and a ball beside the rim is on the ground it is drawn on. Empty on a hole with no water.
+ */
+export function craterRimsOf(l: Layout): { pale: Mesh; soft: Mesh } {
+  const pale = new FastMeshBuilder(),
+    soft = new FastMeshBuilder();
+  const curve = waterCurveOf(l),
+    edge = waterEdgeOf(l);
+  if (!edge || !curve.length) return { pale: pale.build(), soft: soft.build() };
+  const onWater = (x: number, y: number) => {
+    const t = tileAt(l, x, y);
+    return t >= 0 && l.water[t] === 1;
+  };
+  const lay = (b: FastMeshBuilder, spec: { width: number; strips: number; raise: number; base: number }) => {
+    const corner = (x: number, y: number, o: number) => {
+      const [sx, sy] = slopeAt(l, x, y);
+      const k = 1 / Math.hypot(sx, sy, 1);
+      const lift = spec.base + spec.raise * (1 - o / spec.width) ** 2;
+      return b.vertex(x, y, heightAt(l, x, y) + lift, -sx * k, -sy * k, k, 0, 0);
+    };
+    for (let s = 0; s < curve.length; s += 4) {
+      const [ax, ay, bx, by] = [curve[s], curve[s + 1], curve[s + 2], curve[s + 3]];
+      const len = Math.hypot(bx - ax, by - ay);
+      if (len < 1e-6) continue;
+      // away from the water: against the way the depth grows
+      const mx = (ax + bx) / 2,
+        my = (ay + by) / 2,
+        e = 0.3;
+      let nx = -(edge.depth(mx + e, my) - edge.depth(mx - e, my)),
+        ny = -(edge.depth(mx, my + e) - edge.depth(mx, my - e));
+      const nl = Math.hypot(nx, ny);
+      if (nl < 1e-9) continue;
+      nx /= nl;
+      ny /= nl;
+      for (let j = 0; j < spec.strips; j++) {
+        const o0 = (spec.width * j) / spec.strips,
+          o1 = (spec.width * (j + 1)) / spec.strips;
+        const pts: [number, number, number][] = [
+          [ax + nx * o0, ay + ny * o0, o0],
+          [bx + nx * o0, by + ny * o0, o0],
+          [bx + nx * o1, by + ny * o1, o1],
+          [ax + nx * o1, ay + ny * o1, o1],
+        ];
+        if (pts.some(([x, y]) => onWater(x, y) || tileAt(l, x, y) < 0)) continue;
+        const [p0, p1, p2, p3] = pts.map(([x, y, o]) => corner(x, y, o));
+        // wound to face up whichever side of the curve is out
+        const up = (bx - ax) * ny - (by - ay) * nx;
+        if (up > 0) {
+          b.triangle(p0, p1, p2);
+          b.triangle(p0, p2, p3);
+        } else {
+          b.triangle(p0, p2, p1);
+          b.triangle(p0, p3, p2);
+        }
+      }
+    }
+  };
+  lay(soft, CRATER_RIM.soft);
+  lay(pale, CRATER_RIM.pale);
+  return { pale: pale.build(), soft: soft.build() };
+}
+
+/** How a mirror's kerb is: its lip's width, outward from the curve, and how far above the ground it lies, in yards. */
+export const KERB = { lip: 0.35, lift: 0.03 } as const;
+
+/**
+ * The kerb of a mirror (quicksilver): a clean thin chrome edge following the curve its water is drawn by, as a wall from the water's
+ * level up to the ground on the water's side and a lip a third of a yard wide laid on the ground outside it. The ground it stands on
+ * is read where it is (the first ground met going out from the curve), so it holds on hills. Empty on a hole with no water.
+ */
+export function kerbOf(l: Layout): Mesh {
+  const b = new FastMeshBuilder();
+  const curve = waterCurveOf(l),
+    edge = waterEdgeOf(l);
+  if (!edge || !curve.length) return b.build();
+  const e = 0.3;
+  const groundAt = (x: number, y: number, ox: number, oy: number) => {
+    for (const reach of [0.6, 1.5, 3, 4.5]) {
+      const qx = x + ox * reach,
+        qy = y + oy * reach;
+      const t = tileAt(l, qx, qy);
+      if (t >= 0 && !l.water[t] && !l.solid[t]) return heightAt(l, qx, qy);
+    }
+    return heightAt(l, x, y);
+  };
+  for (let s = 0; s < curve.length; s += 4) {
+    const [ax, ay, bx, by] = [curve[s], curve[s + 1], curve[s + 2], curve[s + 3]];
+    const len = Math.hypot(bx - ax, by - ay);
+    if (len < 1e-6) continue;
+    // the way out of the water, from the depth's gradient at the segment's middle
+    const mx = (ax + bx) / 2,
+      my = (ay + by) / 2;
+    let ox = -(edge.depth(mx + e, my) - edge.depth(mx - e, my)),
+      oy = -(edge.depth(mx, my + e) - edge.depth(mx, my - e));
+    const ol = Math.hypot(ox, oy);
+    if (ol < 1e-9) continue;
+    ox /= ol;
+    oy /= ol;
+    const za = groundAt(ax, ay, ox, oy) + KERB.lift,
+      zb = groundAt(bx, by, ox, oy) + KERB.lift;
+    // the wall, facing the water; wound to face it whichever way the segment runs
+    const v = (x: number, y: number, z: number, nx: number, ny: number, nz: number) =>
+      b.vertex(x, y, z, nx, ny, nz, 0, 0);
+    const [w0, w1, w2, w3] = [
+      v(ax, ay, WATER_LEVEL, -ox, -oy, 0),
+      v(bx, by, WATER_LEVEL, -ox, -oy, 0),
+      v(bx, by, zb, -ox, -oy, 0),
+      v(ax, ay, za, -ox, -oy, 0),
+    ];
+    // the segment's direction crossed with up gives the way the quad faces: toward the water when it is along -(ox, oy)
+    const faces = (bx - ax) * -oy - (by - ay) * -ox;
+    if (faces > 0) {
+      b.triangle(w0, w1, w2);
+      b.triangle(w0, w2, w3);
+    } else {
+      b.triangle(w0, w2, w1);
+      b.triangle(w0, w3, w2);
+    }
+    // the lip, flat on the ground outside the wall
+    const [p0, p1, p2, p3] = [
+      v(ax, ay, za, 0, 0, 1),
+      v(bx, by, zb, 0, 0, 1),
+      v(bx + ox * KERB.lip, by + oy * KERB.lip, zb, 0, 0, 1),
+      v(ax + ox * KERB.lip, ay + oy * KERB.lip, za, 0, 0, 1),
+    ];
+    const up = (bx - ax) * oy - (by - ay) * ox;
+    if (up > 0) {
+      b.triangle(p0, p1, p2);
+      b.triangle(p0, p2, p3);
+    } else {
+      b.triangle(p0, p2, p1);
+      b.triangle(p0, p3, p2);
+    }
+  }
+  return b.build();
 }

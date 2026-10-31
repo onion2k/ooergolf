@@ -15,6 +15,10 @@
  * up early and settles is left alone, and one that creeps all the way
  * through is not. A new list, map or cache in the game gets a line in
  * `WATCH` and a reading in `sizes`.
+ *
+ * Not watched here, because they cannot grow: the picture's per-biome caches (the scene's palettes and ring of stones, the turf's
+ * kinds of grass, the hole map's colours, the baked environments, the scenery's models: `sceneryset.ts`), each made once for a biome
+ * and kept, so at most four of each (and two environments). `test/theme.test.ts` holds each made once, the same object on every ask, which is what bounds it.
  */
 import { BODY_CAPACITY } from '../src/arena';
 import { Autopilot } from '../src/autopilot';
@@ -60,7 +64,11 @@ export const WATCH: Partial<Record<string, { ceiling: number; climb?: Climb }>> 
   // two-figure scores, and the event round kept with its tour: 10,164 bytes, held to the byte; the ceiling raised to 10,800 on
   // 16 October 2026 at the user's word, which is that and about six holes more again. The caddie's two counts, held to its
   // limit of three, add 30: 10,194, held to the byte, under the same ceiling; and its count of spin 9 more, 10,203, on 17 October 2026)
-  'save bytes': { ceiling: 10_800 },
+  // 31 October 2026, the nine courses of the biomes: a best on each of the 162 holes (about 104 bytes each), a record of each of the
+  // eighteen courses, and the seasons of all five tours, the three new ones with a season less one event of two-figure scores, a
+  // title count of three figures and the longest grade: measured the same way at 19,732 bytes, held to the byte (the plan's
+  // estimate was 20,000); 20,400 is that and about six holes more, as the ceiling was at 10,800 over 10,228.
+  'save bytes': { ceiling: 20_400 },
   // emptied at every new round: never more than a score a hole
   'card scores': { ceiling: COURSE.length },
   // the bodies in the rehearsal a golf hole's shots are previewed in: the ball, however many shots are tried, and the
@@ -146,6 +154,13 @@ export const GOLF_COURSES = {
   woods: 'The Woods',
   isles: 'The Isles',
   old: 'The Old Course',
+  // one course of each biome and not the nine: a biome's three courses share every line of code a leak run watches (the
+  // surfaces, the trees, the hazard, the theme and its models are the biome's, not the course's), so a second and a third at
+  // ten minutes each would be the same run again. The plan's three: the desert's easiest, the moon's middle and the future's
+  // middle, whose holes carry the most of what a run adds to (trees, a hazard and a long hole).
+  saltpan: 'The Saltpan',
+  copernicus: 'Copernicus',
+  chrome: 'Chrome Heights',
 } as const;
 export type GolfCourseKey = keyof typeof GOLF_COURSES;
 

@@ -351,13 +351,16 @@ export const OCEAN = {
 } as const;
 
 /** The open water's pattern, for every bed that wears it: the waves at `scale`, and the sky they mirror. */
-export const oceanPattern = (scale: number): Part['pattern'] => ({
+export const oceanPattern = (
+  scale: number,
+  ocean: { speed: number; tilt: number; tint: readonly number[] } = OCEAN,
+): Part['pattern'] => ({
   kind: PATTERN.ocean,
   scale,
   seed: 0,
-  speed: OCEAN.speed,
-  glow: OCEAN.tilt,
-  second: OCEAN.tint,
+  speed: ocean.speed,
+  glow: ocean.tilt,
+  second: ocean.tint as [number, number, number],
 });
 
 /**

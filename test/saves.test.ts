@@ -23,11 +23,13 @@ const read = (file: string) => readFileSync(new URL(file, DIR), 'utf8');
 
 /** A save with nothing in it yet, as every field's default makes it. */
 const NONE = { club: '', ball: '', accessory: '' };
-/** What a save from before the seasons loads its season as: both tours at the club grade, no season begun, no event played, no title. */
-const NO_SEASON = {
-  golf: { grade: 'club', begun: 0, played: [], titles: 0 },
-  mini: { grade: 'club', begun: 0, played: [], titles: 0 },
-};
+/** One tour's season before it is begun: the club grade, no season begun, no event played, no title. */
+const NO_TOUR = { grade: 'club', begun: 0, played: [], titles: 0 };
+/**
+ * What a save from before the seasons loads its season as: every tour at the club grade, none begun. A save from before the
+ * biome tours (the desert, the moon and the future, of 31 October 2026) loads those three the same way.
+ */
+const NO_SEASON = { golf: NO_TOUR, mini: NO_TOUR, desert: NO_TOUR, moon: NO_TOUR, future: NO_TOUR };
 /** What a save from before the caddie loads its tips taken as: none of either kind. */
 const NO_TIPS = { club: 0, shape: 0, spin: 0 };
 /** What a save from before the career loads its career as: counted in it, as every round was, with no record, no round and no season. */
@@ -126,6 +128,7 @@ const BEFORE_SOUND: Record<string, Record<string, unknown>> = {
     },
     round: { tour: 'golf', course: 'The Fells', hole: 2, card: [5, 4], retaken: false, pickedUp: false },
     season: {
+      ...NO_SEASON,
       golf: { grade: 'county', begun: 2, played: [[4, 5, 3, 4, 4, 3, 5, 4, 4], null], titles: 0 },
       mini: { grade: 'championship', begun: 4, played: [[2, 3, 2, 3, 2, 3, 2, 3, 3]], titles: 1 },
     },
@@ -162,6 +165,21 @@ const KEPT: Record<string, Record<string, unknown>> = {
   ...Object.fromEntries(Object.entries(BEFORE_SOUND).map(([file, save]) => [file, { ...save, ...NO_SOUND }])),
   // the sound of 18 October 2026: turned off, and the volume at two fifths
   '11-sound.json': { ...BEFORE_SOUND['10-caddie-spin.json'], muted: true, volume: 0.4 },
+  // the biome tours of 31 October 2026: the desert tour at the county grade with an event played and a round kept on its second
+  // event (The Mesa), the moon tour at the championship with a title, an event played and one withdrawn from, the future untouched
+  '12-biomes.json': {
+    ...BEFORE_SOUND['10-caddie-spin.json'],
+    muted: true,
+    volume: 0.4,
+    coins: 260,
+    gems: 1,
+    round: { tour: 'desert', course: 'The Mesa', hole: 3, card: [4, 5, 4], retaken: false, pickedUp: false },
+    season: {
+      ...NO_SEASON,
+      desert: { grade: 'county', begun: 1, played: [[4, 5, 3, 4, 4, 3, 5, 4, 4]], titles: 0 },
+      moon: { grade: 'championship', begun: 4, played: [[4, 4, 3, 4, 5, 3, 4, 4, 5], null], titles: 1 },
+    },
+  },
 };
 
 describe('saves from every shape the game has written', () => {
@@ -342,7 +360,7 @@ describe('saves from every shape the game has written', () => {
         golf: { grade: 'county', begun: 3, played: [card, null], titles: 2 },
         senior: { grade: 'club', begun: 1, played: [], titles: 0 },
       }),
-    ).toEqual({ golf: { grade: 'county', begun: 3, played: [card, null], titles: 2 }, mini: NO_SEASON.mini });
+    ).toEqual({ ...NO_SEASON, golf: { grade: 'county', begun: 3, played: [card, null], titles: 2 } });
     // what is not what it should be takes its own default and nothing else is lost
     expect(read({ golf: { grade: 'junior', begun: 2, played: [], titles: 1 } }).golf).toEqual({
       grade: 'club',
@@ -372,8 +390,32 @@ describe('saves from every shape the game has written', () => {
     ])
       expect(read({ golf: { grade: 'county', begun: 1, played } }).golf.played, JSON.stringify(played)).toEqual([]);
     // and none of it is an object at all
-    for (const bad of [null, 'season', [1, 2], 7, { golf: 'county', mini: [1] }])
+    for (const bad of [null, 'season', [1, 2], 7, { golf: 'county', mini: [1], desert: 3, moon: null, future: 'club' }])
       expect(read(bad), JSON.stringify(bad)).toEqual(NO_SEASON);
+  });
+
+  it('reads each biome tour’s season as it reads the others’, and an old save has all three fresh', () => {
+    const seasonOf = (season: unknown) => new Progress(memoryStore(JSON.stringify({ season }))).save.season;
+    const card = [3, 4, 3, 4, 4, 3, 5, 4, 4];
+    const got = seasonOf({
+      desert: { grade: 'county', begun: 2, played: [card, null], titles: 0 },
+      moon: { grade: 'senior', begun: 1, played: [[3, 0, 3]], titles: -1 },
+      future: { grade: 'championship', begun: 5, played: [], titles: 3 },
+    });
+    expect(got.desert).toEqual({ grade: 'county', begun: 2, played: [card, null], titles: 0 });
+    // a grade there is not is the lowest, a card with a nought is no card, and a count that is no count is nought
+    expect(got.moon).toEqual({ grade: 'club', begun: 1, played: [], titles: 0 });
+    expect(got.future).toEqual({ grade: 'championship', begun: 5, played: [], titles: 3 });
+    expect([got.golf, got.mini], 'a tour left out is a fresh one').toEqual([NO_TOUR, NO_TOUR]);
+    // a save from before the biome tours has no such season and is given three fresh
+    const old = new Progress(memoryStore(read('08-season.json'))).save.season;
+    expect([old.desert, old.moon, old.future]).toEqual([NO_TOUR, NO_TOUR, NO_TOUR]);
+    // a round kept on a biome tour is read; one on a tour there is not is let go
+    const round = (tour: string) =>
+      new Progress(memoryStore(JSON.stringify({ round: { tour, course: 'The Mesa', hole: 1, card: [4] } }))).save.round;
+    expect(round('desert')).toMatchObject({ tour: 'desert', course: 'The Mesa' });
+    expect(round('future')).toMatchObject({ tour: 'future' });
+    expect(round('lunar')).toBeNull();
   });
 
   it('reads the caddie’s tips taken only as counts, and none of a kind that is not one', () => {
@@ -427,6 +469,16 @@ describe('saves from every shape the game has written', () => {
     const fells = COURSES.find((c) => c.name === 'The Fells')!;
     expect(game.resume(fells.holes, { name: fells.name, purse: fells.purse })).toBe(true);
     expect([game.hole, game.card, game.event]).toEqual([2, [5, 4], { tour: 'golf', index: 2 }]);
+    for (let f = 0; f < 300; f++) game.step(1 / 60);
+    expect(checkInvariants(game)).toEqual([]);
+  });
+
+  it('goes on with the event round kept in the biome tours’ own save, and breaks no rule', () => {
+    const season = seasonContext();
+    const game = new Game(new Progress(memoryStore(read('12-biomes.json'))), {}, { random: seeded(7), season });
+    const mesa = COURSES.find((c) => c.name === 'The Mesa')!;
+    expect(game.resume(mesa.holes, { name: mesa.name, purse: mesa.purse })).toBe(true);
+    expect([game.hole, game.card, game.event]).toEqual([3, [4, 5, 4], { tour: 'desert', index: 1 }]);
     for (let f = 0; f < 300; f++) game.step(1 / 60);
     expect(checkInvariants(game)).toEqual([]);
   });

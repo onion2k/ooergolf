@@ -1,17 +1,42 @@
 /**
- * The course picker on the start screen: two tabs, proper golf and minigolf, and one course of the tab in view at a time,
+ * The course picker on the start screen: a tab for proper golf, one for each biome and one for minigolf, and one course of the tab in view at a time,
  * stepped through with the arrows and wrapping, with its place in the order of difficulty (the courses stand easiest first,
  * which is all a player reads of the pace figure) and the player's best round, which is the save's bests by hole name added
  * up when every hole of the course has one. All of it is arithmetic on the summaries, with no page: the hud draws what
  * `shown` says and the test API chooses by name, so the two cannot disagree about which course Play begins.
  */
 
-export type Kind = 'golf' | 'minigolf';
+import type { Tour } from './season';
+
+/**
+ * The tabs, in the order they stand: proper golf of the earth, the three biomes, then minigolf. A tab is a name that the
+ * start screen's button id (`tab-<kind>`) and the tour of the same events (`tourOfKind`) are made from.
+ */
+export type Kind = 'golf' | 'desert' | 'moon' | 'future' | 'minigolf';
+export const KINDS: readonly Kind[] = ['golf', 'desert', 'moon', 'future', 'minigolf'];
+
+/** The tab a course stands on: minigolf's, or its biome's, or proper golf of the earth. */
+export function kindOfCourse(c: { golf: boolean; biome?: string }): Kind {
+  if (!c.golf) return 'minigolf';
+  return KINDS.find((k) => k === c.biome && k !== 'golf' && k !== 'minigolf') ?? 'golf';
+}
+
+/** A tab from whatever was kept or given as one: a name that is not a tab is the first, and nothing is refused. */
+export function asKind(value: unknown): Kind {
+  return KINDS.find((k) => k === value) ?? KINDS[0];
+}
+
+/** The tour whose events a tab shows: minigolf's is the mini tour and every other tab's is its own name. */
+export function tourOfKind(kind: Kind): Tour {
+  return kind === 'minigolf' ? 'mini' : kind;
+}
 
 /** What the picker knows of a course, all of it known without making the course. */
 export interface PickerCourse {
   name: string;
   golf: boolean;
+  /** The biome of a course of one (`Course.biome`), none for the earth's. */
+  biome?: string;
   holes: number;
   par: number;
   /** The course's length in yards, from the generated previews. */
@@ -61,7 +86,7 @@ export class Picker {
   /** The tab in view. */
   kind: Kind;
   /** Where each tab was left, so going back to a tab shows the course it showed. */
-  private readonly at: Record<Kind, number> = { golf: 0, minigolf: 0 };
+  private readonly at: Record<Kind, number> = { golf: 0, desert: 0, moon: 0, future: 0, minigolf: 0 };
   private bests: Readonly<Partial<Record<string, { strokes: number }>>>;
 
   constructor(
@@ -70,12 +95,12 @@ export class Picker {
   ) {
     if (!all.length) throw new Error('a picker needs courses, and was given no courses');
     this.bests = bests;
-    this.kind = all.some((c) => c.golf) ? 'golf' : 'minigolf';
+    this.kind = KINDS.find((k) => all.some((c) => kindOfCourse(c) === k)) ?? 'minigolf';
   }
 
   /** The courses of a tab, in the order they stand. */
   courses(kind: Kind): PickerCourse[] {
-    return this.all.filter((c) => c.golf === (kind === 'golf'));
+    return this.all.filter((c) => kindOfCourse(c) === kind);
   }
 
   /** The tab shown; refused by name for a tab with no course on it. */
@@ -99,7 +124,7 @@ export class Picker {
   show(name: string): void {
     const course = this.all.find((c) => c.name === name);
     if (!course) throw new Error(`no course called ${name}`);
-    const kind: Kind = course.golf ? 'golf' : 'minigolf';
+    const kind = kindOfCourse(course);
     this.kind = kind;
     this.at[kind] = this.courses(kind).indexOf(course);
   }

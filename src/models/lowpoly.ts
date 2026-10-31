@@ -266,14 +266,14 @@ const STONE_TIERS = [
   { name: 'shade', from: -2, mul: [0.5, 0.45, 0.46] },
 ] as const;
 
-export function bankStone(kind = 0): Model {
+export function bankStone(kind = 0, colours: readonly (readonly number[])[] = BANK_STONE.colours): Model {
   const whole = built((b) =>
     lump(b, at(0, 0, 0, kind * 2.1), seeded(kind * 17 + 3), 3, 8, [1, 0.9, BANK_STONE.rise], {
       give: 0.16,
       floor: -0.28,
     }),
   );
-  const colour = BANK_STONE.colours[kind % BANK_STONE.colours.length];
+  const colour = colours[kind % colours.length] as [number, number, number];
   // every face has three vertices of its own, so a face goes to a tier whole, and a tier's mesh is the faces that are its
   const builders = STONE_TIERS.map(() => new MeshBuilder());
   for (let t = 0; t < whole.indices.length; t += 3) {

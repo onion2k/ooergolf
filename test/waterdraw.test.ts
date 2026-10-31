@@ -11,8 +11,8 @@ import { SHELF, STONE_RING, TOUCH, pondOf, waterEdgeOf, type Pond } from '../src
 
 /** Every hole of every course, as the layout the game draws, with the pond it makes. */
 const HOLES = COURSES.flatMap((c) => c.holes).map((hole: HoleDef) => {
-  const layout = layoutOf(hole.map, hole.terrain);
-  return { name: hole.name, layout, pond: pondOf(layout) };
+  const layout = layoutOf(hole.map, hole.terrain, undefined, hole.biome);
+  return { name: hole.name, layout, pond: pondOf(layout), biome: hole.biome };
 });
 const WET = HOLES.filter((h) => h.layout.water.some((w) => w));
 
@@ -136,12 +136,15 @@ describe('the water drawn', () => {
   });
 });
 
+/** The ponds of the earth: a biome's lake is a pan, a crater or a mirror, and draws what its own course tests hold, not this ring. */
+const EARTH_WET = WET.filter((h) => h.biome === undefined);
+
 describe('the ring of stones', () => {
   it('stands in water tiles, on every pond of both kinds of course', () => {
-    expect(WET.some((h) => h.layout.golf)).toBe(true);
-    expect(WET.some((h) => !h.layout.golf)).toBe(true);
+    expect(EARTH_WET.some((h) => h.layout.golf)).toBe(true);
+    expect(EARTH_WET.some((h) => !h.layout.golf)).toBe(true);
     let n = 0;
-    for (const { name, layout: l, pond } of WET) {
+    for (const { name, layout: l, pond } of EARTH_WET) {
       expect(pond.spots.length, `${name}: a ring`).toBeGreaterThan(0);
       for (const s of pond.spots) {
         n++;
@@ -154,7 +157,7 @@ describe('the ring of stones', () => {
   });
 
   it('touches a neighbour along an edge: no stone stands alone', () => {
-    for (const { name, layout: l, pond } of WET) {
+    for (const { name, layout: l, pond } of EARTH_WET) {
       for (const [i, s] of pond.spots.entries()) {
         const touches = pond.spots.some((o, j) => j !== i && Math.hypot(o.x - s.x, o.y - s.y) <= (o.r + s.r) * TOUCH);
         expect(touches, `${name}: a stone alone at ${s.x.toFixed(2)},${s.y.toFixed(2)} in ${l.cols} by ${l.rows}`).toBe(

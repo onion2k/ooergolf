@@ -37,6 +37,11 @@ const PICTURE = [
   'tintmesh',
   'waterdraw',
   'sound',
+  'theme',
+  'sceneryset',
+  'turf',
+  'tint',
+  'turfTexture',
 ];
 /** The game does not import the renderer: it runs without a page, in a test and in the fuzzer. */
 const RENDERER = {

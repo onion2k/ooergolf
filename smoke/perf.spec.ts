@@ -37,7 +37,9 @@ export { BUDGET };
 function biggestGolfHole(): { course: string; big: number; small: number; tiles: number; name: string } {
   let best = { course: '', big: 0, small: 0, tiles: 0, name: '' };
   for (const c of COURSES) {
-    if (!c.golf) continue;
+    // the nine biome courses are left to Part 13's own scenes (a heaviest tee of each biome): the biggest hole held here is
+    // the earth's, as it was, so that joining the game moves no scene of this gate
+    if (!c.golf || c.biome) continue;
     const tiles = c.holes.map((h) => {
       const l = layoutOf(h.map, h.terrain);
       return l.cols * l.rows;

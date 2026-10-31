@@ -52,11 +52,14 @@ describe('what must stay bounded', () => {
       retaken: true,
       pickedUp: false,
     };
-    // and the season at its most: the longest grade on both tours, a season less one event played on each of them with a
+    // and the season at its most: the longest grade on all five tours, a season less one event played on each of them with a
     // score of two figures on every hole (a golf event and a mini event have nine holes each), and the counts of three figures
     for (const [tour, events] of [
       ['golf', 5],
       ['mini', 2],
+      ['desert', 2],
+      ['moon', 2],
+      ['future', 2],
     ] as const)
       progress.save.season[tour] = {
         grade: 'championship',
@@ -67,13 +70,15 @@ describe('what must stay bounded', () => {
     // and the caddie's tips taken at their limit, past which they are not counted
     progress.save.caddie = { club: CADDIE.taken, shape: CADDIE.taken, spin: CADDIE.taken };
     expect(ITEMS.length, 'the forty-five').toBe(45);
-    expect(holes.length, 'a hole of each, nine courses of nine').toBe(81);
+    expect(holes.length, 'a hole of each, eighteen courses of nine').toBe(162);
     const bytes = JSON.stringify(progress.save).length;
     // held to the byte, so a longer id, a new hole or a new field in a best is seen and the ceiling thought about again
     // (15 October 2026: 9,800 before the seasons, 10,164 with a season less one event played on both tours and an event round kept;
     // 16 October 2026: 10,194 with the caddie's two counts; 17 October 2026: 10,203 with its count of spin; 18 October 2026:
     // 10,228 with the sound's mute and volume)
-    expect(bytes, `${bytes} bytes for ${holes.length} holes`).toBe(10_228);
+    // 31 October 2026: 19,732 with the nine courses of the biomes (a best on 162 holes, a record of eighteen courses) and the
+    // three tours of them, each at its longest (a season less one event played, in two-figure scores): the plan had guessed 20,000)
+    expect(bytes, `${bytes} bytes for ${holes.length} holes`).toBe(19_732);
     expect(bytes, 'under the ceiling').toBeLessThan(WATCH['save bytes']!.ceiling);
     expect(WATCH['save bytes']!.ceiling, 'with room for about six holes more and no more').toBeLessThan(bytes * 1.15);
   });
@@ -125,9 +130,16 @@ describe('what must stay bounded', () => {
     expect(trouble({ slots: [1, 2, 3, 4, 5, 6, 7, 8, 9] })).toEqual([]);
   });
 
-  it('has a leak run for every course of golf there is, each by the name its course has', () => {
-    const golf = COURSES.filter((c) => c.golf).map((c) => c.name);
-    expect(Object.values(GOLF_COURSES).sort()).toEqual(golf.sort());
+  it('has a leak run for every course of golf of the earth, each by the name its course has, and one for each biome', () => {
+    // a biome's three courses share all their code (the surfaces, the trees, the hazard, the theme and its models), so what a
+    // leak run watches is reached by any one of them: three more runs of ten minutes a kind and not nine
+    const earth = COURSES.filter((c) => c.golf && !c.biome).map((c) => c.name);
+    const named = Object.values(GOLF_COURSES) as string[];
+    for (const biome of ['desert', 'moon', 'future'] as const) {
+      const runs = COURSES.filter((c) => c.biome === biome && named.includes(c.name));
+      expect(runs, `one run on the ${biome}`).toHaveLength(1);
+    }
+    expect([...named].sort()).toEqual([...earth, 'The Saltpan', 'Copernicus', 'Chrome Heights'].sort());
   });
 
   it("lets a hole with a lane go when nothing else holds it: the lane's table does not keep it alive", async () => {

@@ -10,8 +10,9 @@ import type { Gpu } from 'artshape-render/gpu/context';
 import { TEXTURE_STRIDE, packTexture } from 'artshape-render/game/texture';
 import { noFog } from 'artshape-render/game/fog';
 import { bakeEnvironment } from 'artshape-render/render/env';
-import { SUN } from './sun';
-import { TURF_SIDE, turfTexels } from './turfTexture';
+import { WATER_LEVEL } from './arena';
+import type { Theme } from './theme';
+import { TURF_KINDS, TURF_SIDE, turfTexels } from './turfTexture';
 
 /** The seed of the turf's texels: one, since the turf is the same on every hole and the same on every page. */
 const TURF_SEED = 1;
@@ -130,52 +131,115 @@ function flowing(renderer: GameRenderer) {
 }
 
 /**
- * Gives the renderer the turf the mown ground is laid on, made here from arithmetic and handed over as one layer: premultiplied
- * alpha and colour conversion are off, since the colour is a modulation about mid-grey and the alpha a height, both data.
+ * Gives the renderer the textures the ground is laid on, made here from arithmetic and handed over as layers, in the order of
+ * `TURF_KINDS` (the mown turf's is the first and the others are the biomes' and the pan's): premultiplied alpha and colour
+ * conversion are off, since the colour is a modulation about mid-grey and the alpha a height, both data. All are made once, at
+ * boot, and a hole chooses its layer by number (`Theme.layers`); they are 5 of the renderer's 8.
  */
 async function turfed(renderer: GameRenderer): Promise<void> {
-  const texels = turfTexels(TURF_SIDE, TURF_SEED, 'mown');
-  const image = new ImageData(new Uint8ClampedArray(texels), TURF_SIDE, TURF_SIDE);
-  const layer = await createImageBitmap(image, { premultiplyAlpha: 'none', colorSpaceConversion: 'none' });
-  renderer.setGroundTexture([layer]);
+  const layers: ImageBitmap[] = [];
+  for (const kind of TURF_KINDS) {
+    const texels = turfTexels(TURF_SIDE, TURF_SEED, kind);
+    const image = new ImageData(new Uint8ClampedArray(texels), TURF_SIDE, TURF_SIDE);
+    layers.push(await createImageBitmap(image, { premultiplyAlpha: 'none', colorSpaceConversion: 'none' }));
+  }
+  renderer.setGroundTexture(layers);
 }
 
 /**
- * Put the daylight look on `renderer`: a cartoon in daylight, as bearing's
- * sweet world is, in the clean toy's light. Resolves once the pipelines the
- * look asks for are compiled, which the first frame waits for.
+ * The environments baked, one for each preset a theme asks for and kept: a hole of another biome swaps to the one baked, and
+ * baking is done once (at most four presets are ever made). Not kept for ever: the presets are four.
  */
-export async function daylight(renderer: GameRenderer, ctx: Gpu): Promise<void> {
-  renderer.look = {
-    ...renderer.look,
-    sunDir: SUN,
-    // toon light is at a colour's full strength, so the sun is bright and the colours are shown straight
-    sunColour: [2.75, 2.55, 2.2],
-    exposure: 1,
-    ambient: 1,
-    background: SKY.horizon,
-    sky: { zenith: SKY.zenith, horizon: SKY.horizon, height: SKY.height },
-    shading: 'toon',
-    occlusion: OCCLUSION.strength,
-    occlusionRadius: OCCLUSION.radius,
-    occlusionDirect: OCCLUSION.direct,
-    ...TOY,
+const BAKED = new Map<string, ReturnType<typeof bakeEnvironment>>();
+
+/**
+ * The clear water's settings for a mirror (quicksilver): it mirrors the scene as well as the sky, in one plane at the water's level
+ * (`WATER_LEVEL`, one constant that every pond of a golf hole is drawn at, on hills too), the swell nearly still so the dusk, the
+ * holograms and the skyline are seen upside down and hardly shaken, with nothing to see into, nothing to bend, no foam, no caustics
+ * and no glitter, and the mirror at full strength everywhere, even at the camera's feet. A theme with no mirror names none of it: the
+ * renderer then builds no mirror frame and draws no second scene.
+ */
+export const MIRROR_CLEAR: NonNullable<GameRenderer['look']['clear']> = {
+  mirrorScene: true,
+  mirrorPlane: WATER_LEVEL,
+  mirrorDistort: 0.004,
+  mirror: 8,
+  mirrorNear: 1,
+  // the sky it shows is brightened to silver: the dusk's zenith, seen straight down into a mirror, is its darkest and would grey the sheet
+  mirrorTint: [2.0, 1.8, 2.2],
+  clarity: 0.05,
+  refraction: 0,
+  foamWidth: 0,
+  caustics: 0,
+  glitter: 0,
+  sparkles: 0,
+  waves: [],
+};
+
+/**
+ * What a theme sets on the renderer's look and fog: every field of the sun, the sky, the shade, the rim and the haze, so none is
+ * left from the theme before. Worked out apart from the renderer, so a test holds earth's what `daylight` always made and that
+ * putting one theme on after another leaves nothing of it behind.
+ */
+export function lookFor(theme: Theme) {
+  const { look } = theme;
+  return {
+    look: {
+      sunDir: look.sunDir as [number, number, number],
+      // toon light is at a colour's full strength, so the sun is bright and the colours are shown straight
+      sunColour: look.sunColour as [number, number, number],
+      exposure: 1,
+      ambient: look.ambient,
+      background: look.background as [number, number, number],
+      sky: look.sky as GameRenderer['look']['sky'],
+      shading: 'toon' as const,
+      occlusion: OCCLUSION.strength,
+      occlusionRadius: OCCLUSION.radius,
+      occlusionDirect: OCCLUSION.direct,
+      ...TOY,
+      shadeColour: look.shadeColour as [number, number, number],
+      rim: look.rim,
+      rimColour: look.rimColour as [number, number, number],
+      skyLight: look.skyLight as [number, number, number],
+      groundLight: look.groundLight as [number, number, number],
+      // (named for every theme, so a hole after a mirror's has the water as it was: not left asking for a mirror)
+      clear: theme.water.mirror ? MIRROR_CLEAR : undefined,
+    },
+    fog: {
+      ...noFog(MM_PER_UNIT),
+      density: look.fog.density,
+      base: -10,
+      height: HAZE.height,
+      colour: look.fog.colour as [number, number, number],
+      ambient: 0.4,
+      anisotropy: 0,
+      reach: HAZE.reach,
+      steps: 16,
+      cones: 0,
+    },
   };
-  renderer.fog = {
-    ...noFog(MM_PER_UNIT),
-    density: Math.LN2 / HAZE.halfWay,
-    base: -10,
-    height: HAZE.height,
-    colour: HAZE.colour,
-    ambient: 0.4,
-    anisotropy: 0,
-    reach: HAZE.reach,
-    steps: 16,
-    cones: 0,
-  };
-  renderer.post = { ...renderer.post, ...POST };
-  const env = bakeEnvironment(ctx, 'daylight', { size: 128, mips: 6 });
+}
+
+/** The renderer's look, fog and environment as `theme` has them, and nothing of any other theme's left on it: every field is written. Returns the environment's preset. */
+export function applyLook(renderer: GameRenderer, ctx: Gpu, theme: Theme): string {
+  const { look, fog } = lookFor(theme);
+  renderer.look = { ...renderer.look, ...look };
+  renderer.fog = fog;
+  const preset = theme.look.env;
+  let env = BAKED.get(preset);
+  if (!env) BAKED.set(preset, (env = bakeEnvironment(ctx, preset, { size: 128, mips: 6 })));
   renderer.setEnvironment(env.specular, env.brdf, env.mips);
+  return preset;
+}
+
+/**
+ * Put the look of `theme` (earth's, at boot and for the models' showcase) on `renderer`: a cartoon in daylight, as bearing's
+ * sweet world is, in the clean toy's light. Resolves once the pipelines the look asks for are compiled, which the first frame
+ * waits for. The theme is handed in and not read here, so the look imports no theme, and the theme the look.
+ */
+export async function daylight(renderer: GameRenderer, ctx: Gpu, theme: Theme): Promise<void> {
+  applyLook(renderer, ctx, theme);
+  renderer.post = { ...renderer.post, ...POST };
   await turfed(renderer);
   flowing(renderer);
   await renderer.prepare();

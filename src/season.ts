@@ -13,9 +13,12 @@ import { FIELD_SEEDS, holeScores, type FieldTable } from './field';
 import { hashed } from './random';
 import type { Rival } from './rivals';
 
-/** The two tours a career is played on. Each is given a number by its place here, which a seed is made from: never reorder. */
-export type Tour = 'golf' | 'mini';
-export const TOURS: readonly Tour[] = ['golf', 'mini'];
+/**
+ * The tours a career is played on: golf, minigolf, and a tour of each biome (the desert, the moon and the future, of three
+ * events each). Each is given a number by its place here, which a seed is made from: never reorder, only append.
+ */
+export type Tour = 'golf' | 'mini' | 'desert' | 'moon' | 'future';
+export const TOURS: readonly Tour[] = ['golf', 'mini', 'desert', 'moon', 'future'];
 
 /** The grades of a tour, easiest first. Each is given a number by its place here, which a seed is made from: never reorder. */
 export type Grade = 'club' | 'county' | 'championship';

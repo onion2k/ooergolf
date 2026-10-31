@@ -908,6 +908,14 @@
     align-items: center;
     gap: 10px;
   }
+  /* Play, or Enter and Practise, in the middle of the foot, the sound at its left and the career's switch at its right */
+  #startPlay {
+    display: flex;
+    flex: 0 0 auto;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+  }
   /*
    * The career's switch (16 October 2026; it was a cycle button at the foot, whose words left it unclear whether they said
    * the mode or what a press would choose): the word Career beside a track whose knob is to the right, on the leaf's green,
@@ -915,18 +923,21 @@
    */
   #startHead {
     display: grid;
-    grid-template-columns: 1fr auto 1fr;
+    grid-template-columns: 1fr;
     align-items: center;
-    gap: 10px;
     margin: 0 0 12px;
   }
+  /* the five tabs are the head's row, and the whole of it: with the sound at the left and the career's switch at the right
+     they would not fit one row at the width of the panel, so those two stand at the foot, either side of Play, which has the
+     room (on a phone the switch is at the panel's top, on the Install button's row) */
   #startHead #startTabs {
-    grid-column: 2;
+    justify-self: center;
     margin: 0;
   }
   .panel #playMode {
-    grid-column: 3;
-    justify-self: end;
+    flex: 1 1 0;
+    min-width: max-content;
+    justify-content: flex-end;
     display: inline-flex;
     align-items: center;
     gap: 8px;
@@ -1007,7 +1018,7 @@
   }
   #startTabs button {
     min-height: 44px;
-    padding: 0 20px;
+    padding: 0 12px;
     font-weight: 800;
     color: var(--ink-soft);
     background: transparent;
@@ -1209,6 +1220,13 @@
     font-size: 18px;
   }
 
+  /* on a tablet the five tabs and the Install button, at the panel's top right, would meet: with the button up, the tabs'
+     row stands below it, as the title's own panel has always done on a phone */
+  @media (min-width: 601px) and (max-width: 900px) {
+    html[data-title] #start:has(#install:not([hidden])) #startHead {
+      margin-top: 40px;
+    }
+  }
   @media (max-width: 600px) {
     /* on a phone the card takes the panel's width with the arrows under it, the tabs stand at the left with the Install
        button beside them, and the strip is smaller, so that the card and Play fit under the title's word without scrolling */
@@ -1242,20 +1260,31 @@
       padding: 0 20px;
       font-size: 16px;
     }
-    /* under the title, with the Install button up, the tabs' row stands below it */
-    html[data-title] #start:has(#install:not([hidden])) #startHead {
-      margin-top: 40px;
-    }
-    /* on a phone the tabs stand at the left of their row and the switch at the right */
-    #startHead {
-      grid-template-columns: auto 1fr;
-    }
+    /* on a phone the five tabs share a row of the panel's width, each a fifth of it, and the career's switch is Play's
+       neighbour at the foot; under the title it stands at the panel's top right instead, on the Install button's row (the
+       Install button is at the top left), so that the switch costs the panel no row of its own */
     #startHead #startTabs {
-      grid-column: 1;
+      width: 100%;
+      justify-self: stretch;
+      gap: 2px;
+      padding: 3px;
+    }
+    #startTabs button {
+      flex: 1 1 0;
+      min-width: 0;
     }
     .panel #playMode {
-      grid-column: 2;
+      flex: 0 0 auto;
       font-size: 14px;
+    }
+    html[data-title] #start {
+      padding-top: 64px;
+    }
+    html[data-title] #start #playMode {
+      position: absolute;
+      top: 14px;
+      right: 20px;
+      height: 44px;
     }
     html[data-title] #install::before {
       content: '';
@@ -1277,7 +1306,7 @@
       border-radius: 2px;
     }
     #startTabs button {
-      padding: 0 12px;
+      padding: 0 2px;
       font-size: 14px;
     }
     /* the card takes the whole width, and the arrows go under it either side of the dots */
@@ -1531,9 +1560,10 @@
     }
   }
 
-  /* on the narrowest phones the tabs say Golf and Mini (their full names kept for a screen reader), so the career's switch keeps
-     its word beside them on one row (the user's choice of 16 October 2026) */
-  @media (max-width: 380px) {
+  /* on a phone the tabs say Golf and Mini (their full names kept for a screen reader), so that five stand across the panel: at 400
+     wide the tabs are 64 pixels each and Future the widest word (the user's choice of 16 October 2026 at 380, for the career's
+     switch, widened to every phone by the three biome tabs) */
+  @media (max-width: 600px) {
     #startTabs .long {
       display: none;
     }
@@ -1672,9 +1702,9 @@
    * switch in the career's switch's shape, and the volume, at the left, the career at the right
    */
   #soundControls {
-    grid-column: 1;
-    grid-row: 1;
-    justify-self: start;
+    flex: 1 1 0;
+    min-width: max-content;
+    justify-content: flex-start;
     display: flex;
     align-items: center;
     gap: 12px;
@@ -2618,13 +2648,6 @@
   <!-- the course picker: a tab for each kind of golf, one course of it in view at a time, stepped by the arrows, and Play -->
   <!-- the kind of golf, and beside it at the right the career's switch: on in the career, off in free play -->
   <div id="startHead">
-    <!-- the sound on a desk: a switch and the volume at the left of the tabs' row (a phone's is beside the Shop) -->
-    <div id="soundControls">
-      <button id="soundSwitch" type="button" role="switch" aria-checked="true">Sound <i></i></button>
-      <label id="volumeControl" for="volume"
-        >Volume <input id="volume" type="range" min="0" max="1" step="0.05" value="1" aria-valuetext="100%"
-      /></label>
-    </div>
     <div id="startTabs" role="tablist" aria-label="Kind of golf">
       <button
         id="tab-golf"
@@ -2638,6 +2661,39 @@
         <span class="long">Proper </span>Golf
       </button>
       <button
+        id="tab-desert"
+        role="tab"
+        type="button"
+        aria-selected="false"
+        aria-controls="picker"
+        aria-label="Desert"
+        tabindex="-1"
+      >
+        Desert
+      </button>
+      <button
+        id="tab-moon"
+        role="tab"
+        type="button"
+        aria-selected="false"
+        aria-controls="picker"
+        aria-label="Moon"
+        tabindex="-1"
+      >
+        Moon
+      </button>
+      <button
+        id="tab-future"
+        role="tab"
+        type="button"
+        aria-selected="false"
+        aria-controls="picker"
+        aria-label="Future"
+        tabindex="-1"
+      >
+        Future
+      </button>
+      <button
         id="tab-minigolf"
         role="tab"
         type="button"
@@ -2649,9 +2705,6 @@
         Mini<span class="long"> Golf</span>
       </button>
     </div>
-    <button id="playMode" type="button" role="switch" aria-checked="true" aria-label="Career mode" data-mode="career">
-      <span>Career</span><i aria-hidden="true"></i>
-    </button>
   </div>
   <div id="picker" role="tabpanel" aria-labelledby="tab-golf">
     <button id="coursePrev" class="arrow" type="button" aria-label="Previous course"></button>
@@ -2677,9 +2730,21 @@
     </div>
   </div>
   <div id="startFoot">
-    <button id="playCourse" type="button">Play course</button>
-    <button id="enterEvent" type="button" hidden>Enter</button>
-    <button id="practise" type="button" class="quiet" hidden>Practise</button>
+    <!-- the sound on a desk: a switch and the volume at the left of Play's row (a phone's is beside the Shop) -->
+    <div id="soundControls">
+      <button id="soundSwitch" type="button" role="switch" aria-checked="true">Sound <i></i></button>
+      <label id="volumeControl" for="volume"
+        >Volume <input id="volume" type="range" min="0" max="1" step="0.05" value="1" aria-valuetext="100%"
+      /></label>
+    </div>
+    <div id="startPlay">
+      <button id="playCourse" type="button">Play course</button>
+      <button id="enterEvent" type="button" hidden>Enter</button>
+      <button id="practise" type="button" class="quiet" hidden>Practise</button>
+    </div>
+    <button id="playMode" type="button" role="switch" aria-checked="true" aria-label="Career mode" data-mode="career">
+      <span>Career</span><i aria-hidden="true"></i>
+    </button>
   </div>
 </div>
 <div class="panel" id="stats" hidden></div>

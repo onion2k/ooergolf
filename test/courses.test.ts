@@ -12,7 +12,7 @@ import { HILLS } from './hills';
 const holeNames = (course: string) => COURSES.find((c) => c.name === course)!.holes.map((h) => h.name);
 
 describe('the courses', () => {
-  it('are The Meadow, the first nine as they were, the two newer courses and the six courses of golf, easiest first', () => {
+  it('are The Meadow, the first nine as they were, and after them the nine of the biomes, each biome’s easiest first', () => {
     // four of minigolf were too many: The Fair went on 8 October 2026, its best holes shared between the other two; the six
     // of golf stand in the order of how hard the pace player finds them, which is what a player reads the order as (The
     // Heath, The Woods and The Old Course joined on 14 October 2026, each between the courses it plays between)
@@ -26,10 +26,19 @@ describe('the courses', () => {
       'The Woods',
       'The Isles',
       'The Old Course',
+      'The Saltpan',
+      'The Mesa',
+      'The Badlands',
+      'Tranquility',
+      'Copernicus',
+      'The Far Side',
+      'Neon Park',
+      'Chrome Heights',
+      'The Singularity',
     ]);
     expect(COURSES[0].holes).toBe(COURSE);
     expect(COURSE.length).toBe(9);
-    expect(COURSES.filter((c) => c.golf).map((c) => c.name)).toEqual([
+    expect(COURSES.filter((c) => c.golf && !c.biome).map((c) => c.name)).toEqual([
       'The Links',
       'The Heath',
       'The Fells',
@@ -85,7 +94,7 @@ describe('the courses', () => {
   it('slope only as the physics allows, and round each cup no steeper than the green holds a ball', () => {
     const holds = ROLL.roll / PHYSICS.gravity;
     for (const hole of [...COURSES.flatMap((c) => c.holes), ...HILLS]) {
-      const l = layoutOf(hole.map, hole.terrain);
+      const l = layoutOf(hole.map, hole.terrain, undefined, hole.biome);
       expect(terrainRefusal(l, CUP), hole.name).toBeNull();
       // out to the cup's radius and two balls past it: a ball can come to rest beside the cup and not creep in
       for (let a = 0; a < 48; a++)

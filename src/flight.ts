@@ -13,7 +13,7 @@ import { strikeSpeed } from './arena';
 import { boosted, carrying, isIron, loftOf, type BagClub } from './bag';
 import type { Random } from './random';
 import { NO_KIT, type Kit } from './items';
-import { surfaceFor, type Lie } from './surfaces';
+import { SURFACES, surfaceFor, type Lie, type Surface } from './surfaces';
 
 /** What a mishit loses: at most this share of the speed, at full power, and less the gentler the drag. */
 export const DISPERSION = { loss: 0.08 } as const;
@@ -30,11 +30,17 @@ export function lossOf(kit: Kit = NO_KIT, club?: BagClub): number {
   return DISPERSION.loss * kit.loss * (club && isIron(club) ? kit.ironLoss : 1);
 }
 
-/** The furthest, in radians, that a swing of `power` from `lie` may miss its aim, either way. */
-export function maxScatter(club: BagClub, lie: Lie, power: number, kit: Kit = NO_KIT): number {
+/** The furthest, in radians, that a swing of `power` from `lie` may miss its aim, either way, on the ground `table` (the hole's biome's: earth's where none is given). */
+export function maxScatter(
+  club: BagClub,
+  lie: Lie,
+  power: number,
+  kit: Kit = NO_KIT,
+  table: readonly Surface[] = SURFACES,
+): number {
   return (
     (club.spread *
-      surfaceFor(lie, kit).wild *
+      surfaceFor(lie, kit, table).wild *
       kit.scatter *
       (isIron(club) ? kit.ironScatter : 1) *
       Math.max(0, Math.min(1, power)) *
@@ -71,7 +77,7 @@ export function chipLoft(onSand: boolean, kit: Kit = NO_KIT): number {
 /**
  * The launch of `club` struck at `power` (nought to one) toward `angle` from a ball that lies on `lie`. Four draws
  * of chance, or none for a club with no spread: two for the angle it misses by, and two for the speed it loses, of
- * which half the swings lose nothing.
+ * which half the swings lose nothing. Struck from the ground `table`, the hole's biome's (earth's where none is given).
  */
 export function strike(
   club: BagClub,
@@ -81,13 +87,14 @@ export function strike(
   random: Random,
   kit: Kit = NO_KIT,
   steady = 1,
+  table: readonly Surface[] = SURFACES,
 ): Launch {
-  const surface = surfaceFor(lie, kit);
+  const surface = surfaceFor(lie, kit, table);
   const p = Math.max(0, Math.min(1, power));
   let speed = strikeSpeed(p, club.hardest) * surface.power;
   let aim = angle;
   if (club.spread > 0) {
-    aim += triangle(random) * maxScatter(club, lie, p, kit) * steady;
+    aim += triangle(random) * maxScatter(club, lie, p, kit, table) * steady;
     speed *= 1 - Math.max(0, triangle(random)) * lossOf(kit, club) * p;
   }
   // the sand's lip stands the ball up; the putter's loft is none, and stays none
@@ -97,9 +104,16 @@ export function strike(
 }
 
 /** How far a shot of `power` carries on the level from `lie`, with no scatter: what the aim's marker shows. */
-export function carryFrom(club: BagClub, power: number, lie: Lie, kit: Kit = NO_KIT, first = 1): number {
+export function carryFrom(
+  club: BagClub,
+  power: number,
+  lie: Lie,
+  kit: Kit = NO_KIT,
+  first = 1,
+  table: readonly Surface[] = SURFACES,
+): number {
   club = boosted(club, first);
-  const surface = surfaceFor(lie, kit);
+  const surface = surfaceFor(lie, kit, table);
   const speed = strikeSpeed(Math.max(0, Math.min(1, power)), club.hardest) * surface.power;
   return carrying(speed, club.loft > 0 ? loftOf(club, kit) + surface.loft : 0);
 }

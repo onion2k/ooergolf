@@ -45,7 +45,7 @@ const eventOf = (name: string): EventCourse => {
 /** A season of one event on each tour, so the whole of a season is one card; the real rivals and the real table. */
 const ONE: SeasonContext = {
   ...REAL,
-  tours: { golf: [eventOf('The Links')], mini: [eventOf('The Meadow')] },
+  tours: { ...REAL.tours, golf: [eventOf('The Links')], mini: [eventOf('The Meadow')] },
 };
 const season = (over: Partial<TourSeason> = {}): TourSeason => ({ ...freshTourSeason(), ...over });
 /** A card of `n` holes scoring `total` in all, as even as it can be. */
@@ -54,8 +54,8 @@ const cardOf = (n: number, total: number) =>
 const meadow = REAL.table['The Meadow'].length;
 
 describe('the tours', () => {
-  it('has six events on the golf tour, the golf courses in the order the start screen shows them, and three on the mini', () => {
-    expect(REAL.tours.golf.map((c) => c.name)).toEqual(COURSES.filter((c) => c.golf).map((c) => c.name));
+  it('has six events on the golf tour, the golf courses of the earth in the order the start screen shows them, and three on the mini', () => {
+    expect(REAL.tours.golf.map((c) => c.name)).toEqual(COURSES.filter((c) => c.golf && !c.biome).map((c) => c.name));
     expect(REAL.tours.mini.map((c) => c.name)).toEqual(COURSES.filter((c) => !c.golf).map((c) => c.name));
     expect(eventsIn(REAL, 'golf')).toBe(6);
     expect(eventsIn(REAL, 'mini')).toBe(3);

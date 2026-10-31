@@ -7,6 +7,14 @@
  */
 import { GRADES, type Grade } from './season';
 
+/**
+ * What the callout says when a ball is lost in a lake, `lake` being the hole's biome's word for it (water on earth, the crater on
+ * the Moon): a stroke more, or none when the waders took it.
+ */
+export function splashWords(waded: boolean, lake = 'water'): string {
+  return waded ? `In the ${lake}! Waders: free` : `In the ${lake}! +1`;
+}
+
 /** A grade as a player reads it. */
 export function gradeName(grade: Grade): string {
   return grade === 'club' ? 'Club' : grade === 'county' ? 'County' : 'Championship';

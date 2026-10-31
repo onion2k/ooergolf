@@ -5,8 +5,8 @@
  * logic: the game reads it and the page draws it, and the lower modules go
  * on knowing nothing of any hole.
  */
+import { BIOMES, isBiome, treeOf, type BiomeName } from './biome';
 import { LIE, type Lie } from './surfaces';
-import { TREE } from './trees';
 import { TILE } from './tile';
 import { zonesOf, type Zone } from './zones';
 
@@ -97,7 +97,14 @@ export const KNOCK = { least: 6, apart: 0.1 } as const;
 export const TERRAIN = { step: 0.5 } as const;
 
 /** The characters of a golf hole's map that name a kind of ground. */
-const GOLF_TILES: Record<string, Lie> = { f: LIE.fairway, r: LIE.rough, g: LIE.green, t: LIE.tee, c: LIE.cut };
+const GOLF_TILES: Record<string, Lie> = {
+  f: LIE.fairway,
+  r: LIE.rough,
+  g: LIE.green,
+  t: LIE.tee,
+  c: LIE.cut,
+  d: LIE.pan,
+};
 
 /** How far a ball struck at `speed` rolls on the green before it stops: on the green's own slowing, or on `roll` if the ball is one that rolls otherwise. */
 export function rollsFor(speed: number, roll: number = ROLL.roll): number {
@@ -169,6 +176,8 @@ export interface Layout extends Ground {
   lie: Uint8Array;
   /** Whether this is a golf hole, drawn with golf's tiles: a ball on it is struck with a club from the bag, and lands. */
   golf: boolean;
+  /** The biome the hole is in, which its ground's figures are read through (`surfacesOf`): earth where the hole says none. */
+  biome: BiomeName;
   /**
    * One byte a tile, of a golf hole: 1 where the ground is out of bounds, drawn `x`: rough to the physics, and lost the
    * moment a ball is on it, as one in water is. All nought on a hole of minigolf, whose edge is a rail.
@@ -197,20 +206,23 @@ export interface Layout extends Ground {
  * first, one character a tile: `#` rail, `.` grass, `T` the tee and `C` the
  * cup on level grass, a digit for grass raised that many steps, `~` water,
  * `s` sand, `o` a post standing on grass, and a space for off the course. A golf hole is drawn in `f` fairway, `r` rough,
- * `g` green, `t` the tee's box and `x` out of bounds instead of `.` and the digits, with the same `T`, `C`, `s`, `~` and `o`, and `^`, a tree: the tee is
+ * `g` green, `c` the first cut, `d` a pan (a desert's dried lake, refused in any other biome), `t` the tee's box and `x` out of bounds instead of `.` and the digits, with the same `T`, `C`, `s`, `~` and `o`, and `^`, a tree: the tee is
  * a tee and the cup a green whatever they are drawn on, and a post stands in the rough.
  * `terrain`, if given, is how high the ground slopes on each tile: a grid the
  * shape of the map with a digit a tile, or real heights, one a tile, row by
  * row from the south as a layout has them, which is how ground made from
  * noise comes (see `noise.ts`). Whether the physics will take it is the
- * physics' to say: see `terrainRefusal`. The grid is centred on the origin. A golf hole may also be given its `way`, the line of play in world units, which its fairway is striped along. A map with anything else in it, not exactly one tee and one cup, or
+ * physics' to say: see `terrainRefusal`. The grid is centred on the origin. A golf hole may also be given its `way`, the line of play in world units, which its fairway is striped along, and its `biome` (earth where none), which the layout names and the ground's figures are read through. A map with anything else in it, not exactly one tee and one cup, or
  * grass on its edge, where a ball would leave the world, is refused.
  */
 export function layoutOf(
   map: readonly string[],
   terrain?: readonly string[] | Float32Array,
   way?: readonly (readonly [number, number])[],
+  biome: BiomeName = 'earth',
 ): Layout {
+  if (!isBiome(biome))
+    throw new Error(`a hole's biome is one of ${Object.keys(BIOMES).join(', ')}, not ${String(biome)}`);
   const rows = map.length;
   const cols = Math.max(...map.map((r) => r.length));
   const originX = -(cols * TILE) / 2,
@@ -269,7 +281,11 @@ export function layoutOf(
         minigolf = true;
         kickers.push({ x, y });
       } else if (c === '^') {
-        // a tree stands in the rough: a trunk and a canopy
+        // a tree stands in the rough: a trunk and a canopy; but not in a biome that has none
+        if (BIOMES[biome].tree === null)
+          throw new Error(
+            `a hole's map has a tree (^) in it at column ${tx} of row ${r}, which the ${biome} has none of`,
+          );
         golf = true;
         trees.push({ x, y });
         treeTiles.push(t);
@@ -279,6 +295,11 @@ export function layoutOf(
         lie[t] = LIE.rough;
         oob[t] = 1;
       } else if (c in GOLF_TILES) {
+        // a pan is a desert's lake bed, and no other biome has one to draw: refused by name, since it would be hardpan on earth
+        if (c === 'd' && BIOMES[biome].hazard !== 'pan')
+          throw new Error(
+            `a hole's map has a pan (d) in it at column ${tx} of row ${r}, which only a hole in a biome whose lake is a pan may have, and this one is in the ${biome}`,
+          );
         golf = true;
         lie[t] = GOLF_TILES[c];
       } else if (c >= '1' && c <= '9') {
@@ -323,6 +344,7 @@ export function layoutOf(
     sand,
     lie,
     golf,
+    biome,
     oob,
     trees,
     bumpers,
@@ -549,6 +571,7 @@ const LIE_OF_ZONE: Record<Zone, Lie> = {
   tee: LIE.tee,
   putting: LIE.green,
   cut: LIE.cut,
+  pan: LIE.pan,
   fairway: LIE.fairway,
   rough: LIE.rough,
 };
@@ -588,10 +611,13 @@ export function onFloor(g: Ground, x: number, y: number): boolean {
   return t >= 0 && g.solid[t] === 0 && g.water[t] === 0;
 }
 
-/** How far a point is from the side of the nearest tree's trunk, or Infinity on a hole with none. */
+/** How far a point is from the side of the nearest tree's trunk, or Infinity on a hole with none, or whose trees a ball passes through. */
 export function fromTrees(l: Layout, x: number, y: number): number {
+  const tree = treeOf(l);
+  // a tree with no trunk (a hologram) has no side to be far from: nothing is in its way on the ground
+  if (!tree || tree.passes) return Infinity;
   let near = Infinity;
-  for (const t of l.trees) near = Math.min(near, Math.hypot(x - t.x, y - t.y) - TREE.trunk);
+  for (const t of l.trees) near = Math.min(near, Math.hypot(x - t.x, y - t.y) - tree.trunk);
   return near;
 }
 

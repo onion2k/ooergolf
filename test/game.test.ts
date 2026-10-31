@@ -173,6 +173,9 @@ describe('the game', () => {
       season: {
         golf: { grade: 'club', begun: 0, played: [], titles: 0 },
         mini: { grade: 'club', begun: 0, played: [], titles: 0 },
+        desert: { grade: 'club', begun: 0, played: [], titles: 0 },
+        moon: { grade: 'club', begun: 0, played: [], titles: 0 },
+        future: { grade: 'club', begun: 0, played: [], titles: 0 },
       },
       caddie: { club: 0, shape: 0, spin: 0 },
       muted: false,

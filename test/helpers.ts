@@ -1,18 +1,41 @@
 /** What the tests share: a new game in memory, from a seed, with a note of every event it tells, and a green to practise on. */
+import type { BiomeName } from '../src/biome';
 import { COURSES, type HoleDef } from '../src/course';
 export { FLAT, FLAT_HOLES, levelHole, type LevelSpec } from './level';
-import { golfHole } from '../src/golf';
+import { golfHole, type GolfSpec } from '../src/golf';
 import { LINKS_SPECS } from '../src/links';
 import { FELLS_SPECS } from '../src/fells';
 import { HEATH_SPECS } from '../src/heath';
 import { ISLES_SPECS } from '../src/isles';
 import { OLD_SPECS } from '../src/old';
 import { WOODS_SPECS } from '../src/woods';
+import { SALTPAN_SPECS } from '../src/saltpan';
+import { MESA_SPECS } from '../src/mesa';
+import { BADLANDS_SPECS } from '../src/badlands';
+import { TRANQUILITY_SPECS } from '../src/tranquility';
+import { COPERNICUS_SPECS } from '../src/copernicus';
+import { FARSIDE_SPECS } from '../src/farside';
+import { NEON_PARK_SPECS } from '../src/neonpark';
+import { CHROME_SPECS } from '../src/chrome';
+import { SINGULARITY_SPECS } from '../src/singularity';
 import { Game, type GameEvents } from '../src/game';
 import { Progress, memoryStore } from '../src/progress';
 import { seeded } from '../src/random';
 
 export const DT = 1 / 60;
+
+/** The one hole of each biome course the slow tests are run on, made singly: see `SAMPLE_HOLES`. */
+const BIOME_SAMPLE: Record<string, GolfSpec> = {
+  'The Saltpan': SALTPAN_SPECS[3],
+  'The Mesa': MESA_SPECS[2],
+  'The Badlands': BADLANDS_SPECS[2],
+  Tranquility: TRANQUILITY_SPECS[3],
+  Copernicus: COPERNICUS_SPECS[1],
+  'The Far Side': FARSIDE_SPECS[2],
+  'Neon Park': NEON_PARK_SPECS[0],
+  'Chrome Heights': CHROME_SPECS[1],
+  'The Singularity': SINGULARITY_SPECS[5],
+};
 
 /**
  * The holes the slow tests that try every tile of every hole are run on: every hole of the minigolf courses. Of The Links, whose holes are
@@ -32,7 +55,11 @@ export const SAMPLE_HOLES: HoleDef[] = COURSES.flatMap((c) =>
             ? [golfHole(WOODS_SPECS[6])]
             : c.name === 'The Old Course'
               ? [golfHole(OLD_SPECS[7])]
-              : c.holes,
+              : // and one hole of each of the nine biome courses, a short one with its lake: Dry Well, Mesa Edge, Scorpion Drop, Quiet
+                // Basin, Eratosthenes, Shackleton (a short hole with no lake), Neon Gate, Heat Sink and Zero Day (31 October 2026)
+                c.name in BIOME_SAMPLE
+                ? [golfHole(BIOME_SAMPLE[c.name])]
+                : c.holes,
 );
 
 /**
@@ -83,11 +110,12 @@ export function onGreen(seed = 1) {
  * on the cup gives it room).
  */
 export function field(
-  surface: 'f' | 'r' | 'g' | 's',
+  surface: 'f' | 'r' | 'g' | 's' | 'd',
   rows = 130,
   cols = 41,
   terrain?: Float32Array,
   room = 1,
+  biome?: BiomeName,
 ): HoleDef {
   const middle = Math.floor(cols / 2);
   const map = [
@@ -101,7 +129,7 @@ export function field(
     }),
     '#'.repeat(cols),
   ];
-  return { name: `Field of ${surface}`, par: 4, map, ...(terrain ? { terrain } : {}) };
+  return { name: `Field of ${surface}`, par: 4, map, ...(terrain ? { terrain } : {}), ...(biome ? { biome } : {}) };
 }
 
 /**

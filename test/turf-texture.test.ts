@@ -11,6 +11,7 @@ import { LINKS_SPECS } from '../src/links';
 import { PALETTE } from '../src/models/palette';
 import { Scene, TURF, TURF_GOLF } from '../src/scene';
 import { toned } from '../src/ground';
+import { THEMES } from '../src/theme';
 import { TURF_SIDE, turfTexels } from '../src/turfTexture';
 
 const SIDE = TURF_SIDE;
@@ -120,5 +121,79 @@ describe('the turf on the ground', () => {
       expect(same.length, String(c)).toBeGreaterThan(0);
       for (const g of same) expect(g.texture, String(c)).toBeUndefined();
     }
+  });
+});
+
+describe.each(['tuft', 'regolith', 'plate', 'crack'] as const)('the %s texture', (kind) => {
+  const t = turfTexels(SIDE, 1, kind);
+
+  it('is the same bytes for the same arguments, and tiles: an edge runs on into the other as a texel into the next', () => {
+    expect(turfTexels(SIDE, 1, kind)).toEqual(t);
+    expect(t.length).toBe(SIDE * SIDE * 4);
+    let insideX = 0;
+    let wrappedX = 0;
+    let insideY = 0;
+    let wrappedY = 0;
+    for (let i = 0; i < SIDE; i++) {
+      wrappedX = Math.max(wrappedX, Math.abs(at(t, SIDE - 1, i, 0) - at(t, 0, i, 0)));
+      wrappedY = Math.max(wrappedY, Math.abs(at(t, i, SIDE - 1, 0) - at(t, i, 0, 0)));
+      for (let k = 0; k + 1 < SIDE; k++) {
+        insideX = Math.max(insideX, Math.abs(at(t, k, i, 0) - at(t, k + 1, i, 0)));
+        insideY = Math.max(insideY, Math.abs(at(t, i, k, 0) - at(t, i, k + 1, 0)));
+      }
+    }
+    expect(wrappedX, 'a seam where the texture repeats across').toBeLessThanOrEqual(insideX);
+    expect(wrappedY, 'a seam where the texture repeats along').toBeLessThanOrEqual(insideY);
+  });
+
+  it('is mid-grey on average in colour and in height, within two levels, with some grain and not too much', () => {
+    for (const c of [0, 1, 2, 3]) {
+      let sum = 0;
+      let lo = 255;
+      let hi = 0;
+      for (let i = c; i < t.length; i += 4) {
+        sum += t[i];
+        lo = Math.min(lo, t[i]);
+        hi = Math.max(hi, t[i]);
+      }
+      expect(Math.abs(sum / (SIDE * SIDE) - 128), `channel ${c}`).toBeLessThanOrEqual(2);
+      expect(hi - lo, `channel ${c} swing`).toBeGreaterThan(8);
+      expect(hi - lo, `channel ${c} swing`).toBeLessThan(200);
+    }
+  });
+});
+
+describe('the ground of a biome', () => {
+  const groups = (biome?: 'desert' | 'moon' | 'future') => {
+    const spec = { ...LINKS_SPECS[1], ...(biome ? { biome } : {}), ...(biome === 'moon' ? { trees: 0 } : {}) };
+    const hole = golfHole(spec);
+    return new Scene().static(layoutOf(hole.map, hole.terrain, hole.way, biome), hole.name);
+  };
+  const withColour = (gs: ReturnType<Scene['static']>, c: readonly number[]) =>
+    gs.filter((x) => JSON.stringify((x as { albedo?: number[] }).albedo) === JSON.stringify(c.slice(0, 3)));
+  const layerOf = (g: { texture?: Float32Array }) => g.texture && g.texture[0];
+
+  it('wears its dust on the rough and out of bounds where its theme has one, and earth wears none', () => {
+    for (const [biome, layer] of [
+      ['desert', 2],
+      ['moon', 3],
+      ['future', 4],
+    ] as const) {
+      const made = groups(biome);
+      const rough = made.filter((g) => layerOf(g) === layer && g.mesh.indices.length > 500);
+      expect(rough.length, `${biome}: the rough in its dust`).toBeGreaterThan(0);
+      expect(THEMES[biome].layers.rough!.layer).toBe(layer);
+    }
+    for (const g of groups()) if (g.texture) expect(layerOf(g)).toBe(1);
+  });
+
+  it('puts the future’s plate on its mown ground as well, and leaves the sand bare', () => {
+    const made = groups('future');
+    const mown = withColour(made, [...THEMES.future.ground.firstCut, 0.85]);
+    expect(mown.length).toBeGreaterThan(0);
+    for (const g of mown) expect(layerOf(g)).toBe(4);
+    for (const g of withColour(made, [...THEMES.future.ground.golfSand, 0.9])) expect(g.texture).toBeUndefined();
+    // and the desert’s mown ground is the turf’s, with only its rough in tufts
+    for (const g of withColour(groups('desert'), [...THEMES.desert.ground.firstCut, 0.85])) expect(layerOf(g)).toBe(1);
   });
 });

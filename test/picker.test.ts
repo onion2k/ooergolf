@@ -1,10 +1,10 @@
 /**
- * The course picker without a page: two tabs, the courses of each stepped through either way and wrapping, what is shown
+ * The course picker without a page: a tab for golf, each biome and minigolf, the courses of each stepped through either way and wrapping, what is shown
  * of the one in view (its place in the order and the player's best round), and a course chosen by name. Pure arithmetic
  * on the summaries and the save's bests, which the hud draws and never works out again.
  */
 import { describe, expect, it } from 'vitest';
-import { Picker, bestRound, ordinal, type PickerCourse } from '../src/picker';
+import { KINDS, Picker, asKind, bestRound, kindOfCourse, ordinal, tourOfKind, type PickerCourse } from '../src/picker';
 
 const golf = (name: string, par: number, holes: string[]): PickerCourse => ({
   name,
@@ -107,5 +107,89 @@ describe('the picker', () => {
       '23rd',
       '101st',
     ]);
+  });
+
+  describe('with a tab for each biome', () => {
+    const biome = (name: string, b: 'desert' | 'moon' | 'future', holes: string[]): PickerCourse => ({
+      ...golf(name, 34, holes),
+      biome: b,
+    });
+    const ALL: PickerCourse[] = [
+      mini('The Meadow', ['M1', 'M2']),
+      golf('The Links', 36, ['A1', 'A2', 'A3']),
+      golf('The Heath', 32, ['B1', 'B2', 'B3']),
+      biome('The Saltpan', 'desert', ['D1', 'D2']),
+      biome('The Mesa', 'desert', ['D3', 'D4']),
+      biome('The Badlands', 'desert', ['D5', 'D6']),
+      biome('Tranquility', 'moon', ['L1']),
+      biome('Copernicus', 'moon', ['L2']),
+      biome('Neon Park', 'future', ['F1']),
+      biome('Chrome Heights', 'future', ['F2']),
+      biome('The Singularity', 'future', ['F3']),
+    ];
+
+    it('has five tabs in the order golf, desert, moon, future and minigolf, read from the courses’ golf and biome', () => {
+      expect(KINDS).toEqual(['golf', 'desert', 'moon', 'future', 'minigolf']);
+      expect(ALL.map(kindOfCourse)).toEqual([
+        'minigolf',
+        'golf',
+        'golf',
+        'desert',
+        'desert',
+        'desert',
+        'moon',
+        'moon',
+        'future',
+        'future',
+        'future',
+      ]);
+      const p = new Picker(ALL);
+      expect(
+        p.courses('golf').map((c) => c.name),
+        'a biome’s courses are not in the golf tab',
+      ).toEqual(['The Links', 'The Heath']);
+      expect(p.courses('desert').map((c) => c.name)).toEqual(['The Saltpan', 'The Mesa', 'The Badlands']);
+      expect(p.courses('moon')).toHaveLength(2);
+      expect(p.courses('future')).toHaveLength(3);
+      expect(p.courses('minigolf').map((c) => c.name)).toEqual(['The Meadow']);
+    });
+
+    it('gives each tab a place of its own: the third of three in the desert, and the first of two on the moon', () => {
+      const p = new Picker(ALL);
+      p.tab('desert');
+      expect([p.shown().name, p.shown().place]).toEqual(['The Saltpan', '1st of 3']);
+      p.step(-1);
+      expect([p.shown().name, p.shown().place, p.shown().count]).toEqual(['The Badlands', '3rd of 3', 3]);
+      p.tab('moon');
+      expect(p.shown().place).toBe('1st of 2');
+      p.tab('desert');
+      expect(p.shown().name, 'the tab was left where it was').toBe('The Badlands');
+    });
+
+    it('shows a course by name on the tab of its biome, and refuses a tab with no course', () => {
+      const p = new Picker(ALL);
+      p.show('Chrome Heights');
+      expect([p.kind, p.shown().place]).toEqual(['future', '2nd of 3']);
+      p.show('The Heath');
+      expect([p.kind, p.shown().place]).toEqual(['golf', '2nd of 2']);
+      const noMoon = new Picker(ALL.filter((c) => c.biome !== 'moon'));
+      expect(() => noMoon.tab('moon')).toThrow(/moon/);
+    });
+
+    it('opens on the first tab that has a course, and on minigolf when nothing else has', () => {
+      expect(new Picker(ALL.filter((c) => c.biome === 'moon')).kind).toBe('moon');
+      expect(new Picker(ALL.filter((c) => c.biome === 'future' || !c.golf)).kind).toBe('future');
+      expect(new Picker(ALL).kind).toBe('golf');
+    });
+
+    it('reads a tab that is not one as the first, and refuses nothing', () => {
+      for (const odd of ['senior', '', undefined, null, 7, ['moon'], 'Moon'])
+        expect(asKind(odd), String(odd)).toBe('golf');
+      for (const kind of KINDS) expect(asKind(kind)).toBe(kind);
+    });
+
+    it('names the tour of each tab: minigolf’s is mini, and every other tab’s is its own name', () => {
+      expect(KINDS.map(tourOfKind)).toEqual(['golf', 'desert', 'moon', 'future', 'mini']);
+    });
   });
 });

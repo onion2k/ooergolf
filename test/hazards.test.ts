@@ -1,12 +1,24 @@
 /** The hazards in play: water that costs a stroke, a barrier and a windmill in the way, a belt that carries, and grass up a ramp. */
 import { describe, expect, it } from 'vitest';
-import { BALL, KIND_RADIUS, STEP, TILE, layoutOf } from '../src/arena';
+import { Autopilot } from '../src/autopilot';
+import { BALL, KIND_RADIUS, STEP, TILE, layoutOf, lieAt, tileLieAt } from '../src/arena';
+import { BIOMES } from '../src/biome';
+import { troubleWords, runsOff } from '../src/caddie';
+import { splashWords } from '../src/eventwords';
+import { golfHole } from '../src/golf';
+import { LINKS_SPECS } from '../src/links';
+import { seeded } from '../src/random';
+import { landingText } from '../src/readout';
+import { Route } from '../src/route';
+import { holdsBall, drainFault } from '../src/slopes';
+import { LIE, SURFACES } from '../src/surfaces';
+import { zonesOf } from '../src/zones';
 import type { HoleDef } from '../src/course';
 import { KEPT_MOVING, LIMIT_OVER_PAR, type Game } from '../src/game';
-import { checkInvariants } from '../src/invariants';
+import { checkInvariants, lieProblems, panProblems } from '../src/invariants';
 import { windmill } from '../src/models';
 import { WINDMILL } from '../src/obstacles';
-import { DT, newGame } from './helpers';
+import { DT, field, golfGame, levelHole, newGame } from './helpers';
 
 /** Play `seconds`, checking the rules every frame. */
 function play(game: Game, seconds: number) {
@@ -253,5 +265,266 @@ describe('putting a ball down', () => {
     expect(() => game.place(l.tee.x, edge - 0.6)).toThrow(/level grass/);
     // level grass clear of the step, and of the cup
     expect(() => game.place(l.originX + 1.5 * TILE, edge + 1.5)).not.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------------------
+// the pan: a desert's lake, ground that is in play, and the other biomes' lakes, which are water told in their own words
+// ---------------------------------------------------------------------------------------------------------------------
+
+const NORTH = Math.PI / 2;
+
+/** A ball struck north and followed until it is ready: what it did on the way down and where it came to rest. */
+function flown(def: HoleDef, club: string, power: number, from?: { x: number; y: number }) {
+  const { game, calls } = golfGame(def);
+  if (from) game.place(from.x, from.y);
+  const y0 = game.world.y[game.ball];
+  game.pick(club);
+  expect(game.shoot(NORTH, power)).toBe(true);
+  let peak = 0,
+    second = false;
+  for (let f = 0; f < 60 * 40 && !game.ready; f++) {
+    game.step(DT);
+    const n = calls.filter(([c]) => c === 'landed').length;
+    if (n >= 2) second = true;
+    // how high it hops after the first landing, until the second
+    if (n >= 1 && !second) peak = Math.max(peak, game.world.z[game.ball]);
+    expect(checkInvariants(game), `frame ${f}`).toEqual([]);
+  }
+  expect(game.ready).toBe(true);
+  const land = calls.find(([c]) => c === 'landed');
+  return {
+    game,
+    calls,
+    peak,
+    carry: land ? (land[1][1] as number) - y0 : NaN,
+    rest: game.world.y[game.ball] - y0,
+  };
+}
+
+describe('a pan', () => {
+  it('is a lie of its own, appended after the others, with a row in the table', () => {
+    expect(LIE.pan).toBe(7);
+    expect(SURFACES[LIE.pan].name).toBe('hardpan');
+    expect(SURFACES.length).toBe(8);
+    for (const [name, lie] of Object.entries({ none: 0, tee: 1, fairway: 2, rough: 3, green: 4, sand: 5, cut: 6 }))
+      expect(LIE[name as keyof typeof LIE]).toBe(lie);
+  });
+
+  it('is read the same by the zones, the lie and the physics: ground a ball rolls on at the pan’s own roll', () => {
+    const { game } = golfGame(field('d', 130, 41, undefined, 4, 'desert'));
+    const l = game.layout;
+    const at = { x: l.tee.x, y: l.tee.y + 8 * TILE };
+    expect(zonesOf(l).at(at.x, at.y)).toBe('pan');
+    expect(lieAt(l, at.x, at.y)).toBe(LIE.pan);
+    expect(tileLieAt(l, at.x, at.y)).toBe(LIE.pan);
+    expect(l.water.some((w) => w === 1)).toBe(false);
+    expect(game.rollAt(at.x, at.y)).toBe(BIOMES.desert.surfaces[LIE.pan].roll);
+    expect(lieProblems(game, at.x, at.y)).toEqual([]);
+  });
+
+  it('takes a ball that lands and runs further than on the fairway, hopping higher, and does not lose it', () => {
+    const pan = flown(field('d', 200, 41, undefined, 4, 'desert'), '7-iron', 1);
+    const fairway = flown(field('f', 200, 41, undefined, 4, 'desert'), '7-iron', 1);
+    expect(pan.carry).toBeGreaterThan(50);
+    expect(Math.abs(pan.carry - fairway.carry), 'the same flight').toBeLessThan(3);
+    expect(pan.rest - pan.carry, 'runs on').toBeGreaterThan(fairway.rest - fairway.carry + 3);
+    expect(pan.peak, 'and hops').toBeGreaterThan(fairway.peak + 0.3);
+    expect(pan.calls.some(([c]) => c === 'splash' || c === 'outOfBounds')).toBe(false);
+    expect(pan.game.strokes).toBe(1);
+    expect(pan.game.phase).toBe('play');
+  });
+
+  it('is struck from at full power: no stroke added and no loss, and the swing loses less than the fairway’s', () => {
+    const base = field('d', 200, 41, undefined, 6, 'desert');
+    const { game } = golfGame(base);
+    const from = { x: game.layout.tee.x, y: game.layout.tee.y + 3 * TILE };
+    const struck = flown(base, 'driver', 1, from);
+    expect(lieAt(struck.game.layout, from.x, from.y)).toBe(LIE.pan);
+    const fairway = flown(field('f', 200, 41, undefined, 6, 'desert'), 'driver', 1, from);
+    // the pan takes none of the swing's speed (power 1), and the fairway two in a hundred
+    expect(struck.carry).toBeGreaterThan(fairway.carry);
+    expect(struck.game.strokes).toBe(1);
+    expect(struck.calls.some(([c]) => c === 'splash')).toBe(false);
+  });
+
+  it('is never lost in: a ball put down on it stays, ready, at no stroke', () => {
+    const { game, calls } = golfGame(field('d', 130, 41, undefined, 4, 'desert'));
+    const at = { x: game.layout.tee.x, y: game.layout.tee.y + 10 * TILE };
+    game.place(at.x, at.y);
+    for (let f = 0; f < 120; f++) {
+      game.step(DT);
+      expect(checkInvariants(game)).toEqual([]);
+    }
+    expect(game.ready).toBe(true);
+    expect(game.strokes).toBe(0);
+    expect(calls.some(([c]) => c === 'splash')).toBe(false);
+  });
+
+  it('loses a ball that runs off it out of bounds, as ever', () => {
+    // a lane of pan running north into out of bounds
+    const map = [
+      '###########',
+      '#xxxxxxxxx#',
+      '#xxxxxxxxx#',
+      '#xxxxdxxxx#',
+      ...Array.from({ length: 14 }, () => '#rrrrdrrrr#'),
+      '#rrrCdrrrr#',
+      '#rrrrdrrrr#',
+      '#rrrrdrrrr#',
+      '#rrrttTtrr#',
+      '#rrrrrrrrr#',
+      '###########',
+    ];
+    const def: HoleDef = { name: 'Pan lane', par: 3, biome: 'desert', map };
+    const { game, calls } = golfGame(def);
+    game.place(game.layout.originX + 5.5 * TILE, game.layout.originY + 4.5 * TILE);
+    game.pick('putter');
+    expect(game.shoot(NORTH, 1)).toBe(true);
+    for (let f = 0; f < 60 * 20; f++) {
+      game.step(DT);
+      expect(checkInvariants(game), `frame ${f}`).toEqual([]);
+      if (calls.some(([c]) => c === 'outOfBounds')) break;
+    }
+    expect(
+      calls.some(([c]) => c === 'outOfBounds'),
+      'lost out of bounds, not left on the pan',
+    ).toBe(true);
+    expect(game.strokes).toBe(2);
+  });
+
+  it('is refused by name on a hole that is not a desert’s', () => {
+    const map = levelHole({ name: 'x', par: 3, length: 150, pan: { along: 100, across: 0, radius: 12 } }).map;
+    expect(map.some((row) => row.includes('d'))).toBe(true);
+    for (const biome of [undefined, 'earth', 'moon', 'future'] as const)
+      expect(() => layoutOf(map, undefined, undefined, biome), String(biome)).toThrow(/pan/);
+    expect(() => layoutOf(map, undefined, undefined, 'desert')).not.toThrow();
+  });
+
+  it('has panProblems: no pan tile is water, and only a desert has one', () => {
+    const desert = golfGame(
+      levelHole({ name: 'p', par: 3, length: 150, biome: 'desert', pan: { along: 100, across: 0, radius: 12 } }),
+    ).game;
+    expect(panProblems(desert.layout)).toEqual([]);
+    expect(checkInvariants(desert)).toEqual([]);
+    const pan = desert.layout.lie.findIndex((k) => k === LIE.pan);
+    expect(pan).toBeGreaterThan(-1);
+    desert.layout.water[pan] = 1;
+    expect(panProblems(desert.layout).join()).toMatch(/water/);
+    expect(checkInvariants(desert).join()).toMatch(/pan/);
+    desert.layout.water[pan] = 0;
+    const earth = golfGame(levelHole({ name: 'e', par: 3, length: 150 })).game;
+    earth.layout.lie[earth.layout.lie.findIndex((k) => k === LIE.rough)] = LIE.pan;
+    expect(panProblems(earth.layout).join()).toMatch(/earth/);
+    expect(checkInvariants(earth).join()).toMatch(/pan/);
+  });
+
+  it('holds a ball at rest on a slope by the pan’s roll, which is less than a fairway’s', () => {
+    const rows = 40,
+      cols = 21;
+    const tilted = (slope: number, ch: 'd' | 'f') => {
+      const terrain = new Float32Array(rows * cols);
+      for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) terrain[r * cols + c] = slope * r * TILE;
+      return layoutOf(field(ch, rows, cols, terrain, 3, 'desert').map, terrain, undefined, 'desert');
+    };
+    const middle = (l: ReturnType<typeof layoutOf>) => 20 * l.cols + 10;
+    // a slope of 0.1 is held by the pan (roll 10 holds up to about 0.145) and 0.2 is not, though the fairway (18 in the desert) holds 0.27
+    const [d1, d2, f2] = [tilted(0.1, 'd'), tilted(0.2, 'd'), tilted(0.2, 'f')];
+    expect(holdsBall(d1, middle(d1))).toBe(true);
+    expect(holdsBall(d2, middle(d2))).toBe(false);
+    expect(holdsBall(f2, middle(f2))).toBe(true);
+    // and a pan that runs must drain, as fairway does: this one runs down to the rail, which is no end
+    expect(drainFault(d2)).toBeGreaterThan(-1);
+    expect(drainFault(d1)).toBe(-1);
+  });
+});
+
+describe('a desert’s lake', () => {
+  const spec = { ...LINKS_SPECS[1], biome: 'desert' as const };
+
+  it('is drawn d where earth’s is ~, the same shapes, and there is no water', () => {
+    const earth = golfHole(LINKS_SPECS[1]);
+    const desert = golfHole(spec);
+    expect(desert.biome).toBe('desert');
+    expect(desert.map.some((row) => row.includes('~'))).toBe(false);
+    expect(desert.map.some((row) => row.includes('d'))).toBe(true);
+    // (the desert's cacti are felled where a tree is not, which is the trees' business and not the lake's: compared but for them)
+    const bare = (rows: readonly string[]) => rows.map((row) => row.replaceAll('^', 'r'));
+    expect(bare(desert.map.map((row) => row.replaceAll('d', '~')))).toEqual(bare(earth.map));
+    const l = layoutOf(desert.map, desert.terrain, desert.way, 'desert');
+    expect(l.water.every((w) => w === 0)).toBe(true);
+    expect(panProblems(l)).toEqual([]);
+  });
+
+  it('is played to the end by the autopilot, across the pan, with no ball lost to water', () => {
+    const def = golfHole(spec);
+    const { game, calls } = golfGame(def, seeded(5));
+    const pilot = new Autopilot(game, { random: seeded(7) });
+    for (let f = 0; f < 60 * 60 * 6 && game.phase !== 'over'; f++) {
+      pilot.step(DT);
+      if (f % 15 === 0) expect(checkInvariants(game), `frame ${f}`).toEqual([]);
+    }
+    expect(game.phase).toBe('over');
+    expect(calls.some(([c]) => c === 'splash')).toBe(false);
+  });
+
+  it('has a route across the pan to the cup', () => {
+    const desert = golfHole(spec);
+    const l = layoutOf(desert.map, desert.terrain, desert.way, 'desert');
+    expect(Number.isFinite(new Route(l).distance(l.tee.x, l.tee.y))).toBe(true);
+  });
+});
+
+describe('a crater and a mirror', () => {
+  for (const [biome, word] of [
+    ['moon', 'crater'],
+    ['future', 'quicksilver'],
+  ] as const) {
+    it(`cost a stroke and put the ball back as water does, and are told as the ${word}`, () => {
+      expect(BIOMES[biome].hazard).toBe(biome === 'moon' ? 'crater' : 'mirror');
+      expect(BIOMES[biome].words.lake).toBe(word);
+      const def = levelHole({
+        name: `lake ${biome}`,
+        par: 3,
+        length: 150,
+        biome,
+        pond: { along: 104, across: 0, radius: 15 },
+      });
+      // a drive of the power that finds the pond, as the waders' test finds it
+      let found: ReturnType<typeof golfGame> | null = null;
+      for (let p = 0.3; p <= 0.8 && !found; p += 0.02) {
+        const tried = golfGame(def);
+        tried.game.shoot(NORTH, p);
+        for (let f = 0; f < 60 * 20 && !tried.game.ready; f++) tried.game.step(DT);
+        if (tried.calls.some(([c]) => c === 'splash')) found = tried;
+      }
+      expect(found, 'a drive that finds it').not.toBeNull();
+      const { game, calls } = found!;
+      const { tee } = game.layout;
+      expect(
+        calls.some(([c]) => c === 'splash'),
+        'lost in it',
+      ).toBe(true);
+      expect(game.strokes, 'the stroke and a stroke more').toBe(2);
+      expect(game.world.x[game.ball]).toBeCloseTo(tee.x, 1);
+      expect(game.world.y[game.ball]).toBeCloseTo(tee.y, 1);
+      expect(splashWords(false, BIOMES[biome].words.lake)).toBe(`In the ${word}! +1`);
+      expect(splashWords(true, BIOMES[biome].words.lake)).toBe(`In the ${word}! Waders: free`);
+    });
+  }
+
+  it('leave earth’s words as they were', () => {
+    expect(BIOMES.earth.hazard).toBe('water');
+    expect(BIOMES.desert.hazard).toBe('pan');
+    expect(splashWords(false)).toBe('In the water! +1');
+    expect(splashWords(true)).toBe('In the water! Waders: free');
+    expect(landingText({ carry: 100, end: 'water', lie: LIE.rough, hit: false })).toBe('lands 100 yd · in the water');
+    expect(landingText({ carry: 100, end: 'water', lie: LIE.rough, hit: false }, 'crater')).toBe(
+      'lands 100 yd · in the crater',
+    );
+    expect(troubleWords('water', 240)).toBe('finds the water at 240 yd');
+    expect(troubleWords('water', 240, 'crater')).toBe('finds the crater at 240 yd');
+    expect(runsOff('water', LIE.rough, 'quicksilver')).toBe('runs into the quicksilver');
+    expect(runsOff('water', LIE.rough)).toBe('runs into the water');
   });
 });

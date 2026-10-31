@@ -51,8 +51,9 @@ import { PRIZE, TOURS, type Grade, type Tour } from './season';
 import { eventsIn, finishEvent, nextEvent, withdrawn, closedIfFull, type SeasonContext } from './tournament';
 import type { Random } from './random';
 import { PUTT_SHAPE, bendRate, curveRate, puttSpinFactor, spunKeep, windDirection, windPush } from './shaping';
-import { LANDING, LIE, SURFACES, groundRoll, rollScale } from './surfaces';
-import { hitCanopy, treeCone, turned, type Cone } from './trees';
+import { BIOMES, surfacesOf, treeOf } from './biome';
+import { LANDING, LIE, groundRoll, rollScale } from './surfaces';
+import { hitCanopy, insideCanopy, treeCone, turned, type Cone } from './trees';
 
 /** What happens, for whoever shows it. Every one may be left out. */
 export interface GameEvents {
@@ -72,6 +73,8 @@ export interface GameEvents {
    * in a step, by the rail, a post, a box, the cup or the ground it dropped
    * onto, which pushed it along the unit (dx, dy, dz). See `KNOCK`.
    */
+  /** The ball entered a hologram's canopy at (x, y), losing half its speed to it: told once for each time it goes in, for the picture to flicker it. */
+  flickered?(x: number, y: number): void;
   knocked?(hard: number, x: number, y: number, dx: number, dy: number, dz: number): void;
   /** The ball in the cup, in `strokes`, on a hole of `par`. */
   holed?(strokes: number, par: number): void;
@@ -271,9 +274,16 @@ export class Game {
   private struckAt = 0;
   /** When the hole done began to be shown, in game time. */
   private doneAt = 0;
-  /** Game time not yet stepped by the physics, less than one of its steps, and how far the physics has got. */
+  /** Game time not yet stepped by the physics, less than one of its steps (in the world's seconds, which a biome's pace makes fewer than the clock's), and how far the physics has got. */
   private owed = 0;
   private stepped = 0;
+  /** The world's seconds to the clock's on this hole: its biome's `pace`, one on earth. The clock (`t`) is the frames' whatever it is. */
+  private pace = 1;
+
+  /** How many seconds of the world `dt` seconds of the clock are on this hole: what a thing drawn to the ball's own speed (its roll) must be turned by. */
+  worldSeconds(dt: number): number {
+    return dt * this.pace;
+  }
   /** The last knock told on this hole, when in the physics' time and how hard, so what follows close on it is part of it. */
   private knockAt = -Infinity;
   private knockHard = 0;
@@ -416,7 +426,7 @@ export class Game {
    */
   rollAt(x: number, y: number): number {
     return this.layout.golf
-      ? groundRoll(tileLieAt(this.layout, x, y), this.greens, this.builtKit)
+      ? groundRoll(tileLieAt(this.layout, x, y), this.greens, this.builtKit, surfacesOf(this.layout))
       : ROLL.roll * rollScale(LIE.none, this.builtKit);
   }
 
@@ -569,9 +579,10 @@ export class Game {
   /** Hole `index` begun: a world of its own, the ball on its tee, and no strokes. */
   begin(index: number) {
     this.hole = index;
-    this.layout = layoutOf(this.def.map, this.def.terrain, this.def.way);
+    this.layout = layoutOf(this.def.map, this.def.terrain, this.def.way, this.def.biome);
     this.obstacles = new Obstacles(this.def.obstacles ?? [], this.layout);
-    this.cones = this.layout.trees.map((t) => treeCone(t.x, t.y, heightAt(this.layout, t.x, t.y)));
+    const tree = treeOf(this.layout);
+    this.cones = tree ? this.layout.trees.map((t) => treeCone(t.x, t.y, heightAt(this.layout, t.x, t.y), tree)) : [];
     // what changes the world itself is read once, here, and the world is made with it: the cup's width and the rail's
     // bounce (the ball's roll joins them when the ground figures are wired)
     const kit = this.kit;
@@ -623,8 +634,10 @@ export class Game {
     // nor does a shape, a spin or a wind: the new hole's own, from its name, and none at all on minigolf
     this.letGoOfShape();
     const [wx, wy] = windDirection(this.def.name);
-    // a hole of minigolf is calm whatever it is given: its ball never leaves the ground
-    const speed = this.layout.golf ? (this.def.wind ?? 0) : 0;
+    // a hole of minigolf is calm whatever it is given: its ball never leaves the ground. So is a biome with no air (the Moon's)
+    const biome = BIOMES[this.layout.biome];
+    const speed = this.layout.golf && !biome.calm ? (this.def.wind ?? 0) : 0;
+    this.pace = biome.pace;
     const push = windPush(speed);
     this.blowing = { x: wx, y: wy, speed };
     // the true wind: what a wind sock holds is taken off it as the ball is pushed, so the wind shown is the wind there is
@@ -710,15 +723,14 @@ export class Game {
     if (ctx === null || save.mode !== 'career' || this.rehearsing || !TOURS.includes(tour)) return false;
     // the seasons as they would stand once any round kept is given up, and this one's closed if it is full: only the entry that
     // follows is allowed to change the save, since a refused entry must leave the kept round, and the fee, where they were
-    const seasons = { golf: save.season.golf, mini: save.season.mini };
+    const seasons = { ...save.season };
     const kept = save.round;
     if (kept !== null && Object.hasOwn(seasons, kept.tour))
       seasons[kept.tour] = withdrawn(ctx, kept.tour, seasons[kept.tour]);
     seasons[tour] = closedIfFull(ctx, tour, seasons[tour]);
     const next = nextEvent(ctx, tour, seasons[tour]);
     if (save.coins < next.fee) return false;
-    save.season.golf = seasons.golf;
-    save.season.mini = seasons.mini;
+    for (const t of TOURS) save.season[t] = seasons[t];
     save.coins -= next.fee;
     save.round = { tour, course: next.course.name, hole: 0, card: [], retaken: false, pickedUp: false };
     this.course = next.course.holes;
@@ -868,6 +880,7 @@ export class Game {
         this.random,
         this.kit,
         first.scatter,
+        surfacesOf(this.layout),
       );
       // a putt out of a bunker is struck as much harder as the kit says
       if (!lofted && lie === LIE.sand && this.kit.sandPutt !== 1) {
@@ -941,7 +954,7 @@ export class Game {
       if (hole === THE_CUP) fell.holed = true;
       else Object.assign(fell, { wet: true, x, y });
     };
-    this.owed += dt;
+    this.owed += dt * this.pace;
     while (this.owed >= PHYSICS.step - 1e-9) {
       this.owed -= PHYSICS.step;
       this.stepped += PHYSICS.step;
@@ -957,15 +970,16 @@ export class Game {
         py = world.y[ball],
         pz = world.z[ball];
       world.step(PHYSICS.step, collect);
-      this.canopies(px, py, pz);
-      this.landing(vx, vy, vz);
+      // a ball that went through a hologram lost half its speed to it, which is not a landing's or a knock's to count
+      const kept = this.canopies(px, py, pz);
+      this.landing(vx * kept, vy * kept, vz * kept);
       // on the ground out of bounds it is lost, as in water; in the air over the line it is not
       if (this.isOut()) {
         Object.assign(fell, { out: true, x: world.x[ball], y: world.y[ball] });
         break;
       }
       this.heldToFastest();
-      this.knock(vx, vy, vz);
+      this.knock(vx * kept, vy * kept, vz * kept);
       if (fell.holed || fell.wet) break;
     }
     if (this.phase !== 'play') return;
@@ -1067,15 +1081,37 @@ export class Game {
    * drops; and one that rose into the underside is knocked down. Told as a knock, since it turned the ball as one
    * does. A ball that missed every canopy, over the tip or under the base or round, is left as the physics has it.
    */
-  private canopies(px: number, py: number, pz: number) {
+  private canopies(px: number, py: number, pz: number): number {
     const { world, ball, cones } = this;
-    if (!cones.length || !world.alive[ball]) return;
+    if (!cones.length || !world.alive[ball]) return 1;
+    const tree = treeOf(this.layout)!;
     const x = world.x[ball],
       y = world.y[ball],
       z = world.z[ball];
     const r = world.r[ball];
     // only the trees near enough to be met by this step: the canopy's width and a ball's, from either end of it
     const step = Math.hypot(x - px, y - py, z - pz);
+    if (tree.passes) {
+      // a ball goes through a hologram: it loses a share of its speed as it enters, once, and is not turned. Whether it entered is
+      // whether it was outside the canopy at the step's start and met it in the step, so a ball that begins a step inside one
+      // (rolled to rest under it and struck again, or put down in it) is not slowed for being there, and there is nothing to
+      // keep for a tree or clear at a new hole
+      let entered: { x: number; y: number } | null = null;
+      for (const c of cones) {
+        const reach = c.radius + r + 2 + step;
+        if (Math.abs(x - c.x) > reach || Math.abs(y - c.y) > reach) continue;
+        if (insideCanopy(c, [px, py, pz], r) > 0) continue;
+        const hit = hitCanopy(c, [px, py, pz], [x, y, z], r);
+        if (hit) entered = { x: px + (x - px) * hit.t, y: py + (y - py) * hit.t };
+      }
+      if (!entered) return 1;
+      const keep = tree.passes.keep;
+      world.vx[ball] *= keep;
+      world.vy[ball] *= keep;
+      world.vz[ball] *= keep;
+      this.events.flickered?.(entered.x, entered.y);
+      return keep;
+    }
     let first: { t: number; nx: number; ny: number; nz: number } | null = null;
     for (const c of cones) {
       const reach = c.radius + r + 2 + step;
@@ -1083,16 +1119,17 @@ export class Game {
       const hit = hitCanopy(c, [px, py, pz], [x, y, z], r);
       if (hit && (!first || hit.t < first.t)) first = hit;
     }
-    if (!first) return;
+    if (!first) return 1;
     const { t, nx, ny, nz } = first;
     // put on the face, a hair out of it, and turned by it: the underside is the one that looks straight down
     world.x[ball] = px + (x - px) * t + nx * 1e-3;
     world.y[ball] = py + (y - py) * t + ny * 1e-3;
     world.z[ball] = pz + (z - pz) * t + nz * 1e-3;
-    const out = turned([world.vx[ball], world.vy[ball], world.vz[ball]], first);
+    const out = turned([world.vx[ball], world.vy[ball], world.vz[ball]], first, tree);
     world.vx[ball] = out[0];
     world.vy[ball] = out[1];
     world.vz[ball] = out[2];
+    return 1;
   }
 
   /**
@@ -1201,7 +1238,7 @@ export class Game {
     if (out + into <= 2 * PHYSICS.gravity * PHYSICS.step) return;
     const r = world.r[ball];
     if (Math.abs(world.z[ball] - heightAt(layout, x, y) - restingAbove(layout, x, y, r)) > 0.3) return;
-    const surface = SURFACES[lieAt(layout, x, y)];
+    const surface = surfacesOf(layout)[lieAt(layout, x, y)];
     // along the ground, scrubbed, and more the steeper it came down; away from it, the surface's own hop
     const ax = world.vx[ball] - nx * out,
       ay = world.vy[ball] - ny * out,

@@ -1431,7 +1431,7 @@ test.describe('what it looks like', () => {
       expect(problems).toEqual([]);
     });
 
-    test('the start screen in a career, on a phone: the event kept, its order of merit, and the mode beside Continue', async ({
+    test('the start screen in a career, on a phone: the event kept, its order of merit, and the mode under them', async ({
       page,
     }) => {
       const problems = watch(page);

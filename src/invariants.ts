@@ -72,11 +72,12 @@ import type { Preview } from './preview';
 import { troubleOf, type Caddie, type Tip } from './caddie';
 import type { Bank } from './bank';
 import { GREEN, READER, breakOf, greenArrows, leansOnMinigolf, readerArrows, type Arrow, type Break } from './green';
-import { GREENS, LANDING, LIE, SURFACES, rollScale } from './surfaces';
+import { BIOMES, isBiome, surfacesOf, treeOf } from './biome';
+import { GREENS, LANDING, LIE, rollScale } from './surfaces';
 import { BARRIER, WINDMILL, flipperYaw, type Obstacles } from './obstacles';
 import { WIND, windPush, windReach } from './shaping';
 import { zonesOf } from './zones';
-import { TREE, insideCanopy } from './trees';
+import { insideCanopy } from './trees';
 
 /** How many broken rules of one sort are reported before the rest are only counted. */
 const EACH = 3;
@@ -326,6 +327,47 @@ export function groundProblems(layout: Layout, { slope: leans = true }: { slope?
 }
 
 /**
+ * What is wrong with a hole's pans, a desert's dried lakes: no pan tile is water (a ball on it is in play and never lost), and
+ * none stands on a hole whose biome has no pan for a lake. A pan that were water would take a ball a player is shown rolling on.
+ */
+export function panProblems(layout: Layout): string[] {
+  const out: string[] = [];
+  const pans = BIOMES[layout.biome].hazard === 'pan';
+  for (let t = 0; t < layout.cols * layout.rows; t++) {
+    if (layout.lie[t] !== LIE.pan) continue;
+    if (layout.water[t]) out.push(`pan on water at ${place(layout, t)}`);
+    if (!pans) out.push(`pan at ${place(layout, t)} on a hole in the ${layout.biome}, whose lake is not one`);
+    if (out.length >= 3) break;
+  }
+  return out;
+}
+
+/**
+ * What is wrong with a hole's trees, which are the biome's: none on a biome that has none; a trunk's post in the world at each
+ * tree of a biome whose trees have one, and no body standing at the foot of one a ball passes through (a hologram has no trunk);
+ * and a cone to each, of the biome's figures.
+ */
+export function treeProblems(game: Game): string[] {
+  const { layout, world } = game;
+  const out: string[] = [];
+  const tree = treeOf(layout);
+  if (!tree) {
+    if (layout.trees.length) out.push(`${layout.trees.length} trees on a hole in the ${layout.biome}, which has none`);
+    return out;
+  }
+  if (game.cones.length !== layout.trees.length)
+    out.push(`${game.cones.length} canopies for ${layout.trees.length} trees`);
+  for (const t of layout.trees) {
+    const posts = world.bumpers.filter((b) => Math.hypot(b.x - t.x, b.y - t.y) < 0.01).length;
+    if (tree.passes && posts > 0)
+      out.push(`a body stands at the foot of a hologram at ${t.x.toFixed(1)},${t.y.toFixed(1)}`);
+    if (!tree.passes && posts !== 1)
+      out.push(`${posts} posts at the trunk of the tree at ${t.x.toFixed(1)},${t.y.toFixed(1)}, not one`);
+  }
+  return out;
+}
+
+/**
  * What is wrong with the arrows laid over a green (the hole's own, as `greenArrows` says them, unless given): each is
  * numbers, stands on a tile of putting green (on a hole of minigolf, a tile of its floor: not rail and not water), and there
  * are no more of them than the green has tiles.
@@ -410,6 +452,11 @@ export function lieProblems(game: Game, x: number, y: number, told: number = lie
     out.push(
       `the ball lies on lie ${told} at ${x.toFixed(2)},${y.toFixed(2)}, where the ground is ${zone}, lie ${lieOfZone(zone)}`,
     );
+  // a pan is ground a ball lies on, never water, and only a desert's
+  if (zone === 'pan' && BIOMES[layout.biome].hazard !== 'pan')
+    out.push(
+      `the ball lies on a pan at ${x.toFixed(2)},${y.toFixed(2)} on a hole in the ${layout.biome}, whose lake is not one`,
+    );
   if (zone === 'putting' && game.inHand.id !== PUTTER.id)
     out.push(`the ball is at rest on the putting green with ${game.inHand.id} in hand, not the putter`);
   return out;
@@ -418,6 +465,9 @@ export function lieProblems(game: Game, x: number, y: number, told: number = lie
 export function checkInvariants(game: Game): string[] {
   const out: string[] = [];
   const { world, layout } = game;
+  // a hole is in a biome the game knows: every figure of its ground is read through it, so nothing past this is true of one that is not
+  if (!isBiome(layout.biome))
+    return [`the hole is in the biome "${String(layout.biome)}", which is none of ${Object.keys(BIOMES).join(', ')}`];
   const report = (sort: string, found: string[]) => {
     if (!found.length) return;
     out.push(...found.slice(0, EACH).map((f) => `${sort}: ${f}`));
@@ -461,6 +511,9 @@ export function checkInvariants(game: Game): string[] {
   if (!(Math.abs(Math.hypot(wind.x, wind.y) - 1) < 1e-6))
     out.push(`the wind blows along ${wind.x},${wind.y}, no direction`);
   if (!layout.golf && wind.speed !== 0) out.push(`the wind is ${wind.speed} on a hole of minigolf, where it is calm`);
+  // and on a hole whose biome has no air, whatever the spec says
+  if (BIOMES[layout.biome].calm && wind.speed !== 0)
+    out.push(`the wind is ${wind.speed} on a hole in the ${layout.biome}, where the air is calm`);
 
   // the speed of the greens is the hole's own, from the fastest to the slowest, and only golf has one
   const greens = game.def.greens;
@@ -471,6 +524,8 @@ export function checkInvariants(game: Game): string[] {
   }
   if (layout.golf) {
     report('the ground', [...groundProblems(layout, { slope: greens !== undefined }), ...arrowProblems(layout)]);
+    report('the pan', panProblems(layout));
+    report('the trees', treeProblems(game));
     report('the break', breakProblems(game));
     // the chalk's arrows round the ball are held to the ground a ball is played from, and to their bound
     if (game.kit.chalk && world.alive[game.ball])
@@ -501,14 +556,17 @@ export function checkInvariants(game: Game): string[] {
     if (speed > fastest(game, world.x[ball], world.y[ball]) * 1.001 + blown)
       out.push(`the ball is going ${speed.toFixed(2)} along the ground, faster than a post and a slope may make it`);
     // inside a tree: a trunk is a post, met by the physics, and a canopy is met by the game; the ball is in neither
-    if (layout.trees.length) {
+    const tree = treeOf(layout);
+    if (tree && layout.trees.length) {
       const trunk = -fromTrees(layout, world.x[ball], world.y[ball]) + world.r[ball];
-      if (trunk > 0.1 && world.z[ball] < heightAt(layout, world.x[ball], world.y[ball]) + TREE.base)
+      if (trunk > 0.1 && world.z[ball] < heightAt(layout, world.x[ball], world.y[ball]) + tree.base)
         out.push(`the ball is inside a tree's trunk, ${trunk.toFixed(2)} into it`);
-      for (const c of game.cones) {
-        const depth = insideCanopy(c, [world.x[ball], world.y[ball], world.z[ball]], world.r[ball]);
-        if (depth > 0.05) out.push(`the ball is inside a tree's canopy, ${depth.toFixed(2)} into it`);
-      }
+      // a hologram's canopy is one a ball goes through, and may lie in: it is the cone of a tree with a trunk that it is not in
+      if (!tree.passes)
+        for (const c of game.cones) {
+          const depth = insideCanopy(c, [world.x[ball], world.y[ball], world.z[ball]], world.r[ball]);
+          if (depth > 0.05) out.push(`the ball is inside a tree's canopy, ${depth.toFixed(2)} into it`);
+        }
     }
     // a lofted ball's speed in all: no club sends it faster than it has, and a fall only adds what the height gives
     if (layout.golf) {
@@ -539,7 +597,7 @@ export function checkInvariants(game: Game): string[] {
       const holds = Math.tan(Math.asin(Math.min(1, game.rollAt(world.x[ball], world.y[ball]) / PHYSICS.gravity)));
       if (!(slope <= holds * HOLDS.share + HOLDS.hair))
         out.push(
-          `at rest on a slope of ${slope.toFixed(3)}, which the ${SURFACES[tileLieAt(layout, world.x[ball], world.y[ball])].name} holds no ball on past ${holds.toFixed(3)}: ${at(ball)}`,
+          `at rest on a slope of ${slope.toFixed(3)}, which the ${surfacesOf(layout)[tileLieAt(layout, world.x[ball], world.y[ball])].name} holds no ball on past ${holds.toFixed(3)}: ${at(ball)}`,
         );
     }
     // at rest with nothing under it: asleep where a bounce left it, which a player could never strike from
@@ -623,6 +681,8 @@ export function careerProblems(game: Game): string[] {
     if (!GRADES.includes(season.grade)) out.push(`the ${tour} tour is at the grade ${String(season.grade)}`);
     if (ctx === null) continue;
     const events = ctx.tours[tour];
+    // a season's context with no event on a tour (a test's small one has the golf and mini tours only) has no season to hold
+    if (events.length === 0) continue;
     if (season.played.length >= events.length)
       out.push(
         `the ${tour} season has played ${season.played.length} of its ${events.length} events and is not closed`,

@@ -18,6 +18,7 @@ import type { Tour } from './season';
 import type { Antialias } from 'artshape-render/game/renderer';
 import { KIND_NAME, TILE, type Layout } from './arena';
 import { Autopilot, type Plan } from './autopilot';
+import type { BiomeName } from './biome';
 import { BAG, carryOf } from './bag';
 import type { HoleDef } from './course';
 import type { CourseRecord, PlayMode, RoundOf, SavedRound, TourSeason } from './career';
@@ -369,6 +370,23 @@ export interface GameApi {
   grass(): Promise<GrassDrawn>;
   /** How many blades of grass the last frame drew with their roots within `radius` of (x, y), on the ground plan: read back from the GPU. */
   bladesAround(x: number, y: number, radius: number): Promise<number>;
+  /** The look the picture has on now, read off the renderer: the biome it is of, its sky, background, sun and haze, the environment baked for it, and whether the hole grows any blades. */
+  theme(): ThemeReport;
+  /** The colour of the dust the last stroke or landing threw up, as the biome's theme has it, or null before one. */
+  dust(): number[] | null;
+}
+
+/** What the renderer is lit and coloured by, as the test API reports it. */
+export interface ThemeReport {
+  name: BiomeName;
+  sky: { zenith: number[]; horizon: number[]; height: number };
+  background: number[];
+  sunDir: number[];
+  fog: number[];
+  environment: string;
+  grass: boolean;
+  /** Whether the renderer is asked to mirror the scene in its clear water (a mirror biome's, and no other's). */
+  mirror: boolean;
 }
 
 /**
@@ -511,6 +529,8 @@ export interface DebugHost {
   motions(): Motions;
   grass(): Promise<GrassDrawn>;
   bladesAround(x: number, y: number, radius: number): Promise<number>;
+  theme(): ThemeReport;
+  dust(): number[] | null;
   /** The course being played, and whether the start screen is up; and a course chosen, as the screen does it. */
   course(): string;
   choosing(): boolean;
@@ -744,6 +764,8 @@ export function createApi(host: DebugHost): GameApi {
     },
     motions: () => host.motions(),
     grass: () => host.grass(),
+    theme: () => host.theme(),
+    dust: () => host.dust(),
     bladesAround: (x, y, radius) => host.bladesAround(x, y, radius),
   };
 }

@@ -33,9 +33,15 @@ export function tableOf(courses: readonly EventCourse[]): FieldTable {
   return table;
 }
 
-/** The context of a season whose tours' events are the courses given, with the game's rosters and a table made for them. */
-export function contextOf(tours: Record<Tour, readonly EventCourse[]>): SeasonContext {
+/**
+ * The context of a season whose tours' events are the courses given, with the game's rosters and a table made for them. The
+ * golf and mini tours are asked for; a tour left out has no events, which a test of the biome tours gives and no other needs.
+ */
+export function contextOf(
+  given: Pick<Record<Tour, readonly EventCourse[]>, 'golf' | 'mini'> & Partial<Record<Tour, readonly EventCourse[]>>,
+): SeasonContext {
+  const tours: Record<Tour, readonly EventCourse[]> = { desert: [], moon: [], future: [], ...given };
   const seen = new Map<string, EventCourse>();
-  for (const course of [...tours.golf, ...tours.mini]) seen.set(course.name, course);
+  for (const tour of Object.values(tours)) for (const course of tour) seen.set(course.name, course);
   return { table: tableOf([...seen.values()]), rosters: ROSTERS, tours };
 }

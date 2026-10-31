@@ -6,6 +6,7 @@
  * of a hole's fairway is ground a ball runs down; without one place for it the two would drift apart.
  */
 import { PHYSICS, TILE, slopeAt, terrainAt, tileAt, type Layout } from './arena';
+import { surfacesOf } from './biome';
 import { LIE, rollOf } from './surfaces';
 import { hypot } from './fixedmath';
 
@@ -18,7 +19,8 @@ export function holdsBall(l: Layout, t: number, greens?: number): boolean {
   );
   const s = hypot(sx, sy);
   return (
-    s / Math.sqrt(1 + s * s) <= (0.97 * rollOf(l.lie[t] as Parameters<typeof rollOf>[0], greens)) / PHYSICS.gravity
+    s / Math.sqrt(1 + s * s) <=
+    (0.97 * rollOf(l.lie[t] as Parameters<typeof rollOf>[0], greens, surfacesOf(l))) / PHYSICS.gravity
   );
 }
 
@@ -35,7 +37,7 @@ export function runningShare(l: Layout, greens?: number): number {
 }
 
 /**
- * The first tile of fairway or first cut that a ball put down cannot be left on and whose way down, tile by tile by the
+ * The first tile of fairway, first cut or pan that a ball put down cannot be left on and whose way down, tile by tile by the
  * steepest descent of the ground as a ball meets it, does not end well, or -1 if there is none. A way ends well on ground a ball rests on, on
  * rough or sand or water (which take what runs down to them: the rough holds a ball on any slope the physics allows, and a
  * lake only costs a stroke), and ends badly on rock, on out of bounds, or on a hollow too steep to hold it. A generator that
@@ -45,7 +47,8 @@ export function drainFault(l: Layout, greens?: number): number {
   const n = l.cols * l.rows;
   // 0 not yet known, 1 a way that ends well, 2 one that does not
   const verdict = new Uint8Array(n);
-  const runs = (t: number) => !l.solid[t] && !l.oob[t] && (l.lie[t] === LIE.fairway || l.lie[t] === LIE.cut);
+  const runs = (t: number) =>
+    !l.solid[t] && !l.oob[t] && (l.lie[t] === LIE.fairway || l.lie[t] === LIE.cut || l.lie[t] === LIE.pan);
   // the ground as the ball meets it, smoothed between the tiles' middles: the foot of a cliff in the tiles' heights is a flat
   // of equal tiles, and on the smoothed ground it slopes away from the cliff, which is where a ball goes
   const high = new Float64Array(n).fill(NaN);

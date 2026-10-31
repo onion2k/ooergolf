@@ -21,7 +21,7 @@ for (const course of COURSES) {
   mkdirSync(`public/previews/${slug}`, { recursive: true });
   let bytes = 0;
   const holes = course.holes.map((def, k) => {
-    const layout = layoutOf(def.map, def.terrain, def.way);
+    const layout = layoutOf(def.map, def.terrain, def.way, def.biome);
     const obstacles = new Obstacles(def.obstacles ?? [], layout);
     const painted = paintPreview(layout, obstacles.streamed, obstacles.belted);
     const png = new PNG({ width: painted.width, height: painted.height });

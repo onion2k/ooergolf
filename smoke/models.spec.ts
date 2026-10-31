@@ -121,6 +121,66 @@ test.describe('the models', () => {
   });
 });
 
+test.describe('the desert’s models', () => {
+  test('the row: a saguaro, the golf cactus made to the physics’ cone, a barrel, scrub, a tuft, a rock, a mesa, a butte and a tumbleweed', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await showcase(page, 1, 'desert');
+    await look(page, 'desert');
+    await expect(page).toHaveScreenshot('desert-models.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
+  test('close: the golf cactus, its arms above the base and inside the cone, a flower on its tip', async ({ page }) => {
+    const problems = watch(page);
+    await showcase(page, 1, 'desert-golf-cactus');
+    await look(page, 'desert-golf-cactus');
+    await expect(page).toHaveScreenshot('desert-golf-cactus.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
+  test('close: the saguaro, which past the hole is the same shape made in proportion', async ({ page }) => {
+    const problems = watch(page);
+    await showcase(page, 1, 'desert-saguaro');
+    await look(page, 'desert-saguaro');
+    await expect(page).toHaveScreenshot('desert-saguaro.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+});
+
+test.describe('the Future’s models', () => {
+  test('the hologram at its four levels of glow, a pylon, a bollard, a plinth, a tower and a cup’s ring of light, in the dusk', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await showcase(page, 1, 'future');
+    await look(page, 'future');
+    await expect(page).toHaveScreenshot('future-models.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
+  test('close: a hologram, rings of cyan with gaps on a thin pole', async ({ page }) => {
+    const problems = watch(page);
+    await showcase(page, 1, 'future-hologram-1');
+    await look(page, 'future-hologram-1');
+    await expect(page).toHaveScreenshot('future-hologram.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+});
+
+test.describe('the Moon’s models', () => {
+  test('a boulder, a stone and the flag held out on a wire beside one that flies, in the Moon’s light', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await showcase(page, 1, 'moon');
+    await look(page, 'moon');
+    await expect(page).toHaveScreenshot('moon-models.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+});
+
 test.describe('the kicker', () => {
   test('close: a mushroom bumper, wider at the cap than the foot, in colours of its own', async ({ page }) => {
     const problems = watch(page);

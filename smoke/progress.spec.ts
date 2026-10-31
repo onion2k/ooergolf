@@ -2640,3 +2640,214 @@ test('a course is chosen from over the title with a real pointer, and played', a
   expect((await page.evaluate(() => window.game!.state())).strokes, 'a stroke taken by a drag').toBe(1);
   expect(problems).toEqual([]);
 });
+
+/** The biomes' courses, easiest first, as the start screen's tabs stand them: the tab, and the courses in the order the arrows step. */
+const BIOME_TABS = [
+  ['desert', ['The Saltpan', 'The Mesa', 'The Badlands']],
+  ['moon', ['Tranquility', 'Copernicus', 'The Far Side']],
+  ['future', ['Neon Park', 'Chrome Heights', 'The Singularity']],
+] as const;
+
+/** The hole in play finished as the autopilot would, a stroke at a time; whether it was holed within `most` strokes. */
+async function finishHole(page: Page, stage: string, most = 14) {
+  for (let stroke = 1; stroke <= most; stroke++) {
+    await page.evaluate(() => {
+      const shot = window.game!.suggest();
+      if (shot) window.game!.shoot(shot.angle, shot.power);
+    });
+    for (let f = 0; f < 20 * 60; f += 20) {
+      await play(page, 20, `stroke ${stroke} of ${stage}`);
+      const { phase, ready } = await page.evaluate(() => window.game!.state());
+      if (phase !== 'play' || ready) break;
+    }
+    if ((await page.evaluate(() => window.game!.state().phase)) !== 'play') return true;
+  }
+  return false;
+}
+
+for (const [biome, courses] of BIOME_TABS)
+  test(`a course of the ${biome} is chosen through its tab by a real pointer, a stroke taken by a real drag, and a hole finished`, async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 1, paused: true, screen: true, save: { mode: 'free' } });
+    await landed(page);
+    // the tab, then the arrows: three courses each, easiest first, wrapping, and the dots say how many
+    await page.locator(`#tab-${biome}`).click();
+    await expect(page.locator(`#tab-${biome}`)).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('#courseName')).toHaveText(courses[0]);
+    await expect(page.locator('#courseDots > *')).toHaveCount(3);
+    await page.locator('#courseNext').click();
+    await expect(page.locator('#courseName')).toHaveText(courses[1]);
+    await page.locator('#coursePrev').click();
+    await page.locator('#coursePrev').click();
+    await expect(page.locator('#courseName'), 'back from the first is the last').toHaveText(courses[2]);
+    await page.locator('#courseNext').click();
+    await expect(page.locator('#courseName')).toHaveText(courses[0]);
+    // the strip of its nine holes is fetched as it is viewed
+    await expect(page.locator('#courseStrip img')).toHaveCount(9);
+    await page.locator('#playCourse').click();
+    const chosen = await page.evaluate(() => window.game!.state());
+    expect([chosen.course, chosen.golf, chosen.hole, chosen.choosing]).toEqual([courses[0], true, 0, false]);
+    expect((await page.evaluate(() => window.game!.theme())).name, 'the hole is in its biome').toBe(biome);
+    await expect(page.locator('#start')).toBeHidden();
+    await play(page, 75, 'the first tee');
+    await expect(page.locator('#bag')).toBeVisible();
+    // a stroke by a real drag: back and down from the ball, half the swing
+    const at = await page.evaluate(() => {
+      const b = window.game!.ball();
+      return window.game!.project(b.x, b.y, b.z);
+    });
+    const short = await page.evaluate(() => Math.min(innerWidth, innerHeight));
+    await drag(page, at, { x: at.x, y: at.y + 0.2 * short });
+    expect((await page.evaluate(() => window.game!.state())).strokes, 'the stroke taken by the drag').toBe(1);
+    await untilReady(page, `after the first stroke on ${courses[0]}`);
+    // and the hole finished, scored on the card
+    expect(await finishHole(page, `${courses[0]}'s first hole`), 'holed').toBe(true);
+    await play(page, 20, 'the hole done');
+    const done = await page.evaluate(() => window.game!.state());
+    expect(done.phase).toBe('done');
+    expect(done.card).toHaveLength(1);
+    expect(await page.evaluate(() => window.game!.invariants())).toEqual([]);
+    expect(problems).toEqual([]);
+  });
+
+test('a round of one biome ends on the card, and the start screen it goes back to takes the next course of another biome, and of the earth, in the look of each', async ({
+  page,
+}) => {
+  const problems = watch(page);
+  // under the title, as a player meets the game: its letters dropped, the start screen over the earth
+  await start(page, { title: true, paused: true, seed: 1, screen: true, save: { mode: 'free' } });
+  await play(page, 120, 'the letters dropping');
+  expect(await page.evaluate(() => window.game!.title().landed)).toBe(true);
+  await landed(page);
+  // the desert's last hole, begun as a round of one: finished to the card
+  await page.locator('#tab-desert').click();
+  await page.locator('#playCourse').click();
+  await page.evaluate(() => window.game!.startHole(8));
+  await play(page, 75, 'the last hole of The Saltpan');
+  expect((await page.evaluate(() => window.game!.theme())).name).toBe('desert');
+  expect(await finishHole(page, 'the last hole of The Saltpan', 16), 'holed').toBe(true);
+  await play(page, 240, 'the card');
+  expect((await page.evaluate(() => window.game!.state())).phase).toBe('over');
+  await expect(page.locator('#card')).toBeVisible();
+  // back to the courses, the Moon's tab pressed by a real pointer: a hole of the Moon in the Moon's look
+  await page.locator('#cardCourses').click();
+  await expect(page.locator('#start')).toBeVisible();
+  await landed(page);
+  await play(page, 30, 'the start screen after the round');
+  expect((await page.evaluate(() => window.game!.theme())).name, 'the title’s own sky is the earth’s again').toBe(
+    'earth',
+  );
+  await page.locator('#tab-moon').click();
+  await expect(page.locator('#courseName')).toHaveText('Tranquility');
+  await page.locator('#playCourse').click();
+  await play(page, 30, 'the Moon’s first hole');
+  expect((await page.evaluate(() => window.game!.state())).course).toBe('Tranquility');
+  expect((await page.evaluate(() => window.game!.theme())).name).toBe('moon');
+  // and from the Moon to The Links: earth's sky comes back, every field of it
+  await page.evaluate(() => window.game!.chooseCourse('The Links'));
+  await play(page, 30, 'The Links');
+  expect((await page.evaluate(() => window.game!.theme())).name).toBe('earth');
+  expect(await page.evaluate(() => window.game!.invariants())).toEqual([]);
+  expect(problems).toEqual([]);
+});
+
+test('a save from before the biome tours loads with each new tour at its first event, entered and gone on with from its own tab', async ({
+  page,
+}) => {
+  const problems = watch(page);
+  // the season of 15 October 2026's shape: two tours only, the golf at the county grade, a round kept on the mini
+  const kit = { club: '', ball: '', accessory: '' };
+  await start(page, {
+    seed: 1,
+    paused: true,
+    screen: true,
+    save: {
+      coins: 500,
+      gems: 0,
+      owned: [],
+      kit,
+      best: {},
+      mode: 'career',
+      records: {},
+      round: null,
+      season: {
+        golf: { grade: 'county', begun: 1, played: [[4, 4, 4, 4, 4, 4, 4, 4, 4]], titles: 0 },
+        mini: { grade: 'club', begun: 0, played: [], titles: 0 },
+      },
+      caddie: { club: 0, shape: 0, spin: 0 },
+    },
+  });
+  await landed(page);
+  for (const [biome, courses] of BIOME_TABS) {
+    await page.locator(`#tab-${biome}`).click();
+    await expect(page.locator('#courseName')).toHaveText(courses[0]);
+    await expect(page.locator('#courseEvent')).toHaveText('Club tour · Event 1 of 3');
+    await expect(page.locator('#enterEvent')).toHaveText('Enter · free');
+  }
+  const loaded = (await page.evaluate(() => window.game!.season())).season;
+  for (const tour of ['desert', 'moon', 'future'] as const)
+    expect(loaded[tour], tour).toEqual({ grade: 'club', begun: 0, played: [], titles: 0 });
+  expect(loaded.golf.grade, 'the old season is what it was').toBe('county');
+  // the moon tab's Enter, pressed by a real pointer, takes the moon tour's first event, and its round is kept on that tour
+  await page.locator('#tab-moon').click();
+  await page.locator('#enterEvent').click();
+  const state = await page.evaluate(() => window.game!.state());
+  expect([state.course, state.hole, state.choosing]).toEqual(['Tranquility', 0, false]);
+  expect((await page.evaluate(() => window.game!.season())).event).toEqual({ tour: 'moon', index: 0 });
+  expect((await page.evaluate(() => window.game!.career())).round).toMatchObject({ tour: 'moon', hole: 0 });
+  expect(await page.evaluate(() => window.game!.invariants())).toEqual([]);
+  expect(problems).toEqual([]);
+});
+
+test('a reload mid-event on a biome tour goes on from its tab: the Continue button, the fee not asked again, the board thru the holes kept', async ({
+  page,
+}) => {
+  const problems = watch(page);
+  const card = [4, 5, 4];
+  await start(page, {
+    seed: 1,
+    paused: true,
+    screen: true,
+    save: {
+      coins: 10,
+      round: { tour: 'desert', course: 'The Mesa', hole: 3, card, retaken: false, pickedUp: false },
+      season: { desert: { grade: 'county', begun: 1, played: [[4, 5, 3, 4, 4, 3, 5, 4, 4]], titles: 0 } },
+    },
+  });
+  await landed(page);
+  await page.locator('#tab-desert').click();
+  await expect(page.locator('#courseName')).toHaveText('The Mesa');
+  await expect(page.locator('#courseEvent')).toHaveText('County tour · Event 2 of 3');
+  await expect(page.locator('#enterEvent')).toHaveText('Continue · hole 4');
+  await page.locator('#enterEvent').click();
+  const resumed = await page.evaluate(() => window.game!.state());
+  expect([resumed.course, resumed.hole, resumed.coins, resumed.choosing]).toEqual(['The Mesa', 3, 10, false]);
+  expect(resumed.card).toEqual(card);
+  expect((await page.evaluate(() => window.game!.season())).event).toEqual({ tour: 'desert', index: 1 });
+  expect((await page.evaluate(() => window.game!.season())).board?.head).toBe('Leaderboard · thru 3');
+  expect(await page.evaluate(() => window.game!.invariants())).toEqual([]);
+  expect(problems).toEqual([]);
+});
+
+test('the previews are fetched only as a course is viewed: the nine of the course in view, and the next course’s as it is stepped to', async ({
+  page,
+}) => {
+  const problems = watch(page);
+  const fetched = new Set<string>();
+  page.on('request', (r) => {
+    const m = /\/previews\/([^/]+)\/\d+\.png/.exec(r.url());
+    if (m) fetched.add(m[1]);
+  });
+  await start(page, { seed: 1, paused: true, screen: true, save: { mode: 'free' } });
+  await landed(page);
+  await expect(page.locator('#courseStrip img')).toHaveCount(9);
+  await page.evaluate(() => Promise.all(Array.from(document.images, (i) => i.decode().catch(() => null))));
+  expect([...fetched], 'only the course the start screen opens on').toEqual(['the-links']);
+  await page.locator('#tab-future').click();
+  await expect(page.locator('#courseName')).toHaveText('Neon Park');
+  await page.evaluate(() => Promise.all(Array.from(document.images, (i) => i.decode().catch(() => null))));
+  expect([...fetched].sort(), 'and the one more of the tab pressed').toEqual(['neon-park', 'the-links']);
+  expect(problems).toEqual([]);
+});

@@ -69,7 +69,7 @@ import { CADDIE, CaddieTalk } from '../src/caddie';
 import { BAG, PUTTER, type BagClub } from '../src/bag';
 import { bankOf, makeBank } from '../src/bank';
 import { carryFrom } from '../src/flight';
-import { lieAt } from '../src/arena';
+import { TILE, lieAt, type Layout } from '../src/arena';
 import { Progress, memoryStore } from '../src/progress';
 import { seeded } from '../src/random';
 import { DRAG, HeldView, type Shot } from '../src/shot';
@@ -122,6 +122,23 @@ function islandsOf(hole: HoleDef): { x: number; y: number }[] {
       ? figures(hole).islands.map((i) => centre(hole, i.centre[0], i.centre[1]))
       : [];
     ISLANDS.set(hole, found);
+  }
+  return found;
+}
+
+const PANS = new WeakMap<Layout, { x: number; y: number }[]>();
+/** The middles of the tiles of pan a golf hole has (none on any hole there is until a desert has courses), found from its layout and kept. */
+function pansOf(layout: Layout): { x: number; y: number }[] {
+  let found = PANS.get(layout);
+  if (!found) {
+    found = [];
+    for (let t = 0; t < layout.cols * layout.rows; t++)
+      if (layout.lie[t] === LIE.pan && !layout.solid[t])
+        found.push({
+          x: layout.originX + ((t % layout.cols) + 0.5) * TILE,
+          y: layout.originY + (Math.floor(t / layout.cols) + 0.5) * TILE,
+        });
+    PANS.set(layout, found);
   }
   return found;
 }
@@ -183,14 +200,14 @@ export function fuzz(
   named?: RoundOf,
   given?: SeasonContext,
 ): FuzzResult {
-  // a run on a course of its own plays that course's events: two on the golf tour and one on the mini, so a season is over in a
+  // a run on a course of its own plays that course's events: two on the golf tour and one on each of the others, so a season is over in a
   // round or two, and the table of rivals' scores is made for it; a run among the courses of the game plays the game's
   const season =
     given ??
     (course
       ? (() => {
           const event = { name: named?.name ?? 'Fuzz course', purse: named?.purse ?? 1, holes: course };
-          return contextOf({ golf: [event, event], mini: [event] });
+          return contextOf({ golf: [event, event], mini: [event], desert: [event], moon: [event], future: [event] });
         })()
       : seasonContext());
   // the monkey's own chance, apart from the game's, so what it decides does not shift what the game does
@@ -504,7 +521,7 @@ export function fuzz(
       windfall(tour);
       const [coins, round, seasons, mode] = [save.coins, save.round, JSON.stringify(save.season), save.mode];
       entries = 0;
-      const was = { golf: { ...save.season.golf }, mini: { ...save.season.mini } };
+      const was = Object.fromEntries(TOURS.map((t) => [t, { ...save.season[t] }])) as typeof save.season;
       const entered = game.enter(tour);
       if (!entered) {
         if (entries) told.push(`an entry was refused and told of`);
@@ -531,6 +548,8 @@ export function fuzz(
           told.push(`an entry gave up the round on ${round.tour} and its season played ${a.played.length}`);
       }
       count(checked, 'event entered');
+      // counted by tour, so a tour the careerer never chose is seen and not passed in silence (the five tours are drawn from its own stream)
+      count(checked, `event entered on ${tour}`);
       did('enter an event', tour);
       // and, now and then, a change of mind before a stroke is struck: another course chosen, or another event entered
       if (chain) {
@@ -1417,6 +1436,72 @@ export function fuzz(
       }
     };
     /**
+     * A player driving at a tree: the driver, or the longest club that carries so far, at full power at the nearest tree within a
+     * driver's carry and ahead of the ball, a few degrees off, with a player's slips. Done on a chance of its own and only on a hole
+     * in a biome (a cactus, a hologram), which is no hole of any course there is, so every old seed plays as it did. Whatever comes of
+     * it (the post, the cone, a passage through a hologram) the game's rules hold.
+     */
+    const treer = seeded(seed * 37 + 1);
+    const driveAtATree = () => {
+      if (!game.ready || input.aim !== null || game.phase !== 'play' || !game.layout.golf) return;
+      const { world, ball, layout } = game;
+      if (!layout.trees.length) return;
+      const lie = lieAt(layout, world.x[ball], world.y[ball]);
+      let near: { x: number; y: number } | null = null,
+        away = Infinity;
+      for (const t of layout.trees) {
+        const d = Math.hypot(t.x - world.x[ball], t.y - world.y[ball]);
+        if (d >= 15 && d < away) [near, away] = [t, d];
+      }
+      if (!near || away > carryFrom(BAG[0], 1, lie)) return;
+      game.pick(BAG[0].id);
+      game.setShape(0);
+      game.setSpin(0);
+      const bearing = Math.atan2(near.y - world.y[ball], near.x - world.x[ball]);
+      if (game.shoot(bearing + (treer() - 0.5) * 0.1, 1 - treer() * 0.1)) {
+        spent();
+        did('drive at a tree');
+        busy = Math.floor(between(10, 90));
+      }
+    };
+    /**
+     * Flies a ball to a pan, a desert's dried lake, when the hole has one in a driver's carry: the very shape of `flyToIsland`, on a
+     * chance of its own and only on a hole with a pan, so no other hole plays differently and the old seeds stay as they were. A
+     * ball that lands on a pan runs on across it, hops, is struck from it again, and is never lost to it; whatever comes of it the
+     * rules hold. The pan's tile is chosen by the chance, a spot somewhere on it.
+     */
+    const panner = seeded(seed * 31 + 11);
+    const flyToPan = () => {
+      if (!game.ready || input.aim !== null || game.phase !== 'play' || !game.layout.golf) return;
+      const pans = pansOf(game.layout);
+      if (!pans.length) return;
+      const { world, ball, layout } = game;
+      const lie = lieAt(layout, world.x[ball], world.y[ball]);
+      const pan = pans[Math.floor(panner() * pans.length)];
+      const dx = pan.x - world.x[ball],
+        dy = pan.y - world.y[ball],
+        far = Math.hypot(dx, dy);
+      if (far < 20) return;
+      const lofted = BAG.filter((c) => c.loft > 0).sort((a, b) => carryFrom(a, 1, lie) - carryFrom(b, 1, lie));
+      const club: BagClub | undefined = lofted.find((c) => carryFrom(c, 1, lie) >= far * 1.05);
+      if (!club) return;
+      let low = 0,
+        high = 1;
+      for (let k = 0; k < 20; k++) {
+        const mid = (low + high) / 2;
+        if (carryFrom(club, mid, lie) < far) low = mid;
+        else high = mid;
+      }
+      game.pick(club.id);
+      game.setShape(0);
+      game.setSpin(0);
+      if (game.shoot(Math.atan2(dy, dx) + (panner() - 0.5) * 0.1, Math.min(1, high * (0.95 + 0.1 * panner())))) {
+        spent();
+        did('fly to a pan');
+        busy = Math.floor(between(10, 90));
+      }
+    };
+    /**
      * The framing rule, asked of the camera as the page's director leaves it: once the ball is ready, the view has settled
      * (not easing, turning, gliding or blended to the view from above, the camera caught up with the ball) and no drag is
      * held, the ball and the furthest a shot reaches are inside the safe box for the screen. No chance is drawn, and nothing of
@@ -1730,6 +1815,8 @@ export function fuzz(
       if (game.obstacles.streamed.size && streamer() < 0.03) strikeOntoStream();
       if (laneOf(game.def) && driver() < 0.03) driveTheLane();
       if (game.layout.golf && islandsOf(game.def).length && islander() < 0.03) flyToIsland();
+      if (game.layout.golf && pansOf(game.layout).length && panner() < 0.03) flyToPan();
+      if (game.layout.biome !== 'earth' && game.layout.trees.length && treer() < 0.03) driveAtATree();
       count(itemFrames, `${game.slots.club || '-'}|${game.slots.ball || '-'}|${game.slots.accessory || '-'}`);
       if (seed % 5 === 0 && wardrobe() < 0.004) tryOn();
       if (retaker() < 0.01) retake();

@@ -19,6 +19,7 @@
  * made is refused, by name, and never returned as a hole that cannot be played. It is content's tool: handed a spec and
  * giving back a `HoleDef`, importing no content, only the type of a hole.
  */
+import { BIOMES, isBiome, treeOf, type BiomeName } from './biome';
 import { BALL, KIND_RADIUS, TILE, heightAt, layoutOf, type Layout } from './arena';
 import type { HoleDef } from './course';
 import { GREEN as GREEN_RULES } from './green';
@@ -37,7 +38,7 @@ import { seeded, type Random } from './random';
 import { WIND } from './shaping';
 import { drainFault, holdsBall } from './slopes';
 import { GREENS, LIE } from './surfaces';
-import { TREE, insideCanopy, treeCone } from './trees';
+import { insideCanopy, treeCone } from './trees';
 import { atan2, cos, hypot, sin } from './fixedmath';
 
 /** A pond: how far along the way of play it lies, which side of it (nought is across it, on the line) and how big, in tiles of radius. */
@@ -104,6 +105,8 @@ export interface GolfSpec {
   contour?: number;
   /** How fast the greens are: `HoleDef.greens`. */
   greens?: number;
+  /** The biome the hole belongs to: `HoleDef.biome`. Earth where not said, and then the hole is the hole it was, byte for byte. The generator does not see it, but for how a ball rests on the ground (`rests`, `drainFault`). */
+  biome?: BiomeName;
   /**
    * How much higher the hills are made than `steepness` alone makes them, from one (the hills as they were) to
    * `HEIGHTEN.most`, and then cut to the step the physics takes (`noiseGround`'s `heighten`): steeper ground a ball runs
@@ -229,13 +232,16 @@ export const CROWN = { step: 0.5 };
  */
 export function restUnderCrown(layout: Layout, x: number, y: number): number {
   const r = KIND_RADIUS[BALL];
-  const cone = treeCone(x, y, heightAt(layout, x, y));
-  const reach = TREE.radius + r;
+  const tree = treeOf(layout);
+  // a tree a ball may lie in (a hologram) is never buried in a hillside to its cost, and a biome with none has none to fell
+  if (!tree || tree.passes) return 0;
+  const cone = treeCone(x, y, heightAt(layout, x, y), tree);
+  const reach = tree.radius + r;
   let deepest = 0;
   for (let dx = -reach; dx <= reach; dx += CROWN.step)
     for (let dy = -reach; dy <= reach; dy += CROWN.step) {
       const rho = hypot(dx, dy);
-      if (rho > reach || rho <= TREE.trunk + r) continue;
+      if (rho > reach || rho <= tree.trunk + r) continue;
       const c = Math.floor((x + dx - layout.originX) / TILE),
         row = Math.floor((y + dy - layout.originY) / TILE);
       if (c < 0 || row < 0 || c >= layout.cols || row >= layout.rows) continue;
@@ -251,8 +257,12 @@ export function restUnderCrown(layout: Layout, x: number, y: number): number {
  * went: a felled tree's tile is the rough it stood on. Done once the ground is final, since the banks and the hills are
  * what raise it. It spends no chance, so everything else of the hole is what it would have been.
  */
-export function felled(map: readonly string[], terrain: Float32Array): { map: string[]; felled: number } {
-  const layout = layoutOf(map, terrain);
+export function felled(
+  map: readonly string[],
+  terrain: Float32Array,
+  biome?: BiomeName,
+): { map: string[]; felled: number } {
+  const layout = layoutOf(map, terrain, undefined, biome);
   const rows = map.map((row) => row.split(''));
   let count = 0;
   for (const t of layout.trees) {
@@ -328,9 +338,12 @@ function refuse(spec: GolfSpec) {
     shelves,
     gap,
     woods,
+    biome,
   } = spec;
   const fault = (what: string) => new RangeError(`${name || 'a golf hole'}: ${what}`);
   if (!name) throw new RangeError('a golf hole has to have a name');
+  if (biome !== undefined && !isBiome(biome))
+    throw fault(`its biome is one of ${Object.keys(BIOMES).join(', ')}, not ${String(biome)}`);
   if (!Number.isInteger(par) || par < 1) throw fault(`its par is a whole number from one, not ${par}`);
   if (!Number.isInteger(seed)) throw fault(`its seed is a whole number, not ${seed}`);
   if (!(length >= 60 && length <= 800)) throw fault(`its length is from sixty to eight hundred yards, not ${length}`);
@@ -374,6 +387,12 @@ function refuse(spec: GolfSpec) {
     if (!Number.isInteger(n) || n < 0 || n > 12)
       throw fault(`its ${what} are a whole number from nought to twelve, not ${n}`);
   if (!Number.isInteger(trees) || trees < 0) throw fault(`its trees are a whole number from nought, not ${trees}`);
+  // a biome with no tree (the Moon) has none to plant, nor a wood, nor a lane cut through one
+  if (biome !== undefined && BIOMES[biome].tree === null) {
+    if (trees > 0) throw fault(`it asks for ${trees} trees, and the ${biome} has none`);
+    if (woods) throw fault(`it asks for a wood, and the ${biome} has no trees`);
+    if (gap) throw fault(`it asks for a gap through a wood, and the ${biome} has no trees`);
+  }
   if (bunkers.island !== undefined && (!Number.isInteger(bunkers.island) || bunkers.island < 0 || bunkers.island > 12))
     throw fault(`its island bunkers are a whole number from nought to twelve, not ${bunkers.island}`);
   if (bunkers.fairway + (bunkers.island ?? 0) > 12)
@@ -523,7 +542,8 @@ function at(points: Pt[], s: number): { p: Pt; dir: Pt } {
 function rests(l: ReturnType<typeof layoutOf>, greens: number | undefined, only?: Uint8Array): boolean {
   for (let t = 0; t < l.cols * l.rows; t++) {
     const lie = l.lie[t];
-    if (l.solid[t] || l.oob[t] || (lie !== LIE.fairway && lie !== LIE.green && lie !== LIE.tee)) continue;
+    if (l.solid[t] || l.oob[t] || (lie !== LIE.fairway && lie !== LIE.green && lie !== LIE.tee && lie !== LIE.pan))
+      continue;
     if (only && !only[t]) continue;
     if (!holdsBall(l, t, greens)) return false;
   }
@@ -659,7 +679,7 @@ function banked(ground: Float32Array, kinds: string[][], cols: number, rows: num
 
 export function golfHole(spec: GolfSpec): HoleDef {
   refuse(spec);
-  const { name, par, seed, feel, steepness, width, bunkers, ponds, trees, wind, greens, contour = 0 } = spec;
+  const { name, par, seed, feel, steepness, width, bunkers, ponds, trees, wind, greens, contour = 0, biome } = spec;
   const rolling = spec.rolling === true;
   const lakes = spec.lakes ?? [];
   const greenLake = lakes.some((lake) => lake.at === 'green');
@@ -1229,10 +1249,15 @@ export function golfHole(spec: GolfSpec): HoleDef {
       .map((row) => row.join(''));
   // the ground is made against the hole as it was drawn, and the first cut laid on it after, so that the cut changes
   // what a ball rolls on and not the hills it rolls over
-  const drawn = rowsOf(grid);
+  // a lake is water on earth, the Moon and in the future, and a pan in the desert: drawn `d`, ground a ball is in play on, the same
+  // shapes from the same chance. Only the map is told so; the ground below is made against the lakes as water (`flat`), so the
+  // hills and the hollows a lake is set in are the very ones the same spec has on earth, and what a pan must hold is judged after
+  const pans = BIOMES[biome ?? 'earth'].hazard === 'pan';
+  const panned = (rows: string[]) => (pans ? rows.map((row) => row.replaceAll('~', 'd')) : rows);
+  const flat = layoutOf(rowsOf(grid));
+  const drawn = panned(rowsOf(grid));
   const kinds = mown(grid);
-  const map = rowsOf(kinds);
-  const flat = layoutOf(drawn);
+  const map = panned(rowsOf(kinds));
   // the green's swells and swales, if it is to have any: made once, for the tiles of green the hole is drawn with
   const greenTiles: number[] = [];
   for (let t = 0; t < flat.cols * flat.rows; t++) if (flat.lie[t] === LIE.green) greenTiles.push(t);
@@ -1291,7 +1316,7 @@ export function golfHole(spec: GolfSpec): HoleDef {
     // a plate that is tilted stands high or low of the hills where it ends, so a short blend is a slope steeper than a ball
     // rests on, on the fairway that is under it: it is lengthened for that too, unless the hills alone are already too steep
     // to rest one (the hole is then made gentler, and that is tried again)
-    const playable = rests(layoutOf(drawn, ground), greens, only);
+    const playable = rests(layoutOf(drawn, ground, undefined, biome), greens, only);
     let out = ground;
     for (let blend = PLATE.blend; blend <= PLATE.most; blend++) {
       const edge = GREEN + PLATE.full,
@@ -1305,7 +1330,7 @@ export function golfHole(spec: GolfSpec): HoleDef {
         }
       if (
         steepestStep(out, cup[0] - reach - 1, cup[1] - reach - 1, cup[0] + reach + 1, cup[1] + reach + 1) <= hills &&
-        (!playable || rests(layoutOf(drawn, out), greens, only))
+        (!playable || rests(layoutOf(drawn, out, undefined, biome), greens, only))
       )
         break;
     }
@@ -1327,9 +1352,10 @@ export function golfHole(spec: GolfSpec): HoleDef {
     // the ground that runs must drain, judged on the hole as it is mown, since the first cut is ground a ball is played from;
     // and it must still be a ground the physics takes: a plate blended into steep hills can be a step past half a tile
     if (
-      rests(layoutOf(drawn, terrain), greens, only) &&
+      rests(layoutOf(drawn, terrain, undefined, biome), greens, only) &&
       (!only ||
-        (steepestStep(terrain, 0, 0, cols - 1, rows - 1) <= TILE / 2 && drainFault(layoutOf(map, terrain), greens) < 0))
+        (steepestStep(terrain, 0, 0, cols - 1, rows - 1) <= TILE / 2 &&
+          drainFault(layoutOf(map, terrain, undefined, biome), greens) < 0))
     ) {
       // the line of play in the layout's world units: the way's points are in tiles from the tee, whose tile is `minX`, `minY`
       // from the south-west corner, and a tile's middle is half a tile past its corner
@@ -1341,10 +1367,11 @@ export function golfHole(spec: GolfSpec): HoleDef {
       const hole: HoleDef = {
         name,
         par,
-        map: felled(map, ground).map,
+        map: felled(map, ground, biome).map,
         terrain: ground,
         ...(wind ? { wind } : {}),
         ...(greens !== undefined ? { greens } : {}),
+        ...(biome !== undefined ? { biome } : {}),
         way: ways,
       };
       if (made) LANES.set(hole, made);

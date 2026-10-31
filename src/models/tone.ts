@@ -71,6 +71,10 @@ export const TONES = {
   crown: tiers([1.15, 1.2, 1.6], [0.85, 0.9, 1.0], [0.2, 0.34, 0.5]),
   pine: tiers([6.7, 1.9, 0.75], [2.7, 0.95, 0.5], [0.55, 0.3, 0.37]),
   fern: tiers([4.6, 2.1, 1.75], [3.0, 1.4, 1.2], [1.6, 0.8, 0.8]),
+  /** A desert's sage: a lit side a little brighter and bluer than its colour, and a cool shade, as the desert's shadows are (its theme's shade is violet). */
+  cactus: tiers([1.3, 1.25, 1.2], [0.95, 0.95, 1.0], [0.42, 0.45, 0.62]),
+  /** Dry scrub and a tuft of straw: warm and bright where the sun is, and dull in the shade. */
+  scrub: tiers([1.6, 1.4, 1.05], [1.0, 0.95, 0.85], [0.52, 0.46, 0.5]),
   rock: [
     { from: 0.5, mul: [1.15, 1.12, 1.08] },
     { from: 0.25, mul: [0.92, 0.88, 0.86] },
@@ -82,7 +86,8 @@ export const TONES = {
 /**
  * Which tiers each part of the scenery's models wears, by the model's name and the part's: leaves of a tree, bush and far
  * broadleaf the leaf's, a crown its own, a pine's needles (a conifer's, the golf tree's and the far one's) the pine's, a
- * fern its own, a rock its four. A part not named, a trunk, is left as it is.
+ * fern its own, a rock its four, and the desert's cactus, scrub and tuft their own. A part not named, a trunk, a flower, a tumbleweed,
+ * is left as it is.
  */
 export function sceneryRule(model: Model): PartRule {
   const pine = new Set(['conifer', 'golf tree', 'far conifer']);
@@ -92,6 +97,8 @@ export function sceneryRule(model: Model): PartRule {
     if (part.name === 'bush') return TONES.leaf;
     if (part.name === 'fern') return TONES.fern;
     if (part.name === 'rock') return TONES.rock;
+    if (part.name === 'cactus') return TONES.cactus;
+    if (part.name === 'scrub' || part.name === 'tuft') return TONES.scrub;
     return null;
   };
 }

@@ -23,8 +23,8 @@ import {
 } from './arena';
 import type { Random } from './random';
 import { NO_KIT, type Kit } from './items';
+import { surfacesOf, treeOf } from './biome';
 import { LIE, groundRoll, rollScale } from './surfaces';
-import { TREE } from './trees';
 
 export { World, type Belt, type Pusher } from 'artshape-physics/world';
 
@@ -64,12 +64,12 @@ export interface Cup {
   pull: number;
 }
 
-/** The surfaces by index: the green, a belt, and sand; and on a golf hole, after them, its tee, fairway, rough, green and first cut. */
+/** The surfaces by index: the green, a belt, and sand; and on a golf hole, after them, its tee, fairway, rough, green, first cut and pan. */
 const BELT = 1,
   SAND_SURFACE = 2;
-/** Which of the world's surfaces each golf `LIE` is rolled on, from the green's index for none: sand is the sand's, and the first cut's is the last of them. */
-const GOLF_SURFACE: readonly number[] = [0, 3, 4, 5, 6, SAND_SURFACE, 7];
-const GOLF_LIES = [LIE.tee, LIE.fairway, LIE.rough, LIE.green, LIE.cut] as const;
+/** Which of the world's surfaces each golf `LIE` is rolled on, from the green's index for none: sand is the sand's, the first cut's is the seventh and the pan's the last. */
+const GOLF_SURFACE: readonly number[] = [0, 3, 4, 5, 6, SAND_SURFACE, 7, 8];
+const GOLF_LIES = [LIE.tee, LIE.fairway, LIE.rough, LIE.green, LIE.cut, LIE.pan] as const;
 
 /** The cup's index among the world's holes: the only one, so what goes down a hole and not out of the bottom is holed. */
 export const THE_CUP = 0;
@@ -127,7 +127,7 @@ export function makeWorld(
       { drag: 0, roll: ROLL.roll * rollScale(LIE.none, kit) },
       { drag: 0, roll: 0 },
       { drag: 0, roll: SAND.roll * rollScale(LIE.sand, kit) },
-      ...(layout.golf ? GOLF_LIES.map((k) => ({ drag: 0, roll: groundRoll(k, greens, kit) })) : []),
+      ...(layout.golf ? GOLF_LIES.map((k) => ({ drag: 0, roll: groundRoll(k, greens, kit, surfacesOf(layout)) })) : []),
     ],
     random,
     // a step is met as a change of floor and not as a ledge with an edge: with v0.8.0's edges a ball climbs a riser only
@@ -153,15 +153,18 @@ export function makeWorld(
   }));
   // and each tree's trunk, a post too, as high as the canopy's base, which is all the physics can be given of a tree:
   // the canopy over it is the game's own to test
-  world.bumpers.push(
-    ...layout.trees.map((t) => ({
-      x: t.x,
-      y: t.y,
-      radius: TREE.trunk,
-      top: heightAt(layout, t.x, t.y) + TREE.base,
-      restitution: TREE.restitution * bounce,
-    })),
-  );
+  // (none for a tree a ball passes through: a hologram has no trunk, and nothing stands at its foot)
+  const tree = treeOf(layout);
+  if (tree && !tree.passes)
+    world.bumpers.push(
+      ...layout.trees.map((t) => ({
+        x: t.x,
+        y: t.y,
+        radius: tree.trunk,
+        top: heightAt(layout, t.x, t.y) + tree.base,
+        restitution: tree.restitution * bounce,
+      })),
+    );
   // and each kicker, a post as far as the physics knows, with a bounce of its own
   world.bumpers.push(
     ...layout.kickers.map((k) => ({

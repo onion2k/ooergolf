@@ -30,6 +30,7 @@
  * at, counted as the map is drawn: its column, and its row from the top.
  */
 
+import type { BiomeName } from './biome';
 import type { ObstacleDef } from './obstacles';
 import { FELLS_SUMMARY, fells } from './fells';
 import { HEATH_SUMMARY, heath } from './heath';
@@ -37,6 +38,15 @@ import { ISLES_SUMMARY, isles } from './isles';
 import { LINKS_SUMMARY, links } from './links';
 import { OLD_SUMMARY, old } from './old';
 import { WOODS_SUMMARY, woods } from './woods';
+import { SALTPAN_SUMMARY, saltpan } from './saltpan';
+import { MESA_SUMMARY, mesa } from './mesa';
+import { BADLANDS_SUMMARY, badlands } from './badlands';
+import { TRANQUILITY_SUMMARY, tranquility } from './tranquility';
+import { COPERNICUS_SUMMARY, copernicus } from './copernicus';
+import { FARSIDE_SUMMARY, farside } from './farside';
+import { NEON_PARK_SUMMARY, neonPark } from './neonpark';
+import { CHROME_SUMMARY, chromeHeights } from './chrome';
+import { SINGULARITY_SUMMARY, singularity } from './singularity';
 import { SHED } from './shed';
 import { WATERWORKS } from './waterworks';
 
@@ -70,6 +80,12 @@ export interface HoleDef {
    * says only how the ground is mown. A hole without it is mown in the checker.
    */
   way?: readonly (readonly [number, number])[];
+  /**
+   * The biome a golf hole belongs to (`biome.ts`): the pace its ball's world runs at, whether its air is calm, and the
+   * figures of its ground. Earth without it, which is every hole there is, so a hole that has none plays as it always did;
+   * left out of a hole's hash when absent.
+   */
+  biome?: BiomeName;
 }
 
 /**
@@ -286,6 +302,11 @@ export interface Course {
   /** Whether its holes are golf, played with a bag of clubs and not the putter alone: see `layoutOf`. */
   readonly golf?: boolean;
   /**
+   * The biome of a course whose holes are all one (`biome.ts`): the desert, the moon or the future. Without it a course
+   * is of the earth, as the six of golf are and minigolf is; the picker gives each biome a tab of its own by it.
+   */
+  readonly biome?: Exclude<BiomeName, 'earth'>;
+  /**
    * How many times the career's plain prize a round of it pays (`PRIZE` in `career.ts`): one for minigolf, and on golf
    * rising with how hard the pace player finds it, to two for The Old Course.
    */
@@ -296,7 +317,9 @@ const summaryOf = (holes: readonly HoleDef[]) => ({ holes: holes.length, par: ho
 
 /**
  * Every course, the first the one a new player meets first: the three of minigolf, then the six of golf in the order of how
- * hard the pace player finds them (strokes over par a hole), easiest first, which is what a player reads the order as.
+ * hard the pace player finds them (strokes over par a hole), easiest first, which is what a player reads the order as, and
+ * then the nine of the biomes, each biome's easiest first (the desert, the moon, the future). The biomes' purses are first
+ * figures: 1.2, 1.5 and 1.9 easy to hard, comparable to the golf's own, not yet weighed against the careers they pay into.
  */
 export const COURSES: readonly Course[] = [
   { name: 'The Meadow', purse: 1, holes: COURSE, summary: summaryOf(COURSE) },
@@ -355,5 +378,95 @@ export const COURSES: readonly Course[] = [
     },
     summary: OLD_SUMMARY,
     golf: true,
+  },
+  {
+    name: 'The Saltpan',
+    purse: 1.2,
+    get holes() {
+      return saltpan();
+    },
+    summary: SALTPAN_SUMMARY,
+    golf: true,
+    biome: 'desert',
+  },
+  {
+    name: 'The Mesa',
+    purse: 1.5,
+    get holes() {
+      return mesa();
+    },
+    summary: MESA_SUMMARY,
+    golf: true,
+    biome: 'desert',
+  },
+  {
+    name: 'The Badlands',
+    purse: 1.9,
+    get holes() {
+      return badlands();
+    },
+    summary: BADLANDS_SUMMARY,
+    golf: true,
+    biome: 'desert',
+  },
+  {
+    name: 'Tranquility',
+    purse: 1.2,
+    get holes() {
+      return tranquility();
+    },
+    summary: TRANQUILITY_SUMMARY,
+    golf: true,
+    biome: 'moon',
+  },
+  {
+    name: 'Copernicus',
+    purse: 1.5,
+    get holes() {
+      return copernicus();
+    },
+    summary: COPERNICUS_SUMMARY,
+    golf: true,
+    biome: 'moon',
+  },
+  {
+    name: 'The Far Side',
+    purse: 1.9,
+    get holes() {
+      return farside();
+    },
+    summary: FARSIDE_SUMMARY,
+    golf: true,
+    biome: 'moon',
+  },
+  {
+    name: 'Neon Park',
+    purse: 1.2,
+    get holes() {
+      return neonPark();
+    },
+    summary: NEON_PARK_SUMMARY,
+    golf: true,
+    biome: 'future',
+  },
+  {
+    name: 'Chrome Heights',
+    purse: 1.5,
+    get holes() {
+      return chromeHeights();
+    },
+    summary: CHROME_SUMMARY,
+    golf: true,
+    biome: 'future',
+  },
+  {
+    name: 'The Singularity',
+    purse: 1.9,
+    get holes() {
+      return singularity();
+    },
+    summary: SINGULARITY_SUMMARY,
+    golf: true,
+    biome: 'future',
   },
 ];

@@ -104,7 +104,7 @@ describe('the course', () => {
     expect(COURSE.length).toBeGreaterThanOrEqual(2);
     expect(CUP.radius).toBeGreaterThan(1);
     for (const { hole, golf } of COURSES.flatMap((c) => c.holes.map((h) => ({ hole: h, golf: !!c.golf })))) {
-      const l = layoutOf(hole.map, hole.terrain);
+      const l = layoutOf(hole.map, hole.terrain, undefined, hole.biome);
       expect(hole.par, hole.name).toBeGreaterThanOrEqual(2);
       // the longest holes of The Isles are par six; no hole is more
       expect(hole.par, hole.name).toBeLessThanOrEqual(6);

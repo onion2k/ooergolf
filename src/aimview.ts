@@ -15,7 +15,7 @@ import { LEAD, TILT, VIEW, phoneOf, standOf, tallOf } from './camera';
 import { carryFrom } from './flight';
 import { NO_KIT, type Kit } from './items';
 import { windReach } from './shaping';
-import type { Lie } from './surfaces';
+import { SURFACES, type Lie, type Surface } from './surfaces';
 
 /** How much further than its formula a club goes on the level, four in a hundred and a half: the landing the aim view is to show. */
 export const LANDS_PAST = 1.045;
@@ -25,10 +25,18 @@ export const LANDS_PAST = 1.045;
  * much further as a tailwind of `wind` miles an hour carries a lofted club, so the ring of a downwind shot is on the
  * screen too. The one place it is worked out, for the page and the fuzzer alike.
  */
-export function reachOf(club: BagClub, lie: Lie, wind: number, kit: Kit = NO_KIT, first = 1): number {
+export function reachOf(
+  club: BagClub,
+  lie: Lie,
+  wind: number,
+  kit: Kit = NO_KIT,
+  first = 1,
+  table: readonly Surface[] = SURFACES,
+): number {
   const struck = boosted(club, first);
   return (
-    carryFrom(club, 1, lie, kit, first) * LANDS_PAST + (club.loft > 0 ? windReach(struck, 1, wind, undefined, kit) : 0)
+    carryFrom(club, 1, lie, kit, first, table) * LANDS_PAST +
+    (club.loft > 0 ? windReach(struck, 1, wind, undefined, kit, table) : 0)
   );
 }
 

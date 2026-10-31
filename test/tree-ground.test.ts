@@ -13,6 +13,7 @@ import { COURSES } from '../src/course';
 import { golfHole } from '../src/golf';
 import { checkInvariants } from '../src/invariants';
 import { OLD_SPECS } from '../src/old';
+import { treeOf } from '../src/biome';
 import { TREE, hitCanopy, insideCanopy, treeCone } from '../src/trees';
 import { DT, golfGame } from './helpers';
 
@@ -83,13 +84,17 @@ describe('the crown a ball meets', () => {
       deepest = 0,
       where = '';
     for (const { course, hole } of golfHoles) {
-      const l = layoutOf(hole.map, hole.terrain);
+      const l = layoutOf(hole.map, hole.terrain, undefined, hole.biome);
+      // each biome's tree as it has it: a cactus's own figures, and a hologram's has no trunk and is passed through, so a ball
+      // may rest inside its crown and the rule is not asked of it (`tree-ground` is about what a canopy turns); the Moon has none
+      const tree = treeOf(l);
+      if (tree === null || tree.passes) continue;
       for (const t of l.trees) {
-        const c = treeCone(t.x, t.y, heightAt(l, t.x, t.y));
-        const reach = TREE.radius + R;
+        const c = treeCone(t.x, t.y, heightAt(l, t.x, t.y), tree);
+        const reach = tree.radius + R;
         for (let dx = -reach; dx <= reach; dx += 0.5)
           for (let dy = -reach; dy <= reach; dy += 0.5) {
-            if (dx * dx + dy * dy > reach * reach || Math.hypot(dx, dy) <= TREE.trunk + R) continue;
+            if (dx * dx + dy * dy > reach * reach || Math.hypot(dx, dy) <= tree.trunk + R) continue;
             const x = t.x + dx,
               y = t.y + dy;
             // only where a ball can rest: not water (lost), rock or the rail, and not out of bounds (lost)

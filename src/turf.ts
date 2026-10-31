@@ -10,55 +10,29 @@
  * grows and draws the blades, and the page hands it this.
  */
 import type { GrassField, GrassKind, GrassOptions, TrampleRect, Wind } from 'artshape-render/game/grass';
+import type { BiomeName } from './biome';
 import { TILE, heightAt, tileAt, type Layout } from './arena';
 import { seeded } from './random';
 import { nameSeed, windDirection } from './shaping';
 import { BANK_TINT, kindOfLevel, levelOf, tintOf, tinted, valueOf } from './tint';
+import {
+  BLADE_ROOM,
+  CELLS,
+  FIELD_SIDE,
+  GOLF_FAIRWAY_DENSITY,
+  GOLF_ROUGH_DENSITY,
+  TURF,
+  cellFor,
+  marginAt,
+  sideAt,
+} from './cells';
+import { EARTH_GRASS, THEMES, themeOf, type Theme } from './theme';
+
+export { BLADE_ROOM, CELLS, FIELD_SIDE, GOLF_FAIRWAY_DENSITY, GOLF_ROUGH_DENSITY, TURF, cellFor };
 import { zonesOf, type Zone } from './zones';
 
 /** How far below the green the rough lies: the scene's own, kept here too so the turf imports no drawing. */
 const ROUGH_DEPTH = 3;
-
-/**
- * The field's figures: its finest cell, a quarter of a unit, fine enough for
- * the rough's edge round a rock; and how far round the course it reaches
- * before the rough carries on as the renderer's `outside`.
- */
-export const TURF = { cell: 0.25, reach: 34 } as const;
-
-/**
- * The cells a field may be made of, finest first. Each goes a whole number of
- * times into a tile, which is what the course's edge is made of, so the edge
- * falls between two cells and never in one, whichever is used. The finest is
- * every hole's until a hole is too big for it.
- */
-export const CELLS = [0.25, 0.5, 0.75, 1, 1.5] as const;
-
-/**
- * Cells a side a field may have: the renderer's `MAX_SIDE`, kept here too so the
- * turf imports no drawing, and held equal to it by a test.
- */
-export const FIELD_SIDE = 1024;
-
-/** How far the field reaches past the course at `cell`: `TURF.reach`, up to a whole number of cells, so its edge lies on a tile's. */
-const marginAt = (cell: number) => Math.ceil(TURF.reach / cell) * cell;
-
-/** How many cells a side a field of `tiles` tiles has at `cell`. */
-const sideAt = (tiles: number, cell: number) => Math.ceil((tiles * TILE + 2 * marginAt(cell)) / cell);
-
-/**
- * The finest cell whose field the renderer takes for a hole laid out as `layout`: a quarter of a unit for every
- * hole there is, and coarser for one bigger than sixty tiles a side. A hole no cell covers is refused, by its size.
- */
-export function cellFor(layout: Layout): number {
-  const tiles = Math.max(layout.cols, layout.rows);
-  for (const cell of CELLS) if (sideAt(tiles, cell) <= FIELD_SIDE) return cell;
-  const coarsest = CELLS[CELLS.length - 1];
-  const most = Math.floor((FIELD_SIDE * coarsest - 2 * marginAt(coarsest)) / TILE);
-  throw new RangeError(
-    `a hole of ${layout.cols} by ${layout.rows} tiles is more than a field of grass covers: at most ${most} tiles a side`,
-  );
-}
 
 /** The rough, the only kind on a hole of minigolf: the green had blades of its own, and was painted clean for the look. */
 export const ROUGH = 0;
@@ -82,8 +56,8 @@ export const KINDS: readonly GrassKind[] = [
     height: 0.55,
     heightSpread: 0.2,
     width: 0.11,
-    base: [0.1394, 0.28, 0.011],
-    tip: [0.187, 0.371, 0.012],
+    base: [...EARTH_GRASS.rough.base],
+    tip: [...EARTH_GRASS.rough.tip],
     variation: 0.12,
     roughness: 0.9,
     lean: 0.45,
@@ -103,36 +77,29 @@ export const KINDS: readonly GrassKind[] = [
  * renderer thins the blades with the square of the distance: the blades a frame draws, and so its cost, grow with both
  * densities.
  */
-export const GOLF_ROUGH_DENSITY = 80;
-export const GOLF_FAIRWAY_DENSITY = 100;
-/**
- * The painted fairway's green, already linear: `models/palette.ts`'s own, kept here too so the turf imports no models,
- * and held equal to it by a test.
- */
-const FAIRWAY_GREEN = [0.21, 0.41, 0.0072] as const;
 /**
  * The fairway's blades, from a root darker than the green to a tip lighter. The renderer averages a blade to its root
  * and 1/1.7 of the way to its tip (`grassGround`), so the tip is where that average is the green exactly, and the
- * blades read as the same turf as the painted ground under them.
+ * blades read as the same turf as the painted ground under them. The green is the biome's (`Theme.grass.fair`), earth's the palette's own.
  */
 const ROOT = 0.7,
   TIP = ROOT + 1.7 * (1 - ROOT);
-const FAIRWAY_BASE = FAIRWAY_GREEN.map((c) => c * ROOT) as [number, number, number],
-  FAIRWAY_TIP = FAIRWAY_GREEN.map((c) => c * TIP) as [number, number, number];
 
 /**
  * The kinds of a golf hole. A chunk of the field holds at most 255 lattice points a side, so a
  * field of the coarsest cell takes 112 blades a square unit at the most: both densities are inside it, which a test holds
  * on a hole of that cell, and no hole has to be thinned for the cell it is grown in.
  */
-function golfKinds(): GrassKind[] {
+function golfKinds(theme: Theme): GrassKind[] {
+  const blades = theme.grass!;
+  const green = blades.fair;
   const fairway: GrassKind = {
     density: GOLF_FAIRWAY_DENSITY,
     height: 0.3,
     heightSpread: 0.3,
     width: 0.07,
-    base: FAIRWAY_BASE,
-    tip: FAIRWAY_TIP,
+    base: green.map((c) => c * ROOT) as [number, number, number],
+    tip: green.map((c) => c * TIP) as [number, number, number],
     variation: 0.2,
     roughness: 0.9,
     lean: 0.35,
@@ -140,7 +107,13 @@ function golfKinds(): GrassKind[] {
     // not striped: the ground under it is mown in a checker (`mownAt` in ground.ts), which the renderer's stripes, bands
     // at one angle, cannot follow; plain blades in the middle green let the painted checker read between them
   };
-  const rough: GrassKind = { ...KINDS[ROUGH], density: GOLF_ROUGH_DENSITY };
+  const rough: GrassKind = {
+    ...KINDS[ROUGH],
+    density: blades.rough.density === EARTH_GRASS.rough.density ? GOLF_ROUGH_DENSITY : blades.rough.density,
+    height: blades.rough.height,
+    base: [...blades.rough.base],
+    tip: [...blades.rough.tip],
+  };
   // the rough again at each step of the banks' tint (`tint.ts`), in the kinds past the fairway's: the three darker and then the
   // three lighter, the eight kinds a field may have, which `kindOfLevel` says the place of
   const steps: GrassKind[] = [];
@@ -148,20 +121,24 @@ function golfKinds(): GrassKind[] {
     if (level === 0) continue;
     steps[kindOfLevel(level) - 2] = {
       ...rough,
-      base: tinted(rough.base, valueOf(level)).slice(0, 3) as [number, number, number],
-      tip: tinted(rough.tip, valueOf(level)).slice(0, 3) as [number, number, number],
+      base: tinted(rough.base, valueOf(level), false, theme.crest).slice(0, 3) as [number, number, number],
+      tip: tinted(rough.tip, valueOf(level), false, theme.crest).slice(0, 3) as [number, number, number],
     };
   }
   return [rough, fairway, ...steps];
 }
 
-/**
- * How many blades the renderer has room for in a frame. Past it a blade is not
- * drawn, and the rough furthest from the camera is left bare: this field at
- * forty a unit with the renderer's own rings did reach it, and 64 a unit
- * certainly did. The smoke test holds every hole at every zoom well short.
- */
-export const BLADE_ROOM = 262_144;
+/** The kinds of grass a golf hole of a biome grows, made once for each biome and kept (four at the most): none for a biome with no grass. */
+const GOLF_KINDS = new Map<BiomeName, GrassKind[]>();
+export function golfKindsOf(theme: Theme): readonly GrassKind[] | null {
+  if (!theme.grass) return null;
+  let kinds = GOLF_KINDS.get(theme.name);
+  if (!kinds) GOLF_KINDS.set(theme.name, (kinds = golfKinds(theme)));
+  return kinds;
+}
+
+/** Whether a hole grows no blades at all: its biome's ground is bare, and `fieldOf` is not asked for. */
+export const bladeless = (layout: { biome: BiomeName }): boolean => themeOf(layout).grass === null;
 
 /**
  * How the renderer thins the rough with distance. Left to itself it scales the
@@ -239,7 +216,8 @@ export function flattenFor(
   ready: boolean,
   out: { x: number; y: number; radius: number } = { x: 0, y: 0, radius: 0 },
 ): { x: number; y: number; radius: number } | null {
-  if (!ready || !layout.golf) return null;
+  // (nor on bare ground: a biome that grows no blades has none to press)
+  if (!ready || !layout.golf || bladeless(layout)) return null;
   const t = tileAt(layout, x, y);
   if (t < 0 || layout.water[t] || layout.solid[t] || zonesOf(layout).at(x, y) !== 'rough') return null;
   out.x = x;
@@ -290,7 +268,16 @@ function golfFieldOf(layout: Layout, name: string, bare: readonly Clearing[], ce
       }
   }
   clearDiscs(mask, origin, cell, cols, rows, bare);
-  return { origin, cell, cols, rows, mask, heights, kinds: golfKinds(), seed: nameSeed(name) };
+  return {
+    origin,
+    cell,
+    cols,
+    rows,
+    mask,
+    heights,
+    kinds: [...(golfKindsOf(themeOf(layout)) ?? golfKindsOf(THEMES.earth)!)],
+    seed: nameSeed(name),
+  };
 }
 
 /** `mask` cleared in each of the `bare` discs: a cell when its middle is in the disc, and at a cell coarser than the finest, when any of it is. */

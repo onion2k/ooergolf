@@ -298,6 +298,37 @@ Carousel (whatever the power, the ball ended in the same place) and The Lift (th
 Mill Race's windmill over water), The Island Green (The Flood's island) and The Lock (The Meadow's Barriers over water). A
 save that names one keeps its best, as a best is kept by name.
 
+## The biomes
+
+Golf is not only of the earth. A **biome** is a place the game's golf is played in whose ground, trees, lake and light are its
+own, and whose few rules of play differ a little: three of them, a course of three holes of nine each, easiest first, added on 31
+October 2026 on the user's word ("the next phase, biomes"): nine courses in all, the fifteen of golf in the game. The first nine
+courses (minigolf and the six of golf) are of the earth and play as they ever did, to the bit; a biome is on a hole and a course
+and nothing else (`Course.biome`, `HoleDef.biome`), and a hole that names none is earth's.
+
+|             | Desert                                                                                       | Moon                                                                                                                                                             | Future                                                                                             |
+| ----------- | -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| **Courses** | The Saltpan, The Mesa, The Badlands                                                          | Tranquility, Copernicus, The Far Side                                                                                                                            | Neon Park, Chrome Heights, The Singularity                                                         |
+| **Ground**  | red earth, a straw fairway, an oasis green; a sparse dry rough                               | pale raked fairway on dark regolith, no blades                                                                                                                   | brushed steel and bright polished plate, no blades                                                 |
+| **Trees**   | saguaros: a post to its top and a small cone, which stop a ball dead and drop it at the foot | none: a map may not plant one                                                                                                                                    | holograms: rings of light a ball passes through, slowed about by half, never stopped; they flicker |
+| **Lakes**   | a dried pan, cracked hardpan, **in play**: a ball skitters across it fast and is never lost  | craters: a pit with a rim, a ball lost as in water                                                                                                               | quicksilver, a mirror of the scene, a ball lost as in water                                        |
+| **Play**    | firm ground that runs on, strong gusts                                                       | low gravity, which is the world's clock run slower (0.655 of ours), so the ball hangs 1.5 times as long and every distance is as it is on the earth; **no wind** | lively plates, a rough that runs                                                                   |
+| **Light**   | low hot sun, pale sky                                                                        | hard white sun, black shade and sky, stars and the Earth in the fly-in                                                                                           | dusk, with bloom on the neon                                                                       |
+
+What a biome may not change is the rule of the game: a hole is par three, four or five, a stroke is a stroke, a ball in a lake
+costs one and is put back, and the pace player scores about their own par on each class of course. Each biome has one easy
+course (about a third under par a hole), one in the middle (about par) and one hard (over it), held to their own figures in
+`scripts/pace-baseline.json` as The Heath's are, not to a place in an order.
+
+A biome is a **tab** on the start screen (Golf, Desert, Moon, Future, Mini Golf: the biomes between the golf of the earth and
+minigolf), and a **tour** in the career: three events, each biome's courses in order, a season of its own at its own grade,
+beside the golf tour's six and the mini tour's three. The tours are appended and never reordered, so a season in an old save is
+what it was and the new three begin fresh at the club grade. A biome course's purse is the first figure of 1.2, 1.5 and 1.9
+easy to hard, comparable to the six of the earth, and to be weighed against the careers it pays into.
+
+What a biome does not have: no biome of minigolf, no biome of the six courses there are, no new clubs or items, no music of its
+own. The look of each is `LOOK.md`'s; what a biome is in the code is `HOW-IT-WORKS.md`'s.
+
 ## The upgrades
 
 Bought in the shop with what the holes pay. They change the physics, within
