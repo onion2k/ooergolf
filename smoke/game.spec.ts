@@ -149,7 +149,9 @@ test('a drag too short to mean anything is no shot, and no stroke', async ({ pag
  */
 const FRESH_SAVE =
   '{"coins":0,"gems":0,"owned":[],"kit":{"club":"","ball":"","accessory":""},"best":{},"mode":"career","records":{},"round":null,' +
-  '"season":{"golf":{"grade":"club","begun":0,"played":[],"titles":0},"mini":{"grade":"club","begun":0,"played":[],"titles":0}},' +
+  '"season":{"golf":{"grade":"club","begun":0,"played":[],"titles":0},"mini":{"grade":"club","begun":0,"played":[],"titles":0},' +
+  '"desert":{"grade":"club","begun":0,"played":[],"titles":0},"moon":{"grade":"club","begun":0,"played":[],"titles":0},' +
+  '"future":{"grade":"club","begun":0,"played":[],"titles":0}},' +
   '"caddie":{"club":0,"shape":0,"spin":0},"muted":false,"volume":1}';
 
 test('writes its save, and boots again from it', async ({ page }) => {
