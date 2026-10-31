@@ -371,9 +371,12 @@ export function zonesOf(l: Layout): Zones {
   // push the kind's edge in: the fairway runs on to the water, and under a bunker)
   const vw: Float32Array[] = [],
     weight: Float32Array[] = [];
+  // a hole with no pan tile (every hole but a desert's) has no pan field to blur: its arrays are not made, nor read, nor its tiles looked at
+  const pans = l.lie.includes(LIE.pan);
+  const NONE = new Float32Array(0);
   for (let k = 0; k < FIELDS; k++) {
-    vw.push(new Float32Array(n));
-    weight.push(new Float32Array(n));
+    vw.push(k === PAN && !pans ? NONE : new Float32Array(n));
+    weight.push(k === PAN && !pans ? NONE : new Float32Array(n));
   }
   for (let t = 0; t < n; t++) {
     const lie = l.lie[t];
@@ -395,9 +398,11 @@ export function zonesOf(l: Layout): Zones {
     weight[SAND][t] = ground ? 1 : 0;
     vw[SAND][t] = sand ? 1 : 0;
     // a pan: a tile of the kind, counted as the ground it is, and nothing of sand, out of bounds or rock
-    const wpan = ground && !oob ? 1 : 0;
-    weight[PAN][t] = wpan;
-    vw[PAN][t] = lie === LIE.pan ? wpan : 0;
+    if (pans) {
+      const wpan = ground && !oob ? 1 : 0;
+      weight[PAN][t] = wpan;
+      vw[PAN][t] = lie === LIE.pan ? wpan : 0;
+    }
     const wo = l.solid[t] || l.water[t] ? 0 : 1;
     weight[OUT][t] = wo;
     vw[OUT][t] = oob ? wo : 0;
@@ -412,7 +417,7 @@ export function zonesOf(l: Layout): Zones {
     // the tiles of the kind and the tiles its blur reaches
     const r = Math.max(1, Math.ceil(ZONES.sigma[k] * 3));
     const box: Box = { x0: cols, y0: rows, x1: -1, y1: -1 };
-    for (let t = 0; t < n; t++)
+    for (let t = 0; t < (k === PAN && !pans ? 0 : n); t++)
       if (vw[k][t] > 0) {
         const x = t % cols,
           y = (t - x) / cols;
