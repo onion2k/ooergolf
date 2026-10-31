@@ -14,8 +14,10 @@ import { gust, type Wind } from 'artshape-render/game/grass';
 export const SWAY = { flag: 0.35, tree: 0.05 } as const;
 
 /** Which way the flag at (x, y) flies at time `t`: down the wind, fluttering either way with the gust there. */
-export function flagTurn(t: number, x: number, y: number, wind: Wind): number {
+export function flagTurn(t: number, x: number, y: number, wind: Wind, rigid = false): number {
   const down = Math.atan2(wind.direction[1], wind.direction[0]);
+  // a flag held out on a wire along its top (the Moon's, where no wind blows it) does not flutter: it stands as it was set
+  if (rigid) return down;
   const g = gust(x, y, wind, t);
   // a flutter that quickens in a gust, held to the flag's reach either way
   const flutter = 0.6 * Math.sin(t * 4.3 + x) + 0.4 * Math.sin(t * 7.9 + y);

@@ -15,7 +15,7 @@
 import { MeshBuilder, type Mesh } from 'artshape-render/mesh/types';
 import { PALETTE, RAINBOW, ROUGH } from './palette';
 import { PATTERN, matte, type Colour, type Model, type V3 } from './part';
-import { at, ballProfile, built, lathe, lifted, type Turned } from './shapes';
+import { at, ballProfile, built, lathe, lifted, rod, type Turned } from './shapes';
 import { fan, outside, type Ring } from '../clip';
 import { face, tri } from '../meshes';
 
@@ -218,7 +218,7 @@ const PENNANT = { colour: PALETTE.plastic.blue, stripe: PALETTE.cream, scale: 1.
  */
 export function flag(
   colour: Colour,
-  { height = 9, depth = CUP.depth, radius = 0.12, rainbow = false, pennant = false } = {},
+  { height = 9, depth = CUP.depth, radius = 0.12, rainbow = false, pennant = false, rigid = false } = {},
 ): Model {
   const knob = 0.28;
   const top = height - knob * 2 - 0.08;
@@ -267,6 +267,18 @@ export function flag(
                 : {}),
             },
           ]),
+      // a flag where no wind blows it is held out by a thin wire along its top, from the pole to the cloth's tip, which turns with it
+      ...(rigid
+        ? [
+            {
+              name: 'wire',
+              material: matte(PALETTE.steel, ROUGH.metal),
+              mesh: built((b) =>
+                rod(b, [radius, 0, top + 0.03], [radius * 0.5 + long, 0, top - deep * 0.55 + 0.03], 0.045, 4),
+              ),
+            },
+          ]
+        : []),
     ],
     moving: [],
   };

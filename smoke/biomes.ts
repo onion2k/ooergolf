@@ -47,7 +47,7 @@ export const LOOKS: Record<BiomeName, Looks> = {
     fog: [0.01, 0.01, 0.02],
     sunDir: [0.6, 0.34, 0.72],
     grass: false,
-    dust: [0.3, 0.75, 0.25],
+    dust: [0.74, 0.74, 0.76],
   },
   future: {
     zenith: [0.06, 0.05, 0.28],

@@ -21,6 +21,7 @@ import { PALETTE, shown } from './models/palette';
 import { OCEAN } from './models/obstacles';
 import { SUN } from './sun';
 import { BANK_STONE, boulder, broadleaf, bush, conifer, farTree, fern, golfTree } from './models/lowpoly';
+import { moonBoulder } from './models/moon';
 import { DESERT, barrel, golfCactus, mesa, saguaro, scrub, tuft, tumbleweed } from './models/desert';
 import type { Model } from './models/part';
 import { BANK_TINT } from './tint';
@@ -151,6 +152,8 @@ export interface Theme {
   /** Where a full crest of the rough goes (`BANK_TINT.crest.to`). */
   crest: Rgb;
   water: {
+    /** Whether the lake is a crater: a bowl going down dark, a pale rim round it, a deep matte pit and no ring on the surface where a ball goes in. */
+    crater: boolean;
     /** The four bands of a lake, from the foam in. */
     bands: readonly (readonly number[])[];
     shelf: readonly number[];
@@ -169,7 +172,17 @@ export interface Theme {
   /** The map's own sand and lake: a map is not toon lit, and shows the bunkers in the sand and the water in its mid colour. */
   map: { sand: Rgb; water: Rgb };
   /** The world past the hole: its hills and mountains, and whether clouds drift over it. */
-  backdrop: { hill: Rgb; mountain: Rgb; clouds: boolean };
+  backdrop: {
+    hill: Rgb;
+    mountain: Rgb;
+    clouds: boolean;
+    /** Whether a lake lies in a gap of the hills (and the ground is hollowed for it), and how high the hills rise as a share of earth's. */
+    lake: boolean;
+    relief: number;
+    /** Whether a black sky has stars and an Earth in it, drawn to a view that sees the sky. */
+    stars: boolean;
+    earth: boolean;
+  };
   /** The blades the rough grows and the colour of the fairway's, or null for a biome with no grass (the ground is bare, and no blade is grown). */
   grass: { rough: Blades; fair: Rgb } | null;
   /** The texture the mown ground wears instead of the turf's (null: the turf's own), and the one the rough and out of bounds wear (null: none). */
@@ -179,6 +192,8 @@ export interface Theme {
   scenery: Scenery;
   /** What a stroke and a ball landing throw up: the dust a desert's ground gives, a Moon's regolith, the sparks of a future's plates. Earth's is the grass and sand it always threw. */
   puff: Puffs;
+  /** Whether the flag is held out rigid on a wire along its top, as a flag is where no wind blows it (the Moon's). */
+  rigidFlag: boolean;
 }
 
 /** The ground of earth: the very arrays of `models/palette.ts`. */
@@ -234,14 +249,23 @@ const earth: Theme = {
   name: 'earth',
   ground: EARTH_GROUND,
   crest: BANK_TINT.crest.to,
-  water: { bands: EARTH_BANDS, shelf: EARTH_SHELF, stones: BANK_STONE.colours, ocean: OCEAN },
+  water: { crater: false, bands: EARTH_BANDS, shelf: EARTH_SHELF, stones: BANK_STONE.colours, ocean: OCEAN },
   map: { sand: PALETTE.sand, water: PALETTE.waterMid },
-  backdrop: { hill: PALETTE.hill, mountain: PALETTE.mountain, clouds: true },
+  backdrop: {
+    hill: PALETTE.hill,
+    mountain: PALETTE.mountain,
+    clouds: true,
+    lake: true,
+    relief: 1,
+    stars: false,
+    earth: false,
+  },
   grass: EARTH_GRASS,
   layers: { fairway: null, rough: null, pan: null },
   look: EARTH_LOOK,
   scenery: earthScenery(),
   puff: PUFF,
+  rigidFlag: false,
 };
 
 /** A biome's ground from the sheet's hex colours (fairway, mown fairway, rough, out of bounds, green, mown green, tee, first cut, sand, lip), and its bank a share of the rough's. */
@@ -286,13 +310,22 @@ const desert: Theme = {
   ),
   crest: lit('e4b45e'),
   water: {
+    crater: false,
     bands: ['e6cfa0', 'd8b880', 'cfa870', 'c49a62'].map(lit),
     shelf: lit('a87c52'),
     stones: ['d8bc94', 'c49a70', 'a87c58'].map(lit),
     ocean: { ...OCEAN, body: lit('bd9058') },
   },
   map: { sand: lit('a8432c'), water: lit('c49a62') },
-  backdrop: { hill: lit('b5703f'), mountain: lit('8c4630'), clouds: true },
+  backdrop: {
+    hill: lit('b5703f'),
+    mountain: lit('8c4630'),
+    clouds: true,
+    lake: true,
+    relief: 1,
+    stars: false,
+    earth: false,
+  },
   grass: {
     rough: { base: lit('9c7030'), tip: lit('dcae58'), density: 14, height: 0.8 },
     fair: lit('ceae56'),
@@ -342,6 +375,7 @@ const desert: Theme = {
   // the dry earth the ball lands in comes up as a pale dust, and the sand of a bunker as the red it is (as particles are coloured, on
   // the screen's own scale, as `PUFF`'s are)
   puff: { grass: [0.86, 0.68, 0.44], sand: [0.8, 0.42, 0.28] },
+  rigidFlag: false,
 };
 
 /** The Moon, Moon A of the sheet: a pale fairway on dark dust under a hard sun, a black sky, no blades, no clouds. */
@@ -350,16 +384,28 @@ const moon: Theme = {
   ground: ground(
     ['b9b8b4', 'adaca8', '6c6b6e', '5a595d', 'dcdbd6', 'd0cfca', 'e8e6df', '8f8e8e', '2d2c30', '4a494d'],
     0.7,
+    // no pan on the Moon: the lip is a crater's rim, the pale ejecta it throws up (and its own mid grey as it falls to the dust)
+    ['8f8e8e', 'a9a8aa'],
   ),
   crest: lit('8d8c8e'),
   water: {
+    crater: true,
     bands: ['4c4b4e', '37363a', '232226', '141317'].map(lit),
     shelf: lit('56555a'),
     stones: ['8c8b8e', '77767a', '636266'].map(lit),
     ocean: { ...OCEAN, body: lit('060608'), tint: lit('1c1c20'), tilt: 0.03 },
   },
   map: { sand: lit('2d2c30'), water: lit('232226') },
-  backdrop: { hill: lit('6e6e72'), mountain: lit('4a4a50'), clouds: false },
+  // no lake past the hills (a renderer's water would be a false note on the Moon), and lower, smoother hills; a sky of stars and the Earth
+  backdrop: {
+    hill: lit('6e6e72'),
+    mountain: lit('4a4a50'),
+    clouds: false,
+    lake: false,
+    relief: 0.5,
+    stars: true,
+    earth: true,
+  },
   grass: null,
   layers: { fairway: null, rough: { layer: 3, repeat: 1 / 40, albedo: 0.3, shade: 0.3 }, pan: null },
   look: {
@@ -376,10 +422,33 @@ const moon: Theme = {
     fog: { colour: [0.01, 0.01, 0.02], density: 0.00001 },
     env: 'daylight',
   },
-  // Part 7 fills the Moon's in: boulders and no trees, and a crater's rim for a rock
-  scenery: earthScenery(),
-  // Part 7: regolith that settles slowly, in its own grey (the green puff of earth is a placeholder where there is no grass)
-  puff: PUFF,
+  scenery: {
+    // no tree, and nothing of a tree's roles: the kinds that were green are rocks, a boulder, a stone and a pebble, in the Moon's greys
+    scatter: {
+      broadleaf: null,
+      conifer: null,
+      bush: () => moonBoulder(1.4, { seed: 3, stone: true }),
+      fern: () => moonBoulder(0.8, { seed: 5, stone: true }),
+      rock: () => moonBoulder(ROCK_SIZE, { seed: 1 }),
+    },
+    beyond: {
+      broadleaf: null,
+      conifer: null,
+      bush: () => moonBoulder(2.4, { seed: 6, stone: true }),
+      fern: () => moonBoulder(1.3, { seed: 8, stone: true }),
+      rock: () => moonBoulder(3.4, { seed: 9 }),
+    },
+    // no far woods; far boulders did not read from a fly-in's distance
+    far: { conifer: null, broadleaf: null },
+    golfTree: null,
+    drift: null,
+    hills: 1,
+  },
+  // regolith lifted by a stroke or a landing rises as a pale grey plume and settles slowly, on a sixth of the weight; its rough lie is
+  // a heavy plop, so the puff is deeper
+  puff: { grass: [0.74, 0.74, 0.76], sand: [0.5, 0.5, 0.53], gravity: 0.22, life: 1.5, deep: 1.5 },
+  // a world with no wind holds its flag out on a wire
+  rigidFlag: true,
 };
 
 /** The Future, Future A of the sheet: bright steel at dusk, a plate texture on the ground, mirrored water, no blades. */
@@ -391,13 +460,22 @@ const future: Theme = {
   ),
   crest: lit('9fb0c4'),
   water: {
+    crater: false,
     bands: ['ffffff', 'e8eef4', 'd4dce4', 'c4ced8'].map(lit),
     shelf: lit('8fa0b2'),
     stones: ['dfe6ee', '8fa0b2', '6c7c8e'].map(lit),
     ocean: { ...OCEAN, body: lit('b8c4d0'), tint: lit('ffffff'), tilt: 0.06, scale: 0.18, speed: 0.15 },
   },
   map: { sand: lit('3b4552'), water: lit('d4dce4') },
-  backdrop: { hill: lit('5a6a88'), mountain: lit('39456a'), clouds: true },
+  backdrop: {
+    hill: lit('5a6a88'),
+    mountain: lit('39456a'),
+    clouds: true,
+    lake: true,
+    relief: 1,
+    stars: false,
+    earth: false,
+  },
   grass: null,
   layers: {
     fairway: { layer: 4, repeat: 1 / 24, albedo: 0.6, shade: 0.35 },
@@ -422,6 +500,7 @@ const future: Theme = {
   scenery: earthScenery(),
   // Part 8: the sparks of a plate, where earth's green puff stands for them for now
   puff: PUFF,
+  rigidFlag: false,
 };
 
 /** Every biome's theme. */

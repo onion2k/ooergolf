@@ -53,6 +53,9 @@ import {
   scrub,
   tuft,
   tumbleweed,
+  moonBoulder,
+  stars,
+  earth,
   group,
   placeBlades,
   stake,
@@ -154,6 +157,11 @@ function catalogue(): [string, Model][] {
     ['mesa', mesa()],
     ['butte', mesa({ seed: 2, width: 0.5 })],
     ['tumbleweed', tumbleweed(1.3)],
+    ['moon boulder', moonBoulder(3.4, { seed: 9 })],
+    ['moon stone', moonBoulder(0.8, { seed: 5, stone: true })],
+    ['stars', stars('Water Carry')],
+    ['earth', earth('Water Carry', 0.3)],
+    ['flag on a wire', flag(FLAG_COLOURS.red, { rigid: true })],
   ];
 }
 
@@ -273,6 +281,7 @@ const everyPart = (m: Model): Part[] => [...m.parts, ...m.moving];
  * windmill's way through, which are the insides of holes.
  */
 const OPEN = new Set([
+  'stars',
   'liner',
   'door',
   'collar',
@@ -1354,6 +1363,10 @@ describe('every model keeps to its triangle budget', () => {
       ['tuft', tuft(3.2, { seed: 9 })],
       ['mesa', mesa({ seed: 9 })],
       ['tumbleweed', tumbleweed(1.6)],
+      ['boulder', moonBoulder(3.4, { seed: 9 })],
+      ['stars', stars('Water Carry')],
+      ['earth', earth('Water Carry', 0.3)],
+      ['flag', flag(FLAG_COLOURS.red, { height: 12, rigid: true })],
       ['title', titleModel(titleTrace)],
     ];
     for (const [name, m] of at) expect(triangles(m), name).toBeLessThanOrEqual(BUDGET[name]);

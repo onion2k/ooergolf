@@ -49,6 +49,7 @@ import {
   mesa,
   tumbleweed,
   DESERT,
+  moonBoulder,
   boulder,
   broadleaf,
   bush,
@@ -113,7 +114,7 @@ const TITLE_POLAR = 1.5;
 /** How big the title is stood, as a multiple of its own units (a picture pixel is a hundredth), and how high its middle is off the grass. */
 const TITLE = { scale: 2.4, lift: 12 };
 
-type Row = 'course' | 'obstacles' | 'decoration' | 'desert';
+type Row = 'course' | 'obstacles' | 'decoration' | 'desert' | 'moon';
 interface Item {
   model: Model;
   x: number;
@@ -343,6 +344,27 @@ function desertExhibits(seed: number): Exhibit[] {
 }
 
 /**
+ * The Moon's scenery as `?model=moon` shows it, lit by the Moon's hard sun: a boulder and a stone, and the flag on its wire beside a
+ * flag on earth's, which flies. (The stars and the Earth stand on a dome two thousand yards out and are pictured in the game's
+ * own fly-in.) Only when asked for, so the showcase's other views and the pictures held of them are as they were.
+ */
+function moonExhibits(seed: number): Exhibit[] {
+  const at = (k: number) => -18 + k * 9;
+  const row = (name: string, label: string, model: Model, k: number, scale = 1): Exhibit => ({
+    name: `moon-${name}`,
+    label,
+    row: 'moon',
+    items: [{ model, x: at(k), y: -10, scale }],
+  });
+  return [
+    row('boulder', 'boulder', lit(moonBoulder(3.4, { seed })), 0),
+    row('stone', 'stone', lit(moonBoulder(1.4, { seed: seed + 1, stone: true })), 1),
+    row('rigid-flag', 'flag on a wire', flag(FLAG_COLOURS.red, { rigid: true }), 2),
+    row('flag', 'a flag in the wind', flag(FLAG_COLOURS.red), 3),
+  ];
+}
+
+/**
  * The title's lettering as `?model=title` shows it: the model's own frame has x across, y up and z toward the viewer, as a
  * screen has it, so it is stood up in the showcase's (z up, the viewer to the south) by turning it a quarter about x, and made `TITLE.scale`
  * times as big (in its own mesh and not as the item's scale, which the exhibit's box does not read).
@@ -401,7 +423,15 @@ async function main() {
   bootMsg.textContent = 'compiling shaders…';
   const renderer = new GameRenderer(ctx, 16, 16, 64, MM_PER_UNIT);
   // (the desert's models are looked at in the desert's own light, as the game draws them)
-  await daylight(renderer, ctx, query.get('model')?.startsWith('desert') ? THEMES.desert : THEMES.earth);
+  await daylight(
+    renderer,
+    ctx,
+    query.get('model')?.startsWith('desert')
+      ? THEMES.desert
+      : query.get('model')?.startsWith('moon')
+        ? THEMES.moon
+        : THEMES.earth,
+  );
   const cam = renderer.camera;
   cam.near = 1;
   cam.far = 1200;
@@ -414,6 +444,7 @@ async function main() {
   if (query.get('model') === 'title') shown.push(titleExhibit());
   // the desert's own row stands alone on its patch: the rest of the showcase is earth's, and not what is looked at
   if (query.get('model')?.startsWith('desert')) shown.splice(0, shown.length, ...desertExhibits(seed));
+  if (query.get('model')?.startsWith('moon')) shown.splice(0, shown.length, ...moonExhibits(seed));
   /** Where the grass is left out: under the water and the bunker, which lie at or below it, and the cups' collars. */
   const cut: [number, number, number, number][] = [];
   for (const e of shown)
@@ -543,6 +574,8 @@ async function main() {
     views.set(row, { ...union(boxes.filter((b) => b.e.row === row).map((b) => b.box)), polar: POLAR.row });
   for (const { e, box: b } of boxes) views.set(e.name, { ...b, polar: e.name === 'title' ? TITLE_POLAR : POLAR.one });
   // the desert's row, when it is asked for, as one view: `?model=desert`, or `?model=desert-golf-cactus` for one of them close
+  const stood = boxes.filter((b) => b.e.row === 'moon');
+  if (stood.length) views.set('moon', { ...union(stood.map((b) => b.box)), polar: POLAR.row });
   const planted = boxes.filter((b) => b.e.row === 'desert');
   if (planted.length) views.set('desert', { ...union(planted.map((b) => b.box)), polar: POLAR.row });
   // the lineup of balls, when it is asked for, as one view

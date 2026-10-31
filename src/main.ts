@@ -88,7 +88,8 @@ import { STILL } from 'artshape-render/game/grass';
 import { carryFrom } from './flight';
 import { CADDIE, CaddieTalk } from './caddie';
 import { clearings } from './scenery';
-import { FIREWORK_STEPS, cupBurst, fireworkAt, fireworkEmits, splash, strikePuff } from './bursts';
+import { FIREWORK_STEPS, craterDust, cupBurst, fireworkAt, fireworkEmits, splash, strikePuff } from './bursts';
+import { CRATER } from './waterdraw';
 import { Input } from './input';
 import { SPARKLE, flash, glint, kickFlash } from './glints';
 import { Squash, squashInto, squashOf } from './squash';
@@ -1002,11 +1003,15 @@ async function main() {
       wadedNow = false;
       squash.clear();
       trail.clear();
-      // a splash up, and a ring spreading over the water from where it went in
-      if (game) scene.splashedAt(x, y, game.t);
+      // a splash up, and a ring spreading over the water from where it went in; into a crater, a burst of dust and no ring
+      const crater = game !== undefined && themeOf(game.layout).water.crater;
+      if (game && !crater) scene.splashedAt(x, y, game.t);
       sound.splashed();
       log('sound splash');
-      for (const e of splash(x, y)) renderer.emit(e);
+      if (crater && game) {
+        const theme = themeOf(game.layout);
+        for (const e of craterDust(x, y, theme.puff.grass, CRATER.drop)) renderer.emit(e);
+      } else for (const e of splash(x, y)) renderer.emit(e);
     },
     // out of bounds: a word for it, and the stroke it cost; the ball put back is round
     outOfBounds() {
@@ -1814,7 +1819,8 @@ async function main() {
     const { world, ball } = played;
     if (!world.alive[ball]) return;
     // the ball seen to roll, as far as it went this frame
-    roll(scene.ballTurn, world.vx[ball], world.vy[ball], KIND_RADIUS[BALL], dt);
+    // (by the world's seconds, which a biome's pace makes fewer than the clock's: a ball's speed is the world's, and so is its roll)
+    roll(scene.ballTurn, world.vx[ball], world.vy[ball], KIND_RADIUS[BALL], played.worldSeconds(dt));
   }
   /**
    * The framing as the camera is placed now, for the test API: where the ball and the furthest reach are on the screen

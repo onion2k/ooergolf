@@ -10,10 +10,12 @@ import { expect, test, type Page } from '@playwright/test';
 import { golfHole } from '../src/golf';
 import { LINKS_SPECS } from '../src/links';
 import { WOODS_SPECS } from '../src/woods';
+import { ISLES_SPECS } from '../src/isles';
+import { DRAG } from '../src/shot';
 import { BIOMES, type BiomeName } from '../src/biome';
 import { LOOKS } from './biomes';
 import { BUDGET } from './budget';
-import { start, watch } from './game';
+import { drag, start, watch } from './game';
 import { alone } from './gpu';
 import { CONTRAST, read } from './panels';
 
@@ -211,5 +213,122 @@ test('a stroke from the grass of the desert throws up its dust, in its theme’s
     expect(await page.evaluate(() => window.game!.dust()), `${biome}: after the landing`).toEqual(LOOKS[biome].dust);
     expect(await page.evaluate(() => window.game!.invariants()), biome).toEqual([]);
   }
+  expect(problems).toEqual([]);
+});
+
+/** The heaviest Moon tee there is: the biggest hole of The Isles, made the Moon (which has no trees to plant). */
+function heavyMoon() {
+  const hole = golfHole({ ...ISLES_SPECS[1], name: 'Heavy moon', biome: 'moon', trees: 0 });
+  return { ...hole, terrain: Array.from(hole.terrain as Float32Array) };
+}
+
+for (const [screen, width, height] of [
+  ['a desk', 1280, 800],
+  ['a phone', 400, 860],
+] as const)
+  test(`a heavy Moon tee, and its fly-in with the stars and the Earth, are drawn inside the frame budget on ${screen}, on every rung`, async ({
+    page,
+  }, info) => {
+    test.setTimeout(240_000);
+    await page.setViewportSize({ width, height });
+    const costs: number[] = [];
+    const flyCosts: number[] = [];
+    for (let rung = 0; rung < 4; rung++) {
+      const problems = watch(page);
+      await start(page, { seed: 5, paused: true, rung, flyIn: true });
+      await page.evaluate((hole) => {
+        window.game!.playCourse([{ ...hole, terrain: Float32Array.from(hole.terrain) }]);
+        window.game!.step(3);
+      }, heavyMoon());
+      expect((await page.evaluate(() => window.game!.theme())).name).toBe('moon');
+      // the fly-in sees the sky: the stars and the Earth are drawn to it
+      expect(
+        await page.evaluate(() => window.game!.motions().sky),
+        `rung ${rung}: the sky seen in the fly-in`,
+      ).toBeGreaterThanOrEqual(2);
+      flyCosts.push(
+        await alone(() =>
+          page.evaluate(async () => {
+            window.game!.step(1);
+            return window.game!.measureFrame(200);
+          }),
+        ),
+      );
+      // and the play view, once it is under way, sees none of it
+      await page.evaluate(() => window.game!.step(600));
+      expect(await page.evaluate(() => window.game!.motions().sky), `rung ${rung}: no sky in the play view`).toBe(0);
+      costs.push(
+        await alone(() =>
+          page.evaluate(async () => {
+            window.game!.step(1);
+            return window.game!.measureFrame(300);
+          }),
+        ),
+      );
+      expect(problems).toEqual([]);
+    }
+    const shown = costs.map((c) => Math.round(c * 100) / 100);
+    const flown = flyCosts.map((c) => Math.round(c * 100) / 100);
+    info.annotations.push({ type: 'frames', description: JSON.stringify({ tee: shown, flyIn: flown }) });
+    console.log(`a heavy Moon tee on ${screen}, each rung (ms): ${shown.join(', ')}; its fly-in: ${flown.join(', ')}`);
+    for (const [rung, ms] of [...costs, ...flyCosts].entries())
+      expect(ms, `figure ${rung}: inside the ${BUDGET.frameMs} ms budget`).toBeLessThanOrEqual(BUDGET.frameMs);
+  });
+
+test('a ball into the crater through a real drag costs a stroke, throws up dust and no ring, and is put back; the wind is not told', async ({
+  page,
+}) => {
+  test.setTimeout(150_000);
+  const problems = watch(page);
+  await start(page, { seed: 5, paused: true });
+  await begin(page, 'moon');
+  // a power that lands in the crater, found by trying the shot through the API on this hole and putting the hole back each time
+  const power = await page.evaluate(() => {
+    const g = window.game!;
+    g.club('PW');
+    for (let p = 0.3; p <= 1.001; p += 0.05) {
+      g.startHole(0);
+      g.step(5);
+      g.shoot(Math.PI / 2, p);
+      g.step(600);
+      if (g.events().some((e) => e.startsWith('splash'))) return p;
+    }
+    return null;
+  });
+  expect(power, 'a pitching wedge that finds the crater').not.toBeNull();
+  await page.evaluate(() => {
+    const g = window.game!;
+    g.startHole(0);
+    g.step(5);
+    g.club('PW');
+  });
+  const plan = await page.evaluate(() => {
+    const g = window.game!;
+    const b = g.ball();
+    const from = g.project(b.x, b.y, b.z);
+    // a point a little way back along the line to the cup gives the drag its direction on the page
+    const back = g.project(b.x, b.y - 4, b.z);
+    return { from, back, short: Math.min(innerWidth, innerHeight) };
+  });
+  const dx = plan.back.x - plan.from.x,
+    dy = plan.back.y - plan.from.y,
+    len = Math.hypot(dx, dy);
+  const pull = (power as number) * DRAG.full * plan.short;
+  await drag(
+    page,
+    plan.from,
+    { x: plan.from.x + (dx / len) * pull, y: plan.from.y + (dy / len) * pull },
+    { steps: 10 },
+  );
+  await page.evaluate(() => window.game!.step(600));
+  const state = await page.evaluate(() => window.game!.state());
+  expect(state.strokes, 'a stroke, and the one it cost').toBe(2);
+  expect((await page.evaluate(() => window.game!.events())).some((e) => e.startsWith('splash'))).toBe(true);
+  // no ring spread over the pit, as water's does, and the dust is the Moon's grey
+  expect(await page.evaluate(() => window.game!.motions().splash)).toBe(0);
+  expect(await page.evaluate(() => window.game!.dust())).toEqual(LOOKS.moon.dust);
+  expect(await page.evaluate(() => window.game!.invariants())).toEqual([]);
+  // the wind is not told on a calm world
+  expect(await page.evaluate(() => window.game!.motions().wind ?? null)).toBeNull();
   expect(problems).toEqual([]);
 });

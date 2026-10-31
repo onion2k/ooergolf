@@ -189,7 +189,9 @@ export function dress(layout: Layout, name: string): Dressing {
   }
   // a golf hole is dressed with its bunting alone, which marks where it ends: no bed of flowers or cluster of rock stands
   // on the plain past the stakes, where nothing else does
-  return layout.golf ? { bunting, beds: [], rocks: [] } : { bunting, beds, rocks };
+  return layout.golf
+    ? { bunting: DRESSED[layout.biome].bunting ? bunting : [], beds: [], rocks: [] }
+    : { bunting, beds, rocks };
 }
 
 /** Whether a point is under one of the strings of bunting, or so near that a tree there would stand in it. */
@@ -422,6 +424,8 @@ export interface Dressed {
   per: number;
   size: number;
   great: boolean;
+  /** Whether a golf hole's edge is strung with bunting: not where nothing blows, or a string would hang wrong in no wind. */
+  bunting: boolean;
   far: { most: number; per: number; clump: number; size: number; scale: number; spread: number };
 }
 const EARTH_DRESSED: Dressed = {
@@ -431,11 +435,12 @@ const EARTH_DRESSED: Dressed = {
   per: BEYOND.per,
   size: BEYOND.size,
   great: true,
+  bunting: true,
   far: { most: FAR.most, per: 55, clump: FAR.clump, size: FAR.size, scale: FAR.scale, spread: FAR.spread },
 };
 export const DRESSED: Record<BiomeName, Dressed> = {
   earth: EARTH_DRESSED,
-  // (Parts 7 and 8 give the Moon and the future their own: for now they are dressed as earth is)
+  // (Part 8 gives the future its own: for now it is dressed as earth is)
   desert: {
     wood: [
       ['conifer', 3],
@@ -451,9 +456,24 @@ export const DRESSED: Record<BiomeName, Dressed> = {
     per: BEYOND.per * 0.7,
     size: 6,
     great: false,
+    bunting: true,
     far: { most: 260, per: 130, clump: 30, size: 2, scale: 7, spread: 6 },
   },
-  moon: EARTH_DRESSED,
+  // the Moon: no tree, so no wood, and boulders and stones only, in small sparse scatters; no bunting; no far woods
+  moon: {
+    wood: [],
+    scrub: [
+      ['bush', 4],
+      ['fern', 3],
+      ['rock', 3],
+    ],
+    woodShare: 0,
+    per: BEYOND.per * 0.55,
+    size: 5,
+    great: false,
+    bunting: false,
+    far: { most: 0, per: 55, clump: FAR.clump, size: FAR.size, scale: FAR.scale, spread: FAR.spread },
+  },
   future: EARTH_DRESSED,
 };
 

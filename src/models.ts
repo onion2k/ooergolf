@@ -60,6 +60,7 @@ export {
   bankStone,
   BANK_STONE,
 } from './models/lowpoly';
+export { MOON, earth, moonBoulder, stars } from './models/moon';
 export { DESERT, barrel, golfCactus, mesa, saguaro, scrub, tuft, tumbleweed } from './models/desert';
 export { kicker } from './models/kicker';
 export {
@@ -137,6 +138,9 @@ export const BUDGET = {
   /** A mesa, and a butte, are seven sides in three stacked pieces. */
   mesa: 60,
   tumbleweed: 120,
+  /** The Moon's sky, seen from the fly-in alone: three hundred and twenty stars of a quad, and the Earth, a ball of three faceted lumps. */
+  stars: 1100,
+  earth: 700,
   /** The world past a hole: its hills, mountains and lake, a far tree for each of its trees, and its clouds. */
   backdrop: 24000,
   farTree: 16,

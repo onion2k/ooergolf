@@ -16,6 +16,7 @@ import { tri } from './meshes';
 import type { V3 } from './models/part';
 import { seeded } from './random';
 import { BEYOND } from './scenery';
+import { themeOf } from './theme';
 
 /**
  * The world's figures: how far past the hole (and on golf, what stands round it) the hills begin, `gap`; how deep the
@@ -176,6 +177,8 @@ export function backdropOf(layout: Layout, name: string, ground: number | Ground
   };
   const shape = ridge(seed + 1),
     peaks = ridge(seed + 2);
+  // how high its hills rise as a share of earth's: the Moon's are lower and smoother (a share of one is the hills it always had)
+  const relief = themeOf(layout).backdrop.relief;
   const radius = (k: number) => R0 + (R1 - R0) * (k / rings);
   // the lake's shore, worked out first: its water lies 2 under the lowest ground it touches
   const L = 24;
@@ -194,7 +197,10 @@ export function backdropOf(layout: Layout, name: string, ground: number | Ground
     const t = k / rings;
     const lake = inLake(a);
     const h =
-      (BACKDROP.hill[0] + BACKDROP.hill[1] * shape(a + t * 0.6)) * Math.sin(t * Math.PI * 0.95) * (0.3 + 0.7 * t);
+      (BACKDROP.hill[0] + BACKDROP.hill[1] * shape(a + t * 0.6)) *
+      Math.sin(t * Math.PI * 0.95) *
+      (0.3 + 0.7 * t) *
+      relief;
     // the ground the hill stands on, where it stands
     const r = radius(k);
     const x = cx + Math.cos(a) * r,

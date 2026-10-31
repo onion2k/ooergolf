@@ -37,6 +37,7 @@ import { CUP } from './course';
 import { tintOf, tinted, valueOfStep } from './tint';
 import { THEMES, themeOf, type ModelKind, type Theme } from './theme';
 import { sceneryOf } from './sceneryset';
+import { earth as earthModel, stars as starsModel } from './models/moon';
 import { DRIFT, tumbleweedAt } from './drift';
 import { splitByTint } from './tintmesh';
 import { GREEN, greenArrows, leansOnMinigolf, READER, type Arrow } from './green';
@@ -88,7 +89,7 @@ import { SHADOW } from './look';
 import { BEYOND, SCENERY, beyond, dress, farWoods, scatter, type Piece, type SceneryKind } from './scenery';
 import { groundZOf, hillsTop, planeOf, type GroundZ } from './hills';
 import { backdropOf, cloudAt } from './backdrop';
-import { GROUND, cupGround, groundOf, mownAt, panLipOf, railsOf, stakesOf, toned } from './ground';
+import { GROUND, craterRimsOf, cupGround, groundOf, mownAt, panLipOf, railsOf, stakesOf, toned } from './ground';
 import { STONE_RING, pondOf } from './waterdraw';
 import {
   RIPPLES,
@@ -120,7 +121,7 @@ export const ROUGH_DEPTH = 3;
 /** How far apart the tee's markers stand. */
 const TEE_SPACING = 5;
 /** Whether a part of the flag's model is its cloth: the plain `flag`, or one of the rainbow's strips `flag0` to `flag5`; the pole and knob are not. */
-const isCloth = (name: string) => name.startsWith('flag');
+const isCloth = (name: string) => name.startsWith('flag') || name === 'wire';
 /**
  * The turf the mown ground wears: the layer of the renderer's ground texture (`turfTexture.ts`, made at boot, the first
  * and only layer), how many times it tiles across a world unit (about the scale the old speckle had, 1.4 units a tile), and
@@ -663,6 +664,11 @@ export class Scene {
         [ground.golf.pan, P.pan, 'crack'],
         [panLipOf(layout), P.panLip, 'plain'],
       );
+    // a crater's rim, two ribbons of ejecta on the ground round the pit, the soft one under the pale and falling to the dust
+    if (golf && theme.water.crater) {
+      const rims = craterRimsOf(layout);
+      laid.push([rims.soft, P.pan, 'plain'], [rims.pale, P.panLip, 'plain']);
+    }
     const dusty = dust(theme);
     const cracked = crack(theme);
     const out: GameGroup[] = [
@@ -991,35 +997,39 @@ export class Scene {
       group({ name: 'mountains', mesh: b.mountains, material: [...backdrop.mountain, 0.95] }, still),
       // the far lake is a hole's water too: open water where the hole's is, in finer waves since it is seen from far off,
       // and rippling where `OCEAN_ON` gives the hole its ripples back
-      group(
-        oceanFor(layout.golf)
-          ? {
-              name: 'lake',
-              mesh: b.lake,
-              material: [water.ocean.body[0], water.ocean.body[1], water.ocean.body[2], ROUGH.water],
-              pattern: {
-                kind: PATTERN.ocean,
-                scale: water.ocean.scale * BACKDROP_WAVES,
-                seed: 0,
-                speed: water.ocean.speed,
-                glow: water.ocean.tilt,
-                second: water.ocean.tint as [number, number, number],
-              },
-            }
-          : {
-              name: 'lake',
-              mesh: b.lake,
-              material: [...COLOURS.water, ROUGH.water],
-              pattern: {
-                kind: PATTERN.ripple,
-                scale: RIPPLE.scale * BACKDROP_WAVES,
-                seed: 0,
-                speed: RIPPLE.speed,
-                second: COLOURS.waterVein,
-              },
-            },
-        still,
-      ),
+      ...(backdrop.lake
+        ? [
+            group(
+              oceanFor(layout.golf)
+                ? {
+                    name: 'lake',
+                    mesh: b.lake,
+                    material: [water.ocean.body[0], water.ocean.body[1], water.ocean.body[2], ROUGH.water],
+                    pattern: {
+                      kind: PATTERN.ocean,
+                      scale: water.ocean.scale * BACKDROP_WAVES,
+                      seed: 0,
+                      speed: water.ocean.speed,
+                      glow: water.ocean.tilt,
+                      second: water.ocean.tint as [number, number, number],
+                    },
+                  }
+                : {
+                    name: 'lake',
+                    mesh: b.lake,
+                    material: [...COLOURS.water, ROUGH.water],
+                    pattern: {
+                      kind: PATTERN.ripple,
+                      scale: RIPPLE.scale * BACKDROP_WAVES,
+                      seed: 0,
+                      speed: RIPPLE.speed,
+                      second: COLOURS.waterVein,
+                    },
+                  },
+              still,
+            ),
+          ]
+        : []),
     ];
     const { far, hills } = sceneryOf(theme);
     // a biome draws one of every `hills` of the far trees on the backdrop's hills (every one on earth)
@@ -1172,16 +1182,18 @@ export class Scene {
     if (layout) {
       const { cup } = layout;
       // the cloth: one part, or the rainbow's six strips on a hole begun with the item, each moved as the one is
+      const rigid = themeOf(layout).rigidFlag;
       const cloth = flag(FLAG_COLOURS.red, {
         rainbow: items.rainbow === true,
         pennant: items.pennant === true,
+        rigid,
       }).parts.filter((p) => isCloth(p.name));
-      this.strips = cloth.length;
+      this.strips = cloth.filter((p) => p.name !== 'wire').length;
       // the flag flies downwind, and the trees lean with it, in the same gusts the grass bends in; and it waggles as the
       // ball drops
       const cupZ = heightAt(layout, cup.x, cup.y);
       pool({ parts: cloth }, (m, t) =>
-        place(m, 0, cup.x, cup.y, cupZ, flagTurn(t, cup.x, cup.y, wind) + waggle(t - this.holedAt)),
+        place(m, 0, cup.x, cup.y, cupZ, flagTurn(t, cup.x, cup.y, wind, rigid) + waggle(t - this.holedAt)),
       );
       const pieces = scatter(layout, name);
       const scatterModels = sceneryOf(themeOf(layout)).scatter;
@@ -1225,6 +1237,18 @@ export class Scene {
           ),
         );
       });
+      // a black sky's stars and the Earth over it: one mesh each, about the hole's middle, drawn only to a view that sees the sky
+      // (a matrix of no size to any other, as the clouds are) and put there by the hole's name alone
+      const heavens = themeOf(layout).backdrop;
+      const middle = {
+        x: layout.originX + (layout.cols * TILE) / 2,
+        y: layout.originY + (layout.rows * TILE) / 2,
+      };
+      for (const made of [
+        heavens.stars ? starsModel(name) : null,
+        heavens.earth ? earthModel(name, Math.atan2(layout.cup.y - layout.tee.y, layout.cup.x - layout.tee.x)) : null,
+      ])
+        if (made) this.clouds.push(pool(made, (m) => place(m, 0, middle.x, middle.y, 0, 0, this.sky ? 1 : 0)));
       // the tumbleweeds of a biome that has them, rolling downwind over the hole and the plain about it, by game time alone and
       // drawn only: their place is `drift.ts`'s, the ground under each is the world's
       const weed = sceneryOf(themeOf(layout)).drift?.[0];

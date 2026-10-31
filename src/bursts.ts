@@ -24,6 +24,10 @@ export const PUFF = { grass: [0.3, 0.75, 0.25], sand: [0.96, 0.82, 0.52] } as co
 export interface Puffs {
   readonly grass: readonly number[];
   readonly sand: readonly number[];
+  /** How heavy the particles are (earth's is one), how long they live in seconds (0.45), and how many times deeper the puff is (one): a world of little gravity throws a plume that rises and settles slowly. */
+  readonly gravity?: number;
+  readonly life?: number;
+  readonly deep?: number;
 }
 
 /** A puff from under the ball at (x, y), struck at `power` of the hardest shot: grass, or sand from a bunker. */
@@ -34,19 +38,20 @@ export function strikePuff(
   ground: 'grass' | 'sand' = 'grass',
   puffs: Puffs = PUFF,
 ): Emit[] {
+  const deep = puffs.deep ?? 1;
   return [
     {
       position: [x, y, 0.1],
-      velocity: [0, 0, 2 + power * 3],
+      velocity: [0, 0, (2 + power * 3) * deep],
       spread: 1.5 + power * 2,
-      count: Math.round(6 + power * 18),
-      life: 0.45,
+      count: Math.round((6 + power * 18) * deep),
+      life: puffs.life ?? 0.45,
       lifeSpread: 0.2,
       size: 0.12,
       growth: 0.3,
       colour: [puffs[ground][0], puffs[ground][1], puffs[ground][2]],
       alpha: 0.9,
-      gravity: 1,
+      gravity: puffs.gravity ?? 1,
       floor: 0,
     },
   ];
@@ -222,6 +227,30 @@ export function splash(x: number, y: number): Emit[] {
       alpha: 0.8,
       gravity: 1,
       floor: WATER_LEVEL - 0.1,
+    },
+  ];
+}
+
+/**
+ * A ball into a crater at (x, y): a burst of dust thrown up from the pit's rim, in `colour`, and not a splash: slow, since the pit
+ * is on a world of little gravity, and falling back to the floor of the pit `drop` under the ground. Where there is no water there
+ * is no ring spreading over it either (`Theme.water.crater`).
+ */
+export function craterDust(x: number, y: number, colour: readonly number[], drop: number): Emit[] {
+  return [
+    {
+      position: [x, y, WATER_LEVEL - drop],
+      velocity: [0, 0, 5],
+      spread: 3.5,
+      count: 70,
+      life: 1.8,
+      lifeSpread: 0.4,
+      size: 0.3,
+      growth: 0.9,
+      colour: [colour[0], colour[1], colour[2]],
+      alpha: 0.7,
+      gravity: 0.22,
+      floor: WATER_LEVEL - drop - 0.1,
     },
   ];
 }

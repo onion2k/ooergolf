@@ -23,6 +23,9 @@ import { BANK_STONE } from './models/lowpoly';
 import { hashed, seeded } from './random';
 import { ZONES, blur, distanceGrid, type Box, type Scratch } from './zones';
 
+/** How much deeper than the water's own level a crater's pit is, in yards: far enough for a ball to be seen to fall into it. */
+export const CRATER = { drop: 2.6 } as const;
+
 /** The shelf: how far above the water a water tile outside the curve stands, in the rock's warm brown. */
 export const SHELF = { rise: 0.18, colour: EARTH_SHELF } as const;
 
@@ -105,7 +108,9 @@ export function waterEdgeOf(l: Layout): WaterEdge | null {
   return edgeOf(l)?.edge ?? null;
 }
 
-function edgeOf(l: Layout): { edge: WaterEdge; d: Float32Array; nx: number; ny: number; step: number } | null {
+function edgeOf(
+  l: Layout,
+): { edge: WaterEdge; d: Float32Array; nx: number; ny: number; step: number; curve: Float32Array } | null {
   const { cols, rows } = l;
   const n = cols * rows;
   const box: Box = { x0: cols, y0: rows, x1: -1, y1: -1 };
@@ -137,7 +142,10 @@ function edgeOf(l: Layout): { edge: WaterEdge; d: Float32Array; nx: number; ny: 
   let low = 1;
   for (let t = 0; t < n; t++) if (l.water[t]) low = Math.min(low, scratch.tb[t]);
   const level = Math.max(LEVEL.least, Math.min(LEVEL.most, low * LEVEL.margin));
-  const { d } = distanceGrid(scratch.tb, cols, rows, box, ZONES.per, REACH, level);
+  const { d, segs } = distanceGrid(scratch.tb, cols, rows, box, ZONES.per, REACH, level);
+  // the curve itself, as segments of four numbers in the world's yards, for what is laid along it (a crater's rim)
+  const curve = segs.data.slice(0, segs.n);
+  for (let i = 0; i < curve.length; i++) curve[i] += i % 2 === 0 ? l.originX : l.originY;
   const step = TILE / ZONES.per,
     nx = cols * ZONES.per + 1,
     ny = rows * ZONES.per + 1;
@@ -157,7 +165,12 @@ function edgeOf(l: Layout): { edge: WaterEdge; d: Float32Array; nx: number; ny: 
       );
     },
   };
-  return { edge, d, nx, ny, step };
+  return { edge, d, nx, ny, step, curve };
+}
+
+/** The curve a hole's water is drawn by, as segments of four numbers (x0, y0, x1, y1) in the world's yards; none on a hole with no water. */
+export function waterCurveOf(l: Layout): Float32Array {
+  return edgeOf(l)?.curve ?? new Float32Array(0);
 }
 
 interface Vx {
@@ -217,10 +230,22 @@ function build(l: Layout): Pond {
   const zShelf = WATER_LEVEL + SHELF.rise;
   const ground = (tx: number, ty: number) =>
     tx >= 0 && ty >= 0 && tx < cols && ty < rows && !l.water[ty * cols + tx] && !l.solid[ty * cols + tx];
+  const crater = themeOf(l).water.crater;
+  const zOf = (v: number) =>
+    crater ? WATER_LEVEL - CRATER.drop * Math.min(1, Math.max(0, v) / EDGES[EDGES.length - 1]) : WATER_LEVEL;
   const emit = (b: MeshBuilder, z: number, poly: readonly Vx[]) => {
     if (poly.length < 3) return;
     const ids = poly.map((p) =>
-      b.vertex(p.x - l.originX, p.y - l.originY, z, 0, 0, 1, (p.x - l.originX) / TILE, (p.y - l.originY) / TILE),
+      b.vertex(
+        p.x - l.originX,
+        p.y - l.originY,
+        z === WATER_LEVEL ? zOf(p.v) : z,
+        0,
+        0,
+        1,
+        (p.x - l.originX) / TILE,
+        (p.y - l.originY) / TILE,
+      ),
     );
     for (let i = 1; i + 1 < poly.length; i++) {
       // a cut along a tile's side leaves slivers with no area, which draw nothing and would only be counted
@@ -364,7 +389,10 @@ function build(l: Layout): Pond {
         name: 'deep',
         mesh,
         material: w(water.ocean.body),
-        pattern: oceanPattern(l.golf ? water.ocean.scale : water.ocean.minigolfScale, water.ocean),
+        // a crater's pit is matte near-black and has no waves or sky in it
+        ...(crater
+          ? {}
+          : { pattern: oceanPattern(l.golf ? water.ocean.scale : water.ocean.minigolfScale, water.ocean) }),
       });
   });
   return { parts, spots };

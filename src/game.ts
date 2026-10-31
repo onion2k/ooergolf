@@ -279,6 +279,11 @@ export class Game {
   private stepped = 0;
   /** The world's seconds to the clock's on this hole: its biome's `pace`, one on earth. The clock (`t`) is the frames' whatever it is. */
   private pace = 1;
+
+  /** How many seconds of the world `dt` seconds of the clock are on this hole: what a thing drawn to the ball's own speed (its roll) must be turned by. */
+  worldSeconds(dt: number): number {
+    return dt * this.pace;
+  }
   /** The last knock told on this hole, when in the physics' time and how hard, so what follows close on it is part of it. */
   private knockAt = -Infinity;
   private knockHard = 0;

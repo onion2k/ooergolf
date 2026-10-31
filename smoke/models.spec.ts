@@ -149,6 +149,18 @@ test.describe('the desert’s models', () => {
   });
 });
 
+test.describe('the Moon’s models', () => {
+  test('a boulder, a stone and the flag held out on a wire beside one that flies, in the Moon’s light', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await showcase(page, 1, 'moon');
+    await look(page, 'moon');
+    await expect(page).toHaveScreenshot('moon-models.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+});
+
 test.describe('the kicker', () => {
   test('close: a mushroom bumper, wider at the cap than the foot, in colours of its own', async ({ page }) => {
     const problems = watch(page);

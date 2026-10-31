@@ -17,6 +17,7 @@ import { fan, outside, overlaps, type Point, type Ring } from './clip';
 import { face, tri } from './meshes';
 import { LIE } from './surfaces';
 import { FIELDS, OUT, PAN, RULES, zonesOf, type Zone } from './zones';
+import { waterCurveOf, waterEdgeOf } from './waterdraw';
 
 type V3 = [number, number, number];
 
@@ -1036,4 +1037,78 @@ export function panLipOf(l: Layout): Mesh {
     b.triangle(p0, p2, p3);
   }
   return b.build();
+}
+
+/**
+ * How a crater's rim lies: a pale ejecta ribbon, narrow and raised, and a wider soft one under it that falls to the dust, each laid
+ * outward from the curve the water is drawn by in strips across, and `strips` of them to the width. `raise` is how high the ribbon
+ * stands at the curve over the ground and `base` how high it still lies at its outer edge.
+ */
+export const CRATER_RIM = {
+  pale: { width: 1.1, strips: 2, raise: 0.26, base: 0.04 },
+  soft: { width: 2.8, strips: 3, raise: 0.07, base: 0.03 },
+} as const;
+
+/**
+ * The rims of a hole's crater, as two meshes (the pale and the soft), laid on the ground outside the water's tiles and nowhere on
+ * them: a strip of a ribbon any corner of which is on a water tile is left out, so nothing of the rim is ever drawn over the pit,
+ * and a ball beside the rim is on the ground it is drawn on. Empty on a hole with no water.
+ */
+export function craterRimsOf(l: Layout): { pale: Mesh; soft: Mesh } {
+  const pale = new FastMeshBuilder(),
+    soft = new FastMeshBuilder();
+  const curve = waterCurveOf(l),
+    edge = waterEdgeOf(l);
+  if (!edge || !curve.length) return { pale: pale.build(), soft: soft.build() };
+  const onWater = (x: number, y: number) => {
+    const t = tileAt(l, x, y);
+    return t >= 0 && l.water[t] === 1;
+  };
+  const lay = (b: FastMeshBuilder, spec: { width: number; strips: number; raise: number; base: number }) => {
+    const corner = (x: number, y: number, o: number) => {
+      const [sx, sy] = slopeAt(l, x, y);
+      const k = 1 / Math.hypot(sx, sy, 1);
+      const lift = spec.base + spec.raise * (1 - o / spec.width) ** 2;
+      return b.vertex(x, y, heightAt(l, x, y) + lift, -sx * k, -sy * k, k, 0, 0);
+    };
+    for (let s = 0; s < curve.length; s += 4) {
+      const [ax, ay, bx, by] = [curve[s], curve[s + 1], curve[s + 2], curve[s + 3]];
+      const len = Math.hypot(bx - ax, by - ay);
+      if (len < 1e-6) continue;
+      // away from the water: against the way the depth grows
+      const mx = (ax + bx) / 2,
+        my = (ay + by) / 2,
+        e = 0.3;
+      let nx = -(edge.depth(mx + e, my) - edge.depth(mx - e, my)),
+        ny = -(edge.depth(mx, my + e) - edge.depth(mx, my - e));
+      const nl = Math.hypot(nx, ny);
+      if (nl < 1e-9) continue;
+      nx /= nl;
+      ny /= nl;
+      for (let j = 0; j < spec.strips; j++) {
+        const o0 = (spec.width * j) / spec.strips,
+          o1 = (spec.width * (j + 1)) / spec.strips;
+        const pts: [number, number, number][] = [
+          [ax + nx * o0, ay + ny * o0, o0],
+          [bx + nx * o0, by + ny * o0, o0],
+          [bx + nx * o1, by + ny * o1, o1],
+          [ax + nx * o1, ay + ny * o1, o1],
+        ];
+        if (pts.some(([x, y]) => onWater(x, y) || tileAt(l, x, y) < 0)) continue;
+        const [p0, p1, p2, p3] = pts.map(([x, y, o]) => corner(x, y, o));
+        // wound to face up whichever side of the curve is out
+        const up = (bx - ax) * ny - (by - ay) * nx;
+        if (up > 0) {
+          b.triangle(p0, p1, p2);
+          b.triangle(p0, p2, p3);
+        } else {
+          b.triangle(p0, p2, p1);
+          b.triangle(p0, p3, p2);
+        }
+      }
+    }
+  };
+  lay(soft, CRATER_RIM.soft);
+  lay(pale, CRATER_RIM.pale);
+  return { pale: pale.build(), soft: soft.build() };
 }
