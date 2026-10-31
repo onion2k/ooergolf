@@ -31,8 +31,19 @@ import { PLAYER, mean, round } from './pace';
 
 const DT = 1 / 60;
 
-export type CourseName = 'links' | 'fells' | 'isles' | 'heath' | 'woods' | 'old';
-export const COURSE_NAMES: readonly CourseName[] = ['links', 'fells', 'isles', 'heath', 'woods', 'old'];
+export type CourseName =
+  'links' | 'fells' | 'isles' | 'heath' | 'woods' | 'old' | 'neonpark' | 'chrome' | 'singularity';
+export const COURSE_NAMES: readonly CourseName[] = [
+  'links',
+  'fells',
+  'isles',
+  'heath',
+  'woods',
+  'old',
+  'neonpark',
+  'chrome',
+  'singularity',
+];
 
 /** The options a command line gives: the hole's name, the course and the numbers, with the defaults the script always had. */
 export interface Options {
@@ -70,6 +81,9 @@ const TITLES: Record<CourseName, string> = {
   heath: 'The Heath',
   woods: 'The Woods',
   old: 'The Old Course',
+  neonpark: 'Neon Park',
+  chrome: 'Chrome Heights',
+  singularity: 'The Singularity',
 };
 
 /**
@@ -83,6 +97,13 @@ const MODULES: Record<Exclude<CourseName, 'links'>, { module: string; key: strin
   heath: { module: 'src/heath.ts', key: 'HEATH_SPECS', load: () => import('../src/heath' as string) },
   woods: { module: 'src/woods.ts', key: 'WOODS_SPECS', load: () => import('../src/woods' as string) },
   old: { module: 'src/old.ts', key: 'OLD_SPECS', load: () => import('../src/old' as string) },
+  neonpark: { module: 'src/neonpark.ts', key: 'NEON_PARK_SPECS', load: () => import('../src/neonpark' as string) },
+  chrome: { module: 'src/chrome.ts', key: 'CHROME_SPECS', load: () => import('../src/chrome' as string) },
+  singularity: {
+    module: 'src/singularity.ts',
+    key: 'SINGULARITY_SPECS',
+    load: () => import('../src/singularity' as string),
+  },
 };
 
 /** A course's spec list. Every course but The Links is loaded on request, so this script runs before it is built. */

@@ -26,7 +26,8 @@ describe('seed-search arguments', () => {
   });
 
   it('knows the three courses that came after the hard two, by their short names', () => {
-    for (const course of ['heath', 'woods', 'old']) expect(parseArgs(['x', '--course', course]).course).toBe(course);
+    for (const course of ['heath', 'woods', 'old', 'neonpark', 'chrome', 'singularity'])
+      expect(parseArgs(['x', '--course', course]).course).toBe(course);
   });
 
   it('refuses a course it does not know, by name', () => {
