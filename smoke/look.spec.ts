@@ -2341,9 +2341,9 @@ test.describe('the second pass of the title look', () => {
  * course; and a close look at what is new in each, a cactus, a crater and a hologram. The holes are the ones with most to
  * show: Gallows Wash (the most cacti of any, and a pan), Shackleton (the most craters, and the Earth over the horizon) and
  * Server Rack (the most holograms, among quicksilver). Every picture of the Future has quicksilver in it, since every hole of
- * it has a lake, and that look is still the user's to choose; so the Future's are the last in this file and their names say
- * `quicksilver` where the lake is in the picture, so that a later change to it moves exactly those and they are looked at
- * again together (`npm run look:update` then, and not for the desert's or the Moon's).
+ * it has a lake, and the user chose its look on 31 October 2026 (dark polished liquid metal, FLOW_WATER, not the true mirror); the
+ * Future's are the last in this file and their names say `quicksilver` where the lake is in the picture, so that a change to
+ * it moves exactly those and they are looked at again together (`npm run look:update` then, and not for the desert's or the Moon's).
  */
 interface BiomeScene {
   biome: 'desert' | 'moon' | 'future';
@@ -2542,6 +2542,14 @@ for (const b of ['desert', 'moon'] as const)
 
 // the Future's, last: every hole of it has a lake of quicksilver, the look the user has yet to choose
 test.describe(`the Future's quicksilver, on ${BIOME_SCENES.future.course}`, () => {
+  // the lake as the player meets it: Null Pointer's quicksilver, the most of any hole, across the line from its tee
+  test('The Singularity hole 3, from its tee: the lake of quicksilver across the line', async ({ page }) => {
+    const problems = watch(page);
+    await inBiome(page, { biome: 'future', course: 'The Singularity', hole: 2, stem: '' });
+    await expect(page).toHaveScreenshot('biome-future-quicksilver-tee-lake.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
   biomeScenes(BIOME_SCENES.future, false);
   for (const c of CLOSE.filter((c) => c.biome === 'future')) biomeClose(c);
   test.describe('on a phone', () => {
