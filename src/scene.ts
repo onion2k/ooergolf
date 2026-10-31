@@ -91,7 +91,18 @@ import { SHADOW } from './look';
 import { BEYOND, SCENERY, beyond, dress, farWoods, scatter, type Piece, type SceneryKind } from './scenery';
 import { groundZOf, hillsTop, planeOf, type GroundZ } from './hills';
 import { backdropOf, cloudAt } from './backdrop';
-import { GROUND, craterRimsOf, cupGround, groundOf, mownAt, panLipOf, railsOf, stakesOf, toned } from './ground';
+import {
+  GROUND,
+  craterRimsOf,
+  kerbOf,
+  cupGround,
+  groundOf,
+  mownAt,
+  panLipOf,
+  railsOf,
+  stakesOf,
+  toned,
+} from './ground';
 import { STONE_RING, pondOf } from './waterdraw';
 import {
   RIPPLES,
@@ -148,6 +159,8 @@ function dust(theme: Theme): Float32Array | null {
 function crack(theme: Theme): Float32Array | null {
   return theme.layers.pan ? packTexture(new Float32Array(TEXTURE_STRIDE), 0, theme.layers.pan) : null;
 }
+/** The chrome of a mirror's kerb: bright and nearly polished. */
+const KERB_CHROME = [0.74, 0.8, 0.88, 0.14] as const;
 /** How rough each of a biome's ground colours is: the roughness `PALETTE` gives the same ground on earth. */
 const GROUND_ROUGH = {
   grass: 0.85,
@@ -668,6 +681,8 @@ export class Scene {
         [ground.golf.pan, P.pan, 'crack'],
         [panLipOf(layout), P.panLip, 'plain'],
       );
+    // a mirror's kerb: clean chrome along the curve of its water, a wall and a lip
+    if (golf && theme.water.mirror) laid.push([kerbOf(layout), KERB_CHROME, 'plain']);
     // a crater's rim, two ribbons of ejecta on the ground round the pit, the soft one under the pale and falling to the dust
     if (golf && theme.water.crater) {
       const rims = craterRimsOf(layout);

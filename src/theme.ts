@@ -491,9 +491,11 @@ const future: Theme = {
     // quicksilver: a bright smooth sheet that mirrors the dusk, in a kerb of chrome with no stones round it
     mirror: true,
     bands: ['f4f8fc', 'd0dae8', 'aab6cc', '8490ac'].map(lit),
-    shelf: lit('dfe7f0'),
+    // the shelf is the steel's own colour, on the level (as the crater's is the dust's), and the kerb along the curve is the chrome;
+    // the sheet is clear water: its body is the silver where it is thin and its tint the silver where nothing is under it
+    shelf: lit('7f8d9c'),
     stones: ['dfe6ee', '8fa0b2', '6c7c8e'].map(lit),
-    ocean: { ...OCEAN, body: lit('5a6684'), tint: lit('ffffff'), tilt: 0.3, scale: 0.2, speed: 0.18 },
+    ocean: { ...OCEAN, body: lit('d4dbe7'), tint: lit('a2adc2'), tilt: 0, scale: 1, speed: 0 },
   },
   map: { sand: lit('3b4552'), water: lit('d4dce4') },
   backdrop: {

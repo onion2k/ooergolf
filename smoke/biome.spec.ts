@@ -46,6 +46,8 @@ function holds(r: Awaited<ReturnType<typeof report>>, biome: BiomeName) {
   r.background.forEach((c, k) => expect(c).toBeCloseTo(want.background[k], 5));
   expect(r.environment).toBe(want.environment);
   expect(r.grass).toBe(want.grass);
+  // only a mirror biome asks the renderer for the scene in its water, and a hole after it asks for it no longer
+  expect(r.mirror, `${biome}: the mirror`).toBe(want.mirror);
   r.fog.forEach((c, k) => expect(c).toBeCloseTo(want.fog[k], 5));
   r.sunDir.forEach((c, k) => expect(c).toBeCloseTo(want.sunDir[k], 5));
 }
@@ -377,6 +379,55 @@ for (const [screen, width, height] of [
       expect(ms, `rung ${rung}: inside the ${BUDGET.frameMs} ms budget`).toBeLessThanOrEqual(BUDGET.frameMs);
   });
 
+/** The first three holes of The Woods made the Future: a pond (quicksilver, the mirror) across the line among 55, 141 and 163 holograms. */
+const MIRRORED = [0, 1, 2].map((i) => {
+  const hole = golfHole({ ...WOODS_SPECS[i], name: `Mirror ${WOODS_SPECS[i].name}`, biome: 'future' });
+  return { ...hole, terrain: Array.from(hole.terrain as Float32Array) };
+});
+
+for (const [screen, width, height] of [
+  ['a desk', 1280, 800],
+  ['a phone', 400, 860],
+] as const)
+  test(`a pond of quicksilver among holograms, which draws the scene twice, is inside the frame budget on ${screen}, on every rung`, async ({
+    page,
+  }, info) => {
+    test.setTimeout(400_000);
+    await page.setViewportSize({ width, height });
+    const figures: Record<string, number[]> = {};
+    for (const [k, hole] of MIRRORED.entries()) {
+      figures[hole.name] = [];
+      for (let rung = 0; rung < 4; rung++) {
+        const problems = watch(page);
+        await start(page, { seed: 5, paused: true, rung });
+        await page.evaluate((h) => {
+          window.game!.playCourse([{ ...h, terrain: Float32Array.from(h.terrain) }]);
+          window.game!.step(90);
+        }, hole);
+        expect(await page.evaluate(() => window.game!.content().trees.length), `hole ${k}: holograms`).toBeGreaterThan(
+          40,
+        );
+        figures[hole.name].push(
+          await alone(() =>
+            page.evaluate(async () => {
+              window.game!.step(1);
+              return window.game!.measureFrame(300);
+            }),
+          ),
+        );
+        expect(problems).toEqual([]);
+      }
+    }
+    const shown = Object.fromEntries(
+      Object.entries(figures).map(([n, c]) => [n, c.map((v) => Math.round(v * 100) / 100)]),
+    );
+    info.annotations.push({ type: 'frames', description: JSON.stringify(shown) });
+    console.log(`a mirror among holograms on ${screen}, each rung (ms): ${JSON.stringify(shown)}`);
+    for (const [name, costs] of Object.entries(figures))
+      for (const [rung, ms] of costs.entries())
+        expect(ms, `${name}, rung ${rung}: inside the ${BUDGET.frameMs} ms budget`).toBeLessThanOrEqual(BUDGET.frameMs);
+  });
+
 test('a hologram is drawn the same at the same game time on two runs, byte for byte: its flicker is time and nothing else', async ({
   browser,
 }) => {
@@ -390,6 +441,26 @@ test('a hologram is drawn the same at the same game time on two runs, byte for b
     await page.evaluate(() => window.game!.step(97));
     await page.waitForTimeout(1200);
     shots.push(await page.screenshot({ clip: { x: 340, y: 100, width: 600, height: 400 } }));
+    expect(problems).toEqual([]);
+    await page.close();
+  }
+  expect(shots[1].equals(shots[0]), 'the same pixels on both runs').toBe(true);
+});
+
+test('the mirror, with the holograms upside down in it, is drawn the same at the same game time on two runs, byte for byte', async ({
+  browser,
+}) => {
+  test.setTimeout(150_000);
+  const shots: Buffer[] = [];
+  for (let run = 0; run < 2; run++) {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+    const problems = watch(page);
+    await start(page, { seed: 5, paused: true });
+    await begin(page, 'future');
+    await page.evaluate(() => window.game!.step(97));
+    await page.waitForTimeout(1500);
+    expect((await page.evaluate(() => window.game!.theme())).mirror).toBe(true);
+    shots.push(await page.screenshot({ clip: { x: 440, y: 180, width: 400, height: 200 } }));
     expect(problems).toEqual([]);
     await page.close();
   }

@@ -1113,3 +1113,78 @@ export function craterRimsOf(l: Layout): { pale: Mesh; soft: Mesh } {
   lay(pale, CRATER_RIM.pale);
   return { pale: pale.build(), soft: soft.build() };
 }
+
+/** How a mirror's kerb is: its lip's width, outward from the curve, and how far above the ground it lies, in yards. */
+export const KERB = { lip: 0.35, lift: 0.03 } as const;
+
+/**
+ * The kerb of a mirror (quicksilver): a clean thin chrome edge following the curve its water is drawn by, as a wall from the water's
+ * level up to the ground on the water's side and a lip a third of a yard wide laid on the ground outside it. The ground it stands on
+ * is read where it is (the first ground met going out from the curve), so it holds on hills. Empty on a hole with no water.
+ */
+export function kerbOf(l: Layout): Mesh {
+  const b = new FastMeshBuilder();
+  const curve = waterCurveOf(l),
+    edge = waterEdgeOf(l);
+  if (!edge || !curve.length) return b.build();
+  const e = 0.3;
+  const groundAt = (x: number, y: number, ox: number, oy: number) => {
+    for (const reach of [0.6, 1.5, 3, 4.5]) {
+      const qx = x + ox * reach,
+        qy = y + oy * reach;
+      const t = tileAt(l, qx, qy);
+      if (t >= 0 && !l.water[t] && !l.solid[t]) return heightAt(l, qx, qy);
+    }
+    return heightAt(l, x, y);
+  };
+  for (let s = 0; s < curve.length; s += 4) {
+    const [ax, ay, bx, by] = [curve[s], curve[s + 1], curve[s + 2], curve[s + 3]];
+    const len = Math.hypot(bx - ax, by - ay);
+    if (len < 1e-6) continue;
+    // the way out of the water, from the depth's gradient at the segment's middle
+    const mx = (ax + bx) / 2,
+      my = (ay + by) / 2;
+    let ox = -(edge.depth(mx + e, my) - edge.depth(mx - e, my)),
+      oy = -(edge.depth(mx, my + e) - edge.depth(mx, my - e));
+    const ol = Math.hypot(ox, oy);
+    if (ol < 1e-9) continue;
+    ox /= ol;
+    oy /= ol;
+    const za = groundAt(ax, ay, ox, oy) + KERB.lift,
+      zb = groundAt(bx, by, ox, oy) + KERB.lift;
+    // the wall, facing the water; wound to face it whichever way the segment runs
+    const v = (x: number, y: number, z: number, nx: number, ny: number, nz: number) =>
+      b.vertex(x, y, z, nx, ny, nz, 0, 0);
+    const [w0, w1, w2, w3] = [
+      v(ax, ay, WATER_LEVEL, -ox, -oy, 0),
+      v(bx, by, WATER_LEVEL, -ox, -oy, 0),
+      v(bx, by, zb, -ox, -oy, 0),
+      v(ax, ay, za, -ox, -oy, 0),
+    ];
+    // the segment's direction crossed with up gives the way the quad faces: toward the water when it is along -(ox, oy)
+    const faces = (bx - ax) * -oy - (by - ay) * -ox;
+    if (faces > 0) {
+      b.triangle(w0, w1, w2);
+      b.triangle(w0, w2, w3);
+    } else {
+      b.triangle(w0, w2, w1);
+      b.triangle(w0, w3, w2);
+    }
+    // the lip, flat on the ground outside the wall
+    const [p0, p1, p2, p3] = [
+      v(ax, ay, za, 0, 0, 1),
+      v(bx, by, zb, 0, 0, 1),
+      v(bx + ox * KERB.lip, by + oy * KERB.lip, zb, 0, 0, 1),
+      v(ax + ox * KERB.lip, ay + oy * KERB.lip, za, 0, 0, 1),
+    ];
+    const up = (bx - ax) * oy - (by - ay) * ox;
+    if (up > 0) {
+      b.triangle(p0, p1, p2);
+      b.triangle(p0, p2, p3);
+    } else {
+      b.triangle(p0, p2, p1);
+      b.triangle(p0, p3, p2);
+    }
+  }
+  return b.build();
+}

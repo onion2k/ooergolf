@@ -10,6 +10,7 @@ import type { Gpu } from 'artshape-render/gpu/context';
 import { TEXTURE_STRIDE, packTexture } from 'artshape-render/game/texture';
 import { noFog } from 'artshape-render/game/fog';
 import { bakeEnvironment } from 'artshape-render/render/env';
+import { WATER_LEVEL } from './arena';
 import type { Theme } from './theme';
 import { TURF_KINDS, TURF_SIDE, turfTexels } from './turfTexture';
 
@@ -152,6 +153,30 @@ async function turfed(renderer: GameRenderer): Promise<void> {
 const BAKED = new Map<string, ReturnType<typeof bakeEnvironment>>();
 
 /**
+ * The clear water's settings for a mirror (quicksilver): it mirrors the scene as well as the sky, in one plane at the water's level
+ * (`WATER_LEVEL`, one constant that every pond of a golf hole is drawn at, on hills too), the swell nearly still so the dusk, the
+ * holograms and the skyline are seen upside down and hardly shaken, with nothing to see into, nothing to bend, no foam, no caustics
+ * and no glitter, and the mirror at full strength everywhere, even at the camera's feet. A theme with no mirror names none of it: the
+ * renderer then builds no mirror frame and draws no second scene.
+ */
+export const MIRROR_CLEAR: NonNullable<GameRenderer['look']['clear']> = {
+  mirrorScene: true,
+  mirrorPlane: WATER_LEVEL,
+  mirrorDistort: 0.004,
+  mirror: 8,
+  mirrorNear: 1,
+  // the sky it shows is brightened to silver: the dusk's zenith, seen straight down into a mirror, is its darkest and would grey the sheet
+  mirrorTint: [2.0, 1.8, 2.2],
+  clarity: 0.05,
+  refraction: 0,
+  foamWidth: 0,
+  caustics: 0,
+  glitter: 0,
+  sparkles: 0,
+  waves: [],
+};
+
+/**
  * What a theme sets on the renderer's look and fog: every field of the sun, the sky, the shade, the rim and the haze, so none is
  * left from the theme before. Worked out apart from the renderer, so a test holds earth's what `daylight` always made and that
  * putting one theme on after another leaves nothing of it behind.
@@ -177,6 +202,8 @@ export function lookFor(theme: Theme) {
       rimColour: look.rimColour as [number, number, number],
       skyLight: look.skyLight as [number, number, number],
       groundLight: look.groundLight as [number, number, number],
+      // (named for every theme, so a hole after a mirror's has the water as it was: not left asking for a mirror)
+      clear: theme.water.mirror ? MIRROR_CLEAR : undefined,
     },
     fog: {
       ...noFog(MM_PER_UNIT),

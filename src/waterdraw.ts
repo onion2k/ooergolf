@@ -18,7 +18,7 @@ import { TILE, WATER_LEVEL, heightAt, tileAt, type Layout } from './arena';
 import { WATER, oceanPattern } from './models/obstacles';
 import { ROUGH } from './models/palette';
 import { EARTH_BANDS, EARTH_SHELF, themeOf } from './theme';
-import { matte, type Part } from './models/part';
+import { PATTERN, matte, type Part } from './models/part';
 import { BANK_STONE } from './models/lowpoly';
 import { hashed, seeded } from './random';
 import { ZONES, blur, distanceGrid, type Box, type Scratch } from './zones';
@@ -259,14 +259,47 @@ function build(l: Layout): Pond {
   const shelf = new MeshBuilder();
   const crater = themeOf(l).water.crater;
   // a crater's bands are wider than earth's, since it is a bowl and not a step
+  const mirror = themeOf(l).water.mirror;
   const edges: readonly number[] = crater ? CRATER.edges : EDGES;
-  const bands = edges.map(() => new MeshBuilder());
+  // a mirror is one sheet of clear water at the water's level, and not a band of foam, shallows and deep: every band is one mesh
+  const one = new MeshBuilder();
+  const bands = edges.map(() => (mirror ? one : new MeshBuilder()));
   const zShelf = WATER_LEVEL + SHELF.rise;
   const ground = (tx: number, ty: number) =>
     tx >= 0 && ty >= 0 && tx < cols && ty < rows && !l.water[ty * cols + tx] && !l.solid[ty * cols + tx];
+  /** The height of the first ground met going out from (x, y), away from the water along (-gx, -gy), `v` yards of it being the way to the curve: the pit's floor is not the ground. */
+  const groundBeyond = (x: number, y: number, gx: number, gy: number, v: number) => {
+    for (const reach of [1.2, 2.4, 3.6, 4.8, 6]) {
+      const qx = x - gx * (v + reach),
+        qy = y - gy * (v + reach);
+      const t = tileAt(l, qx, qy);
+      if (t >= 0 && !l.water[t] && !l.solid[t]) return heightAt(l, qx, qy);
+    }
+    return meanTop;
+  };
   const emit = (b: MeshBuilder, z: number, poly: readonly Vx[]) => {
     if (poly.length < 3) return;
     const ids = poly.map((p) => {
+      // a mirror's shelf (the water's tiles outside its curve) lies on the level of the ground beside it, read where it is, and its
+      // sheet at the water's level: so no tile sticks out as a step past the curve
+      if (mirror && b === shelf) {
+        const e = 0.3;
+        let gx = edge.depth(p.x + e, p.y) - edge.depth(p.x - e, p.y),
+          gy = edge.depth(p.x, p.y + e) - edge.depth(p.x, p.y - e);
+        const gl = Math.hypot(gx, gy) || 1;
+        gx /= gl;
+        gy /= gl;
+        return b.vertex(
+          p.x - l.originX,
+          p.y - l.originY,
+          groundBeyond(p.x, p.y, gx, gy, Math.max(p.v, 0)),
+          0,
+          0,
+          1,
+          (p.x - l.originX) / TILE,
+          (p.y - l.originY) / TILE,
+        );
+      }
       if (!crater)
         return b.vertex(
           p.x - l.originX,
@@ -288,16 +321,7 @@ function build(l: Layout): Pond {
       // the ground the lip stands on, read where it is: just out past the curve, away from the water, and not from the tile's neighbour
       // (the gradient of depth is only the curve's near it, so from the middle of the bowl in the ground's mean is used, blended in)
       // (the first ground met going out from the point, a tile of ground and not a tile of water, whose floor is the pit's)
-      let near = meanTop;
-      for (const reach of [1.2, 2.4, 3.6, 4.8, 6]) {
-        const qx = p.x - gx * (Math.max(p.v, 0) + reach),
-          qy = p.y - gy * (Math.max(p.v, 0) + reach);
-        const t = tileAt(l, qx, qy);
-        if (t >= 0 && !l.water[t] && !l.solid[t]) {
-          near = heightAt(l, qx, qy);
-          break;
-        }
-      }
+      const near = groundBeyond(p.x, p.y, gx, gy, Math.max(p.v, 0));
       const deepen = smoothstep((p.v - CRATER.bowl * 0.3) / (CRATER.bowl * 0.5));
       const top = p.v <= 0 ? near : near + (meanTop - near) * deepen;
       const slope = craterSlope(p.v, top);
@@ -323,7 +347,7 @@ function build(l: Layout): Pond {
 
   // the ground a crater lies in, on the whole: what its floor is measured from, since a floor is flat
   let meanTop = 0;
-  if (crater) {
+  if (crater || mirror) {
     let sum = 0,
       count = 0;
     for (let t = 0; t < cols * rows; t++) {
@@ -404,7 +428,7 @@ function build(l: Layout): Pond {
         at(x0, y0 + TILE, deep),
       ]);
     } else if (highest < 0) {
-      const out = crater ? -CRATER.lip : -1;
+      const out = crater || mirror ? -CRATER.lip : -1;
       emit(shelf, zShelf, [
         at(x0, y0, out),
         at(x0 + TILE, y0, out),
@@ -413,7 +437,7 @@ function build(l: Layout): Pond {
       ]);
     } else {
       // the depth is the curve's, or the tile's side where it meets ground, whichever is nearer
-      const dd = (x: number, y: number) => (crater ? edge.depth(x, y) : Math.min(edge.depth(x, y), sd(x, y)));
+      const dd = (x: number, y: number) => (crater || mirror ? edge.depth(x, y) : Math.min(edge.depth(x, y), sd(x, y)));
       const step = TILE / per;
       const rowv: Vx[][] = [];
       for (let j = 0; j <= per; j++) {
@@ -466,7 +490,6 @@ function build(l: Layout): Pond {
   // a crater's rim has a boulder here and there, a third of the ring and not a wall of them
   const packed = pack(cx, cy, cd, cs, cz, random, kind);
   // and none round a mirror, whose kerb is clean chrome
-  const mirror = themeOf(l).water.mirror;
   const spots = mirror ? [] : crater ? packed.filter((_, i) => i % 3 === 0) : packed;
 
   // the water in the colours of the hole's biome: a layout has one, so the pond kept for it is right
@@ -479,6 +502,24 @@ function build(l: Layout): Pond {
       mesh: shelf.build(),
       material: matte(water.shelf as [number, number, number], mirror ? 0.12 : ROUGH.rock),
     });
+  if (mirror) {
+    // one sheet of clear water, silver: the shallows' colour where it is thin and the deep's where nothing is under it
+    if (one.vertexCount)
+      parts.push({
+        name: 'deep',
+        mesh: one.build(),
+        material: w(water.ocean.body),
+        pattern: {
+          kind: PATTERN.clear,
+          scale: 1,
+          seed: 0,
+          speed: 0,
+          glow: 0,
+          second: water.ocean.tint as [number, number, number],
+        },
+      });
+    return { parts, spots };
+  }
   bands.forEach((b, k) => {
     if (!b.vertexCount) return;
     const mesh: Mesh = b.build();
