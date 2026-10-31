@@ -529,6 +529,37 @@ pictures (kept in `~/.claude/plans/ooergolf-3d-title-evidence/`):
 What is left open: the traced shapes are as good as the picture is, and the colours of the outline and the faces were set by eye
 against the picture, a matter of taste for the user to judge in play.
 
+## After the stages: the biomes
+
+Three looks beside the earth's, for the nine courses of golf of 31 October 2026 (`~/.claude/plans/fizzy-percolating-balloon.md`).
+Each is a theme (`src/theme.ts`) the picture applies as a hole begins, and the earth's is what it always was, held equal by a test.
+The user chose each from a sheet of candidates on 31 October 2026 (`~/.claude/plans/ooergolf-biomes-evidence/`): **Desert B**, **Moon A**
+and **Future A**.
+
+- **The Desert:** red earth, a low hot sun and a pale orange haze; the rough a sparse yellow tuft on bare ground, the fairway a pale
+  straw gold made more different from the rough than the sheet had it, the green a tended oasis, red sand, and a lake that is a
+  hardpan of cracked clay. Its trees are saguaros of sage green in flower, in a hundred and more on a hole; past the hole mesas, scrub,
+  tumbleweeds and bleached stones. Dust at a landing is the sand's colour.
+- **The Moon:** a hard white sun, near-black shade and no haze under a black sky; the rough regolith with no blades, the fairway pale
+  grey on dark dust, craters for lakes (a dark pit and an ejecta rim). No trees, boulders instead, and grey hills; the Earth and stars
+  are seen in the fly-in only, since the play view looks under the horizon. The flag is rigid, and a landing throws a plume that
+  settles slowly. The ball is held legible on grey by its own colour (a contrast of 2.6).
+- **The Future:** bright brushed steel at dusk, with bloom on the neon; the rough a plate with seams and no blades, the green a
+  polished plate, sand a grit plate. Its trees are holograms of cyan rings with no sheet between (the renderer has no alpha on the
+  game's path) that flicker from game time, and a ball passes through; past the hole a skyline of lit windows and pylons. A lake is
+  quicksilver, which mirrors the scene, and the cup glows.
+
+**What the pictures hold** (`smoke/look.spec.ts`, from 31 October 2026): a hole of each, from its tee, with a shot aimed from the aim
+view, and in its fly-in, on a desk and a phone, and a close cactus, hardpan and crater (the Desert's, the Moon's); the Future's, which
+are last in the file, are named for the quicksilver that is in every one of them. `look:metrics` holds each biome's fairway at least
+1.34 (Desert), 1.42 (Moon) and 1.24 (Future) times apart in light from its rough.
+
+**What is left to the user.** The quicksilver's look: on the pictures it is a flat pale mirror of the dusk sky with a gold rim,
+and from a tee on Server Rack its ponds read as dark ovals, so the mirror and the holograms upside down in it are seen only up
+close (`biome-future-quicksilver-lake.png`), and it will likely change; every picture with it in is then written again together and
+looked at. Also how the Moon's grey reads at a distance on a phone, the Earth's low-poly look, and the Future's tee on a hole
+with sand, where the caddie's tip card hides the ball on a phone's fly-in. No person had looked at a biome in play before it landed.
+
 ## Across every stage
 
 - **The frame:** measured before and after at the standard view and the

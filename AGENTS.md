@@ -1,7 +1,8 @@
 # Ooergolf: working on it
 
-Golf in 3D on the top-down mechanic (aim, set the power, let go): three courses of minigolf through obstacles and six of
-golf proper with a bag of clubs, fewest strokes to the cup. TypeScript, Vite, and WebGPU through
+Golf in 3D on the top-down mechanic (aim, set the power, let go): three courses of minigolf through obstacles, six of
+golf proper with a bag of clubs, and nine more of golf in three biomes (the Desert, the Moon and the Future), fewest
+strokes to the cup. TypeScript, Vite, and WebGPU through
 [artshape-render](https://github.com/onion2k/artshape-render), with the physics from
 [artshape-physics](https://github.com/onion2k/artshape-physics). The README says what the game is, `DESIGN.md` what it is
 to be and `LOOK.md` what it is to look like; this file says how it is changed, and `HOW-IT-WORKS.md` is the reference it
@@ -39,15 +40,16 @@ green by moving its baseline.
     npm run check          all of it: check:quick, the slow unit tests, fuzz, determinism, leaks:check, pace:check, bench, smoke (~15 min)
     npm test               every unit test, quick and slow (Vitest, test/)
     npm run fuzz           the game played at random, rules checked; -- --seed N plays one failure again, --on <course> one kind
+                           (links, heath, fells, woods, isles, old, the nine biome courses by short name, contoured, shed, waterworks)
     npm run determinism    the same seed played twice, hashed, to catch chance not from the seed
-    npm run leaks          an hour of play watching what must stay bounded; leaks:check is the ten minutes a kind in check
+    npm run leaks          an hour of play watching what must stay bounded; leaks:check is the ten minutes a kind in check (The Meadow, the six courses, and one course of each biome)
     npm run pace           strokes a round, seed by seed, and each hole's median against par; pace:check holds the figures
     npm run bench          the physics' frame time held to scripts/bench-baseline.json
     npm run perf           boot, frame and download held to smoke/perf-baseline.json and the budget
     npm run smoke          the built game in headless Chromium on the real GPU (Playwright, smoke/): every run builds dist first
                            and serves it with Vite's preview; the models' showcase alone is on a dev server, ten ports up
     npm run look           the scenes and the models' showcase, held to the pictures in smoke/screens
-    npm run look:metrics   the look's colour, framing, contrast, cool shade and shape, held to their floors
+    npm run look:metrics   the look's colour, framing, contrast, cool shade and shape, and each biome's fairway against its rough, held to their floors
     npm run format         prettier, writing: by hand, never by the hook
     npm run value          what each shop item saves the pace player a round (the prices' measure; slow)
     npm run field          the rivals' table, src/field.json, again (~20 min; when a course, the autopilot or a skill changes)
@@ -77,12 +79,18 @@ The whole of it, module by module, is `HOW-IT-WORKS.md`'s _How the code is laid 
   into a layout, the body kinds), `physics.ts` (the only importer of artshape-physics), `obstacles.ts`, `golf.ts` (the
   hole generator), `flight.ts`, `shaping.ts`, `green.ts`, `zones.ts`, `autopilot.ts`, `planner.ts`, `caddie.ts`,
   `director.ts` (the camera's decisions, shared by the page and the fuzzer), `season.ts` and `tournament.ts`.
+- **A biome** is a hole's world: `biome.ts` (the game's side: the world's pace, calm air, the surfaces, the lake's kind and
+  the tree's figures), `trees.ts` (the cactus and the hologram) and `HoleDef.biome`, which `layoutOf` copies to
+  `layout.biome` and every read of a ground figure goes through; `theme.ts` is the picture's side (colours, look, grass or
+  none, models). Earth is a hole that names none, and is to the bit what it was.
 - **The page:** `src/main.ts` wires everything and holds no game logic; `hud.ts` draws the words it is handed;
   `scene.ts`, `ground.ts`, `turf.ts`, `look.ts` and `src/models/` are what is drawn; `shot.ts`, `gesture.ts` and
   `input.ts` turn pointers into a shot through ports; `sound.ts` is what is heard, the only importer of artshape-sound
   (`GameSound`, and the `LazySound` the page holds, which makes the context on the first gesture).
 - **Content:** the courses in `course.ts` (`COURSES`) and one file each (`links.ts`, `heath.ts`, `fells.ts`, `woods.ts`,
-  `isles.ts`, `old.ts`, `shed.ts`, `waterworks.ts`); the shop in `items.ts`; rivals in `rivals.ts` and `field.json`.
+  `isles.ts`, `old.ts`, `shed.ts`, `waterworks.ts`, and the nine of the biomes: `saltpan.ts`, `mesa.ts`, `badlands.ts`,
+  `tranquility.ts`, `copernicus.ts`, `farside.ts`, `neonpark.ts`, `chrome.ts`, `singularity.ts`); the shop in `items.ts`;
+  rivals in `rivals.ts` and `field.json`; the tours (golf, mini and one a biome) in `tours.ts`.
 - **The persisted shape:** `src/progress.ts`, with every save shape ever written in `test/saves/`.
 - **Chance:** `src/random.ts`, handed in. `Game` must be given a `random`; `main.ts` seeds it from `?seed=N` or the
   browser's `crypto.getRandomValues`, and lint refuses `Math.random` anywhere in `src/`.
@@ -139,7 +147,8 @@ What to copy the shape of, when building something new:
 _The test API_. Time: `pause`, `resume`, `step(frames)`, `seed(n)`, and `?seed=N`, `?paused=1`, `?rung=N`, `?title=0`,
 `?flyin=0` on the page. Reading: `state`, `ball`, `bodies`, `content`, `events`, `invariants`, `view()`, `motions()`,
 `caddie()`, `season()`, `sound()` (awake, mute, volume, voices, loops, what is loaded and what each load took, the
-music's beat, and the controls as drawn). Playing: `shoot`, `club`, `chooseCourse`, `startHole`, `playCourse`, `buy`,
+music's beat, and the controls as drawn), `theme()` (the biome's look as the renderer has it: sky, background, sun, haze,
+environment, and whether blades are grown) and `dust()` (the colour a stroke threw up). Playing: `shoot`, `club`, `chooseCourse`, `startHole`, `playCourse`, `buy`,
 `equip`; `mute(on)`, `volume(v)`, and `wake()` for the first gesture. The event log has a `sound …` line for each sound
 an event plays. Playwright's Chromium lifts the autoplay rule, so a context made by `wake()` runs. A smoke test
 starts the page headless with `start(page, { save, seed, paused, rung })` in `smoke/game.ts`, a fresh context and a
@@ -155,6 +164,13 @@ For anything new, check what it does:
 - **phone:** a narrow screen, and a slower GPU: which rung it steps down to
 - **the grass:** whether the rough grows under it and moves in the hole's wind, whether it is lost in the long grass,
   and whether the grass survives every rung of the ladder
+- **a biome:** the first hole of one after a hole of another (look, sky, environment, grass and dust all swapped, and an
+  earth hole after it takes earth's back, the title's sky too); none of the grass on the Moon and in the Future on every
+  rung, and a press and a puff that do nothing wrong; a cactus's foot, a ball passed through a hologram at the fastest
+  shot, a ball at rest under one and struck from it; a pan under the tee shot, run across and never lost to, and a ball
+  that runs off it out of bounds; a crater or quicksilver beside the green, a ball put back beside a pit; the Moon's
+  flight of 1.53 times the hang, a calm that shows no wind, and the camera and the aim view on it, desk and phone; the
+  picker's five tabs at 400 px; a fee refused and a reload mid-event on each new tour
 - **the ball in flight:** struck by it, struck into it at full power, landed on from above; never passed through at the
   fastest shot there is
 - **the ball at rest:** on it, against it, wedged between it and a wall; the ball always comes to rest
@@ -266,6 +282,11 @@ Each of the kit's checks, as surveyed on 17 October 2026, and the order the miss
 - **Mutation checks are by hand,** in the work's report, with no tool to record them.
 - **What only a person can judge:** how a course feels to play, a matter of taste in the look, and the limits listed in
   `HOW-IT-WORKS.md`'s _What is not there yet_.
+- **The biomes were not played by a person** before they landed (31 October 2026), and the quicksilver's look is the
+  user's to choose. **Leak runs are one course a biome** (The Saltpan, Copernicus and Chrome Heights, not nine): a biome's
+  three courses share every line a leak run watches. **A biome's frames are held to the budget alone** (`smoke/biome-frames.spec.ts`,
+  its heaviest tees) and not to a baseline, so `perf`'s biggest hole stays the earth's; and only the fairway against the
+  rough is a floor for a biome (`look-metrics.spec.ts` says why not the rest).
 
 ## How a change lands
 

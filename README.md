@@ -62,7 +62,7 @@ is a cushion, posts and round kickers throw the ball back harder than it came, a
 flings a ball timed to it, bumpers slide and throw, and the cup is often round a corner that only a bank gets to. The
 Waterworks is water and timing: the ball one slip from the water on causeways, stones and a tilted lane, streams, belts
 drawn as running water, that carry a ball along and never sink it, and barriers, a windmill's door and a bumper to time. A hole's ground may slope, and the break is shown over one that does: arrows, the putt's
-roll and the words. Six courses of golf follow, nine holes each, easiest first. The Links is hills, bunkers, water and trees. The
+roll and the words. Six courses of golf follow, nine holes each, easiest first (nine more, in the biomes, are below). The Links is hills, bunkers, water and trees. The
 Heath is short and tight: par threes and short fours through woods, a lane cut through the wood on every dogleg, small quick
 greens and a fresh wind. The Fells is steep fell-side ground
 that a ball runs down, with level shelves to land on, doglegs, lakes and lanes cut through woods that a true drive can fly
@@ -70,6 +70,13 @@ and a slice cannot. The Woods is forest on every hole: a wood walls each fairway
 strays is under a canopy. The Isles is nine long holes, a par four to a par six, round big lakes with islands, one of them a green
 that is itself an island, and sand everywhere. The Old Course is the hardest, long holes that each ask two things of a player:
 a lake to carry, a wood with a lane, ground that runs, sand, a pond on the line.
+
+Nine more courses of golf are in three biomes, a world each. In **the Desert** (The Saltpan, The Mesa, The Badlands) trees are
+cacti a ball drops at the foot of, a lake is a dried hardpan a ball skitters across and is never lost to, the ground runs on
+and the gusts are strong. On **the Moon** (Tranquility, Copernicus, The Far Side) there are no trees and no wind, a lake is a
+crater, and the ball hangs in the air 1.53 times as long over the same distances, under a black sky with the Earth in it. In **the
+Future** (Neon Park, Chrome Heights, The Singularity) trees are holograms a ball passes through, slowed, and a lake is quicksilver,
+at dusk, on steel plates. Each biome is a tour of its own, three events, on the start screen's tabs.
 
 Every shot is heard: the club meeting the ball (a wood's ping, an iron's click), the ball landing and hopping, a knock off a
 rail, the rattle of the cup and a run up a marimba as good as the score, polite applause for a birdie: every sound answers something
@@ -142,6 +149,11 @@ fixed, and no baseline is moved to make it green.
     src/heath.ts       The Heath: nine short, tight holes through woods with a lane on every dogleg, made when asked for
     src/woods.ts       The Woods: nine holes walled by forest, a lane through every corner, made when asked for
     src/old.ts         The Old Course: nine long holes that each ask two things, the hardest, made when asked for
+    src/biome.ts       a hole's world: the pace of its clock, its air, its ground's figures, its lake and its tree
+    src/theme.ts       what a biome looks like: ground, light, grass or none, models
+    src/saltpan.ts, mesa.ts, badlands.ts          the Desert's three courses of nine holes
+    src/tranquility.ts, copernicus.ts, farside.ts  the Moon's three
+    src/neonpark.ts, chrome.ts, singularity.ts     the Future's three
     src/trees.ts       a tree's trunk and its canopy, a cone the game tests a ball's step against
     src/route.ts       the way to the cup round water, out of bounds and trees
     src/planner.ts     a golf shot tried in a rehearsal, judged, and chosen

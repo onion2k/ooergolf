@@ -3,8 +3,10 @@
  * with no console error, and the renderer reports the look of its theme (sky, environment, haze, and whether blades are grown);
  * a hole of another biome after it takes its look, and an earth hole after any of them takes earth's back, every field, sky
  * included. A biome's hole is drawn inside the frame budget, and the words on the page keep their contrast against the Moon's
- * dark and the future's dusk. No course is in a biome yet: the holes are The Links' Water Carry made in each, played as a course
- * of its own (`playCourse`). The pictures of them are `look.spec.ts`'s, from Part 13.
+ * dark and the future's dusk. These are the biome seam's own scenes, on test holes (The Links' Water Carry made in each, and the
+ * biggest woods made a desert and a future, played as a course of their own through `playCourse`), held on every rung of the
+ * ladder; the nine real courses' heaviest tees and longest holes are `biome-frames.spec.ts`'s, and their pictures are
+ * `look.spec.ts`'s.
  */
 import { expect, test, type Page } from '@playwright/test';
 import { golfHole } from '../src/golf';
