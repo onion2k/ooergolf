@@ -53,6 +53,7 @@ const SLOW = [
   'test/lie-zones.test.ts',
   'test/lineofplay.test.ts',
   'test/links.test.ts',
+  'test/neonpark.test.ts',
   'test/noise.test.ts',
   'test/old.test.ts',
   'test/overhead-far.test.ts',
