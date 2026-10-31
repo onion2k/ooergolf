@@ -165,7 +165,7 @@ export function play(spec: GolfSpec, rounds: number, from = 1): Figures | string
   } catch (e) {
     return (e as Error).message;
   }
-  const layout = layoutOf(hole.map, hole.terrain);
+  const layout = layoutOf(hole.map, hole.terrain, undefined, hole.biome);
   const scores: number[] = [];
   let oob = 0,
     water = 0,
@@ -234,7 +234,7 @@ async function main() {
     }
     // The Links' lines are as they always were; the newer courses add what they are held to.
     const hole = golfHole(spec);
-    const running = await runningShareOf(layoutOf(hole.map, hole.terrain), hole.greens);
+    const running = await runningShareOf(layoutOf(hole.map, hole.terrain, undefined, hole.biome), hole.greens);
     console.log(JSON.stringify({ ...f, running: running === null ? 'n/a' : round(running) }));
   }
 }
