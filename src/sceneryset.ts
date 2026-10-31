@@ -20,6 +20,8 @@ export interface SceneryModels {
   far: { conifer?: Model[]; broadleaf?: Model[] };
   /** A golf tree baked for the one turn it is drawn at; null where the biome has no tree (the Moon's). */
   golfTree: Model[] | null;
+  /** A golf tree at each of its levels of glow, for a tree that flickers (a hologram): none for a tree that does not. */
+  golfLevels: Model[] | null;
   /** What drifts on the wind, baked for the one turn it is drawn at; null where the biome has nothing that does. */
   drift: Model[] | null;
   /** How many of the far trees on the hills are one drawn. */
@@ -51,6 +53,10 @@ export function sceneryOf(theme: Theme): SceneryModels {
       beyond: bake(s.beyond),
       far: bake(s.far),
       golfTree: s.golfTree && tree ? bucketed(() => s.golfTree!(tree), TONE_SUN, sceneryRule, 1) : null,
+      golfLevels:
+        s.golfTree && s.golfGlows && tree
+          ? s.golfGlows.map((glow) => bucketed(() => s.golfTree!(tree, glow), TONE_SUN, sceneryRule, 1)[0])
+          : null,
       drift: s.drift ? bucketed(s.drift, TONE_SUN, sceneryRule, 1) : null,
       hills: s.hills,
     };

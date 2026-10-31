@@ -972,6 +972,13 @@ async function main() {
       for (const e of strikePuff(x, y, Math.min(1, speed / 60), ground, puffs)) renderer.emit(e);
       drawn.dust = [...puffs[ground]];
     },
+    // through a hologram: a burst of light from where it went in, and that tree flares
+    flickered(x, y) {
+      if (!game) return;
+      scene.flaredAt(x, y, game.t);
+      for (const e of strikePuff(x, y, 0.6, 'grass', themeOf(game.layout).puff)) renderer.emit(e);
+      log('flickered');
+    },
     // knocked off the rail, a post or the ground it dropped onto: squashed along it, and sprung back
     knocked(hard, x, y, dx, dy, dz) {
       if (!game) return;
@@ -1011,7 +1018,7 @@ async function main() {
       if (crater && game) {
         const theme = themeOf(game.layout);
         for (const e of craterDust(x, y, theme.puff.grass, CRATER.drop)) renderer.emit(e);
-      } else for (const e of splash(x, y)) renderer.emit(e);
+      } else for (const e of splash(x, y, game ? themeOf(game.layout).puff.splash : undefined)) renderer.emit(e);
     },
     // out of bounds: a word for it, and the stroke it cost; the ball put back is round
     outOfBounds() {

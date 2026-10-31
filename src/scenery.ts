@@ -426,7 +426,7 @@ export interface Dressed {
   great: boolean;
   /** Whether a golf hole's edge is strung with bunting: not where nothing blows, or a string would hang wrong in no wind. */
   bunting: boolean;
-  far: { most: number; per: number; clump: number; size: number; scale: number; spread: number };
+  far: { most: number; per: number; clump: number; size: number; scale: number; spread: number; from: number };
 }
 const EARTH_DRESSED: Dressed = {
   wood: WOOD,
@@ -436,7 +436,15 @@ const EARTH_DRESSED: Dressed = {
   size: BEYOND.size,
   great: true,
   bunting: true,
-  far: { most: FAR.most, per: 55, clump: FAR.clump, size: FAR.size, scale: FAR.scale, spread: FAR.spread },
+  far: {
+    most: FAR.most,
+    per: 55,
+    clump: FAR.clump,
+    size: FAR.size,
+    scale: FAR.scale,
+    spread: FAR.spread,
+    from: FAR.from,
+  },
 };
 export const DRESSED: Record<BiomeName, Dressed> = {
   earth: EARTH_DRESSED,
@@ -457,7 +465,7 @@ export const DRESSED: Record<BiomeName, Dressed> = {
     size: 6,
     great: false,
     bunting: true,
-    far: { most: 260, per: 130, clump: 30, size: 2, scale: 7, spread: 6 },
+    far: { most: 260, per: 130, clump: 30, size: 2, scale: 7, spread: 6, from: FAR.from },
   },
   // the Moon: no tree, so no wood, and boulders and stones only, in small sparse scatters; no bunting; no far woods
   moon: {
@@ -472,9 +480,27 @@ export const DRESSED: Record<BiomeName, Dressed> = {
     size: 5,
     great: false,
     bunting: false,
-    far: { most: 0, per: 55, clump: FAR.clump, size: FAR.size, scale: FAR.scale, spread: FAR.spread },
+    far: { most: 0, per: 55, clump: FAR.clump, size: FAR.size, scale: FAR.scale, spread: FAR.spread, from: FAR.from },
   },
-  future: EARTH_DRESSED,
+  // the Future: no wood of round trees, pylons and bollards in groves far apart with plinths between, so the near ground is never a
+  // wall of light (the sheet's rings crowded the fairway); no bunting; and a skyline of towers far past the near ground, never beside
+  // the hole
+  future: {
+    wood: [
+      ['conifer', 2],
+      ['bush', 3],
+    ],
+    scrub: [
+      ['bush', 3],
+      ['rock', 3],
+    ],
+    woodShare: 0.3,
+    per: BEYOND.per * 0.6,
+    size: 5,
+    great: false,
+    bunting: false,
+    far: { most: 220, per: 120, clump: 40, size: 3, scale: 22, spread: 16, from: 260 },
+  },
 };
 
 export function farWoods(layout: Layout, name: string): Piece[] {
@@ -495,7 +521,7 @@ export function farWoods(layout: Layout, name: string): Piece[] {
       cx = x0 - FAR.to + random() * (x1 - x0 + 2 * FAR.to);
       cy = y0 - FAR.to + random() * (y1 - y0 + 2 * FAR.to);
       const d = Math.max(x0 - cx, cx - x1, y0 - cy, cy - y1);
-      ok = d > FAR.from && d < FAR.to && random() < 1 - ((d - FAR.from) / (FAR.to - FAR.from)) * FAR.thin;
+      ok = d > far.from && d < FAR.to && random() < 1 - ((d - far.from) / (FAR.to - far.from)) * FAR.thin;
     }
     if (!ok) continue;
     const count = 3 + Math.floor(random() * far.size);

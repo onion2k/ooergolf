@@ -103,8 +103,8 @@ describe('every theme', () => {
     for (const name of NAMES) {
       const t = THEMES[name];
       expect(t.name).toBe(name);
-      expect(shape({ ...t, grass: null, layers: null, name: null, puff: null }), name).toEqual(
-        shape({ ...THEMES.earth, grass: null, layers: null, name: null, puff: null }),
+      expect(shape({ ...t, grass: null, layers: null, name: null, puff: null, scenery: null }), name).toEqual(
+        shape({ ...THEMES.earth, grass: null, layers: null, name: null, puff: null, scenery: null }),
       );
       expect(Object.keys(t.ground).sort(), name).toEqual(Object.keys(THEMES.earth.ground).sort());
       expect(Object.keys(t.look).sort(), name).toEqual(Object.keys(THEMES.earth.look).sort());

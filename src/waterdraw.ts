@@ -465,7 +465,9 @@ function build(l: Layout): Pond {
 
   // a crater's rim has a boulder here and there, a third of the ring and not a wall of them
   const packed = pack(cx, cy, cd, cs, cz, random, kind);
-  const spots = crater ? packed.filter((_, i) => i % 3 === 0) : packed;
+  // and none round a mirror, whose kerb is clean chrome
+  const mirror = themeOf(l).water.mirror;
+  const spots = mirror ? [] : crater ? packed.filter((_, i) => i % 3 === 0) : packed;
 
   // the water in the colours of the hole's biome: a layout has one, so the pond kept for it is right
   const water = themeOf(l).water;
@@ -475,7 +477,7 @@ function build(l: Layout): Pond {
     parts.push({
       name: 'shelf',
       mesh: shelf.build(),
-      material: matte(water.shelf as [number, number, number], ROUGH.rock),
+      material: matte(water.shelf as [number, number, number], mirror ? 0.12 : ROUGH.rock),
     });
   bands.forEach((b, k) => {
     if (!b.vertexCount) return;

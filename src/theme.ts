@@ -22,6 +22,7 @@ import { OCEAN } from './models/obstacles';
 import { SUN } from './sun';
 import { BANK_STONE, boulder, broadleaf, bush, conifer, farTree, fern, golfTree } from './models/lowpoly';
 import { moonBoulder } from './models/moon';
+import { FUTURE, bollard, hologram, plinth, pylon, tower } from './models/future';
 import { DESERT, barrel, golfCactus, mesa, saguaro, scrub, tuft, tumbleweed } from './models/desert';
 import type { Model } from './models/part';
 import { BANK_TINT } from './tint';
@@ -115,7 +116,13 @@ export interface Scenery {
   /** The far woods past them and on the backdrop's hills, a unit tall to be scaled: the cheapest of each kind. */
   far: { conifer: Maker | null; broadleaf: Maker | null };
   /** A golf tree, to the figures the game tests a ball against (`treeOf(layout)`): what is seen is what the ball meets. */
-  golfTree: ((tree: TreeFigures) => Model) | null;
+  golfTree: ((tree: TreeFigures, glow?: number) => Model) | null;
+  /**
+   * How brightly a golf tree shines at each of its levels, brightest first (flared, lit, dimmed, nearly out), for a tree that
+   * flickers (a hologram): the tree is then made at each of these and drawn from the pool of its level, a frame at a time, by
+   * `flicker.ts`. None for a tree that does not.
+   */
+  golfGlows?: readonly number[];
   /** A thing that drifts over the ground on the wind and is drawn only, with no body in the world (the desert's tumbleweed). */
   drift: Maker | null;
   /** How many of the far trees on the backdrop's hills are one drawn: one for each `hills`, so one is all of them. */
@@ -152,6 +159,8 @@ export interface Theme {
   /** Where a full crest of the rough goes (`BANK_TINT.crest.to`). */
   crest: Rgb;
   water: {
+    /** Whether the lake is a mirror of quicksilver: a bright smooth sheet in a chrome kerb, with no stones round it and a ring where a ball goes in. */
+    mirror: boolean;
     /** Whether the lake is a crater: a bowl going down dark, a pale rim round it, a deep matte pit and no ring on the surface where a ball goes in. */
     crater: boolean;
     /** The four bands of a lake, from the foam in. */
@@ -192,6 +201,8 @@ export interface Theme {
   scenery: Scenery;
   /** What a stroke and a ball landing throw up: the dust a desert's ground gives, a Moon's regolith, the sparks of a future's plates. Earth's is the grass and sand it always threw. */
   puff: Puffs;
+  /** Whether the cup has a ring of light round its mouth (the Future's). */
+  cupGlow: boolean;
   /** Whether the flag is held out rigid on a wire along its top, as a flag is where no wind blows it (the Moon's). */
   rigidFlag: boolean;
 }
@@ -249,7 +260,14 @@ const earth: Theme = {
   name: 'earth',
   ground: EARTH_GROUND,
   crest: BANK_TINT.crest.to,
-  water: { crater: false, bands: EARTH_BANDS, shelf: EARTH_SHELF, stones: BANK_STONE.colours, ocean: OCEAN },
+  water: {
+    crater: false,
+    mirror: false,
+    bands: EARTH_BANDS,
+    shelf: EARTH_SHELF,
+    stones: BANK_STONE.colours,
+    ocean: OCEAN,
+  },
   map: { sand: PALETTE.sand, water: PALETTE.waterMid },
   backdrop: {
     hill: PALETTE.hill,
@@ -266,6 +284,7 @@ const earth: Theme = {
   scenery: earthScenery(),
   puff: PUFF,
   rigidFlag: false,
+  cupGlow: false,
 };
 
 /** A biome's ground from the sheet's hex colours (fairway, mown fairway, rough, out of bounds, green, mown green, tee, first cut, sand, lip), and its bank a share of the rough's. */
@@ -311,6 +330,7 @@ const desert: Theme = {
   crest: lit('e4b45e'),
   water: {
     crater: false,
+    mirror: false,
     bands: ['e6cfa0', 'd8b880', 'cfa870', 'c49a62'].map(lit),
     shelf: lit('a87c52'),
     stones: ['d8bc94', 'c49a70', 'a87c58'].map(lit),
@@ -376,6 +396,7 @@ const desert: Theme = {
   // the screen's own scale, as `PUFF`'s are)
   puff: { grass: [0.86, 0.68, 0.44], sand: [0.8, 0.42, 0.28] },
   rigidFlag: false,
+  cupGlow: false,
 };
 
 /** The Moon, Moon A of the sheet: a pale fairway on dark dust under a hard sun, a black sky, no blades, no clouds. */
@@ -391,6 +412,7 @@ const moon: Theme = {
   crest: lit('8d8c8e'),
   water: {
     crater: true,
+    mirror: false,
     // from the lip in, the dust's own colour darkening down the bowl to a near black pit; the shelf (the water's tiles outside the curve,
     // where the ground is level) is the dust itself, so a tile that sticks out reads as the bowl's lip and not a dark box
     bands: ['6a696c', '4a494d', '2c2b2f', '17161a'].map(lit),
@@ -452,22 +474,26 @@ const moon: Theme = {
   puff: { grass: [0.74, 0.74, 0.76], sand: [0.5, 0.5, 0.53], gravity: 0.22, life: 1.5, deep: 1.5 },
   // a world with no wind holds its flag out on a wire
   rigidFlag: true,
+  cupGlow: false,
 };
 
 /** The Future, Future A of the sheet: bright steel at dusk, a plate texture on the ground, mirrored water, no blades. */
 const future: Theme = {
   name: 'future',
   ground: ground(
-    ['b4c2d0', 'a6b5c4', '7f8d9c', '6c7988', 'dbe7f2', 'cedbe8', 'eef5fb', '94a4b4', '3b4552', 'ffc83a'],
+    // the green and the tee brought down a little from the sheet's white, so the ball (white itself) is seen on them
+    ['b4c2d0', 'a6b5c4', '7f8d9c', '6c7988', 'c6d3e2', 'bccada', 'c8d4e2', '94a4b4', '3b4552', 'ffc83a'],
     0.6,
   ),
   crest: lit('9fb0c4'),
   water: {
     crater: false,
-    bands: ['ffffff', 'e8eef4', 'd4dce4', 'c4ced8'].map(lit),
-    shelf: lit('8fa0b2'),
+    // quicksilver: a bright smooth sheet that mirrors the dusk, in a kerb of chrome with no stones round it
+    mirror: true,
+    bands: ['f4f8fc', 'd0dae8', 'aab6cc', '8490ac'].map(lit),
+    shelf: lit('dfe7f0'),
     stones: ['dfe6ee', '8fa0b2', '6c7c8e'].map(lit),
-    ocean: { ...OCEAN, body: lit('b8c4d0'), tint: lit('ffffff'), tilt: 0.06, scale: 0.18, speed: 0.15 },
+    ocean: { ...OCEAN, body: lit('5a6684'), tint: lit('ffffff'), tilt: 0.3, scale: 0.2, speed: 0.18 },
   },
   map: { sand: lit('3b4552'), water: lit('d4dce4') },
   backdrop: {
@@ -499,11 +525,33 @@ const future: Theme = {
     fog: { colour: [0.5, 0.25, 0.5], density: Math.LN2 / HAZE.halfWay },
     env: 'dusk',
   },
-  // Part 8 fills the future's in: holograms for trees, pylons and a skyline for the far woods
-  scenery: earthScenery(),
-  // Part 8: the sparks of a plate, where earth's green puff stands for them for now
-  puff: PUFF,
+  scenery: {
+    // the roles of `scenery.ts` in the Future: no round tree, a pylon for a conifer, a bollard for a bush, a plinth for a rock, and
+    // the skyline of dark towers with lit bands for the far woods
+    scatter: {
+      broadleaf: null,
+      conifer: () => pylon(7),
+      bush: () => bollard(1.4),
+      fern: null,
+      rock: () => plinth(ROCK_SIZE),
+    },
+    beyond: {
+      broadleaf: null,
+      conifer: () => pylon(12, { seed: 2 }),
+      bush: () => bollard(2.2, { seed: 6 }),
+      fern: null,
+      rock: () => plinth(2.6, { seed: 9 }),
+    },
+    far: { conifer: () => tower({ seed: 1 }), broadleaf: () => tower({ seed: 2, width: 0.7, light: FUTURE.pink }) },
+    golfTree: (tree, glow) => hologram(tree, { glow }),
+    golfGlows: [7, 3.2, 1.2, 0.2],
+    drift: null,
+    hills: 6,
+  },
+  // sparks off a plate where a ball strikes or lands, the cyan of the light; a ball into quicksilver throws silver droplets
+  puff: { grass: [0.45, 0.95, 1], sand: [1, 0.82, 0.3], gravity: 0.7, life: 0.4, deep: 1.1, splash: [0.9, 0.94, 1] },
   rigidFlag: false,
+  cupGlow: true,
 };
 
 /** Every biome's theme. */

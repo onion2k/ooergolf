@@ -28,6 +28,8 @@ export interface Puffs {
   readonly gravity?: number;
   readonly life?: number;
   readonly deep?: number;
+  /** The colour of what a ball into a lake throws up, where it is not water's own (the Future's quicksilver). */
+  readonly splash?: readonly number[];
 }
 
 /** A puff from under the ball at (x, y), struck at `power` of the hardest shot: grass, or sand from a bunker. */
@@ -211,7 +213,7 @@ export function fireworkEmits(x: number, y: number, z: number, step: number): Em
 }
 
 /** A splash where the ball went into the water at (x, y). */
-export function splash(x: number, y: number): Emit[] {
+export function splash(x: number, y: number, colour: readonly number[] = [0.75, 0.9, 1]): Emit[] {
   return [
     {
       // from the water's own surface, which lies below the grass, and falling back onto it
@@ -223,7 +225,7 @@ export function splash(x: number, y: number): Emit[] {
       lifeSpread: 0.3,
       size: 0.22,
       growth: 0.6,
-      colour: [0.75, 0.9, 1],
+      colour: [colour[0], colour[1], colour[2]],
       alpha: 0.8,
       gravity: 1,
       floor: WATER_LEVEL - 0.1,

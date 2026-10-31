@@ -16,6 +16,7 @@ import { BIOMES, type BiomeName } from '../src/biome';
 import { LOOKS } from './biomes';
 import { BUDGET } from './budget';
 import { drag, start, watch } from './game';
+import { levelHole } from '../test/level';
 import { alone } from './gpu';
 import { CONTRAST, read } from './panels';
 
@@ -289,6 +290,7 @@ test('a ball into the crater through a real drag costs a stroke, throws up dust 
     for (let p = 0.3; p <= 1.001; p += 0.05) {
       g.startHole(0);
       g.step(5);
+      g.club('PW');
       g.shoot(Math.PI / 2, p);
       g.step(600);
       if (g.events().some((e) => e.startsWith('splash'))) return p;
@@ -330,5 +332,214 @@ test('a ball into the crater through a real drag costs a stroke, throws up dust 
   expect(await page.evaluate(() => window.game!.invariants())).toEqual([]);
   // the wind is not told on a calm world
   expect(await page.evaluate(() => window.game!.motions().wind ?? null)).toBeNull();
+  expect(problems).toEqual([]);
+});
+
+/** The heaviest Future tee there is: the biggest wood of The Woods made the Future, whose trees are holograms. */
+function heavyFuture() {
+  const hole = golfHole({ ...WOODS_SPECS[6], name: 'Heavy future', biome: 'future' });
+  return { ...hole, terrain: Array.from(hole.terrain as Float32Array) };
+}
+
+for (const [screen, width, height] of [
+  ['a desk', 1280, 800],
+  ['a phone', 400, 860],
+] as const)
+  test(`a heavy Future tee, a wood of glowing holograms, is drawn inside the frame budget on ${screen}, on every rung, and flickers`, async ({
+    page,
+  }, info) => {
+    test.setTimeout(240_000);
+    await page.setViewportSize({ width, height });
+    const costs: number[] = [];
+    for (let rung = 0; rung < 4; rung++) {
+      const problems = watch(page);
+      await start(page, { seed: 5, paused: true, rung });
+      await page.evaluate((hole) => {
+        window.game!.playCourse([{ ...hole, terrain: Float32Array.from(hole.terrain) }]);
+        window.game!.step(60);
+      }, heavyFuture());
+      expect((await page.evaluate(() => window.game!.theme())).name).toBe('future');
+      expect(await page.evaluate(() => window.game!.content().trees.length), 'a wood of holograms').toBeGreaterThan(50);
+      costs.push(
+        await alone(() =>
+          page.evaluate(async () => {
+            window.game!.step(1);
+            return window.game!.measureFrame(300);
+          }),
+        ),
+      );
+      expect(problems).toEqual([]);
+    }
+    const shown = costs.map((c) => Math.round(c * 100) / 100);
+    info.annotations.push({ type: 'frames', description: JSON.stringify(shown) });
+    console.log(`a heavy Future tee on ${screen}, each rung (ms): ${shown.join(', ')}`);
+    for (const [rung, ms] of costs.entries())
+      expect(ms, `rung ${rung}: inside the ${BUDGET.frameMs} ms budget`).toBeLessThanOrEqual(BUDGET.frameMs);
+  });
+
+test('a hologram is drawn the same at the same game time on two runs, byte for byte: its flicker is time and nothing else', async ({
+  browser,
+}) => {
+  test.setTimeout(150_000);
+  const shots: Buffer[] = [];
+  for (let run = 0; run < 2; run++) {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+    const problems = watch(page);
+    await start(page, { seed: 5, paused: true });
+    await begin(page, 'future');
+    await page.evaluate(() => window.game!.step(97));
+    await page.waitForTimeout(1200);
+    shots.push(await page.screenshot({ clip: { x: 340, y: 100, width: 600, height: 400 } }));
+    expect(problems).toEqual([]);
+    await page.close();
+  }
+  expect(shots[1].equals(shots[0]), 'the same pixels on both runs').toBe(true);
+});
+
+test('a ball struck through a hologram by a real drag is told of it, is slowed and not knocked, and the ball in quicksilver costs a stroke and says so', async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  const problems = watch(page);
+  await start(page, { seed: 5, paused: true });
+  const holeSpec = levelHole({
+    name: 'Through a hologram',
+    par: 3,
+    length: 150,
+    biome: 'future',
+    trees: [{ along: 40, across: 0 }],
+  });
+  const hole = { ...holeSpec, terrain: holeSpec.terrain ? Array.from(holeSpec.terrain as Float32Array) : undefined };
+  // a club and a power that go through the hologram, found by the API, the hole put back each time
+  const found = await page.evaluate((h) => {
+    const g = window.game!;
+    g.playCourse([{ ...h, terrain: h.terrain ? Float32Array.from(h.terrain) : undefined }]);
+    // the middle of a run of powers that all go through (a shot that only just clips the cone is not the one to drag)
+    for (const club of ['sand-wedge', 'pitching-wedge', '9-iron', '7-iron', '5-iron', 'driver']) {
+      const hits: number[] = [];
+      for (let p = 0.2; p <= 1.001; p += 0.05) {
+        g.startHole(0);
+        g.step(5);
+        g.club(club);
+        g.shoot(Math.PI / 2, p);
+        g.step(900);
+        if (g.events().some((e) => e.startsWith('flickered'))) hits.push(p);
+      }
+      if (hits.length >= 3) return { club, p: hits[Math.floor(hits.length / 2)] };
+    }
+    return null;
+  }, hole);
+  expect(found, 'a shot that goes through the hologram').not.toBeNull();
+  await page.evaluate(
+    ([club]) => {
+      const g = window.game!;
+      g.startHole(0);
+      g.step(180);
+      g.club(club);
+    },
+    [found!.club] as const,
+  );
+  const plan = await page.evaluate(() => {
+    const g = window.game!;
+    const b = g.ball();
+    return {
+      from: g.project(b.x, b.y, b.z),
+      back: g.project(b.x, b.y - 4, b.z),
+      short: Math.min(innerWidth, innerHeight),
+    };
+  });
+  const dx = plan.back.x - plan.from.x,
+    dy = plan.back.y - plan.from.y,
+    len = Math.hypot(dx, dy);
+  const pull = found!.p * DRAG.full * plan.short;
+  await drag(
+    page,
+    plan.from,
+    { x: plan.from.x + (dx / len) * pull, y: plan.from.y + (dy / len) * pull },
+    { steps: 10 },
+  );
+  await page.evaluate(() => window.game!.step(900));
+  const events = await page.evaluate(() => window.game!.events());
+  expect(
+    events.some((e) => e.startsWith('flickered')),
+    `told of a ball through a hologram ${JSON.stringify({ found, events, pull, short: plan.short })}`,
+  ).toBe(true);
+  // not knocked by the hologram: nothing knocks before the ball has gone through it (a knock after is the ground it came down on)
+  const through = events.findIndex((e) => e.startsWith('flickered'));
+  expect(
+    events.slice(0, through).some((e) => e.startsWith('knocked')),
+    'and not knocked by it',
+  ).toBe(false);
+  expect(await page.evaluate(() => window.game!.state().strokes)).toBe(1);
+  expect(await page.evaluate(() => window.game!.invariants())).toEqual([]);
+
+  // and into the mirror, on Water Carry in the Future, by a drag as the crater's was
+  await begin(page, 'future');
+  const found2 = await page.evaluate(() => {
+    const g = window.game!;
+    // the middle of a run of powers that all find the water, with the first club of the bag that has one
+    for (const club of ['driver', '3-wood', '5-iron', '7-iron', 'pitching-wedge']) {
+      const hits: number[] = [];
+      for (let p = 0.3; p <= 1.001; p += 0.05) {
+        g.startHole(0);
+        g.step(5);
+        g.club(club);
+        g.shoot(Math.PI / 2, p);
+        g.step(600);
+        if (g.events().some((e) => e.startsWith('splash'))) hits.push(p);
+      }
+      if (hits.length >= 3) return { club, p: hits[Math.floor(hits.length / 2)] };
+    }
+    return null;
+  });
+  const power = found2?.p ?? null;
+  expect(power, 'a club that finds the quicksilver').not.toBeNull();
+  await page.evaluate(() => {
+    const g = window.game!;
+    g.startHole(0);
+    g.step(180);
+  });
+  await page.evaluate((club) => window.game!.club(club), found2!.club);
+  const water = await page.evaluate(() => {
+    const g = window.game!;
+    const b = g.ball();
+    return {
+      from: g.project(b.x, b.y, b.z),
+      back: g.project(b.x, b.y - 4, b.z),
+      short: Math.min(innerWidth, innerHeight),
+    };
+  });
+  const wx = water.back.x - water.from.x,
+    wy = water.back.y - water.from.y,
+    wl = Math.hypot(wx, wy);
+  const wpull = (power as number) * DRAG.full * water.short;
+  await drag(
+    page,
+    water.from,
+    { x: water.from.x + (wx / wl) * wpull, y: water.from.y + (wy / wl) * wpull },
+    { steps: 10 },
+  );
+  // (the ring spreads for a moment and fades: its widest is read as the frames go by)
+  const ring = await page.evaluate(() => {
+    let widest = 0;
+    for (let f = 0; f < 600; f += 5) {
+      window.game!.step(5);
+      widest = Math.max(widest, window.game!.motions().splash);
+    }
+    return widest;
+  });
+  const after = await page.evaluate(() => ({
+    strokes: window.game!.state().strokes,
+    events: window.game!.events(),
+    ball: window.game!.ball(),
+  }));
+  expect(
+    after.strokes,
+    `a stroke, and the one it cost ${JSON.stringify({ power, wpull, water: water.short, after })}`,
+  ).toBe(2);
+  await expect(page.getByText(/quicksilver/i)).toBeVisible();
+  // a ring spreads over the silver, as it does not over earth's open water
+  expect(ring).toBeGreaterThan(0);
+  expect(await page.evaluate(() => window.game!.invariants())).toEqual([]);
   expect(problems).toEqual([]);
 });

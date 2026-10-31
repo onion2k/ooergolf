@@ -16,7 +16,7 @@ import { createContext } from 'artshape-render/gpu/context';
 import { KICKER, layoutOf } from './arena';
 import { frameCost } from './frame-cost';
 import { railsOf } from './ground';
-import { CACTUS, TREE } from './trees';
+import { CACTUS, HOLOGRAM, TREE } from './trees';
 import { daylight } from './look';
 import { THEMES } from './theme';
 import { place } from './matrix';
@@ -49,6 +49,12 @@ import {
   mesa,
   tumbleweed,
   DESERT,
+  bollard,
+  cupGlow,
+  hologram,
+  plinth,
+  pylon,
+  tower,
   moonBoulder,
   boulder,
   broadleaf,
@@ -114,7 +120,7 @@ const TITLE_POLAR = 1.5;
 /** How big the title is stood, as a multiple of its own units (a picture pixel is a hundredth), and how high its middle is off the grass. */
 const TITLE = { scale: 2.4, lift: 12 };
 
-type Row = 'course' | 'obstacles' | 'decoration' | 'desert' | 'moon';
+type Row = 'course' | 'obstacles' | 'decoration' | 'desert' | 'moon' | 'future';
 interface Item {
   model: Model;
   x: number;
@@ -344,6 +350,32 @@ function desertExhibits(seed: number): Exhibit[] {
 }
 
 /**
+ * The Future's scenery as `?model=future` shows it, in its own dusk: the hologram at each of its four levels of glow (flared, lit,
+ * dimmed, nearly out) side by side, a pylon, a bollard, a plinth, a tower and a ring of light for a cup. Only when asked for, so the
+ * showcase's other views and the pictures held of them are as they were.
+ */
+function futureExhibits(): Exhibit[] {
+  const at = (k: number) => -32 + k * 8;
+  const row = (name: string, label: string, model: Model, k: number, scale = 1, z = 0): Exhibit => ({
+    name: `future-${name}`,
+    label,
+    row: 'future',
+    items: [{ model, x: at(k), y: -8, z, scale }],
+  });
+  const glows = THEMES.future.scenery.golfGlows!;
+  return [
+    ...glows.map((glow, k) =>
+      row(`hologram-${k}`, ['flared', 'lit', 'dimmed', 'nearly out'][k], hologram(HOLOGRAM, { glow }), k),
+    ),
+    row('pylon', 'pylon', lit(pylon(12)), 4),
+    row('bollard', 'bollard', lit(bollard(2.4)), 5),
+    row('plinth', 'plinth', lit(plinth(3)), 6),
+    row('tower', 'tower', tower(), 7, 14),
+    row('cup-glow', 'cup glow', cupGlow(3), 8, 1, 0.1),
+  ];
+}
+
+/**
  * The Moon's scenery as `?model=moon` shows it, lit by the Moon's hard sun: a boulder and a stone, and the flag on its wire beside a
  * flag on earth's, which flies. (The stars and the Earth stand on a dome two thousand yards out and are pictured in the game's
  * own fly-in.) Only when asked for, so the showcase's other views and the pictures held of them are as they were.
@@ -430,7 +462,9 @@ async function main() {
       ? THEMES.desert
       : query.get('model')?.startsWith('moon')
         ? THEMES.moon
-        : THEMES.earth,
+        : query.get('model')?.startsWith('future')
+          ? THEMES.future
+          : THEMES.earth,
   );
   const cam = renderer.camera;
   cam.near = 1;
@@ -445,6 +479,7 @@ async function main() {
   // the desert's own row stands alone on its patch: the rest of the showcase is earth's, and not what is looked at
   if (query.get('model')?.startsWith('desert')) shown.splice(0, shown.length, ...desertExhibits(seed));
   if (query.get('model')?.startsWith('moon')) shown.splice(0, shown.length, ...moonExhibits(seed));
+  if (query.get('model')?.startsWith('future')) shown.splice(0, shown.length, ...futureExhibits());
   /** Where the grass is left out: under the water and the bunker, which lie at or below it, and the cups' collars. */
   const cut: [number, number, number, number][] = [];
   for (const e of shown)
@@ -574,6 +609,8 @@ async function main() {
     views.set(row, { ...union(boxes.filter((b) => b.e.row === row).map((b) => b.box)), polar: POLAR.row });
   for (const { e, box: b } of boxes) views.set(e.name, { ...b, polar: e.name === 'title' ? TITLE_POLAR : POLAR.one });
   // the desert's row, when it is asked for, as one view: `?model=desert`, or `?model=desert-golf-cactus` for one of them close
+  const glowing = boxes.filter((b) => b.e.row === 'future');
+  if (glowing.length) views.set('future', { ...union(glowing.map((b) => b.box)), polar: POLAR.row });
   const stood = boxes.filter((b) => b.e.row === 'moon');
   if (stood.length) views.set('moon', { ...union(stood.map((b) => b.box)), polar: POLAR.row });
   const planted = boxes.filter((b) => b.e.row === 'desert');

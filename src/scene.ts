@@ -39,6 +39,8 @@ import { THEMES, themeOf, type ModelKind, type Theme } from './theme';
 import { sceneryOf } from './sceneryset';
 import { earth as earthModel, stars as starsModel } from './models/moon';
 import { DRIFT, tumbleweedAt } from './drift';
+import { cupGlow } from './models/future';
+import { levelAt, seedOf as flickerSeed } from './flicker';
 import { splitByTint } from './tintmesh';
 import { GREEN, greenArrows, leansOnMinigolf, READER, type Arrow } from './green';
 import { place, placeOnSlope } from './matrix';
@@ -579,6 +581,8 @@ export class Scene {
   private layout: Layout | null = null;
   /** The ground past a golf hole, which what drifts over it stands on: null on a hole of minigolf. */
   private world: GroundZ | null = null;
+  /** When each tree of the hole was last gone through by a ball, in game time, for a tree that flickers (a hologram) to flare: none until one has been. */
+  private flares: Float64Array = new Float64Array(0);
   /** When the ball dropped into this hole's cup, in game time, which the flag waggles from: none until it has. */
   holedAt = -Infinity;
 
@@ -701,6 +705,8 @@ export class Scene {
           }
         : { mesh: plane(ROUGH_SIZE), matrices: rough, ...look(P.rough) },
       ...groups(cup(cupRadius, round), atCup),
+      // the Future's cup has a ring of light round its mouth
+      ...(theme.cupGlow ? groups(cupGlow(cupRadius), atCup) : []),
       // the pin and its knob stand still; the flag's cloth swings in the breeze, and is among what moves
       ...groups({ parts: flag(FLAG_COLOURS.red).parts.filter((p) => !isCloth(p.name)) } as Model, flagAt),
       ...groups(teeMarkers(TEE_SPACING), teeAt),
@@ -801,8 +807,10 @@ export class Scene {
 
   /** The trees of a golf hole, all of one model, each standing where the game has its trunk and its canopy. */
   private trees(layout: Layout): GameGroup[] {
-    const model = sceneryOf(themeOf(layout)).golfTree?.[0];
-    if (!layout.trees.length || !model) return [];
+    const set = sceneryOf(themeOf(layout));
+    const model = set.golfTree?.[0];
+    // a tree that flickers (the Future's hologram) is drawn from the pools of its levels, which move (`dynamic`)
+    if (!layout.trees.length || !model || set.golfLevels) return [];
     const at = new Float32Array(layout.trees.length * 16);
     layout.trees.forEach((t, k) => place(at, k, t.x, t.y, heightAt(layout, t.x, t.y)));
     return groups(model, at);
@@ -1249,6 +1257,44 @@ export class Scene {
         heavens.earth ? earthModel(name, Math.PI / 2) : null,
       ])
         if (made) this.clouds.push(pool(made, (m) => place(m, 0, middle.x, middle.y, 0, 0, this.sky ? 1 : 0)));
+      // a tree that flickers (the Future's hologram): the tree at each of its levels of glow is a pool, and each frame every tree is put in
+      // the pool of the level it is at (`flicker.ts`, a function of the hole's name, the tree and the game time), the pools' counts
+      // saying how many there are; nothing is made in the frame, and the pools are the size of the hole's trees
+      const levelled = sceneryOf(themeOf(layout)).golfLevels;
+      if (levelled && layout.trees.length) {
+        const trees = layout.trees;
+        const seed = flickerSeed(name);
+        this.flares = new Float64Array(trees.length).fill(-1);
+        const flares = this.flares;
+        const pools = levelled.map(() => ({ matrices: new Float32Array(trees.length * 16), count: 0 }));
+        const heights = trees.map((t) => heightAt(layout, t.x, t.y));
+        let drawnAt = Number.NaN;
+        const fill = (t: number) => {
+          if (t === drawnAt) return;
+          drawnAt = t;
+          for (const p of pools) p.count = 0;
+          for (let k = 0; k < trees.length; k++) {
+            const level = levelAt(seed, k, t, flares[k] < 0 ? -1 : t - flares[k]);
+            const p = pools[Math.min(level, pools.length - 1)];
+            place(p.matrices, p.count++, trees[k].x, trees[k].y, heights[k]);
+          }
+        };
+        levelled.forEach((model, level) => {
+          for (const part of model.parts) {
+            const pool = pools[level];
+            const entry = {
+              matrices: pool.matrices,
+              count: 0,
+              write: (_m: Float32Array, t: number) => {
+                fill(t);
+                entry.count = pool.count;
+              },
+            };
+            this.moving.push(entry);
+            out.push(group(part, pool.matrices, trees.length));
+          }
+        });
+      }
       // the tumbleweeds of a biome that has them, rolling downwind over the hole and the plain about it, by game time alone and
       // drawn only: their place is `drift.ts`'s, the ground under each is the world's
       const weed = sceneryOf(themeOf(layout)).drift?.[0];
@@ -1729,10 +1775,29 @@ export class Scene {
     return this.moving;
   }
 
+  /**
+   * A ball went through a tree that flickers (a hologram) where (x, y) is, at game time `t`: the tree nearest it flares, for as long as
+   * `FLARE.lasts` and then goes back to its flicker. The index of the tree, or -1 where there is no such tree on the hole.
+   */
+  flaredAt(x: number, y: number, t: number): number {
+    const trees = this.layout?.trees ?? [];
+    let best = -1,
+      nearest = Infinity;
+    for (let k = 0; k < trees.length && k < this.flares.length; k++) {
+      const d = Math.hypot(trees[k].x - x, trees[k].y - y);
+      if (d < nearest) {
+        nearest = d;
+        best = k;
+      }
+    }
+    if (best >= 0) this.flares[best] = t;
+    return best;
+  }
+
   /** A ball went into the water at (x, y) at game time `t`: a ring spreads from there until it fades. */
   splashedAt(x: number, y: number, t: number) {
     // open water draws no ring, so none is kept for the page to read back
-    if (this.layout && lookOf(this.layout) === 'ocean') return;
+    if (this.layout && lookOf(this.layout) === 'ocean' && !themeOf(this.layout).water.mirror) return;
     this.splashed = { x, y, at: t };
   }
 

@@ -54,6 +54,12 @@ import {
   tuft,
   tumbleweed,
   moonBoulder,
+  hologram,
+  pylon,
+  bollard,
+  plinth,
+  tower,
+  cupGlow,
   stars,
   earth,
   group,
@@ -70,7 +76,8 @@ import {
 import { flipper, titleModel } from '../src/models';
 import titleTrace from '../src/titletrace.json';
 import { BALL, KIND_RADIUS, WATER_LEVEL } from '../src/arena';
-import { CACTUS, TREE, insideCanopy, treeCone } from '../src/trees';
+import { HOLOGRAM as HOLOGRAM_RINGS_FIGURES } from '../src/models/future';
+import { CACTUS, HOLOGRAM, TREE, insideCanopy, treeCone } from '../src/trees';
 import { SCALE } from '../src/scenery';
 import { KINDS, ROUGH } from '../src/turf';
 
@@ -157,6 +164,14 @@ function catalogue(): [string, Model][] {
     ['mesa', mesa()],
     ['butte', mesa({ seed: 2, width: 0.5 })],
     ['tumbleweed', tumbleweed(1.3)],
+    ['hologram', hologram(HOLOGRAM)],
+    ['dim hologram', hologram(HOLOGRAM, { glow: 0.15 })],
+    ['pylon', pylon(12)],
+    ['bollard', bollard(2.2)],
+    ['plinth', plinth(2.6)],
+    ['tower', tower()],
+    ['pink tower', tower({ seed: 2, width: 0.7 })],
+    ['cup glow', cupGlow(1.6)],
     ['moon boulder', moonBoulder(3.4, { seed: 9 })],
     ['moon stone', moonBoulder(0.8, { seed: 5, stone: true })],
     ['stars', stars('Water Carry')],
@@ -1364,6 +1379,12 @@ describe('every model keeps to its triangle budget', () => {
       ['tuft', tuft(3.2, { seed: 9 })],
       ['mesa', mesa({ seed: 9 })],
       ['tumbleweed', tumbleweed(1.6)],
+      ['hologram', hologram(HOLOGRAM)],
+      ['pylon', pylon(15)],
+      ['bollard', bollard(2.8)],
+      ['plinth', plinth(3)],
+      ['tower', tower()],
+      ['cup glow', cupGlow(3)],
       ['boulder', moonBoulder(3.4, { seed: 9 })],
       ['stars', stars('Water Carry')],
       ['earth', earth('Water Carry', 0.3)],
@@ -1892,5 +1913,65 @@ describe('the desert’s plants and its rock', () => {
     const w = bounds(tumbleweed(1.3).parts);
     expect(w.max[2] - w.min[2]).toBeGreaterThan(2.0);
     expect(w.max[2] - w.min[2]).toBeLessThanOrEqual(2.7);
+  });
+});
+
+describe('the Future’s hologram and what stands past the hole', () => {
+  /** A ball's skin, over the cone: the models are held inside it as a golf tree is. */
+  const cone = treeCone(0, 0, 0, HOLOGRAM);
+
+  it('has every ring and the pole inside the cone the game tests a ball against, a ball’s skin bigger: what is seen is what the ball meets', () => {
+    for (const glow of [0.15, 2.2, 5.5]) {
+      const m = hologram(HOLOGRAM, { glow });
+      for (const part of m.parts)
+        for (const [x, y, z] of points(part.mesh)) {
+          // the pole runs up from the ground inside the canopy's tip, and no wider than a tenth of a yard
+          if (part.name === 'spine') {
+            expect(Math.hypot(x, y), 'the pole is thin').toBeLessThanOrEqual(0.1 + 1e-6);
+            expect(z).toBeLessThanOrEqual(HOLOGRAM.apex);
+          } else {
+            expect(
+              insideCanopy(cone, [x, y, z], KIND_RADIUS[BALL]),
+              `${part.name}: ${x.toFixed(2)},${y.toFixed(2)},${z.toFixed(2)}`,
+            ).toBeGreaterThan(0);
+            // and not under the canopy's base: it begins where the cone does
+            expect(z).toBeGreaterThanOrEqual(HOLOGRAM.base - 1e-6);
+          }
+        }
+    }
+  });
+
+  it('is rings with gaps between them (no sheet that would want an alpha), ten of them, each narrower than the one under it, glowing cyan', () => {
+    const m = hologram(HOLOGRAM);
+    const rings = partNamed(m, 'rings');
+    expect(rings.pattern?.kind).toBe(PATTERN.glow);
+    // the rings' heights: each begins above where the last ended
+    const zs = [...new Set(points(rings.mesh).map((p) => Math.round(p[2] * 100) / 100))].sort((a, b) => a - b);
+    expect(zs.length).toBeGreaterThanOrEqual(HOLOGRAM_RINGS_FIGURES.rings * 2 - 2);
+    const wide = (z0: number, z1: number) =>
+      Math.max(
+        ...points(rings.mesh)
+          .filter((p) => p[2] >= z0 && p[2] <= z1)
+          .map((p) => Math.hypot(p[0], p[1])),
+      );
+    expect(wide(HOLOGRAM.base, HOLOGRAM.base + 2)).toBeGreaterThan(wide(HOLOGRAM.apex - 6, HOLOGRAM.apex));
+    // lit at the four levels of the flicker, each brighter than the next, the same shape
+    const glows = [5.5, 2.2, 0.9, 0.15].map((glow) => hologram(HOLOGRAM, { glow }));
+    for (let k = 1; k < glows.length; k++)
+      expect(partNamed(glows[k], 'rings').pattern!.glow!).toBeLessThan(partNamed(glows[k - 1], 'rings').pattern!.glow!);
+    for (const g of glows)
+      expect(Array.from(partNamed(g, 'rings').mesh.positions)).toEqual(Array.from(rings.mesh.positions));
+  });
+
+  it('has a pylon, a bollard and a plinth standing on the ground at their sizes, and a tower a unit tall to be scaled', () => {
+    expect(bounds(pylon(12).parts).min[2]).toBeCloseTo(0, 5);
+    expect(bounds(pylon(12).parts).max[2]).toBeGreaterThan(11);
+    expect(bounds(pylon(12).parts).max[2]).toBeLessThanOrEqual(12.5);
+    expect(bounds(bollard(2.2).parts).max[2]).toBeLessThan(2.2);
+    expect(bounds(plinth(2.6).parts).max[2]).toBeLessThan(2.6 * 0.6);
+    const t = bounds(tower().parts);
+    expect(t.min[2]).toBeCloseTo(0, 5);
+    expect(t.max[2]).toBeCloseTo(1, 5);
+    expect(partNamed(tower(), 'bands').pattern?.kind).toBe(PATTERN.glow);
   });
 });

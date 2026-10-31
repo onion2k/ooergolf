@@ -149,6 +149,26 @@ test.describe('the desert’s models', () => {
   });
 });
 
+test.describe('the Future’s models', () => {
+  test('the hologram at its four levels of glow, a pylon, a bollard, a plinth, a tower and a cup’s ring of light, in the dusk', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await showcase(page, 1, 'future');
+    await look(page, 'future');
+    await expect(page).toHaveScreenshot('future-models.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
+  test('close: a hologram, rings of cyan with gaps on a thin pole', async ({ page }) => {
+    const problems = watch(page);
+    await showcase(page, 1, 'future-hologram-1');
+    await look(page, 'future-hologram-1');
+    await expect(page).toHaveScreenshot('future-hologram.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+});
+
 test.describe('the Moon’s models', () => {
   test('a boulder, a stone and the flag held out on a wire beside one that flies, in the Moon’s light', async ({
     page,

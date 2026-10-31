@@ -70,6 +70,7 @@ describe('what stands past a hole of the desert', () => {
       size: FAR.size,
       scale: FAR.scale,
       spread: FAR.spread,
+      from: FAR.from,
     });
     expect(beyond(e.layout, 'Scenery').length).toBeGreaterThan(300);
   });
