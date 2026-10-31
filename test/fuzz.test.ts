@@ -8,6 +8,7 @@
  * taught to play next goes in a file of its own, and not on to the end of one of these.
  */
 import { describe, expect, it } from 'vitest';
+import { TOURS } from '../src/season';
 import { fuzz } from '../scripts/fuzzer';
 import type { HoleDef } from '../src/course';
 import { FLAT_HOLES } from './helpers';
@@ -81,7 +82,12 @@ describe('the fuzzer', () => {
     // 3095 and 2699 either way.
     // Seed 17's moved from 3095 to 3202 on 16 October 2026 when the banks came to be smoothed along their run (`BANKS.smooth`):
     // it plays courses that roll, where a ball comes to rest on other ground; 26 and 3 did not move.
-    expect([one.drawn, two.drawn, golf.drawn], "draws from the monkey's main stream").toEqual([3095, 3202, 2699]);
+    // Seeds 26 and 17 moved to 3104 and 3213 on 31 October 2026 when the nine biome courses joined the courses and the careerer
+    // began to choose among five tours: a monkey choosing among eighteen courses plays other courses on seed 17 (shown by
+    // choosing among the first nine in a scratch edit, which gives its 3202 again), and seed 26, which also enters other tours'
+    // events, plays on with other coins (that edit gives it 3104, not 3095); 3 (level golf) did not move. The monkey's own draws
+    // are no more a stroke than they were: nothing in the biome tours or tabs draws from its stream.
+    expect([one.drawn, two.drawn, golf.drawn], "draws from the monkey's main stream").toEqual([3104, 3213, 2699]);
     // a reload went on with the event round kept, as the start screen's Continue does: a check that never ran passes in silence
     expect(one.checked['event gone on with'], 'event rounds gone on with after a reload').toBeGreaterThan(0);
     // the framing rule was asked of the camera, on golf and on minigolf, a good many times: a check that never ran passes in silence
@@ -147,9 +153,19 @@ describe('the fuzzer', () => {
       Object.keys(r.done)
         // nor a kicker struck, done only where a seed's rounds reach a hole of The Pinball Shed's (seed 26's now do, and did not
         // before the seasons moved its rounds: the kicker's own tests and run hold it), nor the events entered, practised and given up,
-        // which the course of one hole below plays often enough to hold
+        // which the course of one hole below plays often enough to hold, nor a drive at a tree, which a seed does only if its
+        // rounds reach a hole of a biome whose trees are driven at (it did when the nine biome courses joined the choice: the
+        // cactus and hologram tests, `fuzz-trees` and `fuzz-desert`, hold it)
         .filter(
-          (a) => !['drive the lane', 'strike a kicker', 'enter an event', 'give up an event', 'practise'].includes(a),
+          (a) =>
+            ![
+              'drive the lane',
+              'strike a kicker',
+              'enter an event',
+              'give up an event',
+              'practise',
+              'drive at a tree',
+            ].includes(a),
         )
         .sort(),
       'every action there is, and no other',
@@ -161,7 +177,8 @@ describe('the fuzzer', () => {
         r.done['shoot as aimed'] +
         r.done['fly to an island'] +
         (r.done['drive the lane'] ?? 0) +
-        (r.done['strike a kicker'] ?? 0),
+        (r.done['strike a kicker'] ?? 0) +
+        (r.done['drive at a tree'] ?? 0),
     );
     expect(r.happened.stopped, 'and come to rest').toBeGreaterThan(0);
     expect(r.happened.holed, 'holed out').toBeGreaterThan(0);
@@ -195,6 +212,9 @@ describe('the fuzzer', () => {
       expect(total[check], check).toBeGreaterThan(0);
     for (const action of ['enter an event', 'practise', 'give up an event'])
       expect(did[action], action).toBeGreaterThan(0);
+    // the careerer chooses among all five tours, the three of the biomes among them
+    for (const tour of TOURS)
+      expect(total[`event entered on ${tour}`], `an event entered on the ${tour} tour`).toBeGreaterThan(0);
   });
 
   it('plays level golf holes at random from start to finish, every seed clean, every club struck, every landing told as one is', () => {

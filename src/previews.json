@@ -619,5 +619,626 @@
       }
     ],
     "yards": 4200
+  },
+  "The Saltpan": {
+    "slug": "the-saltpan",
+    "holes": [
+      {
+        "name": "Salt Flat",
+        "par": 3,
+        "yards": 225,
+        "width": 44,
+        "height": 120
+      },
+      {
+        "name": "White Wash",
+        "par": 4,
+        "yards": 490,
+        "width": 24,
+        "height": 120
+      },
+      {
+        "name": "Mirage Road",
+        "par": 4,
+        "yards": 430,
+        "width": 46,
+        "height": 119
+      },
+      {
+        "name": "Dry Well",
+        "par": 3,
+        "yards": 225,
+        "width": 42,
+        "height": 120
+      },
+      {
+        "name": "Crust Walk",
+        "par": 4,
+        "yards": 440,
+        "width": 50,
+        "height": 120
+      },
+      {
+        "name": "Glass Pan",
+        "par": 3,
+        "yards": 220,
+        "width": 50,
+        "height": 120
+      },
+      {
+        "name": "Tumbleweed Run",
+        "par": 4,
+        "yards": 490,
+        "width": 24,
+        "height": 120
+      },
+      {
+        "name": "Bone Flat",
+        "par": 4,
+        "yards": 440,
+        "width": 50,
+        "height": 120
+      },
+      {
+        "name": "Evening Glare",
+        "par": 5,
+        "yards": 570,
+        "width": 41,
+        "height": 120
+      }
+    ],
+    "yards": 3530
+  },
+  "The Mesa": {
+    "slug": "the-mesa",
+    "holes": [
+      {
+        "name": "Sidewinder",
+        "par": 4,
+        "yards": 420,
+        "width": 62,
+        "height": 120
+      },
+      {
+        "name": "Dry Wash",
+        "par": 4,
+        "yards": 490,
+        "width": 23,
+        "height": 120
+      },
+      {
+        "name": "Mesa Edge",
+        "par": 3,
+        "yards": 235,
+        "width": 39,
+        "height": 120
+      },
+      {
+        "name": "The Anvil",
+        "par": 5,
+        "yards": 600,
+        "width": 62,
+        "height": 120
+      },
+      {
+        "name": "Cholla Bend",
+        "par": 4,
+        "yards": 460,
+        "width": 60,
+        "height": 120
+      },
+      {
+        "name": "Butte Drop",
+        "par": 3,
+        "yards": 240,
+        "width": 39,
+        "height": 120
+      },
+      {
+        "name": "Ochre Ledge",
+        "par": 4,
+        "yards": 540,
+        "width": 21,
+        "height": 120
+      },
+      {
+        "name": "Red Rim",
+        "par": 5,
+        "yards": 610,
+        "width": 62,
+        "height": 120
+      },
+      {
+        "name": "Canyon Mouth",
+        "par": 4,
+        "yards": 540,
+        "width": 21,
+        "height": 120
+      }
+    ],
+    "yards": 4135
+  },
+  "The Badlands": {
+    "slug": "the-badlands",
+    "holes": [
+      {
+        "name": "Rattlesnake Ridge",
+        "par": 4,
+        "yards": 470,
+        "width": 65,
+        "height": 120
+      },
+      {
+        "name": "Skull Gulch",
+        "par": 5,
+        "yards": 650,
+        "width": 65,
+        "height": 120
+      },
+      {
+        "name": "Scorpion Drop",
+        "par": 3,
+        "yards": 235,
+        "width": 38,
+        "height": 120
+      },
+      {
+        "name": "Hell Hollow",
+        "par": 4,
+        "yards": 560,
+        "width": 19,
+        "height": 120
+      },
+      {
+        "name": "Gallows Wash",
+        "par": 5,
+        "yards": 620,
+        "width": 67,
+        "height": 120
+      },
+      {
+        "name": "Buzzard Roost",
+        "par": 4,
+        "yards": 490,
+        "width": 62,
+        "height": 120
+      },
+      {
+        "name": "Thirst",
+        "par": 3,
+        "yards": 240,
+        "width": 35,
+        "height": 120
+      },
+      {
+        "name": "Boneyard",
+        "par": 5,
+        "yards": 760,
+        "width": 14,
+        "height": 120
+      },
+      {
+        "name": "Last Water",
+        "par": 4,
+        "yards": 540,
+        "width": 20,
+        "height": 120
+      }
+    ],
+    "yards": 4565
+  },
+  "Tranquility": {
+    "slug": "tranquility",
+    "holes": [
+      {
+        "name": "Earthrise",
+        "par": 3,
+        "yards": 225,
+        "width": 48,
+        "height": 120
+      },
+      {
+        "name": "Small Step",
+        "par": 4,
+        "yards": 470,
+        "width": 26,
+        "height": 120
+      },
+      {
+        "name": "Mare Flat",
+        "par": 4,
+        "yards": 480,
+        "width": 45,
+        "height": 120
+      },
+      {
+        "name": "Quiet Basin",
+        "par": 3,
+        "yards": 230,
+        "width": 43,
+        "height": 120
+      },
+      {
+        "name": "Footprint",
+        "par": 4,
+        "yards": 470,
+        "width": 39,
+        "height": 120
+      },
+      {
+        "name": "Dawn Plain",
+        "par": 4,
+        "yards": 480,
+        "width": 28,
+        "height": 120
+      },
+      {
+        "name": "Sea of Calm",
+        "par": 3,
+        "yards": 225,
+        "width": 41,
+        "height": 120
+      },
+      {
+        "name": "Lander’s Rest",
+        "par": 4,
+        "yards": 480,
+        "width": 46,
+        "height": 120
+      },
+      {
+        "name": "Moonrise",
+        "par": 5,
+        "yards": 610,
+        "width": 40,
+        "height": 120
+      }
+    ],
+    "yards": 3670
+  },
+  "Copernicus": {
+    "slug": "copernicus",
+    "holes": [
+      {
+        "name": "Sea of Rains",
+        "par": 4,
+        "yards": 490,
+        "width": 24,
+        "height": 120
+      },
+      {
+        "name": "Eratosthenes",
+        "par": 3,
+        "yards": 240,
+        "width": 42,
+        "height": 120
+      },
+      {
+        "name": "Apennine Climb",
+        "par": 5,
+        "yards": 630,
+        "width": 52,
+        "height": 120
+      },
+      {
+        "name": "Kepler’s Rim",
+        "par": 4,
+        "yards": 490,
+        "width": 55,
+        "height": 120
+      },
+      {
+        "name": "The Central Peak",
+        "par": 4,
+        "yards": 490,
+        "width": 22,
+        "height": 120
+      },
+      {
+        "name": "Ejecta",
+        "par": 3,
+        "yards": 240,
+        "width": 39,
+        "height": 120
+      },
+      {
+        "name": "Terraced Wall",
+        "par": 5,
+        "yards": 640,
+        "width": 47,
+        "height": 120
+      },
+      {
+        "name": "Crater Floor",
+        "par": 4,
+        "yards": 490,
+        "width": 51,
+        "height": 120
+      },
+      {
+        "name": "Gassendi",
+        "par": 4,
+        "yards": 500,
+        "width": 23,
+        "height": 120
+      }
+    ],
+    "yards": 4210
+  },
+  "The Far Side": {
+    "slug": "the-far-side",
+    "holes": [
+      {
+        "name": "Terminator",
+        "par": 4,
+        "yards": 490,
+        "width": 22,
+        "height": 120
+      },
+      {
+        "name": "The Rille",
+        "par": 5,
+        "yards": 620,
+        "width": 52,
+        "height": 120
+      },
+      {
+        "name": "Shackleton",
+        "par": 3,
+        "yards": 240,
+        "width": 36,
+        "height": 120
+      },
+      {
+        "name": "Aitken Basin",
+        "par": 4,
+        "yards": 480,
+        "width": 55,
+        "height": 120
+      },
+      {
+        "name": "Tsiolkovsky",
+        "par": 5,
+        "yards": 660,
+        "width": 17,
+        "height": 120
+      },
+      {
+        "name": "Long Shadow",
+        "par": 4,
+        "yards": 490,
+        "width": 60,
+        "height": 120
+      },
+      {
+        "name": "Moscoviense",
+        "par": 5,
+        "yards": 610,
+        "width": 47,
+        "height": 120
+      },
+      {
+        "name": "Cold Trap",
+        "par": 3,
+        "yards": 240,
+        "width": 38,
+        "height": 120
+      },
+      {
+        "name": "Last Light",
+        "par": 5,
+        "yards": 640,
+        "width": 42,
+        "height": 120
+      }
+    ],
+    "yards": 4470
+  },
+  "Neon Park": {
+    "slug": "neon-park",
+    "holes": [
+      {
+        "name": "Neon Gate",
+        "par": 3,
+        "yards": 205,
+        "width": 47,
+        "height": 120
+      },
+      {
+        "name": "Arcade Row",
+        "par": 4,
+        "yards": 440,
+        "width": 29,
+        "height": 120
+      },
+      {
+        "name": "Hologram Alley",
+        "par": 4,
+        "yards": 430,
+        "width": 46,
+        "height": 120
+      },
+      {
+        "name": "Laser Lawn",
+        "par": 5,
+        "yards": 580,
+        "width": 22,
+        "height": 120
+      },
+      {
+        "name": "Pixel Plaza",
+        "par": 3,
+        "yards": 215,
+        "width": 45,
+        "height": 120
+      },
+      {
+        "name": "Synth Drive",
+        "par": 4,
+        "yards": 430,
+        "width": 50,
+        "height": 120
+      },
+      {
+        "name": "Light Rail",
+        "par": 3,
+        "yards": 210,
+        "width": 44,
+        "height": 120
+      },
+      {
+        "name": "Glow Walk",
+        "par": 4,
+        "yards": 440,
+        "width": 27,
+        "height": 120
+      },
+      {
+        "name": "Encore",
+        "par": 4,
+        "yards": 430,
+        "width": 49,
+        "height": 120
+      }
+    ],
+    "yards": 3380
+  },
+  "Chrome Heights": {
+    "slug": "chrome-heights",
+    "holes": [
+      {
+        "name": "Overclock",
+        "par": 4,
+        "yards": 440,
+        "width": 25,
+        "height": 120
+      },
+      {
+        "name": "Heat Sink",
+        "par": 3,
+        "yards": 215,
+        "width": 42,
+        "height": 120
+      },
+      {
+        "name": "Server Rack",
+        "par": 4,
+        "yards": 440,
+        "width": 26,
+        "height": 119
+      },
+      {
+        "name": "Mainframe",
+        "par": 5,
+        "yards": 580,
+        "width": 21,
+        "height": 120
+      },
+      {
+        "name": "Uplink",
+        "par": 4,
+        "yards": 440,
+        "width": 47,
+        "height": 120
+      },
+      {
+        "name": "Cold Boot",
+        "par": 3,
+        "yards": 220,
+        "width": 40,
+        "height": 120
+      },
+      {
+        "name": "Silicon Spur",
+        "par": 4,
+        "yards": 430,
+        "width": 24,
+        "height": 119
+      },
+      {
+        "name": "Datum Ridge",
+        "par": 5,
+        "yards": 580,
+        "width": 20,
+        "height": 120
+      },
+      {
+        "name": "Terminal",
+        "par": 4,
+        "yards": 440,
+        "width": 49,
+        "height": 120
+      }
+    ],
+    "yards": 3785
+  },
+  "The Singularity": {
+    "slug": "the-singularity",
+    "holes": [
+      {
+        "name": "Redshift",
+        "par": 4,
+        "yards": 480,
+        "width": 38,
+        "height": 120
+      },
+      {
+        "name": "Dead Pixel",
+        "par": 4,
+        "yards": 480,
+        "width": 23,
+        "height": 120
+      },
+      {
+        "name": "Null Pointer",
+        "par": 5,
+        "yards": 640,
+        "width": 34,
+        "height": 120
+      },
+      {
+        "name": "Warp Gate",
+        "par": 4,
+        "yards": 480,
+        "width": 59,
+        "height": 120
+      },
+      {
+        "name": "Dark Matter",
+        "par": 5,
+        "yards": 660,
+        "width": 39,
+        "height": 120
+      },
+      {
+        "name": "Zero Day",
+        "par": 3,
+        "yards": 235,
+        "width": 41,
+        "height": 120
+      },
+      {
+        "name": "Stack Overflow",
+        "par": 5,
+        "yards": 600,
+        "width": 46,
+        "height": 120
+      },
+      {
+        "name": "Last Packet",
+        "par": 4,
+        "yards": 500,
+        "width": 38,
+        "height": 120
+      },
+      {
+        "name": "Event Horizon",
+        "par": 4,
+        "yards": 500,
+        "width": 42,
+        "height": 120
+      }
+    ],
+    "yards": 4575
   }
 }

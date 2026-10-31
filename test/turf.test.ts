@@ -8,6 +8,7 @@ import { HILLS } from './hills';
 import { ROUGH_DEPTH } from '../src/scene';
 import { SAMPLE_HOLES } from './helpers';
 import { clearings } from '../src/scenery';
+import { THEMES } from '../src/theme';
 import { BLADE_ROOM, CELLS, FIELD_SIDE, GRASS, KINDS, ROUGH, TURF, cellFor, fieldOf, windOf } from '../src/turf';
 
 const HOLE: HoleDef = {
@@ -46,8 +47,8 @@ describe('the turf of a hole', () => {
 
   it('grows no blade on the course, on any hole of minigolf: the green is painted, and the rough frames it', () => {
     // a hole of golf grows its rough inside the stakes and nothing past them: `golf-turf.test.ts` holds that
-    for (const hole of SAMPLE_HOLES.filter((h) => !layoutOf(h.map, h.terrain).golf)) {
-      const hl = layoutOf(hole.map, hole.terrain);
+    for (const hole of SAMPLE_HOLES.filter((h) => !layoutOf(h.map, h.terrain, undefined, h.biome).golf)) {
+      const hl = layoutOf(hole.map, hole.terrain, undefined, hole.biome);
       const f = fieldOf(hl, hole.name);
       let rough = 0;
       for (let i = 0; i < f.mask.length; i++) {
@@ -145,7 +146,11 @@ describe('the wind of a hole', () => {
 
   it('bends the grass a good way, across the ground at one moment and at one place over a few seconds, on every hole', () => {
     const give = KINDS[ROUGH].give ?? 1;
-    for (const hole of COURSES.flatMap((c) => c.holes)) {
+    // a hole of a biome that grows no grass (the Moon's and the Future's) has no blade for a wind to bend: it is excused, and
+    // the biome's own tests hold what its wind does
+    const grassy = COURSES.flatMap((c) => c.holes).filter((h) => THEMES[h.biome ?? 'earth'].grass !== null);
+    expect(grassy.length, 'the earth’s eighty-one holes and the desert’s twenty-seven').toBe(81 + 27);
+    for (const hole of grassy) {
       const w = windOf(hole.name);
       // across a sixteen-unit window: the ripples, the most of them over a spread of moments
       let across = 0;
@@ -239,7 +244,7 @@ describe('the grass of a big hole', () => {
     const all = createHash('sha256');
     let holes = 0;
     for (const hole of ORIGINAL) {
-      const layout = layoutOf(hole.map, hole.terrain);
+      const layout = layoutOf(hole.map, hole.terrain, undefined, hole.biome);
       expect(cellFor(layout), hole.name).toBe(TURF.cell);
       const f = fieldOf(layout, hole.name, clearings(layout, hole.name));
       const h = createHash('sha256');
@@ -255,7 +260,7 @@ describe('the grass of a big hole', () => {
 
   it('grows the field of every hole added since at the finest cell, the same each time', () => {
     for (const hole of ADDED) {
-      const layout = layoutOf(hole.map, hole.terrain);
+      const layout = layoutOf(hole.map, hole.terrain, undefined, hole.biome);
       expect(cellFor(layout), hole.name).toBe(TURF.cell);
       const make = () => fieldOf(layout, hole.name, clearings(layout, hole.name));
       const [a, b] = [make(), make()];

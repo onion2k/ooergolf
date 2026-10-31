@@ -120,8 +120,18 @@ describe('the biomes', () => {
     expect(golfGame(hole()).game.layout.biome).toBe('earth');
   });
 
-  it('is on none of the courses there are, and none of their holes carries the key', () => {
-    for (const c of COURSES) for (const h of c.holes) expect('biome' in h, `${c.name}/${h.name}`).toBe(false);
+  it('is on none of the earth’s courses, and none of their holes carries the key; a biome’s course names it, on every hole', () => {
+    for (const c of COURSES) {
+      for (const h of c.holes) {
+        if (c.biome === undefined) expect('biome' in h, `${c.name}/${h.name}`).toBe(false);
+        else expect(h.biome, `${c.name}/${h.name}`).toBe(c.biome);
+      }
+    }
+    expect(COURSES.filter((c) => c.biome).map((c) => c.biome)).toEqual([
+      ...Array.from({ length: 3 }, () => 'desert'),
+      ...Array.from({ length: 3 }, () => 'moon'),
+      ...Array.from({ length: 3 }, () => 'future'),
+    ]);
   });
 
   it('is carried by a generated hole, and left out of one that has none', () => {

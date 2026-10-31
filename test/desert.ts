@@ -41,10 +41,13 @@ export function tiles(map: readonly string[], chars: string): number {
   return n;
 }
 
-/** The names of every hole of every course the game has, and of the three desert courses beside them. */
+/**
+ * The names of every hole of every course the game has, and of the three desert courses beside them (the desert courses are in
+ * `COURSES` now, so they are taken from `DESERT` and left out of it, and the course named is not its own neighbour).
+ */
 export function takenNames(except: DesertName): string[] {
   return [
-    ...COURSES.flatMap((c) => c.holes.map((h) => h.name)),
+    ...COURSES.filter((c) => c.biome !== 'desert').flatMap((c) => c.holes.map((h) => h.name)),
     ...Object.entries(DESERT)
       .filter(([n]) => n !== except)
       .flatMap(([, specs]) => specs.map((s) => s.name)),

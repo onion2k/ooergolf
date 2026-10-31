@@ -666,7 +666,7 @@ describe('the overhead view', () => {
     it(`shows every corner of the hole with room to spare, at aspect ${aspect.toFixed(2)}, on each hole there is`, () => {
       let capped = 0;
       for (const hole of SAMPLE_HOLES) {
-        const box = layoutOf(hole.map).bounds;
+        const box = layoutOf(hole.map, hole.terrain, undefined, hole.biome).bounds;
         for (const azimuth of [0, 0.7, -2.4]) {
           const { rig, cam } = above(aspect, box, azimuth);
           // a hole too big for the furthest the view stands is the cap's to hold: it shows what it can, and says it is at the cap

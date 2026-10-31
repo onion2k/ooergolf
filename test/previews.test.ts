@@ -17,8 +17,13 @@ const DATA = previews as Record<string, CoursePreview>;
 
 /** The most the nine pictures of one course may weigh, as sent: a step to a course fetches them together. */
 const MOST_A_COURSE = 40_000;
-/** And all of them: the build's whole share of pictures. */
-const MOST_IN_ALL = 200_000;
+/**
+ * And all of them: the build's whole share of pictures. 200,000 until the nine courses of the biomes joined on 31 October 2026,
+ * which weigh 317,697 in all for eighteen courses (a course 13 to 24 kB, the biomes' under the earth's golf for the pale ground
+ * they are drawn on); 330,000 is that and a course more. Fetched as a course is viewed, so none of it is a part of the download
+ * `imageKb` and `perf` hold.
+ */
+const MOST_IN_ALL = 330_000;
 
 const file = (slug: string, n: number) => `public/previews/${slug}/${n}.png`;
 
@@ -133,7 +138,7 @@ describe('the course previews', () => {
       expect(entry.holes.map((h) => [h.name, h.par])).toEqual(holes.map((h) => [h.name, h.par]));
       expect(entry.yards).toBe(entry.holes.reduce((a, h) => a + h.yards, 0));
       for (const [k, def] of holes.entries()) {
-        const layout = layoutOf(def.map, def.terrain, def.way);
+        const layout = layoutOf(def.map, def.terrain, def.way, def.biome);
         expect(entry.holes[k].yards, def.name).toBe(holeLength(layout));
         const obstacles = new Obstacles(def.obstacles ?? [], layout);
         const painted = paintPreview(layout, obstacles.streamed, obstacles.belted);

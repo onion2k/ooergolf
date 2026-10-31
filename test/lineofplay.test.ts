@@ -147,12 +147,12 @@ describe('the point along the line of play', () => {
 
 /** Every golf hole of the courses, with its layout. */
 const HOLES: { name: string; layout: Layout }[] = COURSES.filter((c) => c.golf).flatMap((c) =>
-  c.holes.map((h) => ({ name: h.name, layout: layoutOf(h.map, h.terrain, h.way) })),
+  c.holes.map((h) => ({ name: h.name, layout: layoutOf(h.map, h.terrain, h.way, h.biome) })),
 );
 
 describe('the line of play on the holes there are', () => {
   it('has a way on every hole of golf the courses have, since they are made along one', () => {
-    expect(HOLES.length, 'six courses of nine').toBe(54);
+    expect(HOLES.length, 'fifteen courses of nine').toBe(135);
     for (const { name, layout } of HOLES) expect(layout.way?.length, name).toBeGreaterThanOrEqual(2);
   });
 

@@ -209,7 +209,13 @@ test.describe('the start screen', () => {
     // the picker opens on proper golf (the game leans to proper golf, 14 October 2026) at the easiest course, and steps
     // through the six and then the three of minigolf in the order they stand, each with its holes, par and, on golf, yards as
     // tiles, its difficulty as pips up to its place, its badge, and a strip of its nine holes, each loaded, with its par
-    await expect(page.locator('#startTabs [role=tab]')).toHaveText(['Proper Golf', 'Mini Golf']);
+    await expect(page.locator('#startTabs [role=tab]')).toHaveText([
+      'Proper Golf',
+      'Desert',
+      'Moon',
+      'Future',
+      'Mini Golf',
+    ]);
     await expect(page.locator('#tab-golf')).toHaveAttribute('aria-selected', 'true');
     const seen = async () => ({
       name: await page.locator('#courseName').textContent(),
@@ -250,6 +256,46 @@ test.describe('the start screen', () => {
       await page.locator('#courseNext').click();
     }
     expect((await seen()).name, 'wrapped round to the first').toBe('The Links');
+    // each biome's tab is three courses of its own, easiest first, each in its place of three: first figures for the pars and
+    // the yards, which the course tests and the generated previews hold
+    const biomes: Record<string, [string, number, number][]> = {
+      desert: [
+        ['The Saltpan', 34, 3530],
+        ['The Mesa', 36, 4135],
+        ['The Badlands', 37, 4565],
+      ],
+      moon: [
+        ['Tranquility', 34, 3670],
+        ['Copernicus', 36, 4210],
+        ['The Far Side', 38, 4470],
+      ],
+      future: [
+        ['Neon Park', 34, 3380],
+        ['Chrome Heights', 36, 3785],
+        ['The Singularity', 38, 4575],
+      ],
+    };
+    for (const [tab, courses] of Object.entries(biomes)) {
+      await page.locator(`#tab-${tab}`).click();
+      await expect(page.locator(`#tab-${tab}`)).toHaveAttribute('aria-selected', 'true');
+      await expect(page.locator('#tab-golf')).toHaveAttribute('aria-selected', 'false');
+      for (const [k, [name, par, yards]] of courses.entries()) {
+        expect(await seen(), name).toEqual({
+          name,
+          stats: ['HOLES\n9', `PAR\n${par}`, `YARDS\n${yards.toLocaleString('en-GB')}`],
+          pips: `Difficulty ${k + 1} of 3`,
+          badge: 'Not yet played',
+          strip: STRIPS[name].holes.map((h, n) => `${n + 1} · p${h.par}`),
+          loaded: Array(9).fill(true),
+          dots: 3,
+          on: 1,
+        });
+        await page.locator('#courseNext').click();
+      }
+      expect((await seen()).name, `${tab} wrapped round to its first`).toBe(courses[0][0]);
+    }
+    await page.locator('#tab-golf').click();
+    expect((await seen()).name, 'golf where it was left').toBe('The Links');
     await page.locator('#tab-minigolf').click();
     await expect(page.locator('#tab-minigolf')).toHaveAttribute('aria-selected', 'true');
     for (const [name, par] of [

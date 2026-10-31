@@ -200,14 +200,14 @@ export function fuzz(
   named?: RoundOf,
   given?: SeasonContext,
 ): FuzzResult {
-  // a run on a course of its own plays that course's events: two on the golf tour and one on the mini, so a season is over in a
+  // a run on a course of its own plays that course's events: two on the golf tour and one on each of the others, so a season is over in a
   // round or two, and the table of rivals' scores is made for it; a run among the courses of the game plays the game's
   const season =
     given ??
     (course
       ? (() => {
           const event = { name: named?.name ?? 'Fuzz course', purse: named?.purse ?? 1, holes: course };
-          return contextOf({ golf: [event, event], mini: [event] });
+          return contextOf({ golf: [event, event], mini: [event], desert: [event], moon: [event], future: [event] });
         })()
       : seasonContext());
   // the monkey's own chance, apart from the game's, so what it decides does not shift what the game does
@@ -521,7 +521,7 @@ export function fuzz(
       windfall(tour);
       const [coins, round, seasons, mode] = [save.coins, save.round, JSON.stringify(save.season), save.mode];
       entries = 0;
-      const was = { golf: { ...save.season.golf }, mini: { ...save.season.mini } };
+      const was = Object.fromEntries(TOURS.map((t) => [t, { ...save.season[t] }])) as typeof save.season;
       const entered = game.enter(tour);
       if (!entered) {
         if (entries) told.push(`an entry was refused and told of`);
@@ -548,6 +548,8 @@ export function fuzz(
           told.push(`an entry gave up the round on ${round.tour} and its season played ${a.played.length}`);
       }
       count(checked, 'event entered');
+      // counted by tour, so a tour the careerer never chose is seen and not passed in silence (the five tours are drawn from its own stream)
+      count(checked, `event entered on ${tour}`);
       did('enter an event', tour);
       // and, now and then, a change of mind before a stroke is struck: another course chosen, or another event entered
       if (chain) {

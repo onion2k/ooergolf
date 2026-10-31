@@ -19,7 +19,7 @@ import { helpText, windText, type Held } from './readout';
 import { swatchOf } from './swatch';
 import { SCORE_KINDS, againstPar, scoreKind, scoreName } from './score';
 import type { PlayMode } from './career';
-import type { Kind, Picker } from './picker';
+import { KINDS, tourOfKind, type Kind, type Picker } from './picker';
 import type { Grade, Tour } from './season';
 import {
   cutLine,
@@ -136,9 +136,6 @@ export interface Results {
   promotedTo: Grade | null;
   title: boolean;
 }
-
-/** The tour a tab of the picker holds the events of. */
-const tourOf = (kind: Kind): Tour => (kind === 'golf' ? 'golf' : 'mini');
 
 /** A table's rows drawn: each a row of cells of the words given, the player's marked so the stylesheet can pick it out. */
 function rowsOf(rows: readonly { you: boolean; cells: string[] }[]): HTMLTableRowElement[] {
@@ -303,11 +300,10 @@ export class Hud {
   private readonly prize = document.getElementById('cardPrize')!;
   /** The career as the start screen last drew it: the mode, each course's record in words, and the round kept. */
   private career: StartCareer = { mode: 'career', records: {}, round: null };
-  /** The course picker's parts: the two tabs, the arrows, the card in view and Play; what they show is the picker's say. */
-  private readonly kindTabs: Record<Kind, HTMLButtonElement> = {
-    golf: document.getElementById('tab-golf') as HTMLButtonElement,
-    minigolf: document.getElementById('tab-minigolf') as HTMLButtonElement,
-  };
+  /** The course picker's parts: the five tabs, the arrows, the card in view and Play; what they show is the picker's say. */
+  private readonly kindTabs = Object.fromEntries(
+    KINDS.map((kind) => [kind, document.getElementById(`tab-${kind}`) as HTMLButtonElement]),
+  ) as Record<Kind, HTMLButtonElement>;
   private readonly pickerPanel = document.getElementById('picker')!;
   private readonly courseCard = document.getElementById('courseCard')!;
   private readonly courseName = document.getElementById('courseName')!;
@@ -429,7 +425,7 @@ export class Hud {
     // the course picker: the tabs are a tablist (a press chooses a kind, the arrow keys, home and end walk along them), the
     // arrows step the tab's courses either way and wrap, the arrow keys anywhere else on the screen do the same, and Play
     // begins the course in view
-    const kinds: Kind[] = ['golf', 'minigolf'];
+    const kinds = KINDS;
     kinds.forEach((kind, i) => {
       const tab = this.kindTabs[kind];
       tab.addEventListener('click', () => this.pressKind(kind));
@@ -442,7 +438,7 @@ export class Hud {
               : e.key === 'Home'
                 ? 0
                 : e.key === 'End'
-                  ? 1
+                  ? kinds.length - 1
                   : -1;
         if (to < 0) return;
         e.preventDefault();
@@ -978,7 +974,7 @@ export class Hud {
     const event = this.eventShown();
     if (event && picker.shown().name !== event.course && picker.has(event.course)) picker.show(event.course);
     const shown = picker.shown();
-    for (const kind of ['golf', 'minigolf'] as const) {
+    for (const kind of KINDS) {
       const tab = this.kindTabs[kind];
       const on = picker.kind === kind;
       tab.setAttribute('aria-selected', String(on));
@@ -1065,7 +1061,7 @@ export class Hud {
   /** The tour's event a tab shows, in the career: none in free play, or for a tour with no event to show. */
   private eventShown(): EventCard | null {
     if (!this.picker || !this.events) return null;
-    return this.events[tourOf(this.picker.kind)] ?? null;
+    return this.events[tourOfKind(this.picker.kind)] ?? null;
   }
 
   /**

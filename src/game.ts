@@ -723,15 +723,14 @@ export class Game {
     if (ctx === null || save.mode !== 'career' || this.rehearsing || !TOURS.includes(tour)) return false;
     // the seasons as they would stand once any round kept is given up, and this one's closed if it is full: only the entry that
     // follows is allowed to change the save, since a refused entry must leave the kept round, and the fee, where they were
-    const seasons = { golf: save.season.golf, mini: save.season.mini };
+    const seasons = { ...save.season };
     const kept = save.round;
     if (kept !== null && Object.hasOwn(seasons, kept.tour))
       seasons[kept.tour] = withdrawn(ctx, kept.tour, seasons[kept.tour]);
     seasons[tour] = closedIfFull(ctx, tour, seasons[tour]);
     const next = nextEvent(ctx, tour, seasons[tour]);
     if (save.coins < next.fee) return false;
-    save.season.golf = seasons.golf;
-    save.season.mini = seasons.mini;
+    for (const t of TOURS) save.season[t] = seasons[t];
     save.coins -= next.fee;
     save.round = { tour, course: next.course.name, hole: 0, card: [], retaken: false, pickedUp: false };
     this.course = next.course.holes;

@@ -481,11 +481,14 @@ describe('the retake', () => {
 });
 
 describe('a save without the season', () => {
-  it('begins both tours at the club grade, with no season begun, and plays on', () => {
+  it('begins every tour at the club grade, with no season begun, and plays on', () => {
     const { game } = season(JSON.stringify({ coins: 10 }));
     expect(game.progress.save.season).toEqual({
       golf: { grade: 'club', begun: 0, played: [], titles: 0 },
       mini: { grade: 'club', begun: 0, played: [], titles: 0 },
+      desert: { grade: 'club', begun: 0, played: [], titles: 0 },
+      moon: { grade: 'club', begun: 0, played: [], titles: 0 },
+      future: { grade: 'club', begun: 0, played: [], titles: 0 },
     });
     expect(game.progress.save.kit).toEqual(NOTHING);
     expect(checkInvariants(game)).toEqual([]);

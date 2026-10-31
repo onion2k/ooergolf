@@ -223,9 +223,12 @@ test.describe('the picker fits the screen under the title', () => {
         // the panel springs in: measured once it has landed
         await landed(page);
         const screen = { x0: 0, y0: 0, x1: width, y1: height };
-        // every course of both tabs, since the longest name and the widest preview are what could not fit
+        // every course of every tab, since the longest name and the widest preview are what could not fit
         for (const [tab, count] of [
           ['tab-golf', 6],
+          ['tab-desert', 3],
+          ['tab-moon', 3],
+          ['tab-future', 3],
           ['tab-minigolf', 3],
         ] as const) {
           await page.locator(`#${tab}`).click();
@@ -271,7 +274,7 @@ test.describe('the picker fits the screen under the title', () => {
         await offerInstall(page);
         await landed(page);
         const screen = { x0: 0, y0: 0, x1: width, y1: height };
-        for (const tab of ['tab-golf', 'tab-minigolf'] as const) {
+        for (const tab of ['tab-golf', 'tab-desert', 'tab-moon', 'tab-future', 'tab-minigolf'] as const) {
           await page.locator(`#${tab}`).click();
           const r = await page.evaluate(() => {
             const box = (id: string) => {

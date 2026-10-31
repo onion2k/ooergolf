@@ -11,7 +11,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { CALLOUTS } from '../src/hud';
 import { scoreKind, scoreName } from '../src/score';
 import { SIDE_HILL } from '../test/hills';
-import { drag, start, watch } from './game';
+import { drag, landed, start, watch } from './game';
 import { CLUBS, CLUB_LEAST, CONTRAST, THUMB, closeDrawer, holeOut, openDrawer, read, toCard } from './panels';
 
 const DESKTOP = { viewport: { width: 1280, height: 800 } };
@@ -63,6 +63,10 @@ for (const [where, device] of [
       expect(await shown(), 'the left arrow key steps back').toBe('The Old Course');
       await page.locator('#tab-golf').focus();
       await page.keyboard.press('ArrowRight');
+      await expect(page.locator('#tab-desert')).toHaveAttribute('aria-selected', 'true');
+      await expect(page.locator('#tab-desert')).toBeFocused();
+      expect(await shown(), 'the desert tab opens on its first course').toBe('The Saltpan');
+      await page.keyboard.press('End');
       await expect(page.locator('#tab-minigolf')).toHaveAttribute('aria-selected', 'true');
       await expect(page.locator('#tab-minigolf')).toBeFocused();
       expect(await shown(), 'the minigolf tab opens on its first course').toBe('The Meadow');
@@ -89,6 +93,122 @@ for (const [where, device] of [
         hole: 0,
         choosing: false,
       });
+      expect(problems).toEqual([]);
+    });
+
+    test('the five tabs stand across the panel: whole, without scrolling sideways, each a thumb high and clear, and each tab its own courses and place', async ({
+      page,
+    }) => {
+      const problems = watch(page);
+      await start(page, { seed: 11, paused: true, screen: true, save: { mode: 'free' } });
+      await landed(page);
+      const width = page.viewportSize()!.width;
+      const phone = where === 'on a phone';
+      const tabs = () =>
+        page.locator('#startTabs button').evaluateAll((els) => {
+          const panel = document.getElementById('start')!.getBoundingClientRect();
+          return els.map((el) => {
+            const b = el.getBoundingClientRect();
+            return {
+              id: el.id,
+              text: (el as HTMLElement).innerText.replace(/\s+/g, ' ').trim(),
+              name: el.getAttribute('aria-label'),
+              x0: b.left,
+              x1: b.right,
+              height: b.height,
+              panel: [panel.left, panel.right],
+            };
+          });
+        });
+      const row = await tabs();
+      expect(row.map((t) => t.id)).toEqual(['tab-golf', 'tab-desert', 'tab-moon', 'tab-future', 'tab-minigolf']);
+      // a phone shortens the two long names, whose full ones stay for a screen reader
+      expect(row.map((t) => t.text)).toEqual(
+        phone ? ['Golf', 'Desert', 'Moon', 'Future', 'Mini'] : ['Proper Golf', 'Desert', 'Moon', 'Future', 'Mini Golf'],
+      );
+      expect(row.map((t) => t.name)).toEqual(['Proper Golf', 'Desert', 'Moon', 'Future', 'Mini Golf']);
+      for (const [k, t] of row.entries()) {
+        expect(t.height, `${t.text} a thumb high`).toBeGreaterThanOrEqual(THUMB);
+        expect(t.x0, `${t.text} inside the panel's left`).toBeGreaterThanOrEqual(t.panel[0]);
+        expect(t.x1, `${t.text} inside the panel's right`).toBeLessThanOrEqual(t.panel[1]);
+        if (k) expect(t.x0, `${t.text} clear of the tab before`).toBeGreaterThanOrEqual(row[k - 1].x1);
+      }
+      const r = await read(page);
+      expect(r.outside, 'nothing past the screen').toEqual([]);
+      expect(r.scrollWidth, 'nothing scrolls sideways').toBeLessThanOrEqual(width);
+      // every word of the tabs against its pill, the one in hand against the sun's yellow and the rest against the track
+      for (const t of row)
+        for (const word of t.text.split(' ')) {
+          const read = r.texts.find((x) => x.text === word);
+          expect(read, `${word} was read`).toBeDefined();
+          expect(read!.ratio, `${word} against its pill`).toBeGreaterThanOrEqual(CONTRAST);
+        }
+      expect(r.buttons.filter((b) => b.height < THUMB).map((b) => b.text)).toEqual([]);
+      // each tab in turn: its own courses and its place among them, and the panel whole
+      for (const [tab, count, first] of [
+        ['golf', 6, 'The Links'],
+        ['desert', 3, 'The Saltpan'],
+        ['moon', 3, 'Tranquility'],
+        ['future', 3, 'Neon Park'],
+        ['minigolf', 3, 'The Meadow'],
+      ] as const) {
+        await page.locator(`#tab-${tab}`).click();
+        await expect(page.locator('#courseName')).toHaveText(first);
+        await expect(page.locator('#courseDots i')).toHaveCount(count);
+        await expect(page.locator('#courseDots i.on')).toHaveCount(1);
+        await expect(page.locator('#coursePips'), `${tab}: its place of ${count}`).toHaveAttribute(
+          'aria-label',
+          tab === 'minigolf' ? 'Difficulty 1 of 3' : `Difficulty 1 of ${count}`,
+        );
+        expect(
+          await page.evaluate(() => {
+            const panel = document.querySelector<HTMLElement>('#start')!;
+            return panel.scrollHeight <= panel.clientHeight && document.documentElement.scrollWidth <= innerWidth;
+          }),
+          `${tab}: no scrolling`,
+        ).toBe(true);
+      }
+      expect(problems).toEqual([]);
+    });
+
+    test("in the career each biome tab shows its tour's first event, whole: its card, Enter and Practise a thumb high, nothing past the screen", async ({
+      page,
+    }) => {
+      const problems = watch(page);
+      await start(page, { seed: 11, paused: true, screen: true, save: { coins: 500 } });
+      await landed(page);
+      const width = page.viewportSize()!.width;
+      for (const [tab, course] of [
+        ['golf', 'The Links'],
+        ['desert', 'The Saltpan'],
+        ['moon', 'Tranquility'],
+        ['future', 'Neon Park'],
+        ['minigolf', 'The Meadow'],
+      ] as const) {
+        await page.locator(`#tab-${tab}`).click();
+        await expect(page.locator('#courseName')).toHaveText(course);
+        await expect(page.locator('#courseEvent')).toContainText('Event 1 of');
+        await expect(page.locator('#enterEvent')).toHaveText('Enter · free');
+        const r = await read(page);
+        expect(r.outside, `${tab}: nothing past the screen`).toEqual([]);
+        expect(r.scrollWidth, `${tab}: nothing scrolls sideways`).toBeLessThanOrEqual(width);
+        expect(
+          r.texts.filter((t) => t.ratio < CONTRAST).map((t) => `"${t.text}" ${t.ratio}:1`),
+          `${tab}: contrast`,
+        ).toEqual([]);
+        for (const id of ['enterEvent', 'practise'])
+          expect(
+            (await page.locator(`#${id}`).boundingBox())!.height,
+            `${tab}: ${id} a thumb high`,
+          ).toBeGreaterThanOrEqual(THUMB);
+        expect(
+          await page.evaluate(() => {
+            const panel = document.querySelector<HTMLElement>('#start')!;
+            return panel.scrollHeight <= panel.clientHeight;
+          }),
+          `${tab}: the panel does not scroll`,
+        ).toBe(true);
+      }
       expect(problems).toEqual([]);
     });
 

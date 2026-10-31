@@ -681,6 +681,8 @@ export function careerProblems(game: Game): string[] {
     if (!GRADES.includes(season.grade)) out.push(`the ${tour} tour is at the grade ${String(season.grade)}`);
     if (ctx === null) continue;
     const events = ctx.tours[tour];
+    // a season's context with no event on a tour (a test's small one has the golf and mini tours only) has no season to hold
+    if (events.length === 0) continue;
     if (season.played.length >= events.length)
       out.push(
         `the ${tour} season has played ${season.played.length} of its ${events.length} events and is not closed`,

@@ -12,10 +12,11 @@ import { HOLLOW, groundZOf, planeOf } from '../src/hills';
 import { links } from '../src/links';
 import { fells } from '../src/fells';
 import { isles } from '../src/isles';
+import { themeOf } from '../src/theme';
 
 const HOLES = [links()[0], links()[2], links()[8], isles()[1], isles()[8], fells()[4]].map((h) => ({
   name: h.name,
-  layout: layoutOf(h.map, h.terrain),
+  layout: layoutOf(h.map, h.terrain, undefined, h.biome),
 }));
 
 /** A point inside the fan: the middle of each of its triangles, and of the shore's points and the fan's middle. */
@@ -97,9 +98,13 @@ describe('the hollow of the backdrop’s lake', () => {
   }
 
   it('is cut on every golf hole of every course, and is the same each time', () => {
+    let cut = 0;
     for (const c of COURSES.filter((c) => c.golf))
       for (const h of c.holes) {
-        const l = layoutOf(h.map, h.terrain);
+        const l = layoutOf(h.map, h.terrain, undefined, h.biome);
+        // a biome with no lake past its hills (the Moon's) has no hollow cut for one, as `groundZOf` says: it is excused
+        if (!themeOf(l).backdrop.lake) continue;
+        cut++;
         const a = groundZOf(l, h.name),
           b = groundZOf(l, h.name);
         expect(a.lake, h.name).toBeDefined();
@@ -108,5 +113,6 @@ describe('the hollow of the backdrop’s lake', () => {
         expect(a(x, y), h.name).toBeLessThan(a.lake!.level);
         expect(a(x, y), h.name).toBe(b(x, y));
       }
+    expect(cut, 'the earth’s fifty-four, the desert’s and the future’s, and not the Moon’s').toBe(108);
   });
 });

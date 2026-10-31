@@ -39,7 +39,7 @@ import { PRIZE, PROMOTED, TOURS, YOU, standings, type Tour } from './season';
 import type { TourSeason } from './career';
 import type { Board, EventCard, Results } from './hud';
 import type { Placement } from './game';
-import { Picker, type PickerCourse } from './picker';
+import { Picker, kindOfCourse, tourOfKind, KINDS, type PickerCourse } from './picker';
 import type { CoursePreview } from './previews';
 import previewData from './previews.json';
 import { Game, type GameEvents } from './game';
@@ -385,6 +385,7 @@ async function main() {
     return {
       name: c.name,
       golf: !!c.golf,
+      biome: c.biome,
       holes: c.summary.holes,
       par: c.summary.par,
       yards: p.yards,
@@ -394,6 +395,8 @@ async function main() {
     };
   });
   const picker = new Picker(pickable, progress.save.best);
+  /** The start screen's tab that holds a tour's events, pressed by the test API as a player does. */
+  const tabOfTour = (tour: Tour) => document.getElementById(`tab-${KINDS.find((k) => tourOfKind(k) === tour)}`)!;
   /** The start screen up with the picker, the save's bests and the career as they now are, held back while the title's letters drop. */
   const openStart = (wait: boolean) => {
     picker.setBests((game ?? { progress }).progress.save.best);
@@ -2101,14 +2104,14 @@ async function main() {
     },
     // a tour's event card's buttons, pressed as a player does: its tab, then the button, if it is there to be pressed
     enter: (tour) => {
-      document.getElementById(tour === 'golf' ? 'tab-golf' : 'tab-minigolf')!.click();
+      tabOfTour(tour).click();
       const button = document.getElementById('enterEvent') as HTMLButtonElement;
       if (button.hidden || button.disabled) return false;
       button.click();
       return true;
     },
     practise: (tour) => {
-      document.getElementById(tour === 'golf' ? 'tab-golf' : 'tab-minigolf')!.click();
+      tabOfTour(tour).click();
       const button = document.getElementById('practise') as HTMLButtonElement;
       if (button.hidden) return false;
       button.click();
@@ -2133,7 +2136,7 @@ async function main() {
       const course = pickable.find((c) => c.name === name);
       if (!course) throw new Error(`no course called ${name} on the start screen`);
       hud.setEvents(null);
-      (document.getElementById(course.golf ? 'tab-golf' : 'tab-minigolf') as HTMLButtonElement).click();
+      document.getElementById(`tab-${kindOfCourse(course)}`)!.click();
       const next = document.getElementById('courseNext') as HTMLButtonElement;
       const shown = () => document.getElementById('courseName')!.textContent;
       for (let k = 0; k < COURSES.length && shown() !== name; k++) next.click();

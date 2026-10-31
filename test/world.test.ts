@@ -40,7 +40,7 @@ describe('the ground past a golf hole', () => {
     let counted = 0,
       worst = 0;
     for (const { hole } of golfHoles) {
-      const l = layoutOf(hole.map, hole.terrain);
+      const l = layoutOf(hole.map, hole.terrain, undefined, hole.biome);
       const z = groundZOf(l, hole.name);
       const x0 = l.originX,
         y0 = l.originY,
@@ -71,7 +71,7 @@ describe('the ground past a golf hole', () => {
 
   it('rises from nothing at the edge to tens of yards far out, rolls without a cliff, and is nothing at the world’s end', () => {
     for (const hole of sample) {
-      const l = layoutOf(hole.map, hole.terrain);
+      const l = layoutOf(hole.map, hole.terrain, undefined, hole.biome);
       const z = groundZOf(l, hole.name);
       const x1 = l.originX + l.cols * TILE,
         yMid = l.originY + (l.rows * TILE) / 2;
@@ -99,7 +99,7 @@ describe('the ground past a golf hole', () => {
 describe('the plane under a golf hole', () => {
   for (const hole of sample) {
     it(`follows the ground a little under it, with its slope’s normals, and leaves a hole for water, on ${hole.name}`, () => {
-      const l = layoutOf(hole.map, hole.terrain);
+      const l = layoutOf(hole.map, hole.terrain, undefined, hole.biome);
       const z = groundZOf(l, hole.name);
       const mesh = planeOf(l, z, 1100);
       // the vertices the triangles use: the grid's are the ground lowered, the flat quads' are at the drop, and every normal is a unit that looks up
@@ -150,7 +150,7 @@ describe('the plane under a golf hole', () => {
     });
 
     it(`has no cliff at the map’s edge, a line a tile apart there and none wider than the shadow’s stairs need, on ${hole.name}`, () => {
-      const l = layoutOf(hole.map, hole.terrain);
+      const l = layoutOf(hole.map, hole.terrain, undefined, hole.biome);
       const z = groundZOf(l, hole.name);
       const mesh = planeOf(l, z, 1100);
       // every triangle of the grid is as steep as the ground is, at most: nothing in it is a wall
@@ -197,7 +197,7 @@ describe('what stands past a golf hole', () => {
 
   for (const hole of sample) {
     it(`stands every wood, far wood and post of bunting on the ground where it is, within a tenth, on ${hole.name}`, () => {
-      const l = layoutOf(hole.map, hole.terrain);
+      const l = layoutOf(hole.map, hole.terrain, undefined, hole.biome);
       const z = groundZOf(l, hole.name);
       const at = placements(l, hole.name);
       const near = beyond(l, hole.name),
@@ -252,7 +252,7 @@ describe('what stands past a golf hole', () => {
       worstFar = 0,
       counted = 0;
     for (const { course, hole } of golfHoles) {
-      const l = layoutOf(hole.map, hole.terrain);
+      const l = layoutOf(hole.map, hole.terrain, undefined, hole.biome);
       const n = beyond(l, hole.name),
         f = farWoods(l, hole.name);
       const nearTris = n.reduce((a, p) => a + near(p), 0),
@@ -265,7 +265,7 @@ describe('what stands past a golf hole', () => {
       expect(nearTris, `${course}: ${hole.name}: near woods`).toBeLessThanOrEqual(BUDGET['near woods']);
       expect(farTris, `${course}: ${hole.name}: far woods`).toBeLessThanOrEqual(BUDGET['far woods']);
     }
-    expect(counted, 'six courses of nine').toBe(54);
+    expect(counted, 'fifteen courses of nine').toBe(135);
     // a ceiling that nothing comes near is not held: the worst hole uses most of its budget
     expect(worstNear).toBeGreaterThan(BUDGET['near woods'] * 0.5);
     // the far woods are thin, a few hundred trees of a few dozen triangles: nowhere near their ceiling, which is a cap and not a target

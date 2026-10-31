@@ -361,7 +361,8 @@ export function holdsTable(t: MoonTable) {
 
     it('has names of its own: nine, unique, and none that any other course or the Moon’s other two has', () => {
       expect(new Set(names).size).toBe(9);
-      const others = COURSES.flatMap((c) => c.holes.map((h) => h.name));
+      // the Moon's courses are in COURSES now, and `t.others` has the other two: this course is not its own neighbour
+      const others = COURSES.filter((c) => c.biome !== 'moon').flatMap((c) => c.holes.map((h) => h.name));
       for (const name of names) {
         expect(others, name).not.toContain(name);
         expect(t.others, name).not.toContain(name);
