@@ -2334,3 +2334,218 @@ test.describe('the second pass of the title look', () => {
     expect(problems).toEqual([]);
   });
 });
+
+/**
+ * The biomes, from Part 13 of `~/.claude/plans/fizzy-percolating-balloon.md`: one hole of each, as it is on its course, seen
+ * three ways on a desk and on a phone: from its tee, with a shot aimed from the aim view, and in the fly-in that begins a
+ * course; and a close look at what is new in each, a cactus, a crater and a hologram. The holes are the ones with most to
+ * show: Gallows Wash (the most cacti of any, and a pan), Shackleton (the most craters, and the Earth over the horizon) and
+ * Server Rack (the most holograms, among quicksilver). Every picture of the Future has quicksilver in it, since every hole of
+ * it has a lake, and that look is still the user's to choose; so the Future's are the last in this file and their names say
+ * `quicksilver` where the lake is in the picture, so that a later change to it moves exactly those and they are looked at
+ * again together (`npm run look:update` then, and not for the desert's or the Moon's).
+ */
+interface BiomeScene {
+  biome: 'desert' | 'moon' | 'future';
+  course: string;
+  hole: number;
+  /** The picture's name stem. */
+  stem: string;
+}
+
+const BIOME_SCENES: Record<'desert' | 'moon' | 'future', BiomeScene> = {
+  desert: { biome: 'desert', course: 'The Badlands', hole: 4, stem: 'biome-desert' },
+  moon: { biome: 'moon', course: 'The Far Side', hole: 2, stem: 'biome-moon' },
+  future: { biome: 'future', course: 'Chrome Heights', hole: 2, stem: 'biome-future-quicksilver' },
+};
+
+/** A hole of the biome's course begun through the page's real start of one, `frames` stepped, the stats corner gone. */
+async function inBiome(page: Page, s: BiomeScene, frames = 75) {
+  await start(page, { seed: 11, paused: true });
+  await page.evaluate(
+    ([c, k, f]) => {
+      window.game!.chooseCourse(c as string);
+      window.game!.startHole(k as number);
+      window.game!.step(f as number);
+    },
+    [s.course, s.hole, frames],
+  );
+  await page.evaluate(() => window.game!.grass());
+  await hideStats(page);
+  expect((await page.evaluate(() => window.game!.theme())).name).toBe(s.biome);
+}
+
+/**
+ * A close look at what a biome adds, on a hole of its own choosing: a cactus or a hologram stood in, and for a pan, a crater or
+ * a lake of quicksilver the tile of it nearest the middle of all its tiles (a pond of many lobes has its middle in the grass).
+ */
+interface Close {
+  what: 'cactus' | 'pan' | 'crater' | 'hologram' | 'lake';
+  biome: BiomeScene['biome'];
+  course: string;
+  hole: number;
+  /** The picture's name. */
+  name: string;
+  distance: number;
+  orbit: [number, number];
+}
+
+const CLOSE: Close[] = [
+  {
+    what: 'cactus',
+    biome: 'desert',
+    course: 'The Badlands',
+    hole: 4,
+    name: 'biome-desert-cactus',
+    distance: 32,
+    orbit: [0.5, 0.7],
+  },
+  {
+    what: 'pan',
+    biome: 'desert',
+    course: 'The Saltpan',
+    hole: 5,
+    name: 'biome-desert-pan',
+    distance: 26,
+    orbit: [0.4, 0.55],
+  },
+  {
+    what: 'crater',
+    biome: 'moon',
+    course: 'Tranquility',
+    hole: 1,
+    name: 'biome-moon-crater',
+    distance: 24,
+    orbit: [0.5, 0.6],
+  },
+  {
+    what: 'hologram',
+    biome: 'future',
+    course: 'Chrome Heights',
+    hole: 2,
+    name: 'biome-future-quicksilver-hologram',
+    distance: 30,
+    orbit: [0.5, 0.7],
+  },
+  {
+    what: 'lake',
+    biome: 'future',
+    course: 'The Singularity',
+    hole: 2,
+    name: 'biome-future-quicksilver-lake',
+    distance: 44,
+    orbit: [0.8, 0.8],
+  },
+];
+
+/** The tile of the kind nearest the middle of the hole's tiles of it, in world units. */
+function middleOf(c: Close) {
+  const def = COURSES.find((x) => x.name === c.course)!.holes[c.hole];
+  const l = layoutOf(def.map, def.terrain, def.way, def.biome);
+  const tiles: { x: number; y: number }[] = [];
+  for (let t = 0; t < l.cols * l.rows; t++)
+    if (c.what === 'pan' ? l.lie[t] === LIE.pan : l.water[t])
+      tiles.push({ x: l.originX + ((t % l.cols) + 0.5) * TILE, y: l.originY + (Math.floor(t / l.cols) + 0.5) * TILE });
+  const mx = tiles.reduce((a, t) => a + t.x, 0) / tiles.length,
+    my = tiles.reduce((a, t) => a + t.y, 0) / tiles.length;
+  return {
+    n: tiles.length,
+    ...tiles.sort((a, b) => Math.hypot(a.x - mx, a.y - my) - Math.hypot(b.x - mx, b.y - my))[0],
+  };
+}
+
+function biomeScenes(s: BiomeScene, phone: boolean) {
+  const tail = phone ? '-phone' : '';
+  test(`${s.course} hole ${s.hole + 1}, from its tee${phone ? ', on a phone' : ''}`, async ({ page }) => {
+    const problems = watch(page);
+    await inBiome(page, s);
+    await expect(page).toHaveScreenshot(`${s.stem}-tee${tail}.png`, TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
+  test(`${s.course} hole ${s.hole + 1}, a shot aimed from the aim view${phone ? ', on a phone' : ''}`, async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await inBiome(page, s);
+    await pullDown(page, 0.8, 0, phone);
+    expect(await page.evaluate(() => window.game!.aiming()), 'a shot is being aimed').not.toBe(null);
+    await expect(page).toHaveScreenshot(`${s.stem}-aim${tail}.png`, TOLERANCE);
+    await page.mouse.up();
+    expect(problems).toEqual([]);
+  });
+
+  test(`the fly-in to ${s.course} hole ${s.hole + 1}${phone ? ', on a phone' : ''}`, async ({ page }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true, flyIn: true });
+    await page.evaluate(
+      ([c, k]) => {
+        window.game!.chooseCourse(c as string);
+        window.game!.startHole(k as number);
+        window.game!.step(40);
+      },
+      [s.course, s.hole],
+    );
+    expect((await page.evaluate(() => window.game!.view())).flying, 'still flying').toBe(true);
+    await page.evaluate(() => window.game!.grass());
+    await hideStats(page);
+    await expect(page).toHaveScreenshot(`${s.stem}-flyin${tail}.png`, TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+}
+
+function biomeClose(c: Close) {
+  test(`a ${c.what}, close to, on ${c.course} hole ${c.hole + 1}`, async ({ page }) => {
+    const problems = watch(page);
+    await inBiome(page, { biome: c.biome, course: c.course, hole: c.hole, stem: '' });
+    let at: { x: number; y: number };
+    if (c.what === 'cactus' || c.what === 'hologram') {
+      // the nearest of its kind to the tee, past the ones at the ball's side so the ball is not what is looked at
+      at = await page.evaluate(() => {
+        const g = window.game!;
+        const b = g.ball();
+        const t = g
+          .content()
+          .trees.map((t) => ({ ...t, d: Math.hypot(t.x - b.x, t.y - b.y) }))
+          .filter((t) => t.d > 30)
+          .sort((a, c) => a.d - c.d)[0];
+        return { x: t.x, y: t.y };
+      });
+    } else {
+      const m = middleOf(c);
+      expect(m.n, `a ${c.what} on the hole`).toBeGreaterThan(5);
+      at = m;
+    }
+    await page.evaluate(
+      ({ at, c }) => {
+        const g = window.game!;
+        g.look(at.x, at.y, c.distance);
+        g.orbit(c.orbit[0], c.orbit[1]);
+        g.step(1);
+      },
+      { at, c },
+    );
+    await expect(page.locator('#view')).toHaveScreenshot(`${c.name}.png`, TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+}
+
+for (const b of ['desert', 'moon'] as const)
+  test.describe(`the ${b}, on ${BIOME_SCENES[b].course}`, () => {
+    biomeScenes(BIOME_SCENES[b], false);
+    for (const c of CLOSE.filter((c) => c.biome === b)) biomeClose(c);
+    test.describe('on a phone', () => {
+      test.use({ viewport: { width: 400, height: 860 }, hasTouch: true, isMobile: true });
+      biomeScenes(BIOME_SCENES[b], true);
+    });
+  });
+
+// the Future's, last: every hole of it has a lake of quicksilver, the look the user has yet to choose
+test.describe(`the Future's quicksilver, on ${BIOME_SCENES.future.course}`, () => {
+  biomeScenes(BIOME_SCENES.future, false);
+  for (const c of CLOSE.filter((c) => c.biome === 'future')) biomeClose(c);
+  test.describe('on a phone', () => {
+    test.use({ viewport: { width: 400, height: 860 }, hasTouch: true, isMobile: true });
+    biomeScenes(BIOME_SCENES.future, true);
+  });
+});
