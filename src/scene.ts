@@ -35,7 +35,8 @@ import {
 } from './arena';
 import { CUP } from './course';
 import { tintOf, tinted, valueOfStep } from './tint';
-import { themeOf, type Theme } from './theme';
+import { THEMES, themeOf, type ModelKind, type Theme } from './theme';
+import { sceneryOf } from './sceneryset';
 import { splitByTint } from './tintmesh';
 import { GREEN, greenArrows, leansOnMinigolf, READER, type Arrow } from './green';
 import { place, placeOnSlope } from './matrix';
@@ -70,17 +71,10 @@ import {
   type Model,
   STREAM,
   type Pond,
-  golfTree,
   kicker,
   stake,
-  boulder,
-  broadleaf,
-  bush,
-  conifer,
-  fern,
   bankStone,
   cloud,
-  farTree,
   PATTERN,
   RIPPLE,
 } from './models';
@@ -90,11 +84,10 @@ import { FLIPPER } from './obstacles';
 import type { World } from './physics';
 import { placeRolling } from './roll';
 import { SHADOW } from './look';
-import { BEYOND, ROCK_SIZE, SCENERY, beyond, dress, farWoods, scatter, type Piece, type SceneryKind } from './scenery';
+import { BEYOND, SCENERY, beyond, dress, farWoods, scatter, type Piece, type SceneryKind } from './scenery';
 import { groundZOf, hillsTop, planeOf, type GroundZ } from './hills';
 import { backdropOf, cloudAt } from './backdrop';
 import { GROUND, cupGround, groundOf, mownAt, railsOf, stakesOf, toned } from './ground';
-import { TREE } from './trees';
 import { STONE_RING, pondOf } from './waterdraw';
 import {
   RIPPLES,
@@ -118,7 +111,7 @@ import type { Shot } from './shot';
 import { PALETTE as COLOURS } from './models/palette';
 import { makeBank, bankOf } from './bank';
 import { annulus, at, built } from './models/shapes';
-import { BUCKETS, TONE_SUN, bucketOf, bucketYaw, bucketed, sceneryRule } from './models/tone';
+import { BUCKETS, bucketOf, bucketYaw } from './models/tone';
 
 /** How far below the grass the rough lies: below the bottom of the cup, so the cup is seen into. */
 export const ROUGH_DEPTH = 3;
@@ -276,35 +269,20 @@ function timeAt(distance: number, speed: number, slowing: number): number {
  * the baked tones (`models/tone.ts`): a piece is drawn from `bucketModel` at its bucket's turn. The flowers are made in each
  * of their colours and are not toned.
  */
-const toneSet = (make: () => Model) => bucketed(make, TONE_SUN, sceneryRule);
-export const SCENERY_MODELS: Record<Exclude<SceneryKind, 'flowers'>, Model[]> = {
-  broadleaf: toneSet(() => broadleaf({ height: 7 })),
-  conifer: toneSet(() => conifer({ height: 8 })),
-  bush: toneSet(() => bush(1.8)),
-  fern: toneSet(() => fern(2.2)),
-  rock: toneSet(() => boulder(ROCK_SIZE, { colour: COLOURS.rockWarm })),
-};
+const EARTH_MODELS = sceneryOf(THEMES.earth);
+export const SCENERY_MODELS = EARTH_MODELS.scatter as Record<ModelKind, Model[]>;
 /**
  * The same kinds round a hole of golf, beyond its map: bigger, since they are seen from a golf hole's camera, two
  * hundred yards back, and stand on a plain where the trees are twenty yards tall.
  */
-export const BEYOND_MODELS: Record<Exclude<SceneryKind, 'flowers'>, Model[]> = {
-  broadleaf: toneSet(() => broadleaf({ height: 12, seed: 4 })),
-  conifer: toneSet(() => conifer({ height: 15, seed: 2 })),
-  bush: toneSet(() => bush(2.8, { seed: 6 })),
-  fern: toneSet(() => fern(3.2, { seed: 8 })),
-  rock: toneSet(() => boulder(2.6, { seed: 9, colour: COLOURS.rockWarm })),
-};
+export const BEYOND_MODELS = EARTH_MODELS.beyond as Record<ModelKind, Model[]>;
 /** What a piece is drawn as: a bush of variant one is a fern, so the scatter's own chance chooses it and no draw is added. */
 const drawnAs = (p: Piece): Exclude<SceneryKind, 'flowers'> =>
   p.kind === 'bush' && p.variant === 1 ? 'fern' : (p.kind as Exclude<SceneryKind, 'flowers'>);
 /** A post, built once, to the physics' figures for one. */
 const POST = bumper(BUMPER.radius, { height: BUMPER.height });
 /** The far forest's two trees, built once, and how tall one is at a scale of one; the lake's waves, finer than a pond's, since it is seen from far off. */
-export const FAR_WOODS = {
-  conifer: toneSet(() => farTree('conifer')),
-  broadleaf: toneSet(() => farTree('broadleaf')),
-} as const;
+export const FAR_WOODS = EARTH_MODELS.far as { conifer: Model[]; broadleaf: Model[] };
 const FAR_TREE_HEIGHT = 6;
 /** How far a piece standing on the ground past a golf hole is sunk into it, so its foot is never seen to hover over a slope. */
 const SINK = 0.05;
@@ -314,7 +292,7 @@ const CLOUDS = [1, 2, 3].map((seed) => cloud({ seed }));
 /** A kicker, built once, to the physics' figures for one. */
 const KICKER_MODEL = kicker(KICKER.radius, { height: KICKER.height });
 /** A golf tree, built once, to the figures the game tests a ball against: what is seen is what the ball meets. */
-export const GOLF_TREES = bucketed(() => golfTree(TREE), TONE_SUN, sceneryRule, 1);
+export const GOLF_TREES = EARTH_MODELS.golfTree!;
 /** A stake that marks out of bounds, built once. */
 const STAKE = stake();
 /** The kinds of scenery that lean in the breeze. */
@@ -699,9 +677,9 @@ export class Scene {
       // the pin and its knob stand still; the flag's cloth swings in the breeze, and is among what moves
       ...groups({ parts: flag(FLAG_COLOURS.red).parts.filter((p) => !isCloth(p.name)) } as Model, flagAt),
       ...groups(teeMarkers(TEE_SPACING), teeAt),
-      ...this.scenery(scatter(layout, name)),
-      ...this.beyond(beyond(layout, name), world),
-      ...this.farWoods(farWoods(layout, name), world),
+      ...this.scenery(scatter(layout, name), theme),
+      ...this.beyond(beyond(layout, name), world, theme),
+      ...this.farWoods(farWoods(layout, name), world, theme),
       ...this.dressing(layout, name, world),
       ...this.pondSheets(layout),
       ...this.bunkers(layout),
@@ -796,10 +774,11 @@ export class Scene {
 
   /** The trees of a golf hole, all of one model, each standing where the game has its trunk and its canopy. */
   private trees(layout: Layout): GameGroup[] {
-    if (!layout.trees.length) return [];
+    const model = sceneryOf(themeOf(layout)).golfTree?.[0];
+    if (!layout.trees.length || !model) return [];
     const at = new Float32Array(layout.trees.length * 16);
     layout.trees.forEach((t, k) => place(at, k, t.x, t.y, heightAt(layout, t.x, t.y)));
-    return groups(GOLF_TREES[0], at);
+    return groups(model, at);
   }
 
   /** The stakes along a golf hole's out of bounds, all of one model, each on the ground where it stands. */
@@ -984,7 +963,8 @@ export class Scene {
     const b = backdropOf(layout, name, world ?? -ROUGH_DEPTH);
     const still = new Float32Array(16);
     place(still, 0, 0, 0, 0);
-    const { backdrop, water } = themeOf(layout);
+    const theme = themeOf(layout);
+    const { backdrop, water } = theme;
     const out: GameGroup[] = [
       group({ name: 'hills', mesh: b.hills, material: [...backdrop.hill, 0.95] }, still),
       group({ name: 'mountains', mesh: b.mountains, material: [...backdrop.mountain, 0.95] }, still),
@@ -1020,20 +1000,24 @@ export class Scene {
         still,
       ),
     ];
-    for (const kind of ['conifer', 'broadleaf'] as const)
+    const far = sceneryOf(theme).far;
+    for (const kind of ['conifer', 'broadleaf'] as const) {
+      const models = far[kind];
+      if (!models) continue;
       byBucket(b.forest.filter((t) => t.kind === kind)).forEach((trees, k) => {
         if (!trees.length) return;
         const at = new Float32Array(trees.length * 16);
         trees.forEach((t, i) => place(at, i, t.x, t.y, t.z, bucketYaw(k), t.scale * FAR_TREE_HEIGHT));
-        out.push(...groups(FAR_WOODS[kind][k], at));
+        out.push(...groups(models[k], at));
       });
+    }
     return out;
   }
 
   /** The woods and scrub on the plain round a golf hole, still and standing on the plain, each kind one group. */
-  private beyond(pieces: Piece[], world: GroundZ | null): GameGroup[] {
+  private beyond(pieces: Piece[], world: GroundZ | null, theme: Theme): GameGroup[] {
     const out: GameGroup[] = [];
-    for (const [kind, models] of Object.entries(BEYOND_MODELS))
+    for (const [kind, models] of Object.entries(sceneryOf(theme).beyond))
       byBucket(pieces.filter((p) => p.kind !== 'flowers' && drawnAs(p) === kind)).forEach((of, b) => {
         if (!of.length) return;
         const at = new Float32Array(of.length * 16);
@@ -1044,23 +1028,28 @@ export class Scene {
   }
 
   /** The far woods past them, of the cheapest trees, out to the backdrop's hills, each standing on the ground where it is. */
-  private farWoods(all: Piece[], world: GroundZ | null): GameGroup[] {
+  private farWoods(all: Piece[], world: GroundZ | null, theme: Theme): GameGroup[] {
     const out: GameGroup[] = [];
+    const far = sceneryOf(theme).far;
     // none in the lake the ground is carved for (a tree on its bed would stand in the water)
     const pieces = world?.lake ? all.filter((p) => world.lake!.weight(p.x, p.y) === 0) : all;
-    for (const kind of ['conifer', 'broadleaf'] as const)
+    for (const kind of ['conifer', 'broadleaf'] as const) {
+      const models = far[kind];
+      if (!models) continue;
       byBucket(pieces.filter((p) => p.kind === kind)).forEach((of, b) => {
         if (!of.length) return;
         const at = new Float32Array(of.length * 16);
         of.forEach((p, k) => place(at, k, p.x, p.y, standing(world, p.x, p.y), bucketYaw(b), p.scale));
-        out.push(...groups(FAR_WOODS[kind][b], at));
+        out.push(...groups(models[b], at));
       });
+    }
     return out;
   }
 
   /** A hole's dressing: its bunting on its posts, the beds at the foot of its rail, and its rocks in clusters. */
   private dressing(layout: Layout, name: string, world: GroundZ | null): GameGroup[] {
     const d = dress(layout, name);
+    const rock = sceneryOf(themeOf(layout)).scatter.rock;
     const out: GameGroup[] = [];
     for (const b of d.bunting) {
       const at = new Float32Array(16);
@@ -1076,16 +1065,16 @@ export class Scene {
       out.push(...groups(model, at));
     });
     byBucket(d.rocks).forEach((rocks, b) => {
-      if (!rocks.length) return;
+      if (!rocks.length || !rock) return;
       const at = new Float32Array(rocks.length * 16);
       rocks.forEach((r, i) => place(at, i, r.x, r.y, standing(world, r.x, r.y), bucketYaw(b), r.scale));
-      out.push(...groups(SCENERY_MODELS.rock[b], at));
+      out.push(...groups(rock[b], at));
     });
     return out;
   }
 
   /** The scenery on the rough, a group for each part of each kind's model, placed as the scatter says. */
-  private scenery(pieces: Piece[]): GameGroup[] {
+  private scenery(pieces: Piece[], theme: Theme): GameGroup[] {
     const out: GameGroup[] = [];
     const draw = (model: Model, of: Piece[], yawOf: (p: Piece) => number = (p) => p.yaw) => {
       if (!of.length) return;
@@ -1094,7 +1083,7 @@ export class Scene {
       out.push(...groups(model, at));
     };
     // the trees lean in the breeze, and are among what moves
-    for (const [kind, models] of Object.entries(SCENERY_MODELS))
+    for (const [kind, models] of Object.entries(sceneryOf(theme).scatter))
       if (!TREES.has(kind as SceneryKind))
         byBucket(pieces.filter((p) => p.kind !== 'flowers' && drawnAs(p) === kind)).forEach((of, b) =>
           draw(models[b], of, () => bucketYaw(b)),
@@ -1172,11 +1161,13 @@ export class Scene {
         place(m, 0, cup.x, cup.y, cupZ, flagTurn(t, cup.x, cup.y, wind) + waggle(t - this.holedAt)),
       );
       const pieces = scatter(layout, name);
+      const scatterModels = sceneryOf(themeOf(layout)).scatter;
       for (const kind of TREES)
         byBucket(pieces.filter((p) => p.kind === kind)).forEach((trees, b) => {
-          if (!trees.length) return;
+          const models = scatterModels[kind as ModelKind];
+          if (!trees.length || !models) return;
           pool(
-            SCENERY_MODELS[kind as Exclude<SceneryKind, 'flowers'>][b],
+            models[b],
             (m, t) =>
               trees.forEach((p, k) => {
                 const [lx, ly] = lean(t, p.x, p.y, wind);

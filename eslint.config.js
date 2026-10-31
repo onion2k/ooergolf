@@ -38,6 +38,7 @@ const PICTURE = [
   'waterdraw',
   'sound',
   'theme',
+  'sceneryset',
   'turf',
   'tint',
   'turfTexture',

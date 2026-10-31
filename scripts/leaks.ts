@@ -17,8 +17,8 @@
  * `WATCH` and a reading in `sizes`.
  *
  * Not watched here, because they cannot grow: the picture's per-biome caches (the scene's palettes and ring of stones, the turf's
- * kinds of grass, the hole map's colours, the baked environments), each made once for a biome and kept, so at most four of each
- * (and two environments). `test/theme.test.ts` holds each made once, the same object on every ask, which is what bounds it.
+ * kinds of grass, the hole map's colours, the baked environments, the scenery's models: `sceneryset.ts`), each made once for a biome
+ * and kept, so at most four of each (and two environments). `test/theme.test.ts` holds each made once, the same object on every ask, which is what bounds it.
  */
 import { BODY_CAPACITY } from '../src/arena';
 import { Autopilot } from '../src/autopilot';

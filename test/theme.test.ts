@@ -4,16 +4,19 @@
  * grass is made once for each and none for a biome with bare ground, and the game never imports the picture's theme.
  */
 import { readFileSync, readdirSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { BIOMES, type BiomeName } from '../src/biome';
 import { HAZE, SKY, TOY, lookFor } from '../src/look';
 import { OCEAN } from '../src/models/obstacles';
 import { BANK_STONE } from '../src/models/lowpoly';
 import { PALETTE as COLOURS } from '../src/models/palette';
-import { PALETTE, paletteOf } from '../src/scene';
+import { BEYOND_MODELS, FAR_WOODS, GOLF_TREES, PALETTE, SCENERY_MODELS, Scene, paletteOf } from '../src/scene';
+import { sceneryOf, setsKept } from '../src/sceneryset';
+import { BUCKETS } from '../src/models/tone';
+import { treeOf } from '../src/biome';
 import { SUN } from '../src/sun';
 import { BANK_TINT } from '../src/tint';
-import { EARTH_GRASS, THEMES, themeOf, type Theme } from '../src/theme';
+import { EARTH_GRASS, THEMES, themeOf } from '../src/theme';
 import { KINDS, bladeless, fieldOf, flattenFor, golfKindsOf } from '../src/turf';
 import { TURF_KINDS } from '../src/turfTexture';
 import { BAND_COLOURS, SHELF } from '../src/waterdraw';
@@ -304,4 +307,71 @@ describe('a theme’s textures', () => {
   });
 });
 
-void ({} as Theme);
+describe('a theme’s scenery', () => {
+  it('is, on earth, the very objects the scene always drew: the scatter, the woods beyond, the far woods and the golf tree', () => {
+    const set = sceneryOf(THEMES.earth);
+    expect(set.scatter).toBe(SCENERY_MODELS);
+    expect(set.beyond).toBe(BEYOND_MODELS);
+    expect(set.far).toBe(FAR_WOODS);
+    expect(set.golfTree).toBe(GOLF_TREES);
+    expect(set.golfTree).toHaveLength(1);
+    for (const models of [...Object.values(SCENERY_MODELS), ...Object.values(BEYOND_MODELS)])
+      expect(models).toHaveLength(BUCKETS);
+  });
+
+  it('is built for a biome the first time a hole of it asks, once, and kept: one set for each biome at most', () => {
+    // the future's maker for its rock is counted: a bucket calls it once, so six calls build the set, and a second ask none
+    const made = THEMES.future.scenery.beyond.rock!;
+    const rock = vi.fn(made);
+    THEMES.future.scenery.beyond.rock = rock;
+    expect(rock).not.toHaveBeenCalled();
+    const first = sceneryOf(THEMES.future);
+    expect(rock).toHaveBeenCalledTimes(BUCKETS);
+    for (let k = 0; k < 10; k++) expect(sceneryOf(THEMES.future)).toBe(first);
+    expect(rock).toHaveBeenCalledTimes(BUCKETS);
+    for (const name of ['earth', 'desert'] as const) sceneryOf(THEMES[name]);
+    expect(setsKept(), 'one set for each biome, four at the most').toBeLessThanOrEqual(NAMES.length);
+    THEMES.future.scenery.beyond.rock = made;
+  });
+
+  it('has every kind a slot in every biome, so a part that fills one in fills in a slot that is there', () => {
+    for (const name of NAMES) {
+      const s = THEMES[name].scenery;
+      for (const kind of ['broadleaf', 'conifer', 'bush', 'fern', 'rock'] as const) {
+        expect(kind in s.scatter, `${name} scatter ${kind}`).toBe(true);
+        expect(kind in s.beyond, `${name} beyond ${kind}`).toBe(true);
+      }
+      expect('conifer' in s.far && 'broadleaf' in s.far, `${name} far`).toBe(true);
+      expect('golfTree' in s && 'drift' in s, `${name} golf tree and drift`).toBe(true);
+    }
+  });
+
+  it('has no golf tree where the biome has no tree (the Moon’s), and the biome’s own figures where it has', () => {
+    expect(treeOf({ biome: 'moon' })).toBeNull();
+    for (const name of ['earth', 'desert', 'future'] as const)
+      expect(sceneryOf(THEMES[name]).golfTree, name).toHaveLength(1);
+  });
+
+  it('may draw nothing of a kind: a hole of a biome with a kind left out is drawn, and its pieces of that kind are not', () => {
+    // a theme of its own name for the test: the Moon's rock and far woods are emptied and its set built afresh
+    const moon = THEMES.moon;
+    const was = { rock: moon.scenery.beyond.rock, far: moon.scenery.far.conifer };
+    moon.scenery.beyond.rock = null;
+    moon.scenery.far.conifer = null;
+    try {
+      const { game } = golfGame(levelHole({ name: 'bare', par: 3, length: 150, biome: 'moon' }));
+      const scene = new Scene();
+      const still = scene.static(game.layout, 'bare', game.obstacles, game.cup.radius);
+      expect(still.length).toBeGreaterThan(0);
+      // the Moon's set was first made here, so it was made without them: no model, and not an empty one
+      const set = sceneryOf(moon);
+      expect(set.beyond.rock).toBeUndefined();
+      expect(set.far.conifer).toBeUndefined();
+      expect(set.beyond.bush).toHaveLength(BUCKETS);
+      expect(set.golfTree, 'and no tree, as the biome has none').toBeNull();
+    } finally {
+      moon.scenery.beyond.rock = was.rock;
+      moon.scenery.far.conifer = was.far;
+    }
+  });
+});

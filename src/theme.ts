@@ -20,8 +20,11 @@ import { HAZE, SKY, TOY } from './look';
 import { PALETTE, shown } from './models/palette';
 import { OCEAN } from './models/obstacles';
 import { SUN } from './sun';
-import { BANK_STONE } from './models/lowpoly';
+import { BANK_STONE, boulder, broadleaf, bush, conifer, farTree, fern, golfTree } from './models/lowpoly';
+import type { Model } from './models/part';
 import { BANK_TINT } from './tint';
+import { ROCK_SIZE, type SceneryKind } from './scenery';
+import type { TreeFigures } from './trees';
 
 export type Rgb = readonly [number, number, number];
 
@@ -84,6 +87,55 @@ export interface LookFigures {
   env: 'daylight' | 'dusk';
 }
 
+/** The kinds of scenery that have a model (the flowers are made in colours of their own, and are not toned). */
+export type ModelKind = Exclude<SceneryKind, 'flowers'>;
+
+/** A maker of one model: called once for each turn of it that is baked, so no mesh is shared between two. */
+export type Maker = () => Model;
+
+/**
+ * The models a biome stands round its holes, as makers: what `scene.ts` once held at module level. A kind a biome draws nothing
+ * of is `null` (the Moon's trees), and a piece of that kind is placed and then not drawn. The kinds are the pieces of
+ * `scenery.ts`, which are roles and not species: a biome says what its `conifer` is (the desert's tall cactus), its `bush`, its
+ * `rock`, and what stands in its far woods. The set is baked and built the first time a hole of the biome asks (`sceneryOf`,
+ * `sceneryset.ts`), once, and kept.
+ */
+export interface Scenery {
+  /** The scatter on the rough of a hole of minigolf, and a golf hole's dressing rocks. */
+  scatter: Record<ModelKind, Maker | null>;
+  /** The same kinds past a hole of golf, bigger, since they are seen from two hundred yards back. */
+  beyond: Record<ModelKind, Maker | null>;
+  /** The far woods past them and on the backdrop's hills, a unit tall to be scaled: the cheapest of each kind. */
+  far: { conifer: Maker | null; broadleaf: Maker | null };
+  /** A golf tree, to the figures the game tests a ball against (`treeOf(layout)`): what is seen is what the ball meets. */
+  golfTree: ((tree: TreeFigures) => Model) | null;
+  /** A thing that drifts over the ground on the wind and is drawn only, with no body in the world (the desert's tumbleweed). */
+  drift: Maker | null;
+}
+
+/** Earth's scenery, as the scene always drew it: a copy of the records, the very makers, so a biome may replace a slot. */
+export function earthScenery(): Scenery {
+  return {
+    scatter: {
+      broadleaf: () => broadleaf({ height: 7 }),
+      conifer: () => conifer({ height: 8 }),
+      bush: () => bush(1.8),
+      fern: () => fern(2.2),
+      rock: () => boulder(ROCK_SIZE, { colour: PALETTE.rockWarm }),
+    },
+    beyond: {
+      broadleaf: () => broadleaf({ height: 12, seed: 4 }),
+      conifer: () => conifer({ height: 15, seed: 2 }),
+      bush: () => bush(2.8, { seed: 6 }),
+      fern: () => fern(3.2, { seed: 8 }),
+      rock: () => boulder(2.6, { seed: 9, colour: PALETTE.rockWarm }),
+    },
+    far: { conifer: () => farTree('conifer'), broadleaf: () => farTree('broadleaf') },
+    golfTree: (tree) => golfTree(tree),
+    drift: null,
+  };
+}
+
 export interface Theme {
   name: BiomeName;
   ground: Ground;
@@ -114,6 +166,8 @@ export interface Theme {
   /** The texture the mown ground wears instead of the turf's (null: the turf's own), and the one the rough and out of bounds wear (null: none). */
   layers: { fairway: Layer | null; rough: Layer | null };
   look: LookFigures;
+  /** The models of the scenery (see `Scenery`). */
+  scenery: Scenery;
 }
 
 /** The ground of earth: the very arrays of `models/palette.ts`. */
@@ -173,6 +227,7 @@ const earth: Theme = {
   grass: EARTH_GRASS,
   layers: { fairway: null, rough: null },
   look: EARTH_LOOK,
+  scenery: earthScenery(),
 };
 
 /** A biome's ground from the sheet's hex colours (fairway, mown fairway, rough, out of bounds, green, mown green, tee, first cut, sand, lip), and its bank a share of the rough's. */
@@ -235,6 +290,8 @@ const desert: Theme = {
     fog: { colour: [0.85, 0.6, 0.42], density: Math.LN2 / HAZE.halfWay },
     env: 'daylight',
   },
+  // Part 6 fills the desert's own in: saguaros, barrels, scrub and mesas (`models/desert.ts`)
+  scenery: earthScenery(),
 };
 
 /** The Moon, Moon A of the sheet: a pale fairway on dark dust under a hard sun, a black sky, no blades, no clouds. */
@@ -269,6 +326,8 @@ const moon: Theme = {
     fog: { colour: [0.01, 0.01, 0.02], density: 0.00001 },
     env: 'daylight',
   },
+  // Part 7 fills the Moon's in: boulders and no trees, and a crater's rim for a rock
+  scenery: earthScenery(),
 };
 
 /** The Future, Future A of the sheet: bright steel at dusk, a plate texture on the ground, mirrored water, no blades. */
@@ -306,6 +365,8 @@ const future: Theme = {
     fog: { colour: [0.5, 0.25, 0.5], density: Math.LN2 / HAZE.halfWay },
     env: 'dusk',
   },
+  // Part 8 fills the future's in: holograms for trees, pylons and a skyline for the far woods
+  scenery: earthScenery(),
 };
 
 /** Every biome's theme. */
