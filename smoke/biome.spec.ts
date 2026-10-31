@@ -379,7 +379,7 @@ for (const [screen, width, height] of [
       expect(ms, `rung ${rung}: inside the ${BUDGET.frameMs} ms budget`).toBeLessThanOrEqual(BUDGET.frameMs);
   });
 
-/** The first three holes of The Woods made the Future: a pond (quicksilver, the mirror) across the line among 55, 141 and 163 holograms. */
+/** The first three holes of The Woods made the Future: a pond (quicksilver) across the line among 55, 141 and 163 holograms. */
 const MIRRORED = [0, 1, 2].map((i) => {
   const hole = golfHole({ ...WOODS_SPECS[i], name: `Mirror ${WOODS_SPECS[i].name}`, biome: 'future' });
   return { ...hole, terrain: Array.from(hole.terrain as Float32Array) };
@@ -389,7 +389,7 @@ for (const [screen, width, height] of [
   ['a desk', 1280, 800],
   ['a phone', 400, 860],
 ] as const)
-  test(`a pond of quicksilver among holograms, which draws the scene twice, is inside the frame budget on ${screen}, on every rung`, async ({
+  test(`a pond of quicksilver among holograms is inside the frame budget on ${screen}, on every rung`, async ({
     page,
   }, info) => {
     test.setTimeout(400_000);
@@ -422,7 +422,7 @@ for (const [screen, width, height] of [
       Object.entries(figures).map(([n, c]) => [n, c.map((v) => Math.round(v * 100) / 100)]),
     );
     info.annotations.push({ type: 'frames', description: JSON.stringify(shown) });
-    console.log(`a mirror among holograms on ${screen}, each rung (ms): ${JSON.stringify(shown)}`);
+    console.log(`a quicksilver pond among holograms on ${screen}, each rung (ms): ${JSON.stringify(shown)}`);
     for (const [name, costs] of Object.entries(figures))
       for (const [rung, ms] of costs.entries())
         expect(ms, `${name}, rung ${rung}: inside the ${BUDGET.frameMs} ms budget`).toBeLessThanOrEqual(BUDGET.frameMs);

@@ -37,7 +37,7 @@ green by moving its baseline.
     git commit             the pre-commit hook: gitleaks over what is staged (gitleaks 8 on the PATH; the hook refuses without it), then check:quick
     gitleaks git --redact  the whole history scanned for secrets, by hand before a push (clean at 212 commits on 17 October 2026)
     npm run check:quick    formatting, types and lint side by side, then the quick unit tests (the pre-commit hook; ~28 s)
-    npm run check          all of it: check:quick, the slow unit tests, fuzz, determinism, leaks:check, pace:check, bench, smoke (~15 min)
+    npm run check          all of it: check:quick, the slow unit tests, fuzz, determinism, leaks:check, pace:check, bench, smoke (~65 min on 31 October 2026: the browser tests 34 and pace 25 of it)
     npm test               every unit test, quick and slow (Vitest, test/)
     npm run fuzz           the game played at random, rules checked; -- --seed N plays one failure again, --on <course> one kind
                            (links, heath, fells, woods, isles, old, the nine biome courses by short name, contoured, shed, waterworks)
