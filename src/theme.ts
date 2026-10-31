@@ -159,8 +159,8 @@ export interface Theme {
   /** Where a full crest of the rough goes (`BANK_TINT.crest.to`). */
   crest: Rgb;
   water: {
-    /** Whether the lake is a mirror of quicksilver: a bright smooth sheet in a chrome kerb, with no stones round it and a ring where a ball goes in. */
-    mirror: boolean;
+    /** Whether the lake is quicksilver: one smooth sheet of dark liquid metal in a chrome kerb, with no stones round it and a ring where a ball goes in. */
+    quicksilver: boolean;
     /** Whether the lake is a crater: a bowl going down dark, a pale rim round it, a deep matte pit and no ring on the surface where a ball goes in. */
     crater: boolean;
     /** The four bands of a lake, from the foam in. */
@@ -262,7 +262,7 @@ const earth: Theme = {
   crest: BANK_TINT.crest.to,
   water: {
     crater: false,
-    mirror: false,
+    quicksilver: false,
     bands: EARTH_BANDS,
     shelf: EARTH_SHELF,
     stones: BANK_STONE.colours,
@@ -330,7 +330,7 @@ const desert: Theme = {
   crest: lit('e4b45e'),
   water: {
     crater: false,
-    mirror: false,
+    quicksilver: false,
     bands: ['e6cfa0', 'd8b880', 'cfa870', 'c49a62'].map(lit),
     shelf: lit('a87c52'),
     stones: ['d8bc94', 'c49a70', 'a87c58'].map(lit),
@@ -412,7 +412,7 @@ const moon: Theme = {
   crest: lit('8d8c8e'),
   water: {
     crater: true,
-    mirror: false,
+    quicksilver: false,
     // from the lip in, the dust's own colour darkening down the bowl to a near black pit; the shelf (the water's tiles outside the curve,
     // where the ground is level) is the dust itself, so a tile that sticks out reads as the bowl's lip and not a dark box
     bands: ['6a696c', '4a494d', '2c2b2f', '17161a'].map(lit),
@@ -477,7 +477,7 @@ const moon: Theme = {
   cupGlow: false,
 };
 
-/** The Future, Future A of the sheet: bright steel at dusk, a plate texture on the ground, mirrored water, no blades. */
+/** The Future, Future A of the sheet: bright steel at dusk, a plate texture on the ground, quicksilver water, no blades. */
 const future: Theme = {
   name: 'future',
   ground: ground(
@@ -488,14 +488,14 @@ const future: Theme = {
   crest: lit('9fb0c4'),
   water: {
     crater: false,
-    // quicksilver: a bright smooth sheet that mirrors the dusk, in a kerb of chrome with no stones round it
-    mirror: true,
+    // quicksilver: one smooth sheet of dark polished liquid metal, in a kerb of chrome with no stones round it
+    quicksilver: true,
     bands: ['f4f8fc', 'd0dae8', 'aab6cc', '8490ac'].map(lit),
     // the shelf is the steel's own colour, on the level (as the crater's is the dust's), and the kerb along the curve is the chrome;
-    // the sheet is clear water: its body is the silver where it is thin and its tint the silver where nothing is under it
+    // the sheet is the open water's own waves in a dark steel-blue body with white glints
     shelf: lit('7f8d9c'),
     stones: ['dfe6ee', '8fa0b2', '6c7c8e'].map(lit),
-    ocean: { ...OCEAN, body: lit('d4dbe7'), tint: lit('a2adc2'), tilt: 0, scale: 1, speed: 0 },
+    ocean: { ...OCEAN, body: lit('5a6684'), tint: lit('ffffff'), tilt: 0.3, scale: 0.2, speed: 0.18 },
   },
   map: { sand: lit('3b4552'), water: lit('d4dce4') },
   backdrop: {

@@ -17,7 +17,7 @@ import { fan, outside, overlaps, type Point, type Ring } from './clip';
 import { face, tri } from './meshes';
 import { LIE } from './surfaces';
 import { FIELDS, OUT, PAN, RULES, zonesOf, type Zone } from './zones';
-import { CRATER, waterCurveOf, waterEdgeOf } from './waterdraw';
+import { CRATER, groundBeside, waterCurveOf, waterEdgeOf } from './waterdraw';
 
 type V3 = [number, number, number];
 
@@ -1128,15 +1128,7 @@ export function kerbOf(l: Layout): Mesh {
     edge = waterEdgeOf(l);
   if (!edge || !curve.length) return b.build();
   const e = 0.3;
-  const groundAt = (x: number, y: number, ox: number, oy: number) => {
-    for (const reach of [0.6, 1.5, 3, 4.5]) {
-      const qx = x + ox * reach,
-        qy = y + oy * reach;
-      const t = tileAt(l, qx, qy);
-      if (t >= 0 && !l.water[t] && !l.solid[t]) return heightAt(l, qx, qy);
-    }
-    return heightAt(l, x, y);
-  };
+  const groundAt = (x: number, y: number) => groundBeside(l, x, y, heightAt(l, x, y));
   for (let s = 0; s < curve.length; s += 4) {
     const [ax, ay, bx, by] = [curve[s], curve[s + 1], curve[s + 2], curve[s + 3]];
     const len = Math.hypot(bx - ax, by - ay);
@@ -1150,8 +1142,8 @@ export function kerbOf(l: Layout): Mesh {
     if (ol < 1e-9) continue;
     ox /= ol;
     oy /= ol;
-    const za = groundAt(ax, ay, ox, oy) + KERB.lift,
-      zb = groundAt(bx, by, ox, oy) + KERB.lift;
+    const za = groundAt(ax, ay) + KERB.lift,
+      zb = groundAt(bx, by) + KERB.lift;
     // the wall, facing the water; wound to face it whichever way the segment runs
     const v = (x: number, y: number, z: number, nx: number, ny: number, nz: number) =>
       b.vertex(x, y, z, nx, ny, nz, 0, 0);

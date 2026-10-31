@@ -7,7 +7,8 @@ import { describe, expect, it } from 'vitest';
 import { TILE, WATER_LEVEL, layoutOf, tileAt, type Layout } from '../src/arena';
 import { COURSES, type HoleDef } from '../src/course';
 import { OCEAN, bankStone } from '../src/models';
-import { SHELF, STONE_RING, TOUCH, pondOf, waterEdgeOf, type Pond } from '../src/waterdraw';
+import { SHELF, STONE_RING, TOUCH, pondOf, waterCurveOf, waterEdgeOf, type Pond } from '../src/waterdraw';
+import { kerbOf } from '../src/ground';
 
 /** Every hole of every course, as the layout the game draws, with the pond it makes. */
 const HOLES = COURSES.flatMap((c) => c.holes).map((hole: HoleDef) => {
@@ -253,3 +254,50 @@ function bodyOf(r: number, g: number, b: number): number[] {
   const lin = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
   return [lin(r), lin(g), lin(b)];
 }
+
+describe('the quicksilver’s shape', () => {
+  const FUTURE = WET.filter((h) => h.biome === 'future');
+
+  it('has its curve, which its sheet and its kerb both follow, over the water’s own tiles: no point of it stands more than three quarters of a yard on the ground beside them, where the ground’s square bank wall would show as a step', () => {
+    expect(FUTURE.length, 'holes of the Future with a lake').toBeGreaterThan(20);
+    let worst = 0;
+    for (const { name, layout: l } of FUTURE) {
+      const curve = waterCurveOf(l);
+      for (let s = 0; s < curve.length; s += 2) {
+        let near = Infinity;
+        for (let dy = -2; dy <= 2; dy++)
+          for (let dx = -2; dx <= 2; dx++) {
+            const t = tileAt(l, curve[s] + dx * TILE, curve[s + 1] + dy * TILE);
+            if (t < 0 || !l.water[t]) continue;
+            const x0 = l.originX + (t % l.cols) * TILE,
+              y0 = l.originY + Math.floor(t / l.cols) * TILE;
+            near = Math.min(
+              near,
+              Math.hypot(
+                Math.max(x0 - curve[s], 0, curve[s] - x0 - TILE),
+                Math.max(y0 - curve[s + 1], 0, curve[s + 1] - y0 - TILE),
+              ),
+            );
+          }
+        worst = Math.max(worst, near);
+        if (near > 0.8) expect.fail(`${name}: the curve stands ${near.toFixed(2)} yards off the water's tiles`);
+      }
+    }
+    expect(worst, 'the bound is not slack').toBeGreaterThan(0.4);
+  });
+
+  it('is one sheet at the water’s level and a kerb that is a wall down to it and a lip on the ground, with the same curve for both, round: no segment of the curve is longer than the grid’s own step', () => {
+    for (const { layout: l, pond } of FUTURE.slice(0, 6)) {
+      const sheet = pondOf(l).parts.filter((p) => p.name === 'deep');
+      expect(sheet.length, 'one sheet').toBe(1);
+      expect(
+        pond.parts.map((p) => p.name).filter((n) => n !== 'shelf' && n !== 'deep'),
+        'no bands',
+      ).toEqual([]);
+      expect(kerbOf(l).positions.length, 'a kerb').toBeGreaterThan(0);
+      const curve = waterCurveOf(l);
+      for (let s = 0; s < curve.length; s += 4)
+        expect(Math.hypot(curve[s + 2] - curve[s], curve[s + 3] - curve[s + 1])).toBeLessThan(TILE / 2);
+    }
+  });
+});

@@ -48,8 +48,6 @@ function holds(r: Awaited<ReturnType<typeof report>>, biome: BiomeName) {
   r.background.forEach((c, k) => expect(c).toBeCloseTo(want.background[k], 5));
   expect(r.environment).toBe(want.environment);
   expect(r.grass).toBe(want.grass);
-  // only a mirror biome asks the renderer for the scene in its water, and a hole after it asks for it no longer
-  expect(r.mirror, `${biome}: the mirror`).toBe(want.mirror);
   r.fog.forEach((c, k) => expect(c).toBeCloseTo(want.fog[k], 5));
   r.sunDir.forEach((c, k) => expect(c).toBeCloseTo(want.sunDir[k], 5));
 }
@@ -449,7 +447,7 @@ test('a hologram is drawn the same at the same game time on two runs, byte for b
   expect(shots[1].equals(shots[0]), 'the same pixels on both runs').toBe(true);
 });
 
-test('the mirror, with the holograms upside down in it, is drawn the same at the same game time on two runs, byte for byte', async ({
+test('the quicksilver among holograms is drawn the same at the same game time on two runs, byte for byte', async ({
   browser,
 }) => {
   test.setTimeout(150_000);
@@ -461,7 +459,7 @@ test('the mirror, with the holograms upside down in it, is drawn the same at the
     await begin(page, 'future');
     await page.evaluate(() => window.game!.step(97));
     await page.waitForTimeout(1500);
-    expect((await page.evaluate(() => window.game!.theme())).mirror).toBe(true);
+    expect((await page.evaluate(() => window.game!.theme())).name).toBe('future');
     shots.push(await page.screenshot({ clip: { x: 440, y: 180, width: 400, height: 200 } }));
     expect(problems).toEqual([]);
     await page.close();

@@ -2160,7 +2160,6 @@ async function main() {
         fog: [...renderer.fog.colour],
         environment: lookedEnv,
         grass: blades,
-        mirror: renderer.look.clear?.mirrorScene === true,
       };
     },
     async bladesAround(x, y, radius) {

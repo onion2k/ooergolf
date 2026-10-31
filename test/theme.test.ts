@@ -16,7 +16,7 @@ import { BUCKETS } from '../src/models/tone';
 import { treeOf } from '../src/biome';
 import { SUN } from '../src/sun';
 import { BANK_TINT } from '../src/tint';
-import { EARTH_GRASS, THEMES, themeOf } from '../src/theme';
+import { EARTH_GRASS, THEMES, srgb as lit, themeOf } from '../src/theme';
 import { KINDS, bladeless, fieldOf, flattenFor, golfKindsOf } from '../src/turf';
 import { TURF_KINDS } from '../src/turfTexture';
 import { BAND_COLOURS, SHELF } from '../src/waterdraw';
@@ -248,24 +248,24 @@ describe('the Moon’s and the future’s ground', () => {
   });
 });
 
-describe('the mirror', () => {
-  it('is asked of the renderer by a mirror biome and by no other, and every theme names it so one after another leaves none behind', () => {
-    for (const name of NAMES) {
-      const { look } = lookFor(THEMES[name]);
-      expect('clear' in look, `${name} names it`).toBe(true);
-      if (name === 'future') {
-        expect(look.clear?.mirrorScene).toBe(true);
-        expect(look.clear?.mirrorPlane, 'at the water’s level').toBe(WATER_LEVEL);
-      } else expect(look.clear, `${name} asks for none`).toBeUndefined();
-    }
-    expect(Object.keys(THEMES).filter((n) => THEMES[n as BiomeName].water.mirror)).toEqual(['future']);
+describe('the quicksilver', () => {
+  it('is the Future’s water alone, and no theme asks the renderer to mirror the scene: the true mirror was built and went (see LOOK.md)', () => {
+    expect(Object.keys(THEMES).filter((n) => THEMES[n as BiomeName].water.quicksilver)).toEqual(['future']);
+    for (const name of NAMES) expect('clear' in lookFor(THEMES[name]).look, `${name} names no clear water`).toBe(false);
   });
 
-  it('is one plane for every pond: every vertex of a mirror’s sheet is at the water’s level, on hills too', () => {
-    const def = golfHole({ ...LINKS_SPECS[1], name: 'Hills mirror', biome: 'future' });
+  it('is dark polished metal in the open water’s own waves and white glints: the body 5a6684, tilt 0.3, scale 0.2', () => {
+    const o = THEMES.future.water.ocean;
+    expect([...o.body]).toEqual([...lit('5a6684')]);
+    expect([...o.tint]).toEqual([...lit('ffffff')]);
+    expect([o.tilt, o.scale]).toEqual([0.3, 0.2]);
+  });
+
+  it('is one plane for every pond: every vertex of its sheet is at the water’s level, on hills too, in the ocean’s pattern', () => {
+    const def = golfHole({ ...LINKS_SPECS[1], name: 'Hills quicksilver', biome: 'future' });
     const layout = layoutOf(def.map, def.terrain, def.way, def.biome);
     const sheet = pondOf(layout).parts.find((p) => p.name === 'deep')!;
-    expect(sheet.pattern?.kind).toBe(PATTERN.clear);
+    expect(sheet.pattern?.kind).toBe(PATTERN.ocean);
     for (let i = 2; i < sheet.mesh.positions.length; i += 3)
       expect(sheet.mesh.positions[i]).toBeCloseTo(WATER_LEVEL, 6);
     // and the shelf outside its curve lies on the ground, never under the sheet
@@ -303,7 +303,6 @@ describe('what the smoke test holds the page to', () => {
       expect(want.sunDir, name).toEqual([...l.sunDir]);
       expect(want.grass, name).toBe(THEMES[name].grass !== null);
       expect(want.dust, name).toEqual([...THEMES[name].puff.grass]);
-      expect(want.mirror, name).toBe(THEMES[name].water.mirror);
     }
   });
 });

@@ -385,8 +385,6 @@ export interface ThemeReport {
   fog: number[];
   environment: string;
   grass: boolean;
-  /** Whether the renderer is asked to mirror the scene in its clear water (a mirror biome's, and no other's). */
-  mirror: boolean;
 }
 
 /**

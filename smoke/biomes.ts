@@ -14,8 +14,6 @@ export interface Looks {
   sunDir: number[];
   /** Whether the hole grows blades. */
   grass: boolean;
-  /** Whether its water mirrors the scene. */
-  mirror: boolean;
   /** The colour of the dust a stroke from the grass throws up. */
   dust: number[];
 }
@@ -29,7 +27,6 @@ export const LOOKS: Record<BiomeName, Looks> = {
     fog: [0.2, 0.42, 0.85],
     sunDir: [0.5, 0.482, 0.719],
     grass: true,
-    mirror: false,
     dust: [0.3, 0.75, 0.25],
   },
   desert: {
@@ -40,7 +37,6 @@ export const LOOKS: Record<BiomeName, Looks> = {
     fog: [0.85, 0.6, 0.42],
     sunDir: [0.66, 0.4, 0.63],
     grass: true,
-    mirror: false,
     dust: [0.86, 0.68, 0.44],
   },
   moon: {
@@ -51,7 +47,6 @@ export const LOOKS: Record<BiomeName, Looks> = {
     fog: [0.01, 0.01, 0.02],
     sunDir: [0.6, 0.34, 0.72],
     grass: false,
-    mirror: false,
     dust: [0.74, 0.74, 0.76],
   },
   future: {
@@ -62,7 +57,6 @@ export const LOOKS: Record<BiomeName, Looks> = {
     fog: [0.5, 0.25, 0.5],
     sunDir: [0.55, 0.4, 0.73],
     grass: false,
-    mirror: true,
     dust: [0.45, 0.95, 1],
   },
 };

@@ -185,8 +185,8 @@ describe('a hole of the Future, drawn', () => {
     expect(pond.spots, 'no stones').toEqual([]);
     const kerb = pond.parts.find((p) => p.name === 'shelf');
     if (kerb) expect(kerb.material[3], 'chrome, not rock').toBeLessThan(0.3);
-    expect(THEMES.future.water.mirror).toBe(true);
-    expect(THEMES.earth.water.mirror).toBe(false);
+    expect(THEMES.future.water.quicksilver).toBe(true);
+    expect(THEMES.earth.water.quicksilver).toBe(false);
   });
 
   it('keeps the near ground from being a wall of light and the skyline far from the hole', () => {
