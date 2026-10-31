@@ -315,7 +315,11 @@ export function fuzz(
               const a = aimed;
               const u = (x - a.x) * Math.cos(a.heading) + (y - a.y) * Math.sin(a.heading);
               const v = -(x - a.x) * Math.sin(a.heading) + (y - a.y) * Math.cos(a.heading);
-              const slack = 2 + 0.03 * a.carry;
+              // a swing that misses sideways may come down on ground lower than the ring stands on (a crater's wall, a hill's far
+              // side), and the ball then flies on for as far as it takes to fall that much more: three yards along for each
+              // yard lower, at the steepest a lofted club comes down at (Copernicus, seed 22: 2 lower, 4.3 past the box)
+              const lower = Math.max(0, a.z - playing.world.z[playing.ball]);
+              const slack = 2 + 0.03 * a.carry + 3 * lower;
               // inside the box of what a swing can do: no further across than its scatter, and no further along than the
               // ring and the worst mishit of speed (the two together, in a corner, which the spread's ellipse leaves out)
               if (Math.abs(u) > a.along + slack || Math.abs(v) > a.across + slack)
@@ -342,6 +346,8 @@ export function fuzz(
     across: number;
     along: number;
     carry: number;
+    /** How high the ring stands: the ground the preview came down on. */
+    z: number;
     what: string;
   } | null = null;
   const log: string[] = [];
@@ -789,6 +795,7 @@ export function fuzz(
               across: p.footprint.across,
               along: p.footprint.along,
               carry: p.carry,
+              z: p.z,
               what: `${club.id} at ${power.toFixed(3)} from ${at.x.toFixed(1)},${at.y.toFixed(1)} on lie ${lieAt(layout, at.x, at.y)}, ring ${p.x.toFixed(1)},${p.y.toFixed(1)}, carry ${p.carry.toFixed(1)}, angle ${angle.toFixed(3)}`,
             };
             // the ring is the far end of the spread, and the spread's middle is a half length short of it

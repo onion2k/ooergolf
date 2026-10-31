@@ -4,6 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { fuzz } from '../scripts/fuzzer';
+import { COURSES } from '../src/course';
 import { DESERT, madeOf } from './desert';
 
 describe('the fuzzer on the desert courses', () => {
@@ -29,4 +30,12 @@ describe('the fuzzer on the desert courses', () => {
       expect(splash, 'a desert has no water to lose a ball in').toBe(0);
     }, 300_000);
   }
+
+  // found by `npm run fuzz` on 31 October 2026: the tenth stroke of a hole, still rolling after `KEPT_MOVING`, was picked up as the
+  // ball became ready, and then stopped out of bounds with the hole over, which the rule for a ball at rest there called wrong
+  it('plays seed 9 of The Badlands as the gate does, with the last stroke’s ball rolling out of bounds after the hole is picked up', () => {
+    const course = COURSES.find((c) => c.name === 'The Badlands')!;
+    const r = fuzz(9, 4000, course.holes, { name: course.name, purse: course.purse });
+    expect(r.failure, JSON.stringify(r.failure)).toBe(null);
+  }, 300_000);
 });
