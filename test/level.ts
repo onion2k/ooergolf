@@ -4,6 +4,7 @@
  * `helpers.ts` reaches through the game.
  */
 import { TILE } from '../src/arena';
+import type { BiomeName } from '../src/biome';
 import type { HoleDef } from '../src/course';
 
 /** What a level hole is made with: a straight way of play of `length` yards, and what is on it. */
@@ -20,6 +21,8 @@ export interface LevelSpec {
   greens?: number;
   /** How many tiles of rough either side of the fairway: 9 where not said. */
   rough?: number;
+  /** The biome the hole belongs to: earth where not said, and then the hole carries none, as a hole always did. */
+  biome?: BiomeName;
 }
 
 /**
@@ -63,6 +66,7 @@ export function levelHole(spec: LevelSpec): HoleDef {
     map: grid.map((row) => row.join('')).reverse(),
     ...(spec.wind !== undefined ? { wind: spec.wind } : {}),
     ...(spec.greens !== undefined ? { greens: spec.greens } : {}),
+    ...(spec.biome !== undefined ? { biome: spec.biome } : {}),
   };
 }
 

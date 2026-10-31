@@ -30,6 +30,7 @@
  * at, counted as the map is drawn: its column, and its row from the top.
  */
 
+import type { BiomeName } from './biome';
 import type { ObstacleDef } from './obstacles';
 import { FELLS_SUMMARY, fells } from './fells';
 import { HEATH_SUMMARY, heath } from './heath';
@@ -70,6 +71,12 @@ export interface HoleDef {
    * says only how the ground is mown. A hole without it is mown in the checker.
    */
   way?: readonly (readonly [number, number])[];
+  /**
+   * The biome a golf hole belongs to (`biome.ts`): the pace its ball's world runs at, whether its air is calm, and the
+   * figures of its ground. Earth without it, which is every hole there is, so a hole that has none plays as it always did;
+   * left out of a hole's hash when absent.
+   */
+  biome?: BiomeName;
 }
 
 /**

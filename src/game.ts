@@ -51,7 +51,7 @@ import { PRIZE, TOURS, type Grade, type Tour } from './season';
 import { eventsIn, finishEvent, nextEvent, withdrawn, closedIfFull, type SeasonContext } from './tournament';
 import type { Random } from './random';
 import { PUTT_SHAPE, bendRate, curveRate, puttSpinFactor, spunKeep, windDirection, windPush } from './shaping';
-import { surfacesOf } from './biome';
+import { BIOMES, surfacesOf } from './biome';
 import { LANDING, LIE, groundRoll, rollScale } from './surfaces';
 import { hitCanopy, treeCone, turned, type Cone } from './trees';
 
@@ -272,9 +272,11 @@ export class Game {
   private struckAt = 0;
   /** When the hole done began to be shown, in game time. */
   private doneAt = 0;
-  /** Game time not yet stepped by the physics, less than one of its steps, and how far the physics has got. */
+  /** Game time not yet stepped by the physics, less than one of its steps (in the world's seconds, which a biome's pace makes fewer than the clock's), and how far the physics has got. */
   private owed = 0;
   private stepped = 0;
+  /** The world's seconds to the clock's on this hole: its biome's `pace`, one on earth. The clock (`t`) is the frames' whatever it is. */
+  private pace = 1;
   /** The last knock told on this hole, when in the physics' time and how hard, so what follows close on it is part of it. */
   private knockAt = -Infinity;
   private knockHard = 0;
@@ -570,7 +572,7 @@ export class Game {
   /** Hole `index` begun: a world of its own, the ball on its tee, and no strokes. */
   begin(index: number) {
     this.hole = index;
-    this.layout = layoutOf(this.def.map, this.def.terrain, this.def.way);
+    this.layout = layoutOf(this.def.map, this.def.terrain, this.def.way, this.def.biome);
     this.obstacles = new Obstacles(this.def.obstacles ?? [], this.layout);
     this.cones = this.layout.trees.map((t) => treeCone(t.x, t.y, heightAt(this.layout, t.x, t.y)));
     // what changes the world itself is read once, here, and the world is made with it: the cup's width and the rail's
@@ -624,8 +626,10 @@ export class Game {
     // nor does a shape, a spin or a wind: the new hole's own, from its name, and none at all on minigolf
     this.letGoOfShape();
     const [wx, wy] = windDirection(this.def.name);
-    // a hole of minigolf is calm whatever it is given: its ball never leaves the ground
-    const speed = this.layout.golf ? (this.def.wind ?? 0) : 0;
+    // a hole of minigolf is calm whatever it is given: its ball never leaves the ground. So is a biome with no air (the Moon's)
+    const biome = BIOMES[this.layout.biome];
+    const speed = this.layout.golf && !biome.calm ? (this.def.wind ?? 0) : 0;
+    this.pace = biome.pace;
     const push = windPush(speed);
     this.blowing = { x: wx, y: wy, speed };
     // the true wind: what a wind sock holds is taken off it as the ball is pushed, so the wind shown is the wind there is
@@ -943,7 +947,7 @@ export class Game {
       if (hole === THE_CUP) fell.holed = true;
       else Object.assign(fell, { wet: true, x, y });
     };
-    this.owed += dt;
+    this.owed += dt * this.pace;
     while (this.owed >= PHYSICS.step - 1e-9) {
       this.owed -= PHYSICS.step;
       this.stepped += PHYSICS.step;

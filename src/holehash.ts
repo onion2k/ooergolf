@@ -25,6 +25,8 @@ export function hashHole(hole: HoleDef): number {
   text(hole.name);
   text(hole.map.join('\n'));
   text(JSON.stringify([hole.par, hole.wind ?? null, hole.greens ?? null, hole.obstacles ?? null]));
+  // a biome is written only when the hole names one, so a hole that names none is the hash it was
+  if (hole.biome !== undefined) text(`biome ${hole.biome}`);
   const t = hole.terrain;
   if (t === undefined) text('flat');
   else if (t instanceof Float32Array) for (const b of new Uint8Array(t.buffer, t.byteOffset, t.byteLength)) byte(b);

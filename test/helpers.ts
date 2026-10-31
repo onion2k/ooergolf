@@ -1,4 +1,5 @@
 /** What the tests share: a new game in memory, from a seed, with a note of every event it tells, and a green to practise on. */
+import type { BiomeName } from '../src/biome';
 import { COURSES, type HoleDef } from '../src/course';
 export { FLAT, FLAT_HOLES, levelHole, type LevelSpec } from './level';
 import { golfHole } from '../src/golf';
@@ -88,6 +89,7 @@ export function field(
   cols = 41,
   terrain?: Float32Array,
   room = 1,
+  biome?: BiomeName,
 ): HoleDef {
   const middle = Math.floor(cols / 2);
   const map = [
@@ -101,7 +103,7 @@ export function field(
     }),
     '#'.repeat(cols),
   ];
-  return { name: `Field of ${surface}`, par: 4, map, ...(terrain ? { terrain } : {}) };
+  return { name: `Field of ${surface}`, par: 4, map, ...(terrain ? { terrain } : {}), ...(biome ? { biome } : {}) };
 }
 
 /**

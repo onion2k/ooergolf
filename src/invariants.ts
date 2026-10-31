@@ -72,7 +72,7 @@ import type { Preview } from './preview';
 import { troubleOf, type Caddie, type Tip } from './caddie';
 import type { Bank } from './bank';
 import { GREEN, READER, breakOf, greenArrows, leansOnMinigolf, readerArrows, type Arrow, type Break } from './green';
-import { surfacesOf } from './biome';
+import { BIOMES, isBiome, surfacesOf } from './biome';
 import { GREENS, LANDING, LIE, rollScale } from './surfaces';
 import { BARRIER, WINDMILL, flipperYaw, type Obstacles } from './obstacles';
 import { WIND, windPush, windReach } from './shaping';
@@ -419,6 +419,9 @@ export function lieProblems(game: Game, x: number, y: number, told: number = lie
 export function checkInvariants(game: Game): string[] {
   const out: string[] = [];
   const { world, layout } = game;
+  // a hole is in a biome the game knows: every figure of its ground is read through it, so nothing past this is true of one that is not
+  if (!isBiome(layout.biome))
+    return [`the hole is in the biome "${String(layout.biome)}", which is none of ${Object.keys(BIOMES).join(', ')}`];
   const report = (sort: string, found: string[]) => {
     if (!found.length) return;
     out.push(...found.slice(0, EACH).map((f) => `${sort}: ${f}`));
@@ -462,6 +465,9 @@ export function checkInvariants(game: Game): string[] {
   if (!(Math.abs(Math.hypot(wind.x, wind.y) - 1) < 1e-6))
     out.push(`the wind blows along ${wind.x},${wind.y}, no direction`);
   if (!layout.golf && wind.speed !== 0) out.push(`the wind is ${wind.speed} on a hole of minigolf, where it is calm`);
+  // and on a hole whose biome has no air, whatever the spec says
+  if (BIOMES[layout.biome].calm && wind.speed !== 0)
+    out.push(`the wind is ${wind.speed} on a hole in the ${layout.biome}, where the air is calm`);
 
   // the speed of the greens is the hole's own, from the fastest to the slowest, and only golf has one
   const greens = game.def.greens;
