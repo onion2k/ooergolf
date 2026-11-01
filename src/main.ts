@@ -137,8 +137,8 @@ booted('scripts');
 const marks = { letters: null as number | null, course: null as number | null };
 const mark = (name: 'letters' | 'course') => {
   if (marks[name] !== null) return;
-  marks[name] = performance.now();
-  performance.mark(`title-${name}`);
+  // the mark's own time, and not a second reading of the clock, which a tenth of a millisecond can part from it
+  marks[name] = performance.mark(`title-${name}`).startTime;
 };
 /** A turn of the event loop, so the compile's promises and the frames waiting are run between the steps of a long build. */
 const idle = () => new Promise<void>((done) => setTimeout(done, 0));
