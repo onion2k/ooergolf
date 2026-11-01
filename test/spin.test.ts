@@ -116,8 +116,10 @@ describe('topspin and backspin', () => {
     expect(play(1)).toEqual(play(0));
   });
 
-  it('keep every rule that must always hold, and bring the ball to rest, from every club on every surface, with the fullest backspin and the fullest topspin', () => {
-    for (const surface of ['f', 'g', 'r', 's'] as const)
+  // a test a surface, since the four together took 22 s alone against the 30 s a test is given, and timed out on a busy machine
+  it.each(['f', 'g', 'r', 's'] as const)(
+    'keep every rule that must always hold, and bring the ball to rest, from every club on surface %s, with the fullest backspin and the fullest topspin',
+    (surface) => {
       for (const club of BAG.filter((c) => c.loft > 0))
         for (const spin of [-1, 1]) {
           const { game } = golfGame(field(surface, 200, 81));
@@ -135,5 +137,6 @@ describe('topspin and backspin', () => {
           }
           expect(game.ready, `${club.id} on ${surface}, spin ${spin}: it came to rest`).toBe(true);
         }
-  });
+    },
+  );
 });
