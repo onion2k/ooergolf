@@ -1479,3 +1479,62 @@ each step, and a gate handed what it needs in the same change:
   The horseshoe's mouth is cut only in the level grass round the cup, so on Three Cushion, whose cup stands against a wall 1.2 high, the
   hole runs into the wall's foot, where no ball can be; no `look` picture holds a wide cup, since a picture is held to the GPU it was
   written on.
+
+## Moved from `AGENTS.md`
+
+What the project file said at more length, moved here word for word on 1 November 2026 to keep it near its two hundred lines.
+
+### The test API's readings
+
+`caddie()`, `season()`, `sound()` (awake, mute, volume, voices, loops, what is loaded and what each load took, the
+music's beat, and the controls as drawn), `theme()` (the biome's look as the renderer has it: sky, background, sun, haze,
+environment, and whether blades are grown) and `dust()` (the colour a stroke threw up). Playing: `shoot`, `club`, `chooseCourse`, `startHole`, `playCourse`, `buy`,
+`equip`; `mute(on)`, `volume(v)`, and `wake()` for the first gesture. The event log has a `sound …` line for each sound
+an event plays. Playwright's Chromium lifts the autoplay rule, so a context made by `wake()` runs. A smoke test
+starts the page headless with `start(page, { save, seed, paused, rung })` in `smoke/game.ts`, a fresh context and a
+save of its own, and drives a real mouse or finger with `drag` and `touches`. Never a timeout: pause, seed, step.
+
+### Edge cases in full
+
+- **a biome:** the first hole of one after a hole of another (look, sky, environment, grass and dust all swapped, and an
+  earth hole after it takes earth's back, the title's sky too); none of the grass on the Moon and in the Future on every
+  rung, and a press and a puff that do nothing wrong; a cactus's foot, a ball passed through a hologram at the fastest
+  shot, a ball at rest under one and struck from it; a pan under the tee shot, run across and never lost to, and a ball
+  that runs off it out of bounds; a crater or quicksilver beside the green, a ball put back beside a pit; the Moon's
+  flight of 1.53 times the hang, a calm that shows no wind, and the camera and the aim view on it, desk and phone; the
+  picker's five tabs at 400 px; a fee refused and a reload mid-event on each new tour
+- **the camera:** hidden behind something taller than the ball; every heading and both tilt limits at the home zoom
+  and the widest; the ball and the furthest reach on the screen for every club, desk and phone; a drag turned to the aim
+  and taken back; the flag button at the cup, and the turn by itself at rest; a stroke followed and one held; the
+  overhead view fitted to the hole, desk and phone, and left to the view as it was
+- **the sound:** before the first gesture (no context, a silence), while the ball moves (only a sound cheap to load is
+  loaded, one a frame; a dear one waits for a still screen), heard once an event and only for something seen (a place's own
+  sound, wind and birds, was taken out on 19 October 2026 for want of anything seen to tell what it was), under a menu
+  (the music), muted and at every volume, and kept in the save across a reload; its controls on a desk (the
+  speaker by the flag, M, the start screen's switch and slider) and a phone (the speaker beside the Shop alone), at 320 px
+
+### The GPU and the frame gates
+
+The perf gates read wrong while anything else is on the GPU, and the load average never shows it: every smoke test that
+times a frame does it inside `alone()` (`smoke/gpu.ts`), which reads each process's GPU time from `ioreg`, waits up to two
+minutes for the others to fall under 200 ms of it a second, and fails a timing they passed it during, figure unreported.
+On a busy machine a change is timed in turn with its parent commit and no baseline is written.
+
+### What is not held, in full
+
+- **A shared GPU is seen only on macOS.** Frame costs doubled now and then (Home Waters' tee 9.67 ms against 4.6 to
+  5.0) because another process drew on the GPU at the same time: alone 4.1 to 4.3 ms, beside a second headless game 9.9
+  to 11.7 ms, on 18 October 2026. `alone()` holds it where `ioreg` can be read; elsewhere it says it cannot tell, and a
+  frame figure is taken as it comes. A burst from another process far shorter than a long timing is averaged over the
+  window, so a long test can let a short one through.
+- **Whether the sound is good** is heard, not tested: the tests read what was asked of the package (the event log's
+  `sound …` lines, the voices, what loaded), never what came out of the speakers. Only Chromium's Web Audio is
+  run, with its autoplay rule lifted; the rule a player meets is held only as far as no context being made before a
+  gesture. The sound's ceilings (16 voices and one load a sound) are in `smoke/sound.spec.ts` and not
+  `scripts/leaks.ts`, which plays in node, where there is no AudioContext. A game paused by the test API stops the music's
+  steps, and its notes already handed over play out; a page out of sight suspends the context.
+- **The quicksilver's look was chosen by** the user (dark liquid metal, 31 October 2026).
+- **Leak runs are one course a biome** (The Saltpan, Copernicus and Chrome Heights, not nine): a biome's
+  three courses share every line a leak run watches. **A biome's frames are held to the budget alone** (`smoke/biome-frames.spec.ts`,
+  its heaviest tees) and not to a baseline, so `perf`'s biggest hole stays the earth's; and only the fairway against the
+  rough is a floor for a biome (`look-metrics.spec.ts` says why not the rest).
