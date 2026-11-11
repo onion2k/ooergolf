@@ -47,6 +47,8 @@ import { chipLoft, puttAngle, strike } from './flight';
 import { Obstacles } from './obstacles';
 import { PHYSICS, THE_CUP, makeWorld, type Cup, type World } from './physics';
 import { Progress, memoryStore } from './progress';
+import { newFeats } from './feats';
+import type { FeatId } from './featids';
 import { PRIZE, TOURS, type Grade, type Tour } from './season';
 import { eventsIn, finishEvent, nextEvent, withdrawn, closedIfFull, type SeasonContext } from './tournament';
 import type { Random } from './random';
@@ -127,6 +129,8 @@ export interface GameEvents {
   entered?(fee: number): void;
   /** An event played to its end: where the player was placed and what it came to. Told after `roundPaid`. */
   placed?(result: Placement): void;
+  /** A feat earned (`feats.ts`): told once for each, after the hole that earned it is paid, or as the item that did is bought. It pays nothing. */
+  feat?(id: FeatId): void;
   /** An item bought, for what it cost. */
   bought?(coins: number, gems: number): void;
   /** An item put on (its id), or a slot emptied (''). */
@@ -1525,6 +1529,7 @@ export class Game {
     }
     this.tally(how, score);
     const prize = this.counting ? this.closeRound() : null;
+    const feats = this.earn();
     this.persist();
     if (spend) this.events.spent?.(spent);
     this.events.paid?.(pay.coins, pay.gems);
@@ -1532,6 +1537,15 @@ export class Game {
       this.events.roundPaid?.(prize.coins, prize.placement.record);
       this.events.placed?.(prize.placement);
     }
+    for (const id of feats) this.events.feat?.(id);
+  }
+
+  /** The feats the save now says are earned, kept in it (the caller writes the save) and returned in the order they are told. */
+  private earn(): FeatId[] {
+    const save = this.progress.save;
+    const found = newFeats(save).map((f) => f.id);
+    save.feats.push(...found);
+    return found;
   }
 
   /**
@@ -1621,8 +1635,10 @@ export class Game {
     save.coins -= item.coins;
     save.gems -= item.gems;
     save.owned.push(id);
+    const feats = this.earn();
     this.persist();
     this.events.bought?.(item.coins, item.gems);
+    for (const feat of feats) this.events.feat?.(feat);
     return true;
   }
 
