@@ -9,7 +9,7 @@ import { CADDIE } from '../src/caddie';
 import { runInNewContext } from 'node:vm';
 import { setFlagsFromString } from 'node:v8';
 import { describe, expect, it } from 'vitest';
-import { GOLF_COURSES, WATCH, grew, sizes, trouble } from '../scripts/leaks';
+import { GOLF_COURSES, WATCH, grew, leakRun, sizes, trouble } from '../scripts/leaks';
 import { BALL, groundInto, keptWeights, layoutOf } from '../src/arena';
 import { pondOf } from '../src/waterdraw';
 import { zonesOf } from '../src/zones';
@@ -302,5 +302,18 @@ describe("the heap's and the arrays' climb", () => {
     const creeping = CLEAN_BUFFERS.map((m, k) => m + k);
     expect(trouble({ 'buffers MB': CLEAN_BUFFERS.map((m, k) => m + k / 2) })).toEqual([]);
     expect(trouble({ 'buffers MB': creeping }).join('\n')).toMatch(/buffers MB grew/);
+  });
+});
+
+describe('the daily hole’s kind of run', () => {
+  it('plays one go after another, each on the next day’s hole, keeping nothing: the save’s slot stays one slot', () => {
+    const run = leakRun({ seed: 1, minutes: 1.5, golf: 'daily' });
+    // the heap and the arrays are read after a collection, which a test has none of (`npm run leaks` runs with it), so only the rest are held here
+    expect(run.problems.filter((p) => !/^(heap|buffers) MB/.test(p))).toEqual([]);
+    // a run that played no daily hole passes in silence, so the goes it played are counted
+    expect(run.goes ?? 0, 'the daily goes begun').toBeGreaterThan(2);
+    const bytes = run.samples['save bytes'];
+    expect(Math.max(...bytes) - Math.min(...bytes), 'one slot, never a list of days').toBeLessThan(120);
+    expect(run.samples.bodies.every((n) => n <= 1)).toBe(true);
   });
 });

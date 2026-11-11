@@ -23,6 +23,7 @@
 import { BODY_CAPACITY } from '../src/arena';
 import { Autopilot } from '../src/autopilot';
 import { COURSE, COURSES } from '../src/course';
+import { dailyHole, shiftDay } from '../src/daily';
 import { Game } from '../src/game';
 import { Previewer } from '../src/preview';
 import { TRAIL, Trail } from '../src/trail';
@@ -164,20 +165,24 @@ export const GOLF_COURSES = {
   chrome: 'Chrome Heights',
 } as const;
 export type GolfCourseKey = keyof typeof GOLF_COURSES;
+/** The kinds of run `--on` may name besides a course of golf: the daily hole, a go after a go on the next day's hole. */
+export type LeakKind = GolfCourseKey | 'daily';
 
 export interface LeakOptions {
   seed: number;
   /** Game minutes to play. */
   minutes: number;
-  /** Play a course of golf, one of `GOLF_COURSES`, instead of The Meadow. */
-  golf?: GolfCourseKey;
+  /** Play a course of golf, one of `GOLF_COURSES`, instead of The Meadow; or `daily`, the daily hole of one day after another. */
+  golf?: LeakKind;
 }
 
 export interface LeakRun {
   seed: number;
   minutes: number;
   /** Which course of golf it was played on, if not The Meadow. */
-  golf?: GolfCourseKey;
+  golf?: LeakKind;
+  /** For a run of the daily hole, how many goes were begun: a run that played none has watched nothing. */
+  goes?: number;
   /** Every size, sampled every ten seconds of play. */
   samples: Record<string, number[]>;
   problems: string[];
@@ -190,16 +195,26 @@ export function leakRun({ seed, minutes, golf }: LeakOptions): LeakRun {
   const started = performance.now();
   const samples: Record<string, number[]> = {};
   try {
+    const daily = golf === 'daily';
     const game = new Game(
       new Progress(memoryStore()),
       {},
       {
         random: seeded(seed),
-        course: golf ? COURSES.find((c) => c.name === GOLF_COURSES[golf])!.holes : undefined,
+        course: golf && !daily ? COURSES.find((c) => c.name === GOLF_COURSES[golf])!.holes : undefined,
       },
     );
+    // the daily hole of a day, and of the day after it each time it is done, as a player who comes back every day would
+    let day = '2026-11-11';
+    let goes = 0;
+    const nextGo = () => {
+      game.playDaily(dailyHole(day), day);
+      day = shiftDay(day, 1);
+      goes++;
+    };
+    if (daily) nextGo();
     // round after round, as a player who never stops would
-    const pilot = new Autopilot(game, { skill: PLAYER, random: seeded(seed * 17 + 3), replay: true });
+    const pilot = new Autopilot(game, { skill: PLAYER, random: seeded(seed * 17 + 3), replay: !daily });
     // the preview of a golf hole's shots, which the page makes with the hole and let go of with it: made here as it is there,
     // and a shot tried from where the ball lies now and then, as a held drag does
     let previewer: Previewer | null = null;
@@ -212,6 +227,7 @@ export function leakRun({ seed, minutes, golf }: LeakOptions): LeakRun {
     for (let sample = 0; sample < minutes * 6; sample++) {
       for (let f = 0; f < 600; f++) {
         pilot.step(DT);
+        if (daily && game.phase === 'over') nextGo();
         const { world, ball } = game;
         if (world.alive[ball] && Math.hypot(world.vx[ball], world.vy[ball], world.vz[ball]) > TRAIL.moving)
           trail.record(game.t, world.x[ball], world.y[ball], world.z[ball]);
@@ -249,6 +265,7 @@ export function leakRun({ seed, minutes, golf }: LeakOptions): LeakRun {
       seed,
       minutes,
       golf,
+      goes: daily ? goes : undefined,
       samples,
       problems: trouble(samples),
       seconds: (performance.now() - started) / 1000,

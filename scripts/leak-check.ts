@@ -12,7 +12,7 @@
  */
 import { availableParallelism } from 'node:os';
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
-import { GOLF_COURSES, leakRun, type GolfCourseKey, type LeakOptions, type LeakRun } from './leaks';
+import { GOLF_COURSES, leakRun, type LeakKind, type LeakOptions, type LeakRun } from './leaks';
 
 async function main() {
   const args = process.argv.slice(2);
@@ -28,13 +28,13 @@ async function main() {
   // keep, and The Fells and The Isles add their lanes, lakes and islands, on holes of up to thirty-odd thousand tiles. `--on`
   // narrows the run to one kind (`meadow` or a golf course's key), for a short look at a new course
   const on = value('on');
-  const kinds: (GolfCourseKey | undefined)[] = [undefined, ...(Object.keys(GOLF_COURSES) as GolfCourseKey[])];
+  const kinds: (LeakKind | undefined)[] = [undefined, ...(Object.keys(GOLF_COURSES) as LeakKind[]), 'daily'];
   const queue: LeakOptions[] = seeds.flatMap((seed) =>
     kinds
       .filter((golf) => on === undefined || (golf ?? 'meadow') === on)
       .map((golf) => (golf ? { seed, minutes, golf } : { seed, minutes })),
   );
-  if (!queue.length) throw new Error(`--on ${on}: not meadow, ${Object.keys(GOLF_COURSES).join(', ')}`);
+  if (!queue.length) throw new Error(`--on ${on}: not meadow, daily, ${Object.keys(GOLF_COURSES).join(', ')}`);
   const runs: LeakRun[] = [];
   await Promise.all(
     Array.from({ length: Math.max(1, Math.min(queue.length, availableParallelism() - 1)) }, async () => {
