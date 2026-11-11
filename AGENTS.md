@@ -37,7 +37,8 @@ green by moving its baseline.
     git commit             the pre-commit hook: gitleaks over what is staged (gitleaks 8 on the PATH), then check:quick
     gitleaks git --redact  the whole history scanned for secrets, by hand before a push
     npm run check:quick    formatting, types and lint side by side, then the quick unit tests (the pre-commit hook; ~28 s)
-    npm run check          all of it: check:quick, slow unit tests, fuzz, determinism, leaks:check, pace:check, daily:check, bench, smoke (~70 min)
+    npm run check:change   the pass for a change in flight: check:quick, then only the slow tests, gates and smoke specs what changed can reach (--plan says which)
+    npm run check          all of it: check:quick, slow unit tests, fuzz, determinism, leaks:check, pace:check, daily:check, bench, smoke (~46 min, 33 of them smoke)
     npm test               every unit test, quick and slow (Vitest, test/)
     npm run fuzz           the game played at random, rules checked; -- --seed N plays one failure again, --on <course> one kind
     npm run determinism    the same seed played twice, hashed, to catch chance not from the seed
@@ -212,7 +213,13 @@ perf figures before and after and within budget, `measureFrame` in any other sce
 `smoke/look.spec.ts`. The pass for a feature or a change to the rules of play is `npm run check` green and
 `npm run fuzz -- --seeds 1-24` clean, once, at the end of the piece of work, on the tree as it will land.
 
-**The pass is sized to what the change can reach,** since the measuring gates are most of its hour:
+**The pass is sized to what the change can reach,** since the smoke tests and the measuring gates are most of its three
+quarters of an hour. `npm run check:change` does the sizing: it reads what has changed against the remote's default
+branch, runs the Node gates whose bundles hold a changed file and the smoke specs it can reach (`scripts/reach.ts`; a file
+it does not know reaches everything), and says what it left out. It is the pass for a change in flight, and several in
+flight share one `npm run check`, run once before the push that deploys them. A fault in what `check:change` leaves out
+is found there and not sooner. What reaches each gate, for a reader, and what the command does not run (`perf` alone,
+`fuzz -- --seeds 1-24`, a long `leaks`):
 
 - A change that cannot move a cost (words, a stylesheet, a test, a script, a comment, this file) is held to
   `check:quick` and `npm test`, since the hook leaves out the slow test files (`SLOW` in `vitest.config.ts`; a file that

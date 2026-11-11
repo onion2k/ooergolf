@@ -40,6 +40,7 @@
     "perf": "playwright test smoke/perf.spec.ts",
     "perf:update": "PERF_UPDATE=1 playwright test smoke/perf.spec.ts",
     "check:quick": "sh scripts/quick-check.sh",
+    "check:change": "esbuild scripts/change-check.ts --bundle --platform=node --format=esm --packages=external --outfile=node_modules/.cache/scripts/change.mjs --log-level=warning && node node_modules/.cache/scripts/change.mjs",
     "check": "npm run --silent check:quick && vitest run --project slow --reporter dot --maxWorkers 50% && npm run --silent licences && npm run --silent unused && npm run --silent branches && npm run --silent fuzz && npm run --silent determinism && npm run --silent leaks:check && npm run --silent pace:check && npm run --silent daily:check && npm run --silent bench && npm run --silent smoke",
     "prepare": "git config core.hooksPath .githooks"
   },
