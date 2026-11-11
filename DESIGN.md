@@ -415,12 +415,20 @@ wheel zooms and on a phone two fingers do. An Overhead button shows the
 whole hole from above to look round, by dragging, and never to aim from. A Menu button beside it (and the Escape key) stops
 the hole and offers the way back, a restart of the hole (not in an event, and a hole begun again pays nothing), giving the hole
 up (asked twice: it scores the limit, as a hole picked up does), the trophy room and the courses, where an event round waits to be gone on with.
+Over the daily hole it says the day, and offers a restart only for a go that pays nothing.
 
 The trophy room, opened from the start screen by a cup beside Play and from the menu, shows what a player has done and pays them
 nothing for it: a cup for each title on each of the five tours, a career's eight figures (rounds, events won, holes, holes in
 one, eagles, birdies and the longest putt and drive), the feats as badges (earned in green, the rest grey with how each is won) and
 the best round on every course. A feat is told when it is earned, on the hole's own word. Free play counts nothing, and neither
 does a hole begun again from the menu.
+
+The daily hole is one golf hole a day, the same for every player, made from the UTC day and played from a strip above the five
+tabs on the start screen. Only the first go of a day counts: it is taken at its first stroke (left unfinished, the day reads did not
+finish), paid as any hole is, in the career or free play, and kept in a slot that holds the day, its score and the run of days
+finished in turn; every go after it that day is for nothing, and pays and changes nothing. Its result has a card with the score and
+a Share button, which sends the day, the par, the strokes and the game's address, and nothing of the player. Seven days running is a
+feat.
 
 ## Phone and desktop
 

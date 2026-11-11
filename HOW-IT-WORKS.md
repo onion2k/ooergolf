@@ -298,11 +298,14 @@ today, and what the next features must hand it:
   the baseline being written, being within tolerance). The Fells are now outside the target they were built to; whether to
   retune them is for the user. Before that, 5 October 2026, when the Fells' hole five was renamed The Plunge (its wind is a
   name's, and it moved the figure from 34.63 to 35.44).
+- **Daily:** four hundred days of the daily hole built and played by the pace player (`npm run daily:check`, in `check`, 3 minutes 19
+  seconds); see _The daily hole_ under the code's layout. It holds that the generator's refusals are retried and never come to the plain
+  hole, and that a day's hole can be holed inside its limit: it has no baseline, only the bars in `scripts/daily.ts`.
 - **Leaks:** ten minutes of the autopilot playing round after round, on The
   Meadow and again on each golf course (`GOLF_COURSES` in `scripts/leaks.ts`: the six, and one course of each biome, The
   Saltpan, Copernicus and Chrome Heights, since a biome's three courses share every line a run watches; under
   the Links' ceilings but for the save's bytes, 20,400 since 31 October 2026 for a hundred and sixty-two holes' bests, the career's eighteen
-  course records, all five tours' seasons at their longest, an event kept and the caddie's three counts at their limit (20,022 measured since the trophy room, with ten figures of six figures and every feat, held to the byte by `test/leaks.test.ts`, 378 under the ceiling, which is about three holes' bests; it was 19,732 and 10,800 for eighty-one holes' bests, 10,203 measured; it was 10,800 for eighty-one holes' bests, 10,203 measured); `leaks:check` queues the ten, an hour and forty minutes of play in parallel, and `--on` narrows a run to one kind for a short look; a test holds that a hole
+  course records, all five tours' seasons at their longest, an event kept and the caddie's three counts at their limit (20,098 measured since the daily hole, one more fixed slot, held to the byte by `test/leaks.test.ts`, 302 under the ceiling, which is about three holes' bests; it was 20,022 with the trophy room, ten figures of six figures and every feat; it was 19,732 and 10,800 for eighty-one holes' bests, 10,203 measured; it was 10,800 for eighty-one holes' bests, 10,203 measured); `leaks:check` queues the eleven (a daily kind among them: one go after another, each on the next day's hole), and `--on` narrows a run to one kind for a short look; a test holds that a hole
   with a lane is collectable, so `laneOf`'s cache keeps nothing alive, and one each that `zonesOf`'s and `pondOf`'s tables are weak; the
   arena's reused ground weights are emptied at 256, held by a test, and nothing of the new caches is kept for a game's life, so
   nothing was added to `scripts/leaks.ts`). The card is emptied each round and
@@ -1254,14 +1257,53 @@ minigolf: true }`, read through `oceanFor`) is the one switch: `waterBed` and `s
   under its par, which only an event round writes), Grand slam, Record book and From downtown (`DOWNTOWN`, 20 yards). `Game.earn`
   keeps a new one in the save with the hole's own write (or `buy`'s) and tells `feat(id)` after the hole is paid; it pays nothing.
   A feat is for having done it, so `trophyProblems` (`invariants.ts`) holds the figures and the ids and not that a feat is still
-  earned. **Two of the plan's twelve are not built:** off the pin (the pin waits on `c5-pin`) and seven daily holes running (the daily hole,
-  part E); each will be an id in `featids.ts`, an entry in `feats.ts` and its case in `test/feats.test.ts`. `trophywords.ts` is the
+  earned. **One of the plan's twelve is not built:** off the pin (the pin waits on `c5-pin`); seven daily holes running is built
+  (`dailySeven`, `save.daily.streak >= DAILY_RUN`, see _The daily hole_ below), and the pin's will be an id in `featids.ts`, an entry in `feats.ts` and its case in `test/feats.test.ts`. `trophywords.ts` is the
   words (`trophyView(save, courses)`: the five tours with cups to three and then a number, the eight figures, the feats and the
   records, and `featWords`), and `#trophies` in `index.html`, drawn by the hud from that, is the screen: a cup button at the left
   of Play opens it from the start screen, and the menu's Trophies from a hole, where it hides the menu, which Back gives back (the
   game still stopped; the escape key shuts the room, then the menu); on a phone two columns and the short grade. The hud says a feat
   on the second line of the score word (`hud.feat`; several the one hole earns are one line), or on a word of its own when a purchase
   earned it. The test API's `trophies()` reads the figures, the feats and the room as drawn.
+- **The daily hole** (11 November 2026; plan `~/.claude/plans/synthetic-soaring-meteor.md`, part E). One golf hole a day, the same for
+  every player, from the UTC day, which turns at midnight UTC. `days.ts` is the calendar's arithmetic on `YYYY-MM-DD` strings (a leaf:
+  `utcDay(date)`, `isDay`, `dayNumber`, `shiftDay`, `followsDay`, `dayWords`), done by the civil calendar's own sums so no clock is
+  read; the page reads the clock once and hands the day in, and a smoke page's clock is held to a day with `start(page, { day })`.
+  `daily.ts` draws a `GolfSpec` from `seeded(nameSeed(day))` (`dailySpec(day, attempt)`: the biome by the turn of the days, the day number
+  modulo four through earth, desert, moon and future; a par of three to five with a length to match, 160 to 235, 330 to 470 and 500 to 620
+  yards; a bend of 15 to 45 degrees on half the longer holes; a width of 9 to 14; bunkers; a pond or none; 30 to 110 trees, none on the
+  Moon; a wind of 0 to 18 and greens of 11.5 to 14.5; every draw made in a fixed order whether used or not, so one choice never moves
+  another), named `Daily <day>` (never in `COURSES`, so the previews, the field, the pace baseline and the hashes are what they were).
+  `dailyBuild(day, make)` asks the generator, and where it refuses (a pond that will not fit) tries the next seed, up to `RETRIES` (8),
+  and then `plainSpec(day)`, which a test holds never to be refused in any biome; over 400 days from 11 November 2026, 38 specs were
+  refused on 31 days and none came to the plain one. A hole takes 10 to 60 ms to make. `dailywords.ts` says what the strip, the card and
+  the menu say, from the slot and `dailyFacts(day)` (the hole's biome, par, length and wind from its spec, so the strip speaks before the
+  hole is made). `Game.playDaily(hole, day)` begins a round of one hole that is no course's (no `of`, no event: a round kept to go on
+  with is left, as practice leaves it) and sets `daily` (`{ day, pays }`, `pays` for the first go of a day later than the slot's, so a clock
+  set back is a later go). `save.daily` is one fixed slot, `{ day, strokes, par, streak }` (`DailySlot`), written at the go's first
+  stroke (strokes nought, which reads as did not finish; `streak` the run up to the day before if that was finished) and again at its end
+  (strokes set once, a day added to the run): the first go is the one kept, and pays as a hole does in either mode (free play's bar on pay is
+  lifted for it), counts into `life` as a hole (`life.rounds` never), tells `paid` and the feats, never writes `save.best` (a name a day would
+  grow for ever) and refuses a restart (`Game.restartable`). A hole picked up (Give up, or the limit) is scored at par and five and is the
+  day. Every later go pays nothing, counts nothing and writes nothing, not a byte; a restart is allowed there. `dailyProblems` holds the
+  slot every frame (a day or none, counts, strokes within the limit, the go's day and par and its score once done, a later go over a slot
+  no earlier than its day) and `dailyKeptProblems(before, after)` what may never change (strokes and run of a scored day; the day never
+  going back), which the fuzzer asks of each frame. The page: a strip `#daily` above the five tabs (green with Play today's hole, grey
+  with the score, the run, Share and a go again once done; did not finish where a stroke was taken and not scored), its picture the hole
+  painted by `paintPreview` on a plate once the page is ready (`dailyReady`) and never before the first frame, and the day read each time
+  the start screen opens; `#dailyCard` in place of the round's card, with the score, `N on a par P · coins · days running`, the words
+  Share sends and Share, which is the share sheet where the browser has one, else the clipboard, only on the player's own press
+  (`shareWords` in `main.ts`; a share sheet put away says nothing). What is shared is `shareText(day, par, strokes)`: three lines, `ooergolf
+daily, 11 Nov 2026`, `Par 4: 3 strokes, Birdie` and `https://golf.ooer.com/`, nothing of the player (the mock also had the biome, the yards
+  and the run, which are left out). The menu says `Today's hole · 11 Nov 2026 · 2 strokes · par 4`, that the first go is the one that counts
+  or that a later go pays nothing, Give up scores the limit for the day, Restart is there only on a later go, Courses leaves the go as it
+  stands (not finished, if a stroke was taken), and Trophies as ever. `npm run daily:check` (`scripts/daily.ts`, `daily-check.ts`) builds
+  400 days from 11 November 2026 and plays each on eight seeds with the pace player: 3 minutes 19 seconds, held to 98% of all rounds holed
+  inside the limit and each day to 60%, none stuck and none on the plain hole, and 15% of days at most with a spec refused. Measured on
+  ten seeds: 99.3% (17 days of 400 at nine in ten, 4 at eight and 1 at seven, which is why the bar is not nine in ten for each day as the plan
+  guessed), and the pace player is 0.70 strokes a hole under par on them. The fuzzer plays one of eight fixed days (`FUZZ_DAYS`) on a
+  stream of its own (`seed * 83 + 41`), on three seeds in seven and never on a course given, so no other run changes; `leaks --on daily`
+  plays a go on each next day's hole.
 - **The career is a season of tournaments** (15 and 16 October 2026; plan `~/.claude/plans/wobbly-sprouting-gizmo.md`, which says
   what was chosen from its mock and why). Two tours, golf (the six courses in their order, six events) and mini (three), each of
   three grades, club, county and championship; each event is a field of the player and eleven named rivals (`src/rivals.ts`, a
@@ -1365,7 +1407,7 @@ button's action (the other way to now when not told; refused under the start scr
 the flag it looks to, which strokes it follows) as well as the game's chance, `faceFlag()` presses the flag button's action (false when it did nothing), `menu(open?)` presses the Menu button's action (the other way
 to now when not told; refused, and shut, where `menuMayOpen` says no) and says whether the menu is up after (`state().menu`), `menuShown()` reads the panel
 as drawn (whether it is up, whether Restart is there, what Give up says and whether it is asking, its words and its note), `pickUp()` and `restartHole()`
-press what Give up's second press and Restart do (each says whether the game took it; a restart is refused in an event), `trophies()` reads the save's `life` and `feats` and the trophy room as drawn (up, whether the menu stands behind it, its tours, figures, feats and records; it is opened by its buttons), and `measureFrame`;
+press what Give up's second press and Restart do (each says whether the game took it; a restart is refused in an event), `trophies()` reads the save's `life` and `feats` and the trophy room as drawn (up, whether the menu stands behind it, its tours, figures, feats and records; it is opened by its buttons), `daily()` reads the day by the page's clock, the slot, the go in play and the strip and the card as drawn (Share is pressed by its button, with the share sheet and the clipboard stubbed by the test), `playDaily(day?)` presses the strip's Play for the day given (today's if none), and `measureFrame`;
 `judge(frames, gapMs, workMs)` feeds the quality governor as the frame loop does, and says
 the rung; `grass()` how many blades of the rough the last frame drew near
 and far, and the wind; `bladesAround(x, y, radius)` how many the GPU drew
@@ -1406,7 +1448,7 @@ ball down at a lie.
 
 ## What is not there yet
 
-- The trophy room's feats are ten of the plan's twelve (see _The trophy room_ above). A round under par counts only where the career
+- The trophy room's feats are eleven of the plan's twelve (see _The trophy room_ above; the one left is off the pin). A round under par counts only where the career
   keeps it (an event round's record), since the save has no count of rounds under par, and a feat earned by the last hole of a round
   is told as the card comes up, which the card's own words follow without saying it.
 
@@ -1522,10 +1564,10 @@ What the project file said at more length, moved here word for word on 1 Novembe
 
 ### The test API's readings
 
-`trophies()` (the lifetime figures, the feats and the trophy room as drawn), `caddie()`, `season()`, `sound()` (awake, mute, volume, voices, loops, what is loaded and what each load took, the
+`trophies()` (the lifetime figures, the feats and the trophy room as drawn), `daily()` (the day, the slot, the go and the strip and card as drawn), `caddie()`, `season()`, `sound()` (awake, mute, volume, voices, loops, what is loaded and what each load took, the
 music's beat, and the controls as drawn), `theme()` (the biome's look as the renderer has it: sky, background, sun, haze,
 environment, and whether blades are grown) and `dust()` (the colour a stroke threw up). Playing: `shoot`, `club`, `chooseCourse`, `startHole`, `playCourse`, `buy`,
-`equip`; `mute(on)`, `volume(v)`, and `wake()` for the first gesture. The event log has a `sound …` line for each sound
+`equip`, `playDaily(day?)`; `mute(on)`, `volume(v)`, and `wake()` for the first gesture. The event log has a `sound …` line for each sound
 an event plays. Playwright's Chromium lifts the autoplay rule, so a context made by `wake()` runs. A smoke test
 starts the page headless with `start(page, { save, seed, paused, rung })` in `smoke/game.ts`, a fresh context and a
 save of its own, and drives a real mouse or finger with `drag` and `touches`. Never a timeout: pause, seed, step.
@@ -1537,6 +1579,13 @@ save of its own, and drives a real mouse or finger with `drag` and `touches`. Ne
   out or a putt holed in each; a save from before it (nothing counted, every feat it had already earned told at the next hole); a
   tour with no title, one and four; a feat told with a long putt's second line, with another feat on the same hole, and from the
   shop; the five tours and the eight figures at 400 px wide.
+- **the daily hole:** the first go taken at its first stroke and not before, left unfinished (did not finish), picked up at the tee, at the
+  limit and from the menu, and played out; the first go in free play (paid and counted) and in the career; a later go the same day, one
+  after a reload and one over a slot of a later day (a clock set back): no coin, gem, figure, best or byte written; a restart refused on the
+  first go and allowed on a later one; the run across a month and a year, after a day missed and after a day not finished; the
+  day turning at midnight UTC with the start screen already up (read when it opens again); an event round kept left alone; the Moon's day
+  (no tree, no air); a day the generator refuses (the next seed, then the plain hole); Share with a share sheet, a clipboard only, a share
+  sheet put away and neither; the strip and the card at 400 px; the picture painted only after the first frame; the seventh day running
 - **a biome:** the first hole of one after a hole of another (look, sky, environment, grass and dust all swapped, and an
   earth hole after it takes earth's back, the title's sky too); none of the grass on the Moon and in the Future on every
   rung, and a press and a puff that do nothing wrong; a cactus's foot, a ball passed through a hologram at the fastest

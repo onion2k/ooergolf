@@ -37,12 +37,13 @@ green by moving its baseline.
     git commit             the pre-commit hook: gitleaks over what is staged (gitleaks 8 on the PATH), then check:quick
     gitleaks git --redact  the whole history scanned for secrets, by hand before a push
     npm run check:quick    formatting, types and lint side by side, then the quick unit tests (the pre-commit hook; ~28 s)
-    npm run check          all of it: check:quick, slow unit tests, fuzz, determinism, leaks:check, pace:check, bench, smoke (~65 min)
+    npm run check          all of it: check:quick, slow unit tests, fuzz, determinism, leaks:check, pace:check, daily:check, bench, smoke (~70 min)
     npm test               every unit test, quick and slow (Vitest, test/)
     npm run fuzz           the game played at random, rules checked; -- --seed N plays one failure again, --on <course> one kind
     npm run determinism    the same seed played twice, hashed, to catch chance not from the seed
     npm run leaks          an hour of play watching what must stay bounded; leaks:check is the ten minutes a kind in check
     npm run pace           strokes a round, seed by seed, and each hole's median against par; pace:check holds the figures
+    npm run daily:check    400 days' daily holes built and each played on eight seeds by the pace player, held to bars (~3½ min; in check)
     npm run bench          the physics' frame time held to scripts/bench-baseline.json
     npm run perf           boot, frame and download held to smoke/perf-baseline.json and the budget
     npm run smoke          the built game in headless Chromium on the real GPU (Playwright, smoke/): every run builds dist first
@@ -132,9 +133,9 @@ What to copy the shape of, when building something new:
 `window.game`, in `src/debug.ts`, typed, and the smoke tests compile against it; every call is in `HOW-IT-WORKS.md`'s
 _The test API_. Time: `pause`, `resume`, `step(frames)`, `seed(n)`, and `?seed=N`, `?paused=1`, `?rung=N`, `?title=0`,
 `?flyin=0` on the page. Reading: `state`, `ball`, `bodies`, `content`, `events`, `invariants`, `view()`, `motions()`,
-`caddie()`, `season()`, `sound()`, `theme()`, `dust()`, `menuShown()`, `trophies()`. Playing: `shoot`, `club`, `chooseCourse`, `startHole`,
-`playCourse`, `buy`, `equip`, `mute`, `volume`, `wake`, `menu(open?)`, `pickUp()`, `restartHole()`. A smoke test starts the page headless with
-`start(page, { save, seed, paused, rung })` in `smoke/game.ts`, a fresh context and a save of its own, and drives a real
+`caddie()`, `season()`, `sound()`, `theme()`, `dust()`, `menuShown()`, `trophies()`, `daily()`. Playing: `shoot`, `club`, `chooseCourse`, `startHole`,
+`playCourse`, `playDaily(day?)`, `buy`, `equip`, `mute`, `volume`, `wake`, `menu(open?)`, `pickUp()`, `restartHole()`. A smoke test starts the page headless with
+`start(page, { save, seed, paused, rung, day })` in `smoke/game.ts` (the page's clock held to `day`, 11 November 2026 unless told), a fresh context and a save of its own, and drives a real
 mouse or finger with `drag` and `touches`. Never a timeout: pause, seed, step.
 
 ## Edge cases
@@ -166,6 +167,9 @@ For anything new, check what it does (`HOW-IT-WORKS.md`'s _Edge cases in full_ h
 - **the trophy room:** from the start screen and the menu (which it hides and gives back, time standing under both); counted for
   a hole that pays only (not free play, a hole restarted or a hole picked up); a save from before it earns its feats at the next
   hole; the five tours with no title, one, and more than three; a feat told with a score's word, and one a purchase earned
+- **the daily hole:** taken at its first stroke, left unfinished, picked up, and finished; a later go the same day (nothing written), or
+  over a later day's slot; restart refused on the first go only; free play; the day turning at midnight UTC; Share by sheet, clipboard,
+  put away and neither; the strip and card at 400 px
 - **the camera:** hidden behind something taller than the ball; every heading and tilt limit; the ball and the reach on
   the screen, desk and phone; a drag turned to the aim and taken back; the flag button; a stroke followed and one held;
   the overhead view and back
@@ -217,6 +221,7 @@ perf figures before and after and within budget, `measureFrame` in any other sce
   ladder), boot or the download, or the size of a hole; once, not three times, where the figure is far inside.
 - `bench`: only for `physics.ts`, `arena.ts` or what the world steps.
 - `leaks`: only for something kept, and `--on` the one kind of course it can reach first.
+- `daily:check`: for the generator or the autopilot (any change a golf hole's making or its playing).
 - `pace:check`: for anything that changes a hole or how the autopilot plays; a hole's chance is the next hole's, so the
   whole course is measured again after any change to one hole.
 - A fix is held to its test, the invariants and `fuzz` on the seeds and course it concerns.
