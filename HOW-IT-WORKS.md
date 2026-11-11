@@ -1099,7 +1099,14 @@ minigolf: true }`, read through `oceanFor`) is the one switch: `waterBed` and `s
   ball (`faceFlag` in `main.ts`, through the hud's `flag` handler, to the Director's `nearFlag`), eased and by the shortest way, on
   minigolf as on golf, leaving the zoom, the tilt and an aim view as they are; it does nothing under the start
   screen, with the ball at the cup or while a drag is held on the course, and is disabled while Overhead is on (there is no
-  way to face the cup from above). There is no Look switch and no Aim button: it is always aim. **On a phone** (under 600 wide or 500 high) the hole's
+  way to face the cup from above). The **Menu** button (`#viewMenu`, first in the panel: its word on a desk, three bars on a phone) and the
+  Escape key (after the phone drawer's own) open the hole's menu (`#menu`, over a dimmed course; `setMenu` in `main.ts`, which opens it only
+  where `menuMayOpen` in `menu.ts` says): while it is up `simulate` steps neither the game nor the director, the sound still steps so the song plays, and
+  `Input.blocked` and the wheel are shut. Its words are `menuWords`: Back to the hole; Restart the hole (`Game.restartHole`, not in an event;
+  the hole begun again with the card and the retake as they were, glided to and never flown in to, and paying nothing when it is finished);
+  Give up the hole, which turns to "Give up? It scores N" on the first press and on the second is `Game.pickUp` (scored at the limit, nothing
+  paid, an event's card and kept round written as for any hole, the ball taken out of the world); and Courses (the start screen; an event
+  round is kept to go on with). A new hole puts the menu away. There is no Look switch and no Aim button: it is always aim. **On a phone** (under 600 wide or 500 high) the hole's
   panel (`#strokes`: name, par, strokes, pin, wind, greens, break) is a drawer off the left edge, out of the page's flow,
   pulled out by a chip at the top left (`#holeChip`: "Hole 3 · 0 strokes") and shut by its ✕, a tap on the dimmed course
   (`#drawerScrim`, which is not the canvas, so a drag there is never a shot) or escape; a new hole or the start screen shuts
@@ -1333,7 +1340,10 @@ safe box, whether the view has settled and the problems `framingProblems` finds,
 own setter for the turn and the tilt, which no player can reach (a drag does not move it), `overhead(on?)` presses the Overhead
 button's action (the other way to now when not told; refused under the start screen) and says whether it is on after,
 `followShots('drawn' | 'always' | 'never')` chooses the strokes the camera follows the ball for, `seed(n)` seeds the camera's tosses (which side of
-the flag it looks to, which strokes it follows) as well as the game's chance, `faceFlag()` presses the flag button's action (false when it did nothing), and `measureFrame`;
+the flag it looks to, which strokes it follows) as well as the game's chance, `faceFlag()` presses the flag button's action (false when it did nothing), `menu(open?)` presses the Menu button's action (the other way
+to now when not told; refused, and shut, where `menuMayOpen` says no) and says whether the menu is up after (`state().menu`), `menuShown()` reads the panel
+as drawn (whether it is up, whether Restart is there, what Give up says and whether it is asking, its words and its note), `pickUp()` and `restartHole()`
+press what Give up's second press and Restart do (each says whether the game took it; a restart is refused in an event), and `measureFrame`;
 `judge(frames, gapMs, workMs)` feeds the quality governor as the frame loop does, and says
 the rung; `grass()` how many blades of the rough the last frame drew near
 and far, and the wind; `bladesAround(x, y, radius)` how many the GPU drew

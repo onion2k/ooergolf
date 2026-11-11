@@ -412,7 +412,9 @@ and follows the ball on about one stroke in five, holding the view of the shot
 on the rest and taking the ball up only if it would leave the screen. On a
 phone held upright it turns so the hole runs up the screen. On a desktop the
 wheel zooms and on a phone two fingers do. An Overhead button shows the
-whole hole from above to look round, by dragging, and never to aim from.
+whole hole from above to look round, by dragging, and never to aim from. A Menu button beside it (and the Escape key) stops
+the hole and offers the way back, a restart of the hole (not in an event, and a hole begun again pays nothing), giving the hole
+up (asked twice: it scores the limit, as a hole picked up does) and the courses, where an event round waits to be gone on with.
 
 ## Phone and desktop
 
