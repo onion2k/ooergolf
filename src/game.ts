@@ -1140,6 +1140,7 @@ export class Game {
     this.lipInside = false;
     if (this.lipTold) return;
     this.lipTold = true;
+    if (this.tallying) this.progress.save.life.lipOuts++;
     this.events.lipped?.(x, y);
   }
 
@@ -1152,7 +1153,10 @@ export class Game {
     const { layout } = this;
     const yards = Math.hypot(layout.cup.x - this.lie.x, layout.cup.y - this.lie.y);
     if (this.struckPutt) {
-      if (yards >= (layout.golf ? MOMENTS.longPuttGolf : MOMENTS.longPuttMinigolf)) this.events.longPutt?.(yards);
+      if (yards >= (layout.golf ? MOMENTS.longPuttGolf : MOMENTS.longPuttMinigolf)) {
+        this.counted('longestPutt', Math.floor(yards));
+        this.events.longPutt?.(yards);
+      }
     } else if (layout.golf && yards >= MOMENTS.chipIn) this.events.chippedIn?.(yards);
   }
 
@@ -1197,6 +1201,7 @@ export class Game {
     this.moving = false;
     // told before the splash or the out of bounds it saved, so that a page showing that word knows it cost nothing
     if (wading) this.events.waded?.(x, y);
+    if (this.tallying) this.progress.save.life.lost++;
     tell?.(x, y);
     // a ball lost in water has left the world by the bottom; one out of bounds is still in it, and is taken out
     if (this.world.alive[this.ball]) this.world.remove(this.ball);
@@ -1406,7 +1411,10 @@ export class Game {
     // the driver's first landing from the tee, on the fairway and far enough, is a long drive
     if (this.firstLanding && this.struckDriver && lieAt(layout, x, y) === LIE.fairway) {
       const yards = Math.hypot(x - this.lie.x, y - this.lie.y);
-      if (yards >= MOMENTS.longDrive) this.events.longDrive?.(yards);
+      if (yards >= MOMENTS.longDrive) {
+        this.counted('longestDrive', Math.floor(yards));
+        this.events.longDrive?.(yards);
+      }
     }
     this.firstLanding = false;
   }
@@ -1515,6 +1523,7 @@ export class Game {
       save.owned = save.owned.filter((id) => id !== spent);
       for (const aisle of AISLES) if (save.kit[aisle] === spent) save.kit[aisle] = '';
     }
+    this.tally(how, score);
     const prize = this.counting ? this.closeRound() : null;
     this.persist();
     if (spend) this.events.spent?.(spent);
@@ -1523,6 +1532,39 @@ export class Game {
       this.events.roundPaid?.(prize.coins, prize.placement.record);
       this.events.placed?.(prize.placement);
     }
+  }
+
+  /**
+   * Whether what a player does is counted in their life: for a hole that pays, which is the career's and not free play's, and
+   * not a hole begun again from the menu (or a restart would farm an ace). A rehearsal, which no one plays, counts nothing.
+   */
+  private get tallying(): boolean {
+    return !this.rehearsing && !this.restarted && this.progress.save.mode === 'career';
+  }
+
+  /** A longest figure of the life raised to `value` whole yards, if it is more than it was and the hole counts. */
+  private counted(key: 'longestPutt' | 'longestDrive', value: number) {
+    if (!this.tallying) return;
+    const life = this.progress.save.life;
+    if (value > life[key]) life[key] = value;
+  }
+
+  /**
+   * A hole done, counted into the life: a hole holed is one hole, and an ace, an eagle (two under or better on a golf hole) or a
+   * birdie (any other hole under par), each at most; a hole picked up is not holed. The last hole of a named course is a round,
+   * picked up or not. Called after the free-play return, with the save still to be written.
+   */
+  private tally(how: 'holed' | 'pickedUp', score: number) {
+    if (!this.tallying) return;
+    const life = this.progress.save.life;
+    if (how === 'holed') {
+      life.holes++;
+      const under = this.def.par - score;
+      if (score === 1) life.aces++;
+      else if (this.layout.golf && under >= 2) life.eagles++;
+      else if (under >= 1) life.birdies++;
+    }
+    if (this.of !== null && this.hole + 1 >= this.course.length) life.rounds++;
   }
 
   /**
@@ -1553,6 +1595,7 @@ export class Game {
     if (record) save.records[of.name] = { strokes, par, kit: { ...save.kit }, when: this.today() };
     const done = finishEvent(this.season!, tour, save.season[tour], this.card);
     save.season[tour] = done.season;
+    if (done.place === 1) save.life.wins++;
     const coins = done.prize + (record ? PRIZE.record : 0);
     save.coins += coins;
     return {

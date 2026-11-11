@@ -21,7 +21,8 @@ import { titleLetters } from '../src/models/lettering';
 import titleTrace from '../src/titletrace.json';
 import { TitleScene } from '../src/titlescene';
 import { Previewer } from '../src/preview';
-import { Progress, memoryStore } from '../src/progress';
+import { FEAT_IDS } from '../src/featids';
+import { LIFE_KEYS, Progress, memoryStore } from '../src/progress';
 import { TRAIL, Trail } from '../src/trail';
 import { newGame } from './helpers';
 
@@ -67,6 +68,10 @@ describe('what must stay bounded', () => {
         played: Array.from({ length: events }, () => Array.from({ length: 9 }, () => 10)),
         titles: 999,
       };
+    // and the trophy room at its most: each lifetime figure of six figures (the most a figure is ever asked to hold: a million
+    // holes is a lifetime) and every feat earned, so that a feat added is seen here and not in a player's storage
+    for (const key of LIFE_KEYS) progress.save.life[key] = 999_999;
+    progress.save.feats = [...FEAT_IDS];
     // and the caddie's tips taken at their limit, past which they are not counted
     progress.save.caddie = { club: CADDIE.taken, shape: CADDIE.taken, spin: CADDIE.taken };
     expect(ITEMS.length, 'the forty-five').toBe(45);
@@ -78,7 +83,10 @@ describe('what must stay bounded', () => {
     // 10,228 with the sound's mute and volume)
     // 31 October 2026: 19,732 with the nine courses of the biomes (a best on 162 holes, a record of eighteen courses) and the
     // three tours of them, each at its longest (a season less one event played, in two-figure scores): the plan had guessed 20,000)
-    expect(bytes, `${bytes} bytes for ${holes.length} holes`).toBe(19_732);
+    // 11 November 2026: 20,022 with the trophy room, the ten lifetime figures at six figures each (+136 at nought, which is the
+    // key names, and +154 more for the figures at six figures and the ten feats' ids); the ceiling, 20,400, is not raised, and has
+    // 378 bytes of room, which is about three holes and not six: the next course will want it thought about again
+    expect(bytes, `${bytes} bytes for ${holes.length} holes`).toBe(20_022);
     expect(bytes, 'under the ceiling').toBeLessThan(WATCH['save bytes']!.ceiling);
     expect(WATCH['save bytes']!.ceiling, 'with room for about six holes more and no more').toBeLessThan(bytes * 1.15);
   });

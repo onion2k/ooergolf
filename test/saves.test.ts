@@ -36,7 +36,23 @@ const NO_TIPS = { club: 0, shape: 0, spin: 0 };
 const CAREER = { mode: 'career', records: {}, round: null, season: NO_SEASON, caddie: NO_TIPS };
 /** What a save from before the sound loads its setting as: on, at full volume. */
 const NO_SOUND = { muted: false, volume: 1 };
-const FRESH = { coins: 0, gems: 0, owned: [], kit: NONE, best: {}, ...CAREER, ...NO_SOUND };
+/** What a save from before the trophy room loads its lifetime figures and feats as: nothing counted, nothing earned. */
+const NO_LIFE = {
+  life: {
+    rounds: 0,
+    wins: 0,
+    holes: 0,
+    aces: 0,
+    eagles: 0,
+    birdies: 0,
+    lost: 0,
+    lipOuts: 0,
+    longestPutt: 0,
+    longestDrive: 0,
+  },
+  feats: [],
+};
+const FRESH = { coins: 0, gems: 0, owned: [], kit: NONE, best: {}, ...CAREER, ...NO_SOUND, ...NO_LIFE };
 
 /**
  * What each save loads as. The first is the template's stub's, a bank the
@@ -162,15 +178,18 @@ const BEFORE_SOUND: Record<string, Record<string, unknown>> = {
   },
 };
 const KEPT: Record<string, Record<string, unknown>> = {
-  ...Object.fromEntries(Object.entries(BEFORE_SOUND).map(([file, save]) => [file, { ...save, ...NO_SOUND }])),
+  ...Object.fromEntries(
+    Object.entries(BEFORE_SOUND).map(([file, save]) => [file, { ...save, ...NO_SOUND, ...NO_LIFE }]),
+  ),
   // the sound of 18 October 2026: turned off, and the volume at two fifths
-  '11-sound.json': { ...BEFORE_SOUND['10-caddie-spin.json'], muted: true, volume: 0.4 },
+  '11-sound.json': { ...BEFORE_SOUND['10-caddie-spin.json'], muted: true, volume: 0.4, ...NO_LIFE },
   // the biome tours of 31 October 2026: the desert tour at the county grade with an event played and a round kept on its second
   // event (The Mesa), the moon tour at the championship with a title, an event played and one withdrawn from, the future untouched
   '12-biomes.json': {
     ...BEFORE_SOUND['10-caddie-spin.json'],
     muted: true,
     volume: 0.4,
+    ...NO_LIFE,
     coins: 260,
     gems: 1,
     round: { tour: 'desert', course: 'The Mesa', hole: 3, card: [4, 5, 4], retaken: false, pickedUp: false },
@@ -179,6 +198,32 @@ const KEPT: Record<string, Record<string, unknown>> = {
       desert: { grade: 'county', begun: 1, played: [[4, 5, 3, 4, 4, 3, 5, 4, 4]], titles: 0 },
       moon: { grade: 'championship', begun: 4, played: [[4, 4, 3, 4, 5, 3, 4, 4, 5], null], titles: 1 },
     },
+  },
+  // the trophy room of 11 November 2026: the lifetime figures counted and two feats earned (an ace, and an event won), on a save
+  // that also holds the champion's title of the moon tour; a feat the game does not know is in the file, and not kept
+  '13-trophies.json': {
+    ...BEFORE_SOUND['10-caddie-spin.json'],
+    muted: true,
+    volume: 0.4,
+    coins: 260,
+    gems: 1,
+    season: {
+      ...NO_SEASON,
+      moon: { grade: 'championship', begun: 4, played: [[4, 4, 3, 4, 5, 3, 4, 4, 5], null], titles: 1 },
+    },
+    life: {
+      rounds: 41,
+      wins: 9,
+      holes: 372,
+      aces: 23,
+      eagles: 4,
+      birdies: 96,
+      lost: 58,
+      lipOuts: 31,
+      longestPutt: 31,
+      longestDrive: 268,
+    },
+    feats: ['ace', 'winner'],
   },
 };
 

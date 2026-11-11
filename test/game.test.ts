@@ -183,6 +183,19 @@ describe('the game', () => {
       caddie: { club: 0, shape: 0, spin: 0 },
       muted: false,
       volume: 1,
+      life: {
+        rounds: 0,
+        wins: 0,
+        holes: 0,
+        aces: 0,
+        eagles: 0,
+        birdies: 0,
+        lost: 0,
+        lipOuts: 0,
+        longestPutt: 0,
+        longestDrive: 0,
+      },
+      feats: [],
     });
   });
 });

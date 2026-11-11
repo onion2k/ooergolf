@@ -19,6 +19,7 @@ import {
   type TourSeason,
 } from './career';
 import { GRADES, TOURS, type Grade, type Tour } from './season';
+import { isFeatId, type FeatId } from './featids';
 
 export interface Best {
   strokes: number;
@@ -49,7 +50,58 @@ export interface Save {
   muted: boolean;
   /** The sound's volume, from 0 to 1: full for a save from before there was sound. */
   volume: number;
+  /** What the player has done over the whole of the career, counted by the game as it happens: see `Life`. */
+  life: Life;
+  /** The feats earned, by id, each once and each one the game knows, in the order they were earned. */
+  feats: FeatId[];
 }
+
+/**
+ * The lifetime figures, each a whole number from nought (the distances in whole yards, rounded down). Counted for a hole that pays:
+ * in the career and not in free play, and not for a hole begun again from the menu, which pays nothing. `holes`, `aces`, `eagles`
+ * and `birdies` are holes holed (each hole in one of them at most: an ace is an ace and not a birdie, an eagle is two under or
+ * better on a golf hole, and a birdie is any other hole under par); `rounds` are rounds of a named course played to the end, `wins`
+ * the events won, `lost` the balls lost in water or out of bounds and `lipOuts` the balls the cup turned away.
+ */
+export interface Life {
+  rounds: number;
+  wins: number;
+  holes: number;
+  aces: number;
+  eagles: number;
+  birdies: number;
+  lost: number;
+  lipOuts: number;
+  longestPutt: number;
+  longestDrive: number;
+}
+
+/** The figures a life holds, in the order the save writes them. */
+export const LIFE_KEYS = [
+  'rounds',
+  'wins',
+  'holes',
+  'aces',
+  'eagles',
+  'birdies',
+  'lost',
+  'lipOuts',
+  'longestPutt',
+  'longestDrive',
+] as const satisfies readonly (keyof Life)[];
+
+const freshLife = (): Life => ({
+  rounds: 0,
+  wins: 0,
+  holes: 0,
+  aces: 0,
+  eagles: 0,
+  birdies: 0,
+  lost: 0,
+  lipOuts: 0,
+  longestPutt: 0,
+  longestDrive: 0,
+});
 
 /** Where the save is kept. */
 export interface SaveStore {
@@ -122,6 +174,8 @@ const fresh = (): Save => ({
   caddie: { club: 0, shape: 0, spin: 0 },
   muted: false,
   volume: 1,
+  life: freshLife(),
+  feats: [],
 });
 
 /** A kit from a save, slot by slot: an id of the slot's own aisle that the shop sells, and '' for anything else. */
@@ -247,6 +301,11 @@ function read(json: string | null): Save {
   // a string "true" is not true, and a volume past either end is not the nearest end but the default
   if (typeof from.muted === 'boolean') save.muted = from.muted;
   save.volume = unit(from.volume, save.volume);
+  // each figure of the life is read on its own, so a figure that is not a count is nought and the rest are kept
+  if (isMap(from.life)) for (const key of LIFE_KEYS) save.life[key] = count(from.life[key], 0);
+  // a feat the game does not know (one since withdrawn) is dropped, and so is a repeat
+  if (Array.isArray(from.feats))
+    for (const id of from.feats) if (isFeatId(id) && !save.feats.includes(id)) save.feats.push(id);
   return save;
 }
 
