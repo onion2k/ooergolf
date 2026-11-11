@@ -197,16 +197,16 @@ export class Director {
   /**
    * A hole begun: the camera on its tee, glided to from where it was but for the first hole, which has nowhere to glide
    * from, and a golf hole's aim view of the driver sent for. A hole of minigolf has its limits and its home view as it
-   * always had.
+   * always had. A hole begun again (`again`) is glided to and never flown in to, whatever the page has for new holes.
    */
-  started() {
+  started(again = false) {
     const glide = this.looked;
     const game = this.game;
     if (!game) return;
     const { layout, t } = game;
     const { rig } = this;
     const teeZ = heightAt(layout, layout.tee.x, layout.tee.y);
-    const flyIn = this.options.flyIn === true;
+    const flyIn = !again && this.options.flyIn === true;
     if (flyIn) rig.jump(layout.tee.x, layout.tee.y, teeZ);
     else if (glide) rig.glide(layout.tee.x, layout.tee.y, teeZ, t);
     else rig.jump(layout.tee.x, layout.tee.y, teeZ);

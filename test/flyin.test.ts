@@ -177,6 +177,16 @@ describe('the fly-in by the director', () => {
     }
   });
 
+  it('does not fly in to a hole begun again from the menu, which is glided to, and does to the next hole', () => {
+    const { game } = newGame(1);
+    const { rig, director } = begun(game);
+    director.frame(DT, false);
+    director.started(true);
+    expect(rig.flying(game.t), 'a restart').toBe(false);
+    director.started();
+    expect(rig.flying(game.t), 'the next hole').toBe(true);
+  });
+
   it('is cut short by the overhead view', () => {
     const { game } = newGame(1);
     const { rig } = begun(game);

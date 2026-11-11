@@ -282,6 +282,12 @@ export interface GameApi {
    * after. It opens over a hole in play and over nothing else, and the game waits while it is up.
    */
   menu(open?: boolean): boolean;
+  /** The menu's Give up pressed through: the hole in play picked up and scored at the limit, as its second press does; whether it was. */
+  pickUp(): boolean;
+  /** The menu's Restart pressed: the hole in play begun again from its tee, as its button does; whether it was. Refused in an event. */
+  restartHole(): boolean;
+  /** The hole's menu as drawn: whether it is up, whether Restart is there, what Give up says and whether it is asking, and its words. */
+  menuShown(): ReturnType<DebugHost['menuDrawn']>;
   /** The mulligan: the last stroke undone and the ball back where it was struck from; whether it did anything. */
   mulligan(): boolean;
   /** The save written now, and what it is. */
@@ -533,6 +539,16 @@ export interface DebugHost {
   menu(open?: boolean): boolean;
   /** Whether the hole's menu is up. */
   menuUp(): boolean;
+  pickUp(): boolean;
+  restartHole(): boolean;
+  menuDrawn(): {
+    shown: boolean;
+    restart: boolean;
+    giveUp: string;
+    sure: boolean;
+    subtitle: string;
+    note: string;
+  };
   shopTab(aisle: 'club' | 'ball' | 'accessory'): void;
   measureFrame(warmup?: number): Promise<number>;
   judge(gap: number, work: number): number;
@@ -752,6 +768,9 @@ export function createApi(host: DebugHost): GameApi {
     unequip: (aisle) => game.unequip(aisle),
     shopTab: (aisle) => host.shopTab(aisle),
     menu: (open) => host.menu(open),
+    pickUp: () => host.pickUp(),
+    restartHole: () => host.restartHole(),
+    menuShown: () => host.menuDrawn(),
     mulligan: () => game.mulligan(),
     aiming: () => host.aiming(),
     map: () => host.map(),

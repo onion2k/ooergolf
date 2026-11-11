@@ -529,12 +529,15 @@ test('time stands still under the hole’s menu: the game does not step and noth
   expect((await page.evaluate(() => window.game!.state())).menu).toBe(true);
   await play(page, 60, 'under the menu');
   expect(await t(), 'sixty frames under the menu are no time').toBe(t1);
+  // the menu's scrim and panel let a pointer through, so that what stops the drag is the page's own block on the course
+  await page.addStyleTag({ content: '#menuScrim, #menu { pointer-events: none !important; }' });
   await drag(page, at, { x: at.x, y: at.y + 150 });
   await play(page, 2, 'a drag under the menu');
   expect(await page.evaluate(() => window.game!.state().strokes), 'nothing is struck through the menu').toBe(0);
   expect(await page.evaluate(() => window.game!.menu(false)), 'shut').toBe(false);
   await play(page, 30, 'after the menu');
   expect(await t(), 'and the game goes on').toBeGreaterThan(t1);
+  await page.addStyleTag({ content: '#menuScrim, #menu { pointer-events: auto !important; }' });
   await drag(page, at, { x: at.x, y: at.y + 150 });
   await play(page, 2, 'a drag after the menu');
   expect(await page.evaluate(() => window.game!.state().strokes), 'a shot is struck again').toBe(1);
@@ -547,6 +550,141 @@ test('the hole’s menu does not open under the start screen', async ({ page }) 
   expect(await page.evaluate(() => window.game!.menu(true))).toBe(false);
   expect((await page.evaluate(() => window.game!.state())).menu).toBe(false);
   expect(problems).toEqual([]);
+});
+
+/** The menu as drawn, and the page's own say of whether time stands. */
+const menuNow = (page: Page) => page.evaluate(() => ({ ...window.game!.menuShown(), up: window.game!.state().menu }));
+
+test('the menu: its button and the escape key open and shut it, Restart begins the hole again from its tee, Give up asks twice, and Courses goes to the start screen', async ({
+  page,
+}) => {
+  const problems = watch(page);
+  await start(page, { seed: 1, paused: true });
+  await play(page, 5, 'the first frames');
+  const bar = page.locator('#viewMenu');
+  await expect(bar, 'the button is with the others').toBeVisible();
+  // the button, by a real click: up, and its words say where the player is
+  await bar.click();
+  const menu = await menuNow(page);
+  expect(menu.up).toBe(true);
+  expect(menu.shown).toBe(true);
+  expect(menu.subtitle).toMatch(/^Hole 1 · .+ · 0 strokes · par \d$/);
+  expect(menu.restart, 'free of an event, a restart is there').toBe(true);
+  expect(menu.note).toBe('');
+  // the way back, and the escape key both ways
+  await page.locator('#menuResume').click();
+  expect((await menuNow(page)).up).toBe(false);
+  await page.keyboard.press('Escape');
+  expect((await menuNow(page)).up, 'escape opens it').toBe(true);
+  await page.keyboard.press('Escape');
+  expect((await menuNow(page)).up, 'and shuts it').toBe(false);
+  await expect(page.locator('#menu')).toBeHidden();
+
+  // a stroke taken, and Restart: the ball is on the tee again with no strokes, the menu gone, the hole the same
+  await putt(page, 0, 120);
+  await untilReady(page, 'the stroke before the restart');
+  const before = await page.evaluate(() => window.game!.state());
+  expect(before.strokes).toBe(1);
+  await bar.click();
+  expect((await menuNow(page)).subtitle).toContain('1 stroke ·');
+  await page.locator('#menuRestart').click();
+  const restarted = await page.evaluate(() => window.game!.state());
+  expect([restarted.hole, restarted.strokes, restarted.phase, restarted.menu]).toEqual([before.hole, 0, 'play', false]);
+  const tee = await page.evaluate(() => ({ ball: window.game!.ball(), tee: window.game!.content().holes[0] }));
+  expect(tee.ball.z).toBeGreaterThan(0);
+
+  // Give up: the first press asks, a shut menu forgets it, the second press picks the hole up at par and five
+  await bar.click();
+  const first = await menuNow(page);
+  expect(first.sure).toBe(false);
+  await page.locator('#menuGiveUp').click();
+  const asked = await menuNow(page);
+  expect(asked.sure).toBe(true);
+  expect(asked.giveUp).toBe(`Give up? It scores ${restarted.par + 5}`);
+  expect((await page.evaluate(() => window.game!.state())).card, 'nothing scored by one press').toEqual([]);
+  await page.locator('#menuResume').click();
+  await bar.click();
+  expect((await menuNow(page)).sure, 'asked again from the start').toBe(false);
+  await page.locator('#menuGiveUp').click();
+  await page.locator('#menuGiveUp').click();
+  const gave = await page.evaluate(() => window.game!.state());
+  expect(gave.card).toEqual([restarted.par + 5]);
+  expect(gave.phase).toBe('done');
+  expect(gave.menu).toBe(false);
+  expect(gave.coins, 'a hole given up pays nothing').toBe(before.coins);
+  await play(page, 150, 'the next hole after a hole given up');
+  expect((await page.evaluate(() => window.game!.state())).hole).toBe(1);
+
+  // Courses: the start screen, the menu put away
+  await page.keyboard.press('Escape');
+  await page.locator('#menuCourses').click();
+  const out = await page.evaluate(() => window.game!.state());
+  expect(out.choosing).toBe(true);
+  expect(out.menu).toBe(false);
+  await expect(page.locator('#menu')).toBeHidden();
+  await expect(page.locator('#start')).toBeVisible();
+  await play(page, 1, 'the start screen after Courses');
+  expect(problems).toEqual([]);
+});
+
+test('the menu in an event offers Give up and Courses only, a hole given up goes on the card, and Courses keeps the round to go on with', async ({
+  page,
+}) => {
+  const problems = watch(page);
+  await start(page, { seed: 1, paused: true, screen: true, save: { coins: 10 } });
+  expect(await page.evaluate(() => window.game!.enter('mini'))).toBe(true);
+  await play(page, 5, 'the event begun');
+  expect((await page.evaluate(() => window.game!.state())).choosing).toBe(false);
+  await page.locator('#viewMenu').click();
+  const menu = await menuNow(page);
+  expect(menu.restart, 'no restart in an event').toBe(false);
+  await expect(page.locator('#menuRestart')).toBeHidden();
+  expect(menu.subtitle).toMatch(/^Club tour · The Meadow · hole 1 · 0 strokes$/);
+  expect(menu.note).toBe('Courses keeps this round to go on with');
+  expect(await page.evaluate(() => window.game!.restartHole()), 'and the game refuses it').toBe(false);
+  // Give up twice: the hole is on the card at the limit and the round kept goes on from the next hole
+  const par = await page.evaluate(() => window.game!.state().par);
+  await page.locator('#menuGiveUp').click();
+  await page.locator('#menuGiveUp').click();
+  const gave = await page.evaluate(() => window.game!.state());
+  expect(gave.card).toEqual([par + 5]);
+  const kept = (await page.evaluate(() => window.game!.career())).round;
+  expect(kept).toMatchObject({ tour: 'mini', course: 'The Meadow', hole: 1, card: [par + 5], pickedUp: true });
+  await play(page, 150, 'the next hole of the event');
+  // Courses leaves the round to go on with
+  await page.keyboard.press('Escape');
+  await page.locator('#menuCourses').click();
+  expect((await page.evaluate(() => window.game!.state())).choosing).toBe(true);
+  expect((await page.evaluate(() => window.game!.career())).round, 'the round is kept').toMatchObject({ hole: 1 });
+  expect(await page.evaluate(() => window.game!.invariants())).toEqual([]);
+  expect(problems).toEqual([]);
+});
+
+test.describe('the menu on a phone', () => {
+  test.use({ viewport: { width: 400, height: 860 }, hasTouch: true, isMobile: true });
+  test('is opened by its button among the view’s, and the escape key shuts the hole’s drawer before it opens the menu', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 1, paused: true });
+    await play(page, 5, 'the first frames');
+    expect(await openDrawer(page)).toBe(true);
+    await page.keyboard.press('Escape');
+    expect(await page.evaluate(() => window.game!.state().menu), 'the drawer first').toBe(false);
+    await expect(page.locator('#strokes')).toBeHidden();
+    await page.keyboard.press('Escape');
+    expect(await page.evaluate(() => window.game!.state().menu), 'then the menu').toBe(true);
+    await page.locator('#menuResume').tap();
+    expect(await page.evaluate(() => window.game!.state().menu)).toBe(false);
+    await page.locator('#viewMenu').tap();
+    expect(await page.evaluate(() => window.game!.state().menu), 'by its button').toBe(true);
+    const reading = await read(page);
+    expect(reading.outside).toEqual([]);
+    for (const b of reading.buttons.filter((b) => b.text !== 'Overhead'))
+      expect(b.height, `${b.text} a thumb high`).toBeGreaterThanOrEqual(THUMB);
+    for (const t of reading.texts) expect(t.ratio, `${t.text} on ${t.behind}`).toBeGreaterThanOrEqual(CONTRAST);
+    expect(problems).toEqual([]);
+  });
 });
 
 test('a ball knocked in the cup as it drops is holed once, and nothing of the knock is drawn', async ({ page }) => {

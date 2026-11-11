@@ -15,6 +15,7 @@
  */
 import { AISLES, type Aisle, type Item, type KitSlots } from './items';
 import type { Mode } from './gesture';
+import type { MenuWords } from './menu';
 import { helpText, windText, type Held } from './readout';
 import { swatchOf } from './swatch';
 import { SCORE_KINDS, againstPar, scoreKind, scoreName } from './score';
@@ -62,6 +63,12 @@ export interface HudHandlers {
   volume(volume: number): void;
   /** The Retake button pressed: the kit's one free retake of the last stroke. */
   retake(): void;
+  /** The hole's menu wanted open or shut: its button, its way back and the escape key. */
+  menu(open: boolean): void;
+  /** Give up pressed twice in the menu: the hole picked up. */
+  pickUp(): void;
+  /** Restart pressed in the menu: the hole begun again from its tee. */
+  restart(): void;
   /** A club of the bag chosen on a golf hole, by its id. */
   club(id: string): void;
   /** The shape button pressed: the next shape in its cycle, from minus one (a draw) to one (a fade). */
@@ -283,8 +290,16 @@ export class Hud {
   private readonly chipStrokes = document.getElementById('chipStrokes')!;
   private readonly chipUnit = document.getElementById('chipUnit')!;
   private readonly scrim = document.getElementById('drawerScrim')!;
-  /** Whether the hole's menu is up. */
+  /** Whether the hole's menu is up, and whether Give up has been pressed once in it. */
   private menuUp = false;
+  private sure = false;
+  private giveUpWords: MenuWords = { subtitle: '', restart: true, giveUp: '', giveUpSure: '', note: null };
+  private readonly menuPanel = document.getElementById('menu')!;
+  private readonly menuScrim = document.getElementById('menuScrim')!;
+  private readonly menuSub = document.getElementById('menuWords')!;
+  private readonly menuNote = document.getElementById('menuNote')!;
+  private readonly menuRestart = document.getElementById('menuRestart') as HTMLButtonElement;
+  private readonly menuGiveUp = document.getElementById('menuGiveUp') as HTMLButtonElement;
   private readonly coins = document.getElementById('coins')!;
   private readonly gems = document.getElementById('gems')!;
   private readonly shop = document.getElementById('shop')!;
@@ -507,9 +522,23 @@ export class Hud {
     this.chipOpen.addEventListener('click', () => this.setDrawer(true));
     document.getElementById('holeInfoClose')!.addEventListener('click', () => this.setDrawer(false));
     this.scrim.addEventListener('click', () => this.setDrawer(false));
+    // the escape key shuts the drawer if it is open, and else opens the hole's menu, or shuts it; not over the shop or the card, which have their own way out
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') this.setDrawer(false);
+      if (e.key !== 'Escape') return;
+      if (this.drawerOpen()) this.setDrawer(false);
+      else if (this.menuUp) handlers.menu(false);
+      else if (this.shop.hidden && this.card.hidden) handlers.menu(true);
     });
+    document.getElementById('viewMenu')!.addEventListener('click', () => handlers.menu(true));
+    document.getElementById('menuResume')!.addEventListener('click', () => handlers.menu(false));
+    this.menuScrim.addEventListener('click', () => handlers.menu(false));
+    this.menuRestart.addEventListener('click', () => handlers.restart());
+    // Give up is asked twice: the first press turns the button to the question, and the second is the answer
+    this.menuGiveUp.addEventListener('click', () => {
+      if (!this.sure) this.askGiveUp(true);
+      else handlers.pickUp();
+    });
+    document.getElementById('menuCourses')!.addEventListener('click', () => handlers.courses());
     this.overheadButton.addEventListener('click', () => handlers.overhead(this.mode !== 'overhead'));
     this.flagButton.addEventListener('click', () => handlers.flag());
     for (const speaker of [this.soundButton, this.purseSound])
@@ -672,9 +701,43 @@ export class Hud {
     };
   }
 
-  /** The hole's menu put up or away: it is a menu, so the music plays under it. */
-  setMenu(open: boolean) {
+  /**
+   * The hole's menu put up, with `words` for the hole in play, or put away. It is a menu, so the music plays under it. Opened or
+   * shut, Give up is back to its first press.
+   */
+  setMenu(open: boolean, words?: MenuWords) {
     this.menuUp = open;
+    if (words) {
+      this.giveUpWords = words;
+      this.menuSub.textContent = words.subtitle;
+      this.menuRestart.hidden = !words.restart;
+      this.menuNote.hidden = words.note === null;
+      this.menuNote.textContent = words.note ?? '';
+    }
+    this.askGiveUp(false);
+    this.menuPanel.hidden = !open;
+    this.menuScrim.hidden = !open;
+    if (open) document.getElementById('menuResume')!.focus();
+  }
+
+  /** Give up shown as it first is, or as the question it turns to once pressed. */
+  private askGiveUp(sure: boolean) {
+    this.sure = sure;
+    this.menuGiveUp.textContent = sure ? this.giveUpWords.giveUpSure : this.giveUpWords.giveUp || 'Give up the hole';
+    this.menuGiveUp.classList.toggle('warn', sure);
+    this.menuGiveUp.classList.toggle('quiet', !sure);
+  }
+
+  /** The menu as drawn, for the test API: whether it is up, which buttons are there, and what Give up says. */
+  menuDrawn(): { shown: boolean; restart: boolean; giveUp: string; sure: boolean; subtitle: string; note: string } {
+    return {
+      shown: !this.menuPanel.hidden,
+      restart: !this.menuRestart.hidden,
+      giveUp: this.menuGiveUp.textContent,
+      sure: this.sure,
+      subtitle: this.menuSub.textContent,
+      note: this.menuNote.hidden ? '' : this.menuNote.textContent,
+    };
   }
 
   /** Whether a menu is up: the start screen (or the title it waits under), the shop, the card or the hole's menu. The music plays under them. */
@@ -1210,8 +1273,11 @@ export class Hud {
       this.card,
       this.shop,
       this.toast,
+      this.menuPanel,
+      this.menuScrim,
     ])
       el.hidden = true;
+    this.menuUp = false;
     // held back, it is still the screen that is up, which every other panel is put away for, and shows when it is let go
     this.held = wait;
     this.start.hidden = wait;
@@ -1372,6 +1438,7 @@ export class Hud {
     this.toast.hidden = true;
     this.card.hidden = true;
     this.shop.hidden = true;
+    this.setMenu(false);
   }
 
   /** The strokes taken; a new stroke takes away the word left over the course by the last (the water's, out of bounds, a lip-out, a long drive). */

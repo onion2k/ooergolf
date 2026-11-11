@@ -89,7 +89,7 @@ import { CRATER } from './waterdraw';
 import { Input } from './input';
 import { Squash, squashInto, squashOf } from './squash';
 import { Governor, RUNGS, economyFor } from './quality';
-import { menuMayOpen } from './menu';
+import { menuMayOpen, menuWords, type MenuFacts } from './menu';
 import { retakeShown, type RetakeState } from './retake';
 import { HeldView } from './shot';
 import { between } from './frames';
@@ -350,6 +350,8 @@ async function main() {
   let choosing = true;
   /** Whether the hole's menu is up: the game and the camera wait under it, and nothing is struck through it. */
   let menuOpen = false;
+  /** Whether the hole now beginning is a restart of the one in play, which is glided to its tee and not flown in to. */
+  let restarting = false;
   /**
    * The title scene while it is up: the title hole is the game's hole and its lettering is drawn over it. Null once a course
    * is chosen, which lets go of every group of it, and on a page that leaves the title out. `wantTitle` says the next hole begun
@@ -506,6 +508,8 @@ async function main() {
         this.courses();
       },
       courses() {
+        // the hole's menu is put away, and the round it was over left as the game has it (an event round is kept to go on with)
+        setMenu(false);
         choosing = true;
         stats.hidden = true;
         setOverhead(false);
@@ -533,6 +537,18 @@ async function main() {
       // the start screen's slider: the volume
       volume(v) {
         setVolume(v);
+      },
+      // the hole's menu: its button, its way back and the escape key
+      menu(open) {
+        setMenu(open);
+      },
+      // Give up, pressed twice: the hole scored at the limit, and the menu away
+      pickUp() {
+        pickUpHole();
+      },
+      // Restart: the hole begun again from its tee, glided to and not flown in to
+      restart() {
+        restartHole();
       },
       // the Retake button: the kit's free retake, which the game says whether it took (and tells of, through `mulliganed`)
       retake() {
@@ -776,7 +792,7 @@ async function main() {
       // ball on the tee is round
       // (a golf hole lets the camera stand back as far as a drive needs, and begins looking at the tee shot from there;
       // a hole of minigolf has its limits and its home view as it always had)
-      director.started();
+      director.started(restarting);
       leans = slopes;
       rolls = slopes || (!layout.golf && game.kit.rest);
       previewer = rehearsal;
@@ -1186,6 +1202,35 @@ async function main() {
     // nothing is struck through the start screen
     blocked: () => choosing || menuOpen,
   });
+  /** The hole in play picked up, as Give up's second press does: the menu put away if it was, and whether the game took it. */
+  function pickUpHole(): boolean {
+    const took = game.pickUp();
+    if (took) setMenu(false);
+    return took;
+  }
+  /** The hole in play begun again, as Restart does: the menu put away by the hole begun, the camera glided to the tee, and whether the game began it. */
+  function restartHole(): boolean {
+    restarting = true;
+    try {
+      return game.restartHole();
+    } finally {
+      restarting = false;
+    }
+  }
+  /** What the menu says of the hole in play. */
+  function menuFacts(): MenuFacts {
+    const tour = game.event?.tour;
+    return {
+      hole: game.hole + 1,
+      name: game.def.name,
+      par: game.def.par,
+      strokes: game.strokes,
+      limit: game.limit,
+      course: game.of?.name ?? courseName,
+      grade: tour !== undefined ? progress.save.season[tour].grade : null,
+      restartable: game.event === null,
+    };
+  }
   /**
    * The hole's menu opened or shut, as its button and the escape key do, and whether it is open. It opens only where
    * `menuMayOpen` says; shut, it is simply shut. Time waits while it is up (`simulate`).
@@ -1193,7 +1238,7 @@ async function main() {
   function setMenu(open: boolean): boolean {
     if (open && !menuMayOpen({ phase: game.phase, choosing, titled: titled !== null })) return menuOpen;
     menuOpen = open;
-    hud.setMenu(open);
+    hud.setMenu(open, open ? menuWords(menuFacts()) : undefined);
     return menuOpen;
   }
   /**
@@ -1555,6 +1600,9 @@ async function main() {
     faceFlag,
     menu: (open) => setMenu(open ?? !menuOpen),
     menuUp: () => menuOpen,
+    pickUp: pickUpHole,
+    restartHole,
+    menuDrawn: () => hud.menuDrawn(),
     caddie: () => ({
       said: hud.tipShown(),
       offered: talk.offered

@@ -200,6 +200,7 @@
   #retakePanel:not([hidden]),
   #bag:not([hidden]),
   #card:not([hidden]),
+  #menu:not([hidden]),
   #shop:not([hidden]),
   #start:not([hidden]) {
     pointer-events: auto;
@@ -625,6 +626,7 @@
   /* ---- the card, the shop and the start screen: in the middle, over everything ---- */
 
   #card,
+  #menu,
   #shop,
   #start {
     position: fixed;
@@ -643,6 +645,7 @@
     z-index: 2;
   }
   #card h2,
+  #menu h2,
   #shop h2 {
     margin: 0 0 8px;
     font-size: 24px;
@@ -749,6 +752,49 @@
   }
   .pair button {
     padding: 0 10px;
+  }
+
+  /*
+   * the hole's menu: over a dimmed course, in the sky's blue, its buttons stacked (the way back to the hole the sun's yellow and
+   * the rest quiet) and Courses beside the hole's own two; Give up turns to the grape's warning once pressed, and asks again
+   */
+  #menuScrim {
+    position: fixed;
+    inset: 0;
+    z-index: 2;
+    background: rgba(20, 32, 72, 0.32);
+  }
+  #menu {
+    width: min(340px, calc(100vw / var(--ui, 1) - 32px));
+    z-index: 3;
+  }
+  #menu p {
+    margin: 0 0 14px;
+    font-weight: 700;
+    color: var(--ink-soft);
+  }
+  #menuButtons {
+    display: grid;
+    gap: 12px;
+  }
+  #menu button.warn {
+    color: var(--grape-ink);
+    background: var(--paper);
+    box-shadow:
+      inset 0 0 0 3px var(--grape),
+      0 4px 0 var(--grape-deep);
+  }
+  #menu #menuNote {
+    margin: 12px 0 0;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-align: center;
+    text-transform: uppercase;
+  }
+  #menuNote[hidden],
+  #menuRestart[hidden] {
+    display: none;
   }
 
   #shop {
@@ -1709,6 +1755,15 @@
     min-width: 44px;
     padding: 0;
   }
+  /* the menu's button at the cluster's left: its word on a desk, three bars on a phone, where the word would not fit beside the chip */
+  #viewMode #viewMenu .bars {
+    display: none;
+  }
+  #viewMenu svg {
+    width: 26px;
+    height: 26px;
+    pointer-events: none;
+  }
   #viewSound svg {
     width: 26px;
     height: 26px;
@@ -1761,6 +1816,18 @@
     #viewMode #viewSound,
     #soundControls {
       display: none;
+    }
+    #viewMode #viewMenu {
+      display: grid;
+      place-items: center;
+      min-width: 44px;
+      padding: 0;
+    }
+    #viewMenu .word {
+      display: none;
+    }
+    #viewMode #viewMenu .bars {
+      display: block;
     }
     #purse #purseSound {
       display: grid;
@@ -2624,6 +2691,18 @@
     <button id="cardShop" class="quiet">Visit the shop</button>
   </div>
 </div>
+<div id="menuScrim" hidden></div>
+<div class="panel" id="menu" role="dialog" aria-modal="true" aria-labelledby="menuTitle" hidden>
+  <h2 id="menuTitle">Paused</h2>
+  <p id="menuWords"></p>
+  <div id="menuButtons">
+    <button id="menuResume" type="button">Back to the hole</button>
+    <button id="menuRestart" class="quiet" type="button">Restart the hole</button>
+    <button id="menuGiveUp" class="quiet" type="button">Give up the hole</button>
+    <button id="menuCourses" class="quiet" type="button">Courses</button>
+  </div>
+  <p id="menuNote" hidden></p>
+</div>
 <div class="panel" id="shop" hidden>
   <div id="shopHead">
     <h2>The pro shop</h2>
@@ -2780,6 +2859,12 @@
 </div>
 <div class="panel" id="holePanel" hidden><canvas id="holeMap" role="img" aria-label="Map of the hole"></canvas></div>
 <div class="panel" id="viewMode" role="group" aria-label="The view" hidden>
+  <button id="viewMenu" class="quiet" type="button" aria-haspopup="dialog" aria-label="Menu" title="Menu (Esc)">
+    <span class="word">Menu</span>
+    <svg class="bars" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M5 7h14M5 12h14M5 17h14" fill="none" stroke="var(--ink)" stroke-width="3" stroke-linecap="round" />
+    </svg>
+  </button>
   <button id="viewOverhead" type="button" aria-pressed="false">Overhead</button
   ><button id="viewFlag" class="quiet" type="button" aria-label="Look at the flag" title="Look at the flag">
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
