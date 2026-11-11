@@ -917,6 +917,24 @@ async function main() {
       squash.clear();
       effects.clearTrail();
     },
+    // round the rim and out: a rattle and two hollow knocks falling away
+    lipped() {
+      sound.lipped();
+      log('sound lipped');
+    },
+    // a long putt or a chip about to drop, and a long drive come down: each cheered a little, the hole's own cheer after
+    longPutt() {
+      sound.longPutt();
+      log('sound longPutt');
+    },
+    chippedIn() {
+      sound.chippedIn();
+      log('sound chippedIn');
+    },
+    longDrive() {
+      sound.longDrive();
+      log('sound longDrive');
+    },
     // in the cup: confetti out of it, the flag waggling and its gold flashing, from the moment it dropped
     holed(strokes, par) {
       hud.done(strokes, par, false);

@@ -134,6 +134,10 @@ describe('the game sound', () => {
     sound.step(0, true);
     sound.struck('iron', 1, true);
     sound.holed(1, 3);
+    sound.lipped();
+    sound.longPutt();
+    sound.chippedIn();
+    sound.longDrive();
     sound.splashed();
     sound.lost(false);
     sound.knocked(30, 6, true);
@@ -186,6 +190,10 @@ describe('the game sound', () => {
       sound.holed(strokes, par);
       return names();
     };
+    const marimba = (strokes: number, par: number) => {
+      after(strokes, par);
+      return asked.plays.filter((p) => p.name === 'marimba');
+    };
     expect(after(4, 4)).toEqual(['cup', 'marimba', 'marimba']);
     expect(after(3, 4)).toEqual(['cup', 'marimba', 'marimba', 'marimba', 'marimba', 'applause']);
     expect(after(1, 3)).toEqual([
@@ -200,7 +208,90 @@ describe('the game sound', () => {
     // the run climbs
     const run = asked.plays.filter((p) => p.name === 'marimba').map((p) => p.pitch);
     expect(run[5]).toBeGreaterThan(run[0] * 1.5);
-    expect(after(7, 4), 'over par is still holed').toEqual(['cup', 'marimba', 'marimba']);
+    expect(after(7, 4), 'over par is still holed, with the cup first').toEqual(['cup', 'marimba', 'marimba']);
+    // an eagle is fuller than a birdie: more notes, a bell, and the applause louder, short of the ace's
+    const eagle = after(2, 4);
+    expect(eagle.filter((n) => n === 'marimba').length).toBeGreaterThan(4);
+    expect(eagle).toContain('bell');
+    const eagleApplause = asked.plays.find((p) => p.name === 'applause')!.gain;
+    after(3, 4);
+    const birdieApplause = asked.plays.find((p) => p.name === 'applause')!.gain;
+    after(1, 4);
+    const aceApplause = asked.plays.find((p) => p.name === 'applause')!.gain;
+    expect(birdieApplause).toBeLessThan(eagleApplause);
+    expect(eagleApplause).toBeLessThan(aceApplause);
+    // a bogey falls where a par rises, and is quieter and lower
+    const par = marimba(4, 4);
+    const bogey = marimba(5, 4);
+    expect(par[1].pitch).toBeGreaterThan(par[0].pitch);
+    expect(bogey[1].pitch).toBeLessThan(bogey[0].pitch);
+    expect(bogey[0].gain).toBeLessThan(par[0].gain);
+    expect(Math.max(...bogey.map((p) => p.pitch))).toBeLessThan(Math.min(...par.map((p) => p.pitch)));
+  });
+
+  it('answers a hole five ways: an ace, an eagle or better, a birdie, a par and over par, each its own', () => {
+    // each from a sound of its own, so that the same chance is behind each and a difference is the score's
+    const answer = (strokes: number, par: number) => {
+      const sound = loadedSound();
+      sound.holed(strokes, par);
+      return JSON.stringify(asked.plays);
+    };
+    const five = [answer(1, 4), answer(2, 4), answer(3, 4), answer(4, 4), answer(5, 4)];
+    expect(new Set(five).size).toBe(5);
+    // an albatross is as an eagle and a double bogey as a bogey, and a birdie on a hole of five as one on a hole of three
+    expect(answer(2, 5)).toBe(answer(2, 4));
+    expect(answer(6, 4)).toBe(answer(5, 4));
+    expect(answer(2, 3)).toBe(answer(3, 4));
+    expect(answer(3, 3)).toBe(answer(4, 4));
+    // two under is the line: one under is a birdie
+    expect(answer(3, 5)).toBe(answer(2, 4));
+    expect(answer(4, 5)).toBe(answer(3, 4));
+  });
+
+  it('asks for something of its own for a lip-out, a long putt, a chip-in and a long drive, from sounds in the queue', () => {
+    const sound = loadedSound();
+    const each: [string, () => void][] = [
+      ['lipped', () => sound.lipped()],
+      ['longPutt', () => sound.longPutt()],
+      ['chippedIn', () => sound.chippedIn()],
+      ['longDrive', () => sound.longDrive()],
+    ];
+    const lists = each.map(([name, ask]) => {
+      asked.plays.length = 0;
+      ask();
+      expect(asked.plays.length, name).toBeGreaterThan(0);
+      for (const p of asked.plays) {
+        expect(asked.loads, `${name} plays ${p.name}`).toContain(p.name);
+        expect(p.gain, name).toBeGreaterThan(0);
+        expect(p.gain, name).toBeLessThanOrEqual(1);
+      }
+      return JSON.stringify(asked.plays);
+    });
+    expect(new Set(lists).size, 'four different answers').toBe(4);
+  });
+
+  it('keeps a long putt or a chip-in from doubling the applause of the hole it comes before', () => {
+    const sound = loadedSound();
+    for (const ask of [() => sound.longPutt(), () => sound.chippedIn()]) {
+      asked.plays.length = 0;
+      ask();
+      sound.holed(3, 4);
+      expect(
+        names().filter((n) => n === 'applause'),
+        'one applause, the hole’s',
+      ).toHaveLength(1);
+      // the cheer comes first, so what the hole plays after it sits over it
+      expect(asked.plays.findIndex((p) => p.name === 'cup')).toBeGreaterThan(0);
+    }
+    // a drive is not applauded: the ball is still running
+    asked.plays.length = 0;
+    sound.longDrive();
+    expect(names()).not.toContain('applause');
+    // a lip-out is a miss: no marimba run up
+    asked.plays.length = 0;
+    sound.lipped();
+    expect(names()).not.toContain('applause');
+    expect(asked.plays.every((p) => p.gain < 0.6)).toBe(true);
   });
 
   it('splashes into water, and falls two notes for a ball lost or picked up, the pick-up lower', () => {
@@ -251,6 +342,10 @@ describe('the sound made on the first gesture', () => {
     });
     lazy.struck('iron', 1, false);
     lazy.holed(1, 3);
+    lazy.lipped();
+    lazy.longPutt();
+    lazy.chippedIn();
+    lazy.longDrive();
     lazy.step(1 / 60, true);
     lazy.mute(true);
     lazy.volume = 0.25;

@@ -331,20 +331,60 @@ export class GameSound {
     if (kicker) this.play('spring', 0.8);
   }
 
-  /** The ball in the cup in `strokes` on a hole of `par`: the rattle, and a run up the marimba as good as the score. */
+  /**
+   * The ball in the cup in `strokes` on a hole of `par`: the rattle first, and then an answer as good as the score, five of
+   * them. An ace is the run up the marimba, the bells and the whole applause. Two under or better (an eagle, an albatross) is
+   * a run of five with a bell and the applause nearly as full. A birdie is a run of four and half the applause. A par is two
+   * notes rising, and over par two lower and quieter falling, so a bogey does not sound like a par.
+   */
   holed(strokes: number, par: number) {
     this.play('cup');
     if (strokes === 1) {
       [72, 76, 79, 83, 84, 88].forEach((n, i) => this.play('marimba', 0.5, bend(n), 0.3 + i * 0.075));
       [96, 100, 103].forEach((n, i) => this.play('bell', 0.25, bend(n - 24), 0.75 + i * 0.12));
       this.play('applause', 0.9, 1, 0.5);
+    } else if (strokes <= par - 2) {
+      [72, 76, 79, 84, 88].forEach((n, i) => this.play('marimba', 0.5, bend(n), 0.3 + i * 0.08));
+      this.play('bell', 0.22, bend(79), 0.7);
+      this.play('applause', 0.75, 1, 0.5);
     } else if (strokes < par) {
       [72, 76, 79, 84].forEach((n, i) => this.play('marimba', 0.5, bend(n), 0.3 + i * 0.09));
       this.play('applause', 0.55, 1, 0.55);
-    } else {
+    } else if (strokes === par) {
       this.play('marimba', 0.45, bend(76), 0.3);
       this.play('marimba', 0.45, bend(79), 0.42);
+    } else {
+      this.play('marimba', 0.3, bend(67), 0.3);
+      this.play('marimba', 0.3, bend(62), 0.46);
     }
+  }
+
+  /** The ball round the rim and out: the cup's rattle, quiet and bright, and two hollow knocks of wood falling away. */
+  lipped() {
+    this.play('cup', 0.4, 1.25);
+    this.play('wood', 0.25, 0.9, 0.2);
+    this.play('wood', 0.2, 0.7, 0.36);
+  }
+
+  /**
+   * A long putt about to drop: a low arpeggio of three marimba notes, before the hole's own run up (which starts at 0.3 s) and
+   * with no applause of its own, so that the hole's is the only one.
+   */
+  longPutt() {
+    [60, 64, 67].forEach((n, i) => this.play('marimba', 0.35, bend(n), i * 0.09));
+  }
+
+  /** A chip about to drop: the long putt's arpeggio with a fourth note above it and a soft bell on the end, and no applause. */
+  chippedIn() {
+    [60, 64, 67, 72].forEach((n, i) => this.play('marimba', 0.35, bend(n), i * 0.07));
+    this.play('bell', 0.18, bend(72), 0.28);
+  }
+
+  /** A long drive come down: two bright notes up, a marimba and a bell over it, and no applause, for the ball is still running. */
+  longDrive() {
+    this.play('marimba', 0.4, bend(79));
+    this.play('marimba', 0.4, bend(84), 0.08);
+    this.play('bell', 0.25, bend(84), 0.08);
   }
 
   /** The ball into water. */
@@ -462,6 +502,22 @@ export class LazySound {
 
   holed(strokes: number, par: number) {
     this.sound?.holed(strokes, par);
+  }
+
+  lipped() {
+    this.sound?.lipped();
+  }
+
+  longPutt() {
+    this.sound?.longPutt();
+  }
+
+  chippedIn() {
+    this.sound?.chippedIn();
+  }
+
+  longDrive() {
+    this.sound?.longDrive();
   }
 
   splashed() {

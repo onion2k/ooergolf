@@ -7,7 +7,7 @@
 import { expect, type Page } from '@playwright/test';
 import type { GameApi } from '../src/debug';
 import type { Save } from '../src/progress';
-import { layoutOf, tileAt } from '../src/arena';
+import { BALL, HARDEST_SHOT, KIND_RADIUS, ROLL, layoutOf, powerFor, tileAt } from '../src/arena';
 import { COURSES } from '../src/course';
 
 declare global {
@@ -207,4 +207,29 @@ export function intoThePond(): number {
     }
   }
   throw new Error('no way into the Pond');
+}
+
+/**
+ * A putt at the cup of the hole in play, as `test/open-green.ts` strikes one: the ball laid `back` short of the cup's clear
+ * distance from the south (or `from` yards due south of the cup, when given), `aside` off its middle, and struck north so as
+ * to arrive at the cup's edge at `speed` units a second. Twelve a second, 0.6 of the cup's radius off the middle, lips out on
+ * a level green with room all round, and five through the middle drops. The hole's first hole-in-the-cup ground is a
+ * minigolf hole with a straight run south of the cup (The Meadow's first). Whether the shot was taken.
+ */
+export async function puttAtCup(page: Page, speed: number, aside = 0, options: { back?: number; from?: number } = {}) {
+  const cup = await page.evaluate(() => window.game!.content().cup);
+  // as far from the middle as a ball may be put down by the cup (game.ts's CLEAR_OF_CUP, which this file cannot import)
+  const clear = cup.radius + KIND_RADIUS[BALL] + 0.5;
+  const y0 = cup.y - (options.from ?? clear + (options.back ?? 0.1));
+  const toEdge = cup.y - Math.sqrt(Math.max(0, cup.radius ** 2 - aside ** 2)) - y0;
+  const power = powerFor(Math.sqrt(speed * speed + 2 * ROLL.roll * toEdge), HARDEST_SHOT);
+  return page.evaluate(
+    ({ x, y, power }) => {
+      const g = window.game!;
+      g.lay(x, y);
+      g.step(10);
+      return g.shoot(Math.PI / 2, power);
+    },
+    { x: cup.x + aside, y: y0, power },
+  );
 }

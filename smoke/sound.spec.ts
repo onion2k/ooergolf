@@ -11,7 +11,7 @@
  */
 import { expect, test, type Page } from '@playwright/test';
 import { COURSES } from '../src/course';
-import { drag, intoThePond, landed, start, watch } from './game';
+import { drag, intoThePond, landed, puttAtCup, start, watch } from './game';
 import { holeOut } from './panels';
 
 const sound = (page: Page) => page.evaluate(() => window.game!.sound());
@@ -139,6 +139,76 @@ test('a ball holed is heard once, and a ball into water once', async ({ page }) 
   );
   expect(count(lines, /^splash /)).toBeGreaterThan(0);
   expect(count(lines, /^sound splash$/)).toBe(count(lines, /^splash /));
+});
+
+test('a lip-out is heard once, and a long putt, a chip-in and a long drive each as often as the game tells of them', async ({
+  page,
+}) => {
+  await start(page, { seed: 3, paused: true });
+  await page.evaluate(() => {
+    window.game!.wake();
+    window.game!.step(30);
+  });
+  // a putt the rim turns away: told of once and heard once, and the hole is not holed
+  await events(page);
+  expect(await puttAtCup(page, 12, 0.6 * 1.45)).toBe(true);
+  await toRest(page);
+  let lines = await events(page);
+  expect(count(lines, /^lipped /), 'the game told of it once').toBe(1);
+  expect(count(lines, /^sound lipped$/), 'and it was heard once').toBe(1);
+  expect(count(lines, /^holed /)).toBe(0);
+  await page.evaluate(() => window.game!.step(120));
+  expect(count(await events(page), /^sound lipped$/), 'no second lip-out').toBe(0);
+
+  // a long putt: a stroke taken first (the first is a hole in one if it drops), then one struck from 22 yards that drops
+  await page.evaluate(() => window.game!.startHole(0));
+  await page.evaluate(() => window.game!.step(5));
+  await page.evaluate(() => window.game!.shoot(0, 0.05));
+  await toRest(page);
+  await events(page);
+  expect(await puttAtCup(page, 5, 0, { from: 22 })).toBe(true);
+  await toRest(page);
+  lines = await events(page);
+  expect(count(lines, /^longPutt /), 'the game told of it once').toBe(1);
+  expect(count(lines, /^sound longPutt$/), 'and it was heard once').toBe(1);
+  expect(count(lines, /^holed /)).toBe(1);
+
+  // a stretch of play on each kind of ground: whatever the game told of, the sound heard as often
+  const told = { lipped: 0, longPutt: 0, chippedIn: 0, longDrive: 0 };
+  for (const name of ['The Meadow', 'The Links', 'The Heath']) {
+    await page.evaluate((n) => window.game!.chooseCourse(n), name);
+    for (let hole = 0; hole < 4; hole++) {
+      await page.evaluate((h) => {
+        window.game!.startHole(h);
+        window.game!.step(5);
+      }, hole);
+      await events(page);
+      const seen: string[] = [];
+      for (let s = 0; s < 12 && (await page.evaluate(() => window.game!.state().phase)) === 'play'; s++) {
+        await page.evaluate(() => {
+          const g = window.game!;
+          const shot = g.suggest();
+          if (shot) g.shoot(shot.angle, shot.power, shot.club);
+        });
+        // in slices, reading the log as it goes, since it keeps only the latest lines
+        for (let slice = 0; slice < 20; slice++) {
+          const done = await page.evaluate(() => {
+            const g = window.game!;
+            for (let f = 0; f < 60 && g.state().phase === 'play' && !g.state().ready; f++) g.step(1);
+            return g.state().phase !== 'play' || g.state().ready;
+          });
+          seen.push(...(await events(page)));
+          if (done) break;
+        }
+      }
+      for (const key of Object.keys(told) as (keyof typeof told)[]) {
+        const game = count(seen, new RegExp(`^${key} `));
+        expect(count(seen, new RegExp(`^sound ${key}$`)), `${name} ${hole + 1}: ${key}`).toBe(game);
+        told[key] += game;
+      }
+    }
+  }
+  console.log(`told and heard over the stretch: ${JSON.stringify(told)}`);
 });
 
 test('on a golf hole the club strikes as it is and the landing thuds; the menus have music', async ({ page }) => {
