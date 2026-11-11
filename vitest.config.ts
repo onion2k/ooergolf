@@ -22,6 +22,7 @@ const SLOW = [
   'test/copernicus.test.ts',
   'test/course.test.ts',
   'test/courses.test.ts',
+  'test/daily.test.ts',
   'test/cup-drawn.test.ts',
   'test/desert-courses.test.ts',
   'test/desert-pace.test.ts',
