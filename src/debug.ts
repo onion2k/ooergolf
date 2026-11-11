@@ -26,6 +26,7 @@ import type { HoleDef } from './course';
 import type { CourseRecord, PlayMode, RoundOf, SavedRound, TourSeason } from './career';
 import { greenArrows, speedName } from './green';
 import type { Game } from './game';
+import type { DailySlot } from './progress';
 import { checkInvariants } from './invariants';
 import { seeded } from './random';
 import type { SoundState } from './sound';
@@ -295,6 +296,16 @@ export interface GameApi {
    * menu stands behind it, and every tour, figure, feat and record on it). It is opened by its buttons, the start screen's and the menu's.
    */
   trophies(): TrophyReport;
+  /**
+   * The daily hole: the day it is by the page's clock (UTC), the slot the save keeps for it, the go in play (its day, and whether it is the first
+   * of the day, which pays), and the strip on the start screen and the card at its end as drawn. Share is pressed on its button.
+   */
+  daily(): DailyReport;
+  /**
+   * The strip's Play pressed through, for the day given (today's by the page's clock if none is): the daily hole of that day begun as its
+   * button does, the start screen put away; whether the game began it. A fixed day is how a test holds the hole.
+   */
+  playDaily(day?: string): boolean;
   /** The mulligan: the last stroke undone and the ball back where it was struck from; whether it did anything. */
   mulligan(): boolean;
   /** The save written now, and what it is. */
@@ -549,6 +560,9 @@ export interface DebugHost {
   pickUp(): boolean;
   restartHole(): boolean;
   trophiesDrawn(): TrophyReport['shown'];
+  dailyToday(): string;
+  playDaily(day?: string): boolean;
+  dailyDrawn(): DailyReport['shown'];
   menuDrawn(): {
     shown: boolean;
     restart: boolean;
@@ -590,6 +604,26 @@ export interface DebugHost {
   practise(tour: Tour): boolean;
   board(): { head: string; rows: string[][]; cut: string } | null;
   events: string[];
+}
+
+/** What `daily()` reads. */
+export interface DailyReport {
+  today: string;
+  slot: DailySlot;
+  go: { day: string; pays: boolean } | null;
+  shown: {
+    strip: { shown: boolean; state: string; title: string; meta: string; buttons: string[]; painted: boolean };
+    card: {
+      shown: boolean;
+      head: string;
+      score: string;
+      line: string;
+      note: string;
+      words: string;
+      shareNote: string;
+      buttons: string[];
+    };
+  };
 }
 
 /** What `trophies()` reads: the save's lifetime figures and feats, and the trophy room as the page draws it. */
@@ -795,6 +829,13 @@ export function createApi(host: DebugHost): GameApi {
     restartHole: () => host.restartHole(),
     menuShown: () => host.menuDrawn(),
     trophies: () => ({ life: { ...progress.save.life }, feats: [...progress.save.feats], shown: host.trophiesDrawn() }),
+    daily: () => ({
+      today: host.dailyToday(),
+      slot: { ...progress.save.daily },
+      go: game.daily && { ...game.daily },
+      shown: host.dailyDrawn(),
+    }),
+    playDaily: (day) => host.playDaily(day),
     mulligan: () => game.mulligan(),
     aiming: () => host.aiming(),
     map: () => host.map(),

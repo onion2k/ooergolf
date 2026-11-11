@@ -24,6 +24,9 @@ import { links } from '../src/links';
 import { onBank } from '../src/slopes';
 import { puttText } from '../src/readout';
 import { DRAG } from '../src/shot';
+import { shareText } from '../src/daily';
+import { dailyFacts } from '../src/dailywords';
+import { paid } from '../src/items';
 import { scoreName } from '../src/score';
 import { driveWords, fromWords, lipWords } from '../src/eventwords';
 import { LIE } from '../src/surfaces';
@@ -826,6 +829,289 @@ test.describe('the trophy room on a phone', () => {
     expect(await page.locator('#trophyTours .long').first().isVisible()).toBe(false);
     await page.locator('#trophiesClose').tap();
     await expect(page.locator('#trophies')).toBeHidden();
+    expect(problems).toEqual([]);
+  });
+});
+
+/**
+ * The daily hole, on a fixed day by the page's clock (the hole of a day is the same whenever this is run). The share sheet and the
+ * clipboard are stubs that note what they were given: the real ones are never called. A page of its own with nothing saved.
+ */
+const DAY = '2026-11-11';
+const NEXT = '2026-11-12';
+const stubShare = (page: Page, how: 'share' | 'clipboard' | 'abort' | 'none' = 'share') =>
+  page.addInitScript((mode) => {
+    const w = window as unknown as { shared: string[] };
+    w.shared = [];
+    if (mode === 'share' || mode === 'abort')
+      Object.defineProperty(navigator, 'share', {
+        configurable: true,
+        value: (data: { text: string }) => {
+          if (mode === 'abort') return Promise.reject(new DOMException('put away', 'AbortError'));
+          w.shared.push(data.text);
+          return Promise.resolve();
+        },
+      });
+    else Object.defineProperty(navigator, 'share', { configurable: true, value: undefined });
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: (text: string) => {
+          if (mode === 'none') return Promise.reject(new Error('no clipboard'));
+          w.shared.push(`clipboard: ${text}`);
+          return Promise.resolve();
+        },
+      },
+    });
+  }, how);
+const dailyNow = (page: Page) => page.evaluate(() => window.game!.daily());
+const sharedWords = (page: Page) => page.evaluate(() => (window as unknown as { shared: string[] }).shared);
+/** The page's daily picture painted, which it is after the first frame and not before. */
+const painted = (page: Page) =>
+  page.waitForFunction(() => window.game!.daily().shown.strip.painted).then(() => dailyNow(page));
+
+test('the daily hole: the strip asks for a go, the first go is paid and kept and its card shares it, a later go pays nothing, and a reload keeps the day', async ({
+  page,
+}) => {
+  const problems = watch(page);
+  await stubShare(page);
+  await start(page, { seed: 1, paused: true, screen: true, day: DAY });
+  // the strip, before the day's go: the hole's facts from its spec, Play only, and its picture painted once the page is ready
+  const first = await painted(page);
+  const facts = dailyFacts(DAY);
+  expect(first.today).toBe(DAY);
+  expect(first.shown.strip).toMatchObject({
+    shown: true,
+    state: 'open',
+    title: 'Today’s hole · Wednesday 11 November',
+    buttons: ['dailyPlay'],
+    painted: true,
+  });
+  expect(first.shown.strip.meta).toContain(`par ${facts.par} · ${facts.yards} yards`);
+  expect(first.slot).toEqual({ day: '', strokes: 0, par: 0, streak: 0 });
+  await expect(page.locator('#daily')).toBeVisible();
+  const coins0 = (await page.evaluate(() => window.game!.state())).coins;
+
+  // Play today's hole, by a real click: the first go, with the menu saying so and no Restart
+  await page.locator('#dailyPlay').click();
+  const go = await dailyNow(page);
+  expect(go.go).toEqual({ day: DAY, pays: true });
+  expect((await page.evaluate(() => window.game!.state())).choosing).toBe(false);
+  await play(page, 5, 'the daily hole begun');
+  await page.locator('#viewMenu').click();
+  const menu = await menuNow(page);
+  expect(menu.subtitle).toMatch(new RegExp(`^Today’s hole · 11 Nov 2026 · 0 strokes · par ${facts.par}$`));
+  expect(menu.restart, 'the first go is not restarted').toBe(false);
+  expect(menu.note).toBe('The first go is the one that counts');
+  await expect(page.locator('#menuRestart')).toBeHidden();
+  expect(await page.evaluate(() => window.game!.restartHole()), 'and the game refuses it').toBe(false);
+  await page.locator('#menuResume').click();
+
+  // played out: the slot is the day, kept at the first stroke, and the card says what was done and what Share sends
+  const done = await holeOut(page);
+  expect(done.phase).toBe('done');
+  const strokes = done.card[0];
+  await play(page, 150, 'the daily hole done');
+  const kept = await dailyNow(page);
+  expect(kept.slot).toEqual({ day: DAY, strokes, par: done.par, streak: 1 });
+  const pay = paid(strokes, done.par, strokes >= done.par + 5).coins;
+  expect((await page.evaluate(() => window.game!.state())).coins - coins0, 'paid as a hole is').toBe(pay);
+  await expect(page.locator('#dailyCard')).toBeVisible();
+  await expect(page.locator('#card'), 'not the round’s card').toBeHidden();
+  const words = shareText(DAY, done.par, strokes);
+  expect(kept.shown.card).toMatchObject({
+    shown: true,
+    head: 'Today’s hole · 11 November',
+    score: scoreName(strokes, done.par, strokes >= done.par + 5),
+    words,
+    buttons: ['dailyCardShare', 'dailyCardAgain', 'dailyCardCourses'],
+  });
+  expect(kept.shown.card.line.startsWith(`${strokes} on a par ${done.par}`)).toBe(true);
+  expect(
+    (JSON.parse(await page.evaluate(() => window.game!.save())) as { best: object }).best,
+    'no best for a day',
+  ).toEqual({});
+  expect(words).toContain('https://golf.ooer.com/');
+  // Share, by a real click: the share sheet is handed the words, and nothing else
+  await page.locator('#dailyCardShare').click();
+  expect(await sharedWords(page)).toEqual([words]);
+  await expect(page.locator('#dailyShareNote')).toHaveText('Shared');
+
+  // again, for nothing: a later go pays nothing, counts nothing and leaves the slot, and the menu has its Restart
+  const coins1 = (await page.evaluate(() => window.game!.state())).coins;
+  const life1 = (await page.evaluate(() => window.game!.trophies())).life;
+  await page.locator('#dailyCardAgain').click();
+  expect((await dailyNow(page)).go).toEqual({ day: DAY, pays: false });
+  await play(page, 5, 'a later go begun');
+  await page.locator('#viewMenu').click();
+  const later = await menuNow(page);
+  expect(later.restart).toBe(true);
+  expect(later.note).toBe('A later go: nothing is paid');
+  await page.locator('#menuRestart').click();
+  expect((await page.evaluate(() => window.game!.state())).strokes).toBe(0);
+  const again = await holeOut(page);
+  expect(again.phase).toBe('done');
+  await play(page, 150, 'a later go done');
+  const second = await dailyNow(page);
+  expect(second.slot, 'the first go stands').toEqual(kept.slot);
+  expect((await page.evaluate(() => window.game!.state())).coins, 'nothing paid').toBe(coins1);
+  expect((await page.evaluate(() => window.game!.trophies())).life, 'nothing counted').toEqual(life1);
+  expect(second.shown.card.line).toContain('counts for nothing');
+  expect(second.shown.card.note).toBe(
+    `Your first go, ${scoreName(strokes, done.par).replace(/!$/, '')} (${strokes}), is the one that counts.`,
+  );
+  expect(second.shown.card.words, 'the first go is what is shared').toBe(words);
+
+  // Courses: the strip says the day's score, with Share and another go, and a reload keeps the day
+  await page.locator('#dailyCardCourses').click();
+  const strip = (await dailyNow(page)).shown.strip;
+  expect(strip).toMatchObject({ state: 'done', buttons: ['dailyShare', 'dailyAgain'] });
+  expect(strip.title).toBe(`Today: ${scoreName(strokes, done.par).replace(/!$/, '')} · ${strokes}`);
+  expect(strip.meta).toBe('1 day running');
+  await page.locator('#dailyShare').click();
+  expect(await sharedWords(page)).toEqual([words, words]);
+  await page.reload();
+  await page.waitForFunction(() => window.game?.ready);
+  const after = await dailyNow(page);
+  expect(after.slot).toEqual(kept.slot);
+  expect(after.shown.strip.state).toBe('done');
+  expect(await page.evaluate(() => window.game!.invariants())).toEqual([]);
+
+  // the day turns at midnight UTC: the strip, read when the start screen opens, asks for a go again, and the old day stays kept
+  await page.clock.setFixedTime(new Date(`${NEXT}T00:00:01Z`));
+  await page.evaluate(() => window.game!.playDaily('2026-11-11'));
+  await page.evaluate(() => window.game!.menu(true));
+  await page.locator('#menuCourses').click();
+  const turned = await dailyNow(page);
+  expect(turned.today).toBe(NEXT);
+  expect(turned.shown.strip).toMatchObject({ state: 'open', title: 'Today’s hole · Thursday 12 November' });
+  expect(turned.slot).toEqual(kept.slot);
+  expect(problems).toEqual([]);
+});
+
+test('the daily hole left unfinished reads did not finish, with no Share, and a go after it pays nothing', async ({
+  page,
+}) => {
+  const problems = watch(page);
+  await stubShare(page);
+  await start(page, { seed: 1, paused: true, screen: true, day: DAY });
+  await painted(page);
+  await page.locator('#dailyPlay').click();
+  await play(page, 5, 'the daily hole begun');
+  await page.evaluate(() => {
+    const shot = window.game!.suggest();
+    if (shot) window.game!.shoot(shot.angle, shot.power, shot.club);
+  });
+  await play(page, 5, 'the first stroke');
+  expect((await page.evaluate(() => window.game!.state())).strokes).toBe(1);
+  const taken = await dailyNow(page);
+  expect(taken.slot, 'taken at its first stroke').toEqual({ day: DAY, strokes: 0, par: expect.any(Number), streak: 0 });
+  // the menu's Courses leaves it as it stands
+  await page.locator('#viewMenu').click();
+  await page.locator('#menuCourses').click();
+  const strip = (await dailyNow(page)).shown.strip;
+  expect(strip).toMatchObject({
+    state: 'unfinished',
+    title: 'Today: did not finish',
+    buttons: ['dailyAgain'],
+  });
+  await expect(page.locator('#dailyShare')).toBeHidden();
+  const coins = (await page.evaluate(() => window.game!.state())).coins;
+  await page.locator('#dailyAgain').click();
+  expect((await dailyNow(page)).go).toEqual({ day: DAY, pays: false });
+  const done = await holeOut(page);
+  expect(done.phase).toBe('done');
+  await play(page, 150, 'a go after it');
+  const card = (await dailyNow(page)).shown.card;
+  expect(card.note).toBe('Your first go was not finished, and that is the one that counts.');
+  expect(card.words, 'nothing to share').toBe('');
+  await expect(page.locator('#dailyCardShare')).toBeHidden();
+  expect((await page.evaluate(() => window.game!.state())).coins).toBe(coins);
+  expect((await dailyNow(page)).slot.strokes).toBe(0);
+  expect(problems).toEqual([]);
+});
+
+test('Give up on the daily hole’s first go scores it at the limit and keeps that for the day', async ({ page }) => {
+  const problems = watch(page);
+  await stubShare(page);
+  await start(page, { seed: 1, paused: true, screen: true, day: DAY });
+  await painted(page);
+  await page.locator('#dailyPlay').click();
+  await play(page, 5, 'the daily hole begun');
+  await page.locator('#viewMenu').click();
+  const par = (await page.evaluate(() => window.game!.state())).par;
+  await page.locator('#menuGiveUp').click();
+  expect((await menuNow(page)).giveUp).toBe(`Give up? It scores ${par + 5} for the day`);
+  await page.locator('#menuGiveUp').click();
+  await play(page, 150, 'the hole given up');
+  const after = await dailyNow(page);
+  expect(after.slot).toEqual({ day: DAY, strokes: par + 5, par, streak: 1 });
+  expect(after.shown.card.score).toBe('Picked up');
+  expect((await page.evaluate(() => window.game!.state())).coins, 'a hole given up pays nothing').toBe(0);
+  expect(problems).toEqual([]);
+});
+
+for (const how of ['clipboard', 'abort', 'none'] as const)
+  test(`Share ${how === 'clipboard' ? 'falls back to the clipboard where there is no share sheet' : how === 'abort' ? 'says nothing when the share sheet is put away' : 'says it could not where there is neither'}`, async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await stubShare(page, how);
+    const finished = { day: DAY, strokes: 3, par: 4, streak: 1 };
+    await start(page, { seed: 1, paused: true, screen: true, day: DAY, save: { daily: finished } });
+    await painted(page);
+    expect((await dailyNow(page)).shown.strip.buttons).toEqual(['dailyShare', 'dailyAgain']);
+    await page.locator('#dailyShare').click();
+    const words = shareText(DAY, 4, 3);
+    const shared = await sharedWords(page);
+    expect(shared).toEqual(how === 'clipboard' ? [`clipboard: ${words}`] : []);
+    // the strip has no note of its own: what became of the words is said on the card, which is where Share is pressed from there
+    await page.locator('#dailyAgain').click();
+    await holeOut(page);
+    await play(page, 150, 'a later go done');
+    await page.locator('#dailyCardShare').click();
+    const note = page.locator('#dailyShareNote');
+    if (how === 'clipboard') await expect(note).toHaveText('Copied to the clipboard');
+    else if (how === 'none') await expect(note).toHaveText(/Could not share/);
+    else await expect(note).toBeHidden();
+    expect(problems).toEqual([]);
+  });
+
+test.describe('the daily hole on a phone', () => {
+  test.use({ viewport: { width: 400, height: 860 }, hasTouch: true, isMobile: true });
+  test('the strip and the card are whole on the screen, legible, a thumb high, and work by touch', async ({ page }) => {
+    const problems = watch(page);
+    await stubShare(page);
+    await start(page, { seed: 1, paused: true, screen: true, day: DAY });
+    await painted(page);
+    // the strip on the start screen: nothing past the sides, every word legible, every button a thumb high
+    let reading = await read(page);
+    expect(reading.outside).toEqual([]);
+    expect(reading.scrollWidth).toBeLessThanOrEqual(400);
+    for (const t of reading.texts) expect(t.ratio, `${t.text} on ${t.behind}`).toBeGreaterThanOrEqual(CONTRAST);
+    for (const b of reading.buttons.filter((b) => b.text === 'Play today’s hole'))
+      expect(b.height, 'Play today’s hole is a thumb high').toBeGreaterThanOrEqual(THUMB);
+    await page.locator('#dailyPlay').tap();
+    expect((await dailyNow(page)).go).toEqual({ day: DAY, pays: true });
+    await holeOut(page);
+    await play(page, 150, 'the daily hole done');
+    await expect(page.locator('#dailyCard')).toBeVisible();
+    await landed(page);
+    reading = await read(page);
+    expect(reading.outside).toEqual([]);
+    expect(reading.scrollWidth).toBeLessThanOrEqual(400);
+    for (const t of reading.texts) expect(t.ratio, `${t.text} on ${t.behind}`).toBeGreaterThanOrEqual(CONTRAST);
+    for (const b of reading.buttons.filter((b) => ['Share', 'Again, for nothing', 'Courses'].includes(b.text)))
+      expect(b.height, `${b.text} is a thumb high`).toBeGreaterThanOrEqual(THUMB);
+    await page.locator('#dailyCardShare').tap();
+    expect((await sharedWords(page)).length).toBe(1);
+    await page.locator('#dailyCardCourses').tap();
+    expect((await dailyNow(page)).shown.strip.state).toBe('done');
+    // and the strip after the day's go: Share and another go are a thumb high too
+    reading = await read(page);
+    for (const b of reading.buttons.filter((b) => ['Share'].includes(b.text)))
+      expect(b.height, 'Share is a thumb high').toBeGreaterThanOrEqual(THUMB);
+    expect(reading.outside).toEqual([]);
     expect(problems).toEqual([]);
   });
 });

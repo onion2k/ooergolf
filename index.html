@@ -202,6 +202,7 @@
   #card:not([hidden]),
   #menu:not([hidden]),
   #trophies:not([hidden]),
+  #dailyCard:not([hidden]),
   #shop:not([hidden]),
   #start:not([hidden]) {
     pointer-events: auto;
@@ -629,6 +630,7 @@
   #card,
   #menu,
   #trophies,
+  #dailyCard,
   #shop,
   #start {
     position: fixed;
@@ -1091,6 +1093,152 @@
       height: calc(100dvh / var(--ui, 1) - 16px);
       max-height: none;
     }
+  }
+
+  /*
+   * The daily hole: a strip above the five tabs on the start screen (11 November 2026, the mock the user chose), the hole painted from
+   * above on a small plate at its left, its words, and its buttons at the right. In the leaf's green while the day's go is to be
+   * taken, and in grey once it is done or taken: Share and another go for nothing then stand in place of Play. A phone's strip has a
+   * smaller plate and smaller words, and wraps its buttons under them where they would not fit.
+   */
+  #daily {
+    display: grid;
+    grid-template-columns: 58px minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: center;
+    margin: 0 0 12px;
+    padding: 8px 10px 8px 8px;
+    text-align: left;
+    background: var(--leaf-tint);
+    border-radius: 16px;
+    box-shadow:
+      inset 0 0 0 3px var(--leaf),
+      0 4px 0 var(--leaf-deep);
+  }
+  #daily[data-state='done'],
+  #daily[data-state='unfinished'] {
+    background: var(--mist);
+    box-shadow:
+      inset 0 0 0 3px var(--mist-deep),
+      0 4px 0 var(--stone);
+  }
+  #dailyPic {
+    width: 58px;
+    height: 58px;
+    object-fit: contain;
+    background: #e9f3fb;
+    border-radius: 10px;
+    image-rendering: pixelated;
+  }
+  #dailyText b {
+    display: block;
+    font-size: 17px;
+    font-weight: 900;
+    line-height: 1.2;
+  }
+  #dailyText small {
+    display: block;
+    margin-top: 2px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ink-soft);
+  }
+  #dailyActs {
+    display: flex;
+    gap: 8px;
+  }
+  #dailyAgain {
+    display: grid;
+    place-items: center;
+    min-width: 44px;
+    padding: 0;
+  }
+  #dailyAgain svg {
+    width: 24px;
+    height: 24px;
+    pointer-events: none;
+  }
+  @media (max-width: 600px) {
+    #daily {
+      grid-template-columns: 46px minmax(0, 1fr) auto;
+      gap: 8px;
+      padding: 6px 8px 6px 6px;
+    }
+    #dailyPic {
+      width: 46px;
+      height: 46px;
+    }
+    #dailyText b {
+      font-size: 14px;
+    }
+    #dailyText small {
+      font-size: 11px;
+    }
+    #dailyActs button:not(#dailyAgain) {
+      padding: 0 12px;
+      font-size: 14px;
+    }
+  }
+  /* the card when the day's hole is done: the score large in the leaf's green, the shared words as they will be sent, Share, and the way on */
+  #dailyCard {
+    --edge: var(--leaf);
+    --lip: var(--leaf-deep);
+    width: min(360px, calc(100vw / var(--ui, 1) - 32px));
+    text-align: center;
+  }
+  #dailyCardHead {
+    display: block;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+  #dailyScore {
+    margin: 4px 0;
+    font-size: 40px;
+    font-weight: 900;
+    line-height: 1.1;
+    color: var(--leaf-ink);
+  }
+  #dailyScore[data-kind='over'] {
+    color: var(--ink);
+  }
+  #dailyScore[data-kind='picked'] {
+    color: var(--ink-soft);
+  }
+  #dailyLine {
+    margin: 0;
+    font-weight: 800;
+  }
+  #dailyShareText {
+    margin: 12px 0;
+    padding: 10px 12px;
+    font:
+      700 13px/1.5 ui-monospace,
+      Menlo,
+      monospace;
+    text-align: left;
+    white-space: pre-wrap;
+    background: var(--mist);
+    border-radius: 12px;
+  }
+  #dailyNote,
+  #dailyShareNote {
+    margin: 8px 0 0;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ink-soft);
+  }
+  #dailyCardButtons {
+    display: grid;
+    gap: 10px;
+    margin-top: 12px;
+  }
+  #dailyCardButtons .pair {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
   }
 
   #start {
@@ -2908,6 +3056,21 @@
   <span class="cap">Course records</span>
   <ul id="trophyRecords"></ul>
 </div>
+<div class="panel" id="dailyCard" role="dialog" aria-labelledby="dailyCardHead" hidden>
+  <span class="cap" id="dailyCardHead"></span>
+  <div id="dailyScore"></div>
+  <p id="dailyLine"></p>
+  <pre id="dailyShareText" hidden></pre>
+  <p id="dailyNote" hidden></p>
+  <div id="dailyCardButtons">
+    <button id="dailyCardShare" type="button">Share</button>
+    <p id="dailyShareNote" role="status" hidden></p>
+    <div class="pair">
+      <button id="dailyCardAgain" class="quiet" type="button">Again, for nothing</button>
+      <button id="dailyCardCourses" class="quiet" type="button">Courses</button>
+    </div>
+  </div>
+</div>
 <div class="panel" id="shop" hidden>
   <div id="shopHead">
     <h2>The pro shop</h2>
@@ -2950,6 +3113,34 @@
   <h1>ooergolf</h1>
   <p><span id="startWords">Choose a course</span></p>
   <button id="install" type="button" hidden>Install the game</button>
+  <!-- the daily hole: one a day, the same for every player; the first go is the one kept -->
+  <div id="daily" data-state="open" hidden>
+    <canvas id="dailyPic" width="58" height="58" aria-hidden="true"></canvas>
+    <div id="dailyText"><b id="dailyTitle"></b><small id="dailyMeta"></small></div>
+    <div id="dailyActs">
+      <button id="dailyPlay" type="button">Play today’s hole</button>
+      <button id="dailyShare" type="button" class="quiet">Share</button>
+      <button
+        id="dailyAgain"
+        type="button"
+        class="quiet"
+        aria-label="Play today’s hole again, for nothing"
+        title="Play again, for nothing"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M19 12a7 7 0 1 1-2.2-5.1" fill="none" stroke="var(--ink)" stroke-width="3" stroke-linecap="round" />
+          <path
+            d="M19.5 3.5v5h-5"
+            fill="none"
+            stroke="var(--ink)"
+            stroke-width="3"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+      </button>
+    </div>
+  </div>
   <!-- the course picker: a tab for each kind of golf, one course of it in view at a time, stepped by the arrows, and Play -->
   <!-- the kind of golf, and beside it at the right the career's switch: on in the career, off in free play -->
   <div id="startHead">

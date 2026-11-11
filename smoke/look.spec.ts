@@ -37,7 +37,7 @@ import { STREAM_HOLE } from '../test/stream-hole';
 import { wideHole } from '../test/wide-hole';
 import { smallHole } from './bighole';
 import { TROPHIES_SAVE, drag, landed, puttAtCup, puttingHole, start, watch } from './game';
-import { openDrawer } from './panels';
+import { holeOut, openDrawer } from './panels';
 import { alone } from './gpu';
 
 /** How far the pictures may differ before it is a change and not the GPU: a fiftieth of the pixels, each well off. */
@@ -1980,6 +1980,34 @@ test.describe('the hole’s menu', () => {
     expect(problems).toEqual([]);
   });
 
+  test('the start screen with the daily hole asked for: the green strip above the tabs, its hole painted on the plate', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true, screen: true });
+    await page.evaluate(() => window.game!.step(1));
+    await hideStats(page);
+    await expect(page.locator('#daily')).toHaveAttribute('data-state', 'open');
+    await expect(page).toHaveScreenshot('start-daily.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
+  test('the daily hole’s card when its first go is done: the score, what it paid, the words Share sends, and the way on', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true, screen: true });
+    await page.evaluate(() => window.game!.playDaily());
+    await page.evaluate(() => window.game!.step(5));
+    await holeOut(page);
+    await page.evaluate(() => window.game!.step(150));
+    await page.mouse.move(0, 0);
+    await settled(page);
+    await expect(page.locator('#dailyCard')).toBeVisible();
+    await expect(page).toHaveScreenshot('daily-card.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
   test.describe('on a phone', () => {
     test.use({ viewport: { width: 400, height: 860 }, hasTouch: true, isMobile: true });
 
@@ -2000,6 +2028,36 @@ test.describe('the hole’s menu', () => {
       await settled(page);
       await expect(page.locator('#trophies')).toBeVisible();
       await expect(page).toHaveScreenshot('phone-trophies.png', TOLERANCE);
+      expect(problems).toEqual([]);
+    });
+
+    test('the start screen after the day’s go, on a phone: the grey strip with its score, the run, Share and another go', async ({
+      page,
+    }) => {
+      const problems = watch(page);
+      await start(page, {
+        seed: 11,
+        paused: true,
+        screen: true,
+        save: { daily: { day: '2026-11-11', strokes: 3, par: 4, streak: 4 } },
+      });
+      await page.evaluate(() => window.game!.step(1));
+      await hideStats(page);
+      await expect(page.locator('#daily')).toHaveAttribute('data-state', 'done');
+      await expect(page).toHaveScreenshot('phone-start-daily.png', TOLERANCE);
+      expect(problems).toEqual([]);
+    });
+
+    test('the daily hole’s card, on a phone', async ({ page }) => {
+      const problems = watch(page);
+      await start(page, { seed: 11, paused: true, screen: true });
+      await page.evaluate(() => window.game!.playDaily());
+      await page.evaluate(() => window.game!.step(5));
+      await holeOut(page);
+      await page.evaluate(() => window.game!.step(150));
+      await settled(page);
+      await expect(page.locator('#dailyCard')).toBeVisible();
+      await expect(page).toHaveScreenshot('phone-daily-card.png', TOLERANCE);
       expect(problems).toEqual([]);
     });
   });

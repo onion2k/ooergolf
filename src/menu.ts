@@ -5,6 +5,7 @@
  * could stop the time of a screen that has none. And what it says: its words and which buttons it has, worked out from
  * numbers, so a word that reads wrong is a test that fails and not a picture someone has to notice.
  */
+import { dayWords } from './days';
 import { gradeName } from './eventwords';
 import type { Grade } from './season';
 
@@ -35,8 +36,10 @@ export interface MenuFacts {
   course: string;
   /** The grade of the tour whose event is in play, or null where no event is. */
   grade: Grade | null;
-  /** Whether the game would begin the hole again: not in an event. */
+  /** Whether the game would begin the hole again: not in an event, and not the daily hole's first go. */
   restartable: boolean;
+  /** The daily hole's day and whether this go is the first of it, which is the one that counts; null for any other hole. */
+  daily: { day: string; pays: boolean } | null;
 }
 
 /** The menu's words and which of its buttons are there. */
@@ -54,6 +57,14 @@ export interface MenuWords {
 /** The menu's words for the hole in play. */
 export function menuWords(f: MenuFacts): MenuWords {
   const strokes = `${f.strokes} ${f.strokes === 1 ? 'stroke' : 'strokes'}`;
+  if (f.daily !== null)
+    return {
+      subtitle: `Today’s hole · ${dayWords(f.daily.day)} · ${strokes} · par ${f.par}`,
+      restart: f.restartable,
+      giveUp: 'Give up the hole',
+      giveUpSure: f.daily.pays ? `Give up? It scores ${f.limit} for the day` : `Give up? It scores ${f.limit}`,
+      note: f.daily.pays ? 'The first go is the one that counts' : 'A later go: nothing is paid',
+    };
   return {
     subtitle:
       f.grade === null

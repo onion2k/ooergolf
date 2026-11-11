@@ -15,7 +15,9 @@
  */
 import { AISLES, type Aisle, type Item, type KitSlots } from './items';
 import type { Mode } from './gesture';
+import type { CardView, StripView } from './dailywords';
 import type { MenuWords } from './menu';
+import type { Painted } from './previews';
 import { featWords, type TrophyView } from './trophywords';
 import { helpText, windText, type Held } from './readout';
 import { swatchOf } from './swatch';
@@ -70,6 +72,10 @@ export interface HudHandlers {
   pickUp(): void;
   /** Restart pressed in the menu: the hole begun again from its tee. */
   restart(): void;
+  /** The daily hole's button pressed, on the strip or the card: the hole of today begun, for the first go or one for nothing. */
+  daily(): void;
+  /** Share pressed on the strip or the card, with the words to send: what was done with them. */
+  share(text: string): Promise<'shared' | 'copied' | 'cancelled' | 'failed'>;
   /** The trophy room opened (from the start screen or the hole's menu): what it says, from the save as it is now. */
   trophies(): TrophyView;
   /** A club of the bag chosen on a golf hole, by its id. */
@@ -304,6 +310,13 @@ export class Hud {
   private readonly menuRestart = document.getElementById('menuRestart') as HTMLButtonElement;
   private readonly menuGiveUp = document.getElementById('menuGiveUp') as HTMLButtonElement;
   private readonly trophies = document.getElementById('trophies')!;
+  /** The daily hole's strip on the start screen and its card at the hole's end, and the words each would share as they stand. */
+  private readonly daily = document.getElementById('daily')!;
+  private readonly dailyPic = document.getElementById('dailyPic') as HTMLCanvasElement;
+  private readonly dailyCard = document.getElementById('dailyCard')!;
+  private readonly dailyNote = document.getElementById('dailyShareNote')!;
+  private dailyShared: string | null = null;
+  private dailyPainted = false;
   /** The second line the callout was given, and the feats added to it since: a feat is said after what the callout already says. */
   private calloutFrom = '';
   private readonly feats: string[] = [];
@@ -537,7 +550,7 @@ export class Hud {
       if (this.drawerOpen()) this.setDrawer(false);
       else if (!this.trophies.hidden) this.closeTrophies();
       else if (this.menuUp) handlers.menu(false);
-      else if (this.shop.hidden && this.card.hidden) handlers.menu(true);
+      else if (this.shop.hidden && this.card.hidden && this.dailyCard.hidden) handlers.menu(true);
     });
     document.getElementById('viewMenu')!.addEventListener('click', () => handlers.menu(true));
     document.getElementById('menuResume')!.addEventListener('click', () => handlers.menu(false));
@@ -555,6 +568,12 @@ export class Hud {
       button.addEventListener('click', () => this.openTrophies(handlers.trophies(), button));
     }
     document.getElementById('trophiesClose')!.addEventListener('click', () => this.closeTrophies());
+    // the daily hole: Play today's hole and the go again for nothing begin it, and Share sends what the strip or the card says
+    for (const id of ['dailyPlay', 'dailyAgain', 'dailyCardAgain'])
+      document.getElementById(id)!.addEventListener('click', () => handlers.daily());
+    for (const id of ['dailyShare', 'dailyCardShare'])
+      document.getElementById(id)!.addEventListener('click', () => void this.shareDaily());
+    document.getElementById('dailyCardCourses')!.addEventListener('click', () => handlers.courses());
     this.overheadButton.addEventListener('click', () => handlers.overhead(this.mode !== 'overhead'));
     this.flagButton.addEventListener('click', () => handlers.flag());
     for (const speaker of [this.soundButton, this.purseSound])
@@ -874,7 +893,14 @@ export class Hud {
 
   /** Whether a menu is up: the start screen (or the title it waits under), the shop, the card or the hole's menu. The music plays under them. */
   get inMenus(): boolean {
-    return this.startUp || !this.shop.hidden || !this.card.hidden || this.menuUp || !this.trophies.hidden;
+    return (
+      this.startUp ||
+      !this.shop.hidden ||
+      !this.card.hidden ||
+      !this.dailyCard.hidden ||
+      this.menuUp ||
+      !this.trophies.hidden
+    );
   }
 
   /**
@@ -1408,6 +1434,7 @@ export class Hud {
       this.menuPanel,
       this.menuScrim,
       this.trophies,
+      this.dailyCard,
     ])
       el.hidden = true;
     this.menuUp = false;
@@ -1441,6 +1468,122 @@ export class Hud {
     this.going = round?.course ?? '';
     if (round && this.picker?.has(round.course)) this.picker.show(round.course);
     this.drawPicker();
+  }
+
+  /**
+   * The daily hole's strip on the start screen: its state sets the colour, its title and words are drawn, and only the buttons its
+   * state has are there. Drawn each time the start screen opens, from the slot and the day as they then are.
+   */
+  setDaily(view: StripView | null) {
+    this.daily.hidden = view === null;
+    if (view === null) return;
+    this.daily.dataset.state = view.state;
+    document.getElementById('dailyTitle')!.textContent = view.title;
+    document.getElementById('dailyMeta')!.textContent = view.meta;
+    (document.getElementById('dailyPlay') as HTMLButtonElement).hidden = !view.play;
+    (document.getElementById('dailyShare') as HTMLButtonElement).hidden = !view.share;
+    (document.getElementById('dailyAgain') as HTMLButtonElement).hidden = !view.again;
+  }
+
+  /** The daily hole's picture painted on the strip's plate, made once the page is ready and not before the first frame; none puts the plate back blank. */
+  paintDaily(picture: Painted | null) {
+    const canvas = this.dailyPic;
+    this.dailyPainted = picture !== null;
+    if (picture === null) {
+      canvas.getContext('2d')?.clearRect(0, 0, canvas.width, canvas.height);
+      return;
+    }
+    canvas.width = picture.width;
+    canvas.height = picture.height;
+    canvas
+      .getContext('2d')
+      ?.putImageData(new ImageData(new Uint8ClampedArray(picture.pixels), picture.width, picture.height), 0, 0);
+  }
+
+  /**
+   * The daily hole's card, for a hole done: the day's heading, the score, the line under it, the shared words as they will be sent, a
+   * note where there is one, and Share (only where there is something to share). Over the hole, in place of the round's card.
+   */
+  showDailyCard(view: CardView) {
+    this.toast.hidden = true;
+    document.getElementById('dailyCardHead')!.textContent = view.head;
+    const score = document.getElementById('dailyScore')!;
+    score.textContent = view.score;
+    score.dataset.kind = view.kind;
+    document.getElementById('dailyLine')!.textContent = view.line;
+    const note = document.getElementById('dailyNote')!;
+    note.hidden = view.note === null;
+    note.textContent = view.note ?? '';
+    const words = document.getElementById('dailyShareText')!;
+    words.hidden = view.share === null;
+    words.textContent = view.share ?? '';
+    (document.getElementById('dailyCardShare') as HTMLButtonElement).hidden = view.share === null;
+    this.dailyNote.hidden = true;
+    this.dailyShared = view.share;
+    this.dailyCard.hidden = false;
+  }
+
+  /** The daily hole's words shared, on a press of Share (the strip's or the card's), and what became of them said under the button. */
+  private async shareDaily() {
+    const text = this.dailyShared ?? this.dailyStripShare;
+    if (text === null) return;
+    const done = await this.handlers.share(text);
+    // a share sheet put away says nothing: it was the player's choice
+    if (done === 'cancelled') return;
+    this.dailyNote.textContent =
+      done === 'shared'
+        ? 'Shared'
+        : done === 'copied'
+          ? 'Copied to the clipboard'
+          : 'Could not share: select the words and copy them';
+    this.dailyNote.hidden = this.dailyCard.hidden;
+  }
+
+  /** What the strip's Share sends: set with the strip. */
+  private dailyStripShare: string | null = null;
+
+  /** The strip's shared words, which its Share sends. */
+  setDailyShare(text: string | null) {
+    this.dailyStripShare = text;
+  }
+
+  /** The daily hole as drawn, for the test API: the strip's state and words and which buttons are there, the card, and whether the plate is painted. */
+  dailyDrawn(): {
+    strip: { shown: boolean; state: string; title: string; meta: string; buttons: string[]; painted: boolean };
+    card: {
+      shown: boolean;
+      head: string;
+      score: string;
+      line: string;
+      note: string;
+      words: string;
+      shareNote: string;
+      buttons: string[];
+    };
+  } {
+    const visible = (ids: string[]) => ids.filter((id) => !document.getElementById(id)!.hidden);
+    return {
+      strip: {
+        shown: !this.daily.hidden && !this.start.hidden,
+        state: this.daily.dataset.state ?? '',
+        title: document.getElementById('dailyTitle')!.textContent,
+        meta: document.getElementById('dailyMeta')!.textContent,
+        buttons: visible(['dailyPlay', 'dailyShare', 'dailyAgain']),
+        painted: this.dailyPainted,
+      },
+      card: {
+        shown: !this.dailyCard.hidden,
+        head: document.getElementById('dailyCardHead')!.textContent,
+        score: document.getElementById('dailyScore')!.textContent,
+        line: document.getElementById('dailyLine')!.textContent,
+        note: document.getElementById('dailyNote')!.hidden ? '' : document.getElementById('dailyNote')!.textContent,
+        words: document.getElementById('dailyShareText')!.hidden
+          ? ''
+          : document.getElementById('dailyShareText')!.textContent,
+        shareNote: this.dailyNote.hidden ? '' : this.dailyNote.textContent,
+        buttons: visible(['dailyCardShare', 'dailyCardAgain', 'dailyCardCourses']),
+      },
+    };
   }
 
   /** Whether the start screen is up, in sight or held back for the title's letters. */
@@ -1570,6 +1713,7 @@ export class Hud {
     this.setStrokes(0);
     this.toast.hidden = true;
     this.card.hidden = true;
+    this.dailyCard.hidden = true;
     this.shop.hidden = true;
     this.trophies.hidden = true;
     this.setMenu(false);

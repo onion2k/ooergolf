@@ -148,6 +148,23 @@ describe('the first go of a day', () => {
     expect(game.strokes).toBe(1);
   });
 
+  it('says it may not be restarted exactly when a restart is refused, there and in every other round', () => {
+    const { game } = played({ coins: 1000, season: { golf: { grade: 'county', begun: 0, played: [], titles: 0 } } });
+    game.playDaily(GREEN, DAY);
+    expect(game.restartable).toBe(false);
+    holeInOne(game);
+    expect(game.restartable, 'between holes').toBe(false);
+    next(game);
+    game.playDaily(GREEN, DAY);
+    expect(game.restartable, 'a later go').toBe(true);
+    expect(game.restartHole()).toBe(true);
+    game.newRound();
+    expect(game.restartable, 'free play of a course').toBe(true);
+    game.enter('golf');
+    expect(game.restartable, 'in an event').toBe(false);
+    expect(game.restartHole()).toBe(false);
+  });
+
   it('picked up from the menu is scored at the limit, taken, paid nothing, and a day all the same', () => {
     const { game } = played({ coins: 5 });
     game.playDaily(GREEN, DAY);

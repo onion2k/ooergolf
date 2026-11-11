@@ -11,6 +11,7 @@ const free: MenuFacts = {
   course: 'The Links',
   grade: null,
   restartable: true,
+  daily: null,
 };
 
 describe('the words of the hole’s menu', () => {

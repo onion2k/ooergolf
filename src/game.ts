@@ -756,6 +756,11 @@ export class Game {
     return true;
   }
 
+  /** Whether the hole in play may be begun again, which is what the menu's Restart is there for: a hole in play, and none of the refusals. */
+  get restartable(): boolean {
+    return this.phase === 'play' && !this.restartRefused();
+  }
+
   /** Why a restart is not allowed, if it is not: in an event, where a stroke counts against the field, and on the daily hole's first go. The one place a rule is added to. */
   private restartRefused(): boolean {
     // the daily hole's first go is the one kept, so it is played once: no stroke of it is taken back

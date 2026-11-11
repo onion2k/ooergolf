@@ -49,9 +49,13 @@ export async function start(
     title?: boolean;
     // and the fly-in to each hole, so a picture a second into a hole is of the view a shot is played from
     flyIn?: boolean;
+    // the day it is by the page's clock, as UTC has it at noon: the daily hole is the hole of that day, whenever the test is run;
+    // a fixed day for every page, since the start screen's strip says the day and shows its hole, and no picture may change with the date
+    day?: string;
   } = {},
 ) {
-  const { save, seed, paused, screen, rung, title, flyIn } = options;
+  const { save, seed, paused, screen, rung, title, flyIn, day = '2026-11-11' } = options;
+  await page.clock.setFixedTime(new Date(`${day}T12:00:00Z`));
   if (save)
     await page.addInitScript((s) => {
       if (sessionStorage.getItem('ooergolf-test-seeded')) return;
@@ -68,6 +72,8 @@ export async function start(
   if (paused) query.set('paused', '1');
   await page.goto(query.size ? `/?${query.toString()}` : '/');
   await ready(page);
+  // the strip's picture is painted a moment after the page is ready, and a page looked at is looked at with it painted
+  if (screen) await page.waitForFunction(() => window.game!.daily().shown.strip.painted);
   if (!screen) await page.evaluate(() => window.game!.chooseCourse('The Meadow'));
 }
 

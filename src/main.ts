@@ -29,15 +29,19 @@ import { ITEMS, itemById } from './items';
 import { createApi } from './debug';
 import { holeFailureText, reasonOf } from './failure';
 import { frameCost } from './frame-cost';
-import { COURSES, type Course } from './course';
+import { layoutOf } from './arena';
+import { COURSES, type Course, type HoleDef } from './course';
 import { dayOf, type RoundOf } from './career';
+import { dailyHole, shareText, utcDay } from './daily';
+import { dayWords } from './days';
+import { cardView, dailyFacts, hasShare, stripView } from './dailywords';
 import { seasonContext } from './tours';
 import { closedIfFull, nextEvent, type SeasonContext } from './tournament';
 import type { Tour } from './season';
 import type { TourSeason } from './career';
 import { boardNow, careerWords, eventCards, resultsOf, type LastPlaced } from './board';
 import { Picker, kindOfCourse, tourOfKind, KINDS, type PickerCourse } from './picker';
-import type { CoursePreview } from './previews';
+import { paintPreview, type CoursePreview } from './previews';
 import previewData from './previews.json';
 import { Game, type GameEvents } from './game';
 import { Hud } from './hud';
@@ -401,6 +405,61 @@ async function main() {
     picker.setBests(game.progress.save.best);
     hud.showStart(picker, wait, careerWords(progress.save));
     hud.setEvents(eventCards(season, progress.save));
+    drawDaily();
+  };
+  // ---- the daily hole: one a day, from the UTC day, on a strip over the start screen ----
+  /** The hole of a day made, kept for that day alone: made once the page is ready and never before the first frame, or when Play is pressed first. */
+  let dailyMade: { day: string; hole: HoleDef } | null = null;
+  /** Whether the page is ready (its first frame has run), which the plate's picture waits for, and the day the plate was last painted for. */
+  let dailyReady = false;
+  let dailyPainted: string | null = null;
+  /** The day by the page's clock, which is UTC's so that it turns at the same moment for every player. Read each time the start screen opens. */
+  const dailyToday = () => utcDay(new Date());
+  const dailyHoleOf = (day: string): HoleDef => {
+    if (dailyMade?.day !== day) dailyMade = { day, hole: dailyHole(day) };
+    return dailyMade.hole;
+  };
+  /** The last hole done at the daily hole, and the coins it paid, told before the card: what the card says. */
+  let dailyDone: { strokes: number; par: number; pickedUp: boolean } | null = null;
+  let dailyPaid = 0;
+  /** The strip drawn for today: its words from the day's spec and the save's slot, and its picture once the page is ready. */
+  const drawDaily = () => {
+    const day = dailyToday();
+    const slot = progress.save.daily;
+    hud.setDaily(stripView(slot, day, dailyFacts(day)));
+    hud.setDailyShare(hasShare(slot, day) ? shareText(day, slot.par, slot.strokes) : null);
+    if (dailyReady && dailyPainted !== day) {
+      const { map, terrain, way, biome } = dailyHoleOf(day);
+      hud.paintDaily(paintPreview(layoutOf(map, terrain, way, biome)));
+      dailyPainted = day;
+    }
+  };
+  /** The daily hole of `day` begun as a round of its own, with the start screen put away, and whether the game began it. */
+  const startDaily = (day: string): boolean => {
+    endTitle();
+    if (!game.playDaily(dailyHoleOf(day), day)) return false;
+    dailyDone = null;
+    dailyPaid = 0;
+    playing(game.def.name);
+    return true;
+  };
+  /** The words shared: the share sheet where the browser has one, else the clipboard, and what became of them. Called only on the player's own press. */
+  const shareWords = async (text: string): Promise<'shared' | 'copied' | 'cancelled' | 'failed'> => {
+    if (typeof navigator.share === 'function') {
+      try {
+        await navigator.share({ text });
+        return 'shared';
+      } catch (err) {
+        // a share sheet put away is the player's choice and is not tried again by the clipboard
+        if (err instanceof DOMException && err.name === 'AbortError') return 'cancelled';
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      return 'copied';
+    } catch {
+      return 'failed';
+    }
   };
   /** A course as the career knows a round of it: its name and its purse. */
   const roundOf = (c: Course): RoundOf => ({ name: c.name, purse: c.purse });
@@ -585,6 +644,11 @@ async function main() {
         }
         hud.setTip(talk.said.text, talk.said.button);
       },
+      // the daily hole: today's begun, as the strip's Play and its go again do; and Share, which is the player's own press
+      daily() {
+        startDaily(dailyToday());
+      },
+      share: shareWords,
       // the Install button: the browser's offer taken (the button is only shown while there is one)
       install() {
         offer.prompt();
@@ -818,7 +882,12 @@ async function main() {
       backToAim?.();
       squash.clear();
       effects.clearTrail();
-      hud.started({ index, count: game.course.length, name, par });
+      hud.started({
+        index,
+        count: game.course.length,
+        name: game.daily !== null ? `Daily hole · ${dayWords(game.daily.day)}` : name,
+        par,
+      });
       holedFrom = 0;
       // the bag on a golf hole, with the driver in hand, and none on a hole of minigolf
       hud.setBag(
@@ -973,6 +1042,7 @@ async function main() {
     },
     // in the cup: confetti out of it, the flag waggling and its gold flashing, from the moment it dropped
     holed(strokes, par) {
+      dailyDone = { strokes, par, pickedUp: false };
       hud.done(strokes, par, false, holedFrom);
       holedFrom = 0;
       // the ball rattling in the cup, and a run up the marimba as good as the score
@@ -999,12 +1069,28 @@ async function main() {
       }
     },
     pickedUp: (strokes, par) => {
+      dailyDone = { strokes, par, pickedUp: true };
       hud.done(strokes, par, true);
       sound.lost(true);
       log('sound picked up');
       hud.setBoard(boardNow(season, game.event, game.card, eventSeason));
     },
     finished: () => {
+      // the daily hole's own card, in place of a round's: its score, what it paid and what Share sends
+      const go = game.daily;
+      if (go !== null && dailyDone !== null) {
+        const { strokes, par, pickedUp } = dailyDone;
+        hud.showDailyCard(
+          cardView(
+            go.day,
+            strokes,
+            par,
+            { pays: go.pays, pickedUp, coins: go.pays ? dailyPaid : 0 },
+            progress.save.daily,
+          ),
+        );
+        return;
+      }
       const best = progress.save.best;
       hud.finished(
         game.course,
@@ -1034,7 +1120,10 @@ async function main() {
       prized = { coins, record };
       showPurse();
     },
-    paid: showPurse,
+    paid: (coins) => {
+      dailyPaid = coins;
+      showPurse();
+    },
     // a feat earned: its name on the hole's word, and no sound of its own (a feat pays nothing and is not a moment of the ball's)
     feat(id) {
       hud.feat(featOf(id).name);
@@ -1237,7 +1326,8 @@ async function main() {
       limit: game.limit,
       course: game.of?.name ?? courseName,
       grade: tour !== undefined ? progress.save.season[tour].grade : null,
-      restartable: game.event === null,
+      restartable: game.restartable,
+      daily: game.daily !== null ? { ...game.daily } : null,
     };
   }
   /**
@@ -1613,6 +1703,9 @@ async function main() {
     restartHole,
     menuDrawn: () => hud.menuDrawn(),
     trophiesDrawn: () => hud.trophiesDrawn(),
+    dailyToday,
+    playDaily: (day) => startDaily(day ?? dailyToday()),
+    dailyDrawn: () => hud.dailyDrawn(),
     caddie: () => ({
       said: hud.tipShown(),
       offered: talk.offered
@@ -1738,6 +1831,11 @@ async function main() {
   };
   ready = true;
   bootMs = performance.now();
+  // the daily hole's picture is made once the first frame is out and not before it: a hole takes a few tens of milliseconds to build
+  dailyReady = true;
+  setTimeout(() => {
+    if (choosing) drawDaily();
+  }, 0);
   requestAnimationFrame(frame);
   // the service worker, after the game is ready and never before: a boot is the first frame's business, and the worker's
   // caching of the build is for the next boot, not this one
