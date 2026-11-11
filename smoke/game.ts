@@ -233,3 +233,25 @@ export async function puttAtCup(page: Page, speed: number, aside = 0, options: {
     { x: cup.x + aside, y: y0, power },
   );
 }
+
+/** A save with a career's figures, two feats kept, two titles on the golf tour and one on the mini, and one record. */
+export const TROPHIES_SAVE = {
+  life: {
+    rounds: 41,
+    wins: 9,
+    holes: 372,
+    aces: 23,
+    eagles: 4,
+    birdies: 96,
+    lost: 58,
+    lipOuts: 31,
+    longestPutt: 31,
+    longestDrive: 268,
+  },
+  feats: ['ace', 'winner'],
+  season: {
+    golf: { grade: 'championship', begun: 3, played: [], titles: 2 },
+    mini: { grade: 'county', begun: 2, played: [], titles: 1 },
+  },
+  records: { 'The Meadow': { strokes: 19, par: 26, kit: { club: '', ball: '', accessory: '' }, when: '2026-10-15' } },
+};

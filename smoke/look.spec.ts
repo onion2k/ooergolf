@@ -36,7 +36,7 @@ import { BOWL, SIDE_HILL } from '../test/hills';
 import { STREAM_HOLE } from '../test/stream-hole';
 import { wideHole } from '../test/wide-hole';
 import { smallHole } from './bighole';
-import { drag, landed, puttAtCup, puttingHole, start, watch } from './game';
+import { TROPHIES_SAVE, drag, landed, puttAtCup, puttingHole, start, watch } from './game';
 import { openDrawer } from './panels';
 import { alone } from './gpu';
 
@@ -1966,6 +1966,20 @@ test.describe('the hole’s menu', () => {
     expect(problems).toEqual([]);
   });
 
+  test('the trophy room over the menu: the five tours with their cups, the eight figures and the feats there are, earned in green', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true, save: TROPHIES_SAVE });
+    await opened(page);
+    await page.locator('#menuTrophies').click();
+    await page.mouse.move(0, 0);
+    await settled(page);
+    await expect(page.locator('#trophies')).toBeVisible();
+    await expect(page).toHaveScreenshot('trophies.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
   test.describe('on a phone', () => {
     test.use({ viewport: { width: 400, height: 860 }, hasTouch: true, isMobile: true });
 
@@ -1974,6 +1988,18 @@ test.describe('the hole’s menu', () => {
       await start(page, { seed: 11, paused: true });
       await opened(page, true);
       await expect(page).toHaveScreenshot('phone-menu.png', TOLERANCE);
+      expect(problems).toEqual([]);
+    });
+
+    test('the trophy room over the menu, in two columns, with the short grades', async ({ page }) => {
+      const problems = watch(page);
+      await start(page, { seed: 11, paused: true, save: TROPHIES_SAVE });
+      await opened(page, true);
+      await page.locator('#menuTrophies').tap();
+      await page.mouse.move(0, 0);
+      await settled(page);
+      await expect(page.locator('#trophies')).toBeVisible();
+      await expect(page).toHaveScreenshot('phone-trophies.png', TOLERANCE);
       expect(problems).toEqual([]);
     });
   });

@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import type { HoleDef } from '../src/course';
 import { MOMENTS, Game, type GameEvents } from '../src/game';
-import { checkInvariants } from '../src/invariants';
+import { checkInvariants, trophyProblems } from '../src/invariants';
 import { Progress, memoryStore } from '../src/progress';
 import { seeded } from '../src/random';
 import { DT, GREEN, field, golfGame } from './helpers';
@@ -247,5 +247,44 @@ describe('what is counted where it is told', () => {
     const before = g.progress.save.life.lost;
     (g as unknown as { putBack(x: number, y: number): void }).putBack(0, 0);
     expect(g.progress.save.life.lost).toBe(before + 1);
+  });
+});
+
+describe('the rule of the trophy room', () => {
+  it('holds nothing wrong in a fresh save or one that has been played', () => {
+    const g = played();
+    expect(trophyProblems(g)).toEqual([]);
+    holeInOne(g);
+    expect(trophyProblems(g)).toEqual([]);
+    expect(checkInvariants(g)).toEqual([]);
+  });
+
+  it('names a figure that is not a whole number or is below nought', () => {
+    const g = played();
+    const life = g.progress.save.life;
+    life.holes = -1;
+    life.lost = 2.5;
+    life.longestDrive = Number.NaN;
+    const problems = trophyProblems(g).join('\n');
+    expect(problems).toMatch(/holes are -1/);
+    expect(problems).toMatch(/lost are 2.5/);
+    expect(problems).toMatch(/longestDrive are NaN/);
+    expect(checkInvariants(g).join()).toMatch(/holes are -1/);
+  });
+
+  it('names more aces, eagles and birdies than holes holed, since each hole is counted in one at most', () => {
+    const g = played();
+    g.progress.save.life.holes = 3;
+    g.progress.save.life.aces = 2;
+    g.progress.save.life.birdies = 2;
+    expect(trophyProblems(g).join()).toMatch(/4 aces, eagles and birdies in 3 holes/);
+  });
+
+  it('names a feat kept twice, or one the game does not know', () => {
+    const g = played();
+    g.progress.save.feats.push('ace', 'ace');
+    expect(trophyProblems(g).join()).toMatch(/the feat ace is kept twice/);
+    (g.progress.save.feats as string[]).push('moonshot');
+    expect(trophyProblems(g).join()).toMatch(/the feat moonshot is not one the game knows/);
   });
 });

@@ -15,7 +15,9 @@
 import { expect, test, type Page } from '@playwright/test';
 import { PNG } from 'pngjs';
 import { TILE, layoutOf } from '../src/arena';
-import type { HoleDef } from '../src/course';
+import { COURSES, type HoleDef } from '../src/course';
+import { FEATS } from '../src/feats';
+import { ITEMS } from '../src/items';
 import { facing } from '../src/camera';
 import { breakOf } from '../src/green';
 import { links } from '../src/links';
@@ -30,7 +32,7 @@ import { CADDIE_HOLES, FLAT } from '../test/level';
 import { wideHole } from '../test/wide-hole';
 import { smallHole } from './bighole';
 import { BUDGET } from './budget';
-import { drag, intoThePond, landed, puttAtCup, puttingHole, start, watch } from './game';
+import { TROPHIES_SAVE, drag, intoThePond, landed, puttAtCup, puttingHole, start, watch } from './game';
 import { CONTRAST, THUMB, holeOut, openDrawer, read } from './panels';
 import { alone } from './gpu';
 
@@ -683,6 +685,147 @@ test.describe('the menu on a phone', () => {
     for (const b of reading.buttons.filter((b) => b.text !== 'Overhead'))
       expect(b.height, `${b.text} a thumb high`).toBeGreaterThanOrEqual(THUMB);
     for (const t of reading.texts) expect(t.ratio, `${t.text} on ${t.behind}`).toBeGreaterThanOrEqual(CONTRAST);
+    expect(problems).toEqual([]);
+  });
+});
+
+const trophiesNow = (page: Page) => page.evaluate(() => window.game!.trophies());
+
+test('the trophy room: its button on the start screen opens it with the career as the save has it, and Back and the escape key shut it', async ({
+  page,
+}) => {
+  const problems = watch(page);
+  await start(page, { seed: 1, paused: true, screen: true, save: TROPHIES_SAVE });
+  expect((await trophiesNow(page)).shown.shown, 'shut until asked').toBe(false);
+  await page.locator('#trophiesOpen').click();
+  await expect(page.locator('#trophies')).toBeVisible();
+  const room = await trophiesNow(page);
+  expect(room.shown.shown).toBe(true);
+  expect(room.shown.menuBehind, 'no menu behind it on the start screen').toBe(false);
+  expect(room.shown.tours.map((t) => [t.name, t.cups, t.won])).toEqual([
+    ['Golf', '\u{1F3C6}\u{1F3C6}', true],
+    ['Mini', '\u{1F3C6}', true],
+    ['Desert', '', false],
+    ['Moon', '', false],
+    ['Future', '', false],
+  ]);
+  expect(room.shown.figures.map((f) => f.value)).toEqual(['41', '9', '372', '23', '4', '96', '31 yd', '268 yd']);
+  expect(room.shown.featsHead).toBe(`Feats · 2 of ${FEATS.length}`);
+  expect(room.shown.feats.map((f) => f.id)).toEqual(FEATS.map((f) => f.id));
+  expect(room.shown.feats.filter((f) => f.earned).map((f) => f.id)).toEqual(['ace', 'winner']);
+  expect(room.shown.records.map((r) => r.course)).toEqual(COURSES.map((c) => c.name));
+  expect(room.shown.records[0]).toEqual({ course: 'The Meadow', text: '19 (−7)', held: true });
+  expect(room.shown.records.filter((r) => r.held)).toHaveLength(1);
+  // what is drawn is read as a player reads it: legible, whole, and every button a thumb high
+  const reading = await read(page);
+  expect(reading.outside).toEqual([]);
+  for (const t of reading.texts.filter((t) => t.text !== ''))
+    expect(t.ratio, `${t.text} on ${t.behind}`).toBeGreaterThanOrEqual(CONTRAST);
+  for (const b of reading.buttons.filter((b) => b.text === 'Back'))
+    expect(b.height, 'Back is a thumb high').toBeGreaterThanOrEqual(THUMB);
+  // Back, by a real click; and the escape key
+  await page.locator('#trophiesClose').click();
+  await expect(page.locator('#trophies')).toBeHidden();
+  await expect(page.locator('#start')).toBeVisible();
+  await page.locator('#trophiesOpen').click();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#trophies')).toBeHidden();
+  expect((await page.evaluate(() => window.game!.state())).menu, 'the escape key shuts it and opens no menu').toBe(
+    false,
+  );
+  expect(await page.evaluate(() => window.game!.invariants())).toEqual([]);
+  expect(problems).toEqual([]);
+});
+
+test('the trophy room opened from the hole’s menu hides the menu and gives it back, and time stands still under both', async ({
+  page,
+}) => {
+  const problems = watch(page);
+  await start(page, { seed: 1, paused: true, save: TROPHIES_SAVE });
+  await play(page, 30, 'before the menu');
+  const t = () => page.evaluate(() => window.game!.state().t);
+  await page.locator('#viewMenu').click();
+  const t0 = await t();
+  await page.locator('#menuTrophies').click();
+  await expect(page.locator('#trophies')).toBeVisible();
+  await expect(page.locator('#menu'), 'the menu steps aside').toBeHidden();
+  const room = await trophiesNow(page);
+  expect(room.shown.menuBehind).toBe(true);
+  expect((await page.evaluate(() => window.game!.state())).menu, 'the game is still paused under it').toBe(true);
+  await play(page, 60, 'under the trophy room');
+  expect(await t(), 'sixty frames under it are no time').toBe(t0);
+  // Back gives the menu back, still paused, with the focus on the button that opened it
+  await page.locator('#trophiesClose').click();
+  await expect(page.locator('#menu')).toBeVisible();
+  await expect(page.locator('#trophies')).toBeHidden();
+  await expect(page.locator('#menuTrophies')).toBeFocused();
+  expect((await menuNow(page)).up).toBe(true);
+  // the escape key shuts the room first, and then the menu
+  await page.locator('#menuTrophies').click();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#trophies')).toBeHidden();
+  expect((await menuNow(page)).up, 'the menu is back after the room').toBe(true);
+  await page.keyboard.press('Escape');
+  expect((await menuNow(page)).up, 'and the next escape shuts it').toBe(false);
+  // the menu shut by the test API takes the room with it
+  await page.locator('#viewMenu').click();
+  await page.locator('#menuTrophies').click();
+  expect(await page.evaluate(() => window.game!.menu(false))).toBe(false);
+  await expect(page.locator('#trophies')).toBeHidden();
+  expect(problems).toEqual([]);
+});
+
+test('a feat earned is said on the hole’s word and kept in the save, and one earned in the shop has a word of its own', async ({
+  page,
+}) => {
+  const problems = watch(page);
+  // a save that has already won an event, and not been told: the next hole done earns the feat
+  await start(page, { seed: 1, paused: true, save: { life: { wins: 1 } } });
+  expect((await trophiesNow(page)).feats).toEqual([]);
+  const done = await holeOut(page);
+  expect(done.phase).toBe('done');
+  // the autopilot holes the first hole in one stroke, which is a feat of its own, told first; both on the one line
+  await expect(page.locator('#toastFrom')).toHaveText(/Feats earned: Ace, Winner/);
+  expect((await trophiesNow(page)).feats).toEqual(['ace', 'winner']);
+  expect(
+    (JSON.parse(await page.evaluate(() => window.game!.save())) as { feats: string[] }).feats,
+    'written to the save',
+  ).toEqual(['ace', 'winner']);
+  expect(problems).toEqual([]);
+});
+
+test('a feat earned by a purchase, the fifteenth thing owned, has a word of its own over the course until the next hole', async ({
+  page,
+}) => {
+  const problems = watch(page);
+  const owned = ITEMS.slice(0, 14).map((i) => i.id);
+  await start(page, { seed: 1, paused: true, save: { coins: 100_000, gems: 1000, owned } });
+  await play(page, 5, 'the first frames');
+  await expect(page.locator('#toast')).toBeHidden();
+  expect(await page.evaluate((id) => window.game!.buy(id), ITEMS[14].id)).toBe(true);
+  await expect(page.locator('#toastWords')).toHaveText('Feat earned: Kitted out');
+  expect((await trophiesNow(page)).feats).toEqual(['kittedOut']);
+  expect(problems).toEqual([]);
+});
+
+test.describe('the trophy room on a phone', () => {
+  test.use({ viewport: { width: 400, height: 860 }, hasTouch: true, isMobile: true });
+  test('is whole on the screen, legible, with its two columns, opened and shut by touch', async ({ page }) => {
+    const problems = watch(page);
+    await start(page, { seed: 1, paused: true, screen: true, save: TROPHIES_SAVE });
+    await page.locator('#trophiesOpen').tap();
+    await expect(page.locator('#trophies')).toBeVisible();
+    const reading = await read(page);
+    expect(reading.outside).toEqual([]);
+    expect(reading.scrollWidth).toBeLessThanOrEqual(400);
+    for (const t of reading.texts) expect(t.ratio, `${t.text} on ${t.behind}`).toBeGreaterThanOrEqual(CONTRAST);
+    for (const b of reading.buttons.filter((b) => b.text === 'Back'))
+      expect(b.height, 'Back is a thumb high').toBeGreaterThanOrEqual(THUMB);
+    // the grade is the short word on a phone, so five tours stand in a row
+    expect(await page.locator('#trophyTours .short').first().isVisible()).toBe(true);
+    expect(await page.locator('#trophyTours .long').first().isVisible()).toBe(false);
+    await page.locator('#trophiesClose').tap();
+    await expect(page.locator('#trophies')).toBeHidden();
     expect(problems).toEqual([]);
   });
 });

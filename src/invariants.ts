@@ -69,6 +69,8 @@ import { CUP } from './course';
 import { AISLES, CEILINGS, FIRST_STROKE_MOST, itemById, kitOf, type Kit } from './items';
 import { LIMIT_OVER_PAR, MOMENTS, fastest, type Game } from './game';
 import { PLAY_MODES } from './career';
+import { isFeatId } from './featids';
+import { LIFE_KEYS } from './progress';
 import { GRADES, TOURS } from './season';
 import { holeCount, nextEvent } from './tournament';
 import type { Preview } from './preview';
@@ -662,6 +664,26 @@ export function checkInvariants(game: Game): string[] {
   out.push(...boxProblems(game));
   report('a flipper', flipperProblems(game.obstacles));
   report('the career', careerProblems(game));
+  report('the trophy room', trophyProblems(game));
+  return out;
+}
+
+/**
+ * What is wrong with the trophy room as the save keeps it: every lifetime figure a whole number not below nought, no more aces,
+ * eagles and birdies than holes holed (a hole is counted in one of them at most), and each feat kept once and one the game
+ * knows. A feat earned is not held to still be earned: what is owned can be spent, and a feat is for having done it once.
+ */
+export function trophyProblems(game: Game): string[] {
+  const out: string[] = [];
+  const { life, feats } = game.progress.save;
+  for (const key of LIFE_KEYS)
+    if (!Number.isInteger(life[key]) || life[key] < 0) out.push(`the ${key} are ${life[key]}`);
+  const rated = life.aces + life.eagles + life.birdies;
+  if (rated > life.holes) out.push(`${rated} aces, eagles and birdies in ${life.holes} holes`);
+  feats.forEach((id, i) => {
+    if (feats.indexOf(id) !== i) out.push(`the feat ${id} is kept twice`);
+    if (!isFeatId(id)) out.push(`the feat ${String(id)} is not one the game knows`);
+  });
   return out;
 }
 
