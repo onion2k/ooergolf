@@ -83,6 +83,8 @@ export class Effects {
   private readonly scratch = new Float64Array(2);
   /** Where the water's sparkles are this frame, four numbers each: written into, never made. */
   private readonly sparkQuads = new Float32Array(SPARKLE.most * 4);
+  /** Which place glints this frame and how brightly, written by `glint` so that nothing is made each frame. */
+  private readonly spot = { at: 0, brightness: 0 };
   /** The gold's places on this hole, x, y and z each: worked out as the hole begins, since the cup does not move within it. */
   private readonly places = new Float64Array(RIM_PLACES * 3);
   /** When each kicker of this hole was last hit, in game time: a kicker a hole, made as the hole begins, so never more than it has. */
@@ -192,7 +194,7 @@ export class Effects {
       for (let k = 0; k < count; k++) this.glow(k, places[k * 3], places[k * 3 + 1], places[k * 3 + 2], lit);
       return count;
     }
-    const g = glint(game.t, RIM_PLACES);
+    const g = glint(game.t, RIM_PLACES, this.spot);
     if (g.brightness <= 0) return 0;
     this.glow(0, places[g.at * 3], places[g.at * 3 + 1], places[g.at * 3 + 2], g.brightness);
     return 1;

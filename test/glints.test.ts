@@ -3,11 +3,12 @@ import { describe, expect, it } from 'vitest';
 import { FLASH, GLINT, SPARKLE, flash, glint, sparkle, sparkles } from '../src/glints';
 
 describe('a glint', () => {
+  const out = { at: 0, brightness: 0 };
   it('is nothing most of the time, and flares briefly now and then at one of its places', () => {
     let lit = 0;
     const seen = new Set<number>();
     for (let t = 0; t < 60; t += 1 / 60) {
-      const g = glint(t, 5);
+      const g = glint(t, 5, out);
       if (g.brightness > 0) {
         lit++;
         seen.add(g.at);
@@ -21,10 +22,11 @@ describe('a glint', () => {
   });
 
   it('rises and falls, rather than switching on and off', () => {
-    const [start] = [...Array(3600).keys()].map((f) => f / 60).filter((t) => glint(t, 3).brightness > 0);
+    const [start] = [...Array(3600).keys()].map((f) => f / 60).filter((t) => glint(t, 3, out).brightness > 0);
     const peak = start + GLINT.flare / 2;
-    expect(glint(start + 0.01, 3).brightness).toBeLessThan(glint(peak, 3).brightness);
-    expect(glint(peak, 3).brightness).toBeGreaterThan(0.9);
+    const early = glint(start + 0.01, 3, out).brightness;
+    expect(early).toBeLessThan(glint(peak, 3, out).brightness);
+    expect(glint(peak, 3, out).brightness).toBeGreaterThan(0.9);
   });
 
   it('flashes all the gold as a ball drops: brightest at once, fading, and gone at its end, exactly', () => {
@@ -38,8 +40,17 @@ describe('a glint', () => {
   });
 
   it('is the same at the same moment, and there is none where there is nothing to glint', () => {
-    expect(glint(12.34, 4)).toEqual(glint(12.34, 4));
-    expect(glint(12.34, 0).brightness).toBe(0);
+    expect({ ...glint(12.34, 4, out) }).toEqual({ ...glint(12.34, 4, { at: 0, brightness: 0 }) });
+    expect(glint(12.34, 0, out).brightness).toBe(0);
+  });
+
+  it('is written into the object it is given, and that same object comes back, so a frame makes nothing', () => {
+    const mine = { at: -1, brightness: -1 };
+    expect(glint(0.1, 5, mine)).toBe(mine);
+    expect(mine.brightness).toBeGreaterThan(0);
+    const none = { at: -1, brightness: -1 };
+    expect(glint(0.1, 0, none)).toBe(none);
+    expect(none).toEqual({ at: 0, brightness: 0 });
   });
 });
 

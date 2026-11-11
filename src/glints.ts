@@ -23,15 +23,27 @@ export function flash(since: number): number {
   return (1 - since / FLASH.lasts) ** 2;
 }
 
-/** Which of `places` places glints at time `t`, and how brightly, from 0 to 1. */
-export function glint(t: number, places: number): { at: number; brightness: number } {
-  if (places < 1) return { at: 0, brightness: 0 };
+/**
+ * Which of `places` places glints at time `t`, and how brightly, from 0 to 1, written into `out`, which is handed back,
+ * since it is asked every frame and a frame makes nothing.
+ */
+export function glint(
+  t: number,
+  places: number,
+  out: { at: number; brightness: number },
+): { at: number; brightness: number } {
+  if (places < 1) {
+    out.at = 0;
+    out.brightness = 0;
+    return out;
+  }
   const n = Math.floor(t / GLINT.every);
   // a hash of which beat it is, so the places come round in no order
   const h = Math.imul(n ^ 0x9e3779b9, 0x85ebca6b) >>> 0;
   const into = t - n * GLINT.every;
-  if (into >= GLINT.flare) return { at: h % places, brightness: 0 };
-  return { at: h % places, brightness: Math.sin((into / GLINT.flare) * Math.PI) };
+  out.at = h % places;
+  out.brightness = into >= GLINT.flare ? 0 : Math.sin((into / GLINT.flare) * Math.PI);
+  return out;
 }
 
 /**

@@ -425,7 +425,7 @@ test.describe('what it looks like', () => {
     // the first moment a place on the rim is at the height of its glint
     let t = 0;
     for (let f = 0; f < 60 * 60; f++) {
-      const g = glint(f / 60, 5);
+      const g = glint(f / 60, 5, { at: 0, brightness: 0 });
       if (g.at < 4 && g.brightness > 0.95) {
         t = f;
         break;

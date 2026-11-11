@@ -12,8 +12,10 @@
 /** The most a single frame steps the game, in seconds. */
 export const LONGEST_STEP = 1 / 20;
 
-/** The gap from the last frame's timestamp to this one's, in milliseconds, never less than none; and the step it gives, in seconds. */
-export function between(now: number, last: number): { gap: number; dt: number } {
+/** The gap from the last frame's timestamp to this one's, in milliseconds, never less than none; and the step it gives, in seconds. Written into `out`, which is handed back, since a frame makes nothing. */
+export function between(now: number, last: number, out: { gap: number; dt: number }): { gap: number; dt: number } {
   const gap = Math.max(0, now - last);
-  return { gap, dt: Math.min(gap / 1000, LONGEST_STEP) };
+  out.gap = gap;
+  out.dt = Math.min(gap / 1000, LONGEST_STEP);
+  return out;
 }

@@ -706,11 +706,6 @@ export function itemById(id: string): Item | undefined {
   return ITEMS.find((i) => i.id === id);
 }
 
-/** An item that is used up by what it pays for: the piggy bank, and any that comes to be like it. */
-export function isConsumable(item: Item): boolean {
-  return item.figures.piggy === true;
-}
-
 /** The three slots of the kit: each '' or the id of an item of that aisle. */
 export interface KitSlots {
   club: string;

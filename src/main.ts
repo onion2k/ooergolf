@@ -89,7 +89,7 @@ import { CRATER } from './waterdraw';
 import { Input } from './input';
 import { Squash, squashInto, squashOf } from './squash';
 import { Governor, RUNGS, economyFor } from './quality';
-import { retakeShown } from './retake';
+import { retakeShown, type RetakeState } from './retake';
 import { HeldView } from './shot';
 import { between } from './frames';
 import { Effects } from './effects';
@@ -1028,12 +1028,13 @@ async function main() {
       title.leave();
     }
   }
+  const earlyStep = { gap: 0, dt: 0 };
   function earlyTick(now: number) {
     if (!earlyOn) return;
     requestAnimationFrame(earlyTick);
     const t = early;
     if (!t || !pipelined) return;
-    const { dt } = between(now, earlyLast || now);
+    const { dt } = between(now, earlyLast || now, earlyStep);
     earlyLast = now;
     lettersFrame(t, dt);
   }
@@ -1279,11 +1280,13 @@ async function main() {
     // the clouds are drawn to a view that sees the sky, the fly-in's and the title's, and put away from every other: they drift over
     // the hole at the height a shot is aimed from, and one drawn there covered the shot
     scene.setSky(titled !== null || rig.seesSky(game.t));
-    scene.writeMoving(game.t).forEach((m, k) => {
+    const moving = scene.writeMoving(game.t);
+    for (let k = 0; k < moving.length; k++) {
+      const m = moving[k];
       renderer.move(2 + k, m.matrices, m.count);
       // what is coloured by game time, as the rings on the water fade, has its colours written again each frame
       if (m.looks) renderer.tint(2 + k, m.looks);
-    });
+    }
     // the grass's wind and its track keep game time, as everything else that moves does
     renderer.time = game.t;
     effects.shine(titled !== null);
@@ -1382,6 +1385,8 @@ async function main() {
     // (by the world's seconds, which a biome's pace makes fewer than the clock's: a ball's speed is the world's, and so is its roll)
     roll(scene.ballTurn, world.vx[ball], world.vy[ball], KIND_RADIUS[BALL], game.worldSeconds(dt));
   }
+  /** The state `retakeShown` is asked about, written into each frame and never made again. */
+  const retake: RetakeState = { held: false, strokes: 0, used: false, phase: '', choosing: false, event: false };
   /** The frame drawn, and when it was begun, for the governor to measure the drawing against. */
   function draw(dt: number): number {
     // nothing is drawn once the page is stopped on the boot screen: the scene is left as the build that failed left it
@@ -1391,16 +1396,13 @@ async function main() {
     cam.far = titled ? CLIP.far : rig.farPlaneAt(game.t);
     if (economyOf !== (titled ? 'title' : 'play')) applyEconomy();
     // the Retake button is up while pressing it would do something: the page tells the hud, which does not read the game
-    hud.setRetake(
-      retakeShown({
-        held: game.kit.retake,
-        strokes: game.strokes,
-        used: game.mulliganUsed,
-        phase: game.phase,
-        choosing,
-        event: game.event !== null,
-      }),
-    );
+    retake.held = game.kit.retake;
+    retake.strokes = game.strokes;
+    retake.used = game.mulliganUsed;
+    retake.phase = game.phase;
+    retake.choosing = choosing;
+    retake.event = game.event !== null;
+    hud.setRetake(retakeShown(retake));
     rig.place(cam, game.t);
     if (titled) titleCamera(titled);
     cam.update();
@@ -1602,12 +1604,13 @@ async function main() {
   });
 
   let last = performance.now();
+  const step = { gap: 0, dt: 0 };
   const frame = (now: number) => {
     // a page stopped on the boot screen is not asked for another frame, and the loop ends
     if (stopped()) return;
     requestAnimationFrame(frame);
     // never back, however early the browser stamps the first frame, and never a leap after the page was away
-    const { gap, dt } = between(now, last);
+    const { gap, dt } = between(now, last, step);
     last = now;
     if (paused) {
       draw(0);

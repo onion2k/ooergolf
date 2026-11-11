@@ -29,11 +29,6 @@ export function facingSouth(x: number, y: number, z: number): Place {
   return ([px, py, pz]) => [x + px, y - pz, z + py];
 }
 
-/** Z laid along X, X along Y and Y up Z, then moved: for a rail or a string that runs across. */
-export function lyingAlongX(x: number, y: number, z: number): Place {
-  return ([px, py, pz]) => [x + pz, y + px, z + py];
-}
-
 const sub = (a: V3, b: V3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const cross = (a: V3, b: V3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const dot = (a: V3, b: V3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -79,12 +74,6 @@ export function frustum(
   }
   if (top && r1 > 0) for (let i = 1; i < n - 1; i++) tri(b, p(0, r1, z1), p(i, r1, z1), p(i + 1, r1, z1));
   if (bottom && r0 > 0) for (let i = 1; i < n - 1; i++) tri(b, p(0, r0, z0), p(i + 1, r0, z0), p(i, r0, z0));
-}
-
-/** The wall of a tube of `n` sides facing in, from `z0` up to `z1`: the inside of a hole. */
-export function tubeIn(b: MeshBuilder, place: Place, n: number, r: number, z0: number, z1: number, phase = 0) {
-  const p = (i: number, z: number) => place(round(i, n, r, z, phase));
-  for (let i = 0; i < n; i++) face(b, p(i + 1, z0), p(i, z0), p(i, z1), p(i + 1, z1));
 }
 
 /** A flat ring facing up at height `z`, from radius `rIn` out to `rOut`. */

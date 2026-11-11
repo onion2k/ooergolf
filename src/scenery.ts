@@ -448,7 +448,6 @@ const EARTH_DRESSED: Dressed = {
 };
 export const DRESSED: Record<BiomeName, Dressed> = {
   earth: EARTH_DRESSED,
-  // (Part 8 gives the future its own: for now it is dressed as earth is)
   desert: {
     wood: [
       ['conifer', 3],

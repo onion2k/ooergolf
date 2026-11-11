@@ -137,65 +137,6 @@ export function arc(cr: number, cz: number, r: number, a0: number, a1: number, s
 }
 
 /**
- * A box of half extents `hx`, `hy` and `hz` about its middle, every edge
- * rounded to radius `r` and every corner to a ball's eighth, in `steps` a
- * quarter turn of the rounding. Never bigger than its box, flat on each face
- * between the roundings, and made as a cube is, a face at a time: the points
- * where two faces meet are the same points with the same normals, so it has
- * no crease.
- */
-export function roundedBlock(b: MeshBuilder, place: Place, hx: number, hy: number, hz: number, r: number, steps = 4) {
-  const h = [hx, hy, hz];
-  const rr = Math.min(r, hx, hy, hz);
-  // along each axis, where a face's points are on the box before it is rounded: across each rounding in even turns
-  const half = Math.max(1, Math.round(steps / 2));
-  const samples = h.map((e) => {
-    const flat = e - rr;
-    const out: number[] = [];
-    for (let k = half; k >= 1; k--) out.push(-flat - rr * Math.tan((Math.PI / 4) * (k / half)));
-    out.push(-flat);
-    if (flat > 1e-9) out.push(flat);
-    for (let k = 1; k <= half; k++) out.push(flat + rr * Math.tan((Math.PI / 4) * (k / half)));
-    return out;
-  });
-  for (let axis = 0; axis < 3; axis++)
-    for (const s of [-1, 1]) {
-      const [u, w] = [(axis + 1) % 3, (axis + 2) % 3];
-      const su = samples[u],
-        sw = samples[w];
-      const points: V3[] = [],
-        normals: V3[] = [];
-      for (const qu of su)
-        for (const qw of sw) {
-          const q = [0, 0, 0];
-          q[axis] = s * h[axis];
-          q[u] = qu;
-          q[w] = qw;
-          // the nearest point of the box shrunk by the rounding, and out from it by the rounding the way it points
-          const inner = q.map((c, a) => Math.max(-(h[a] - rr), Math.min(h[a] - rr, c)));
-          const d = q.map((c, a) => c - inner[a]);
-          const l = Math.hypot(d[0], d[1], d[2]);
-          const n: V3 = [d[0] / l, d[1] / l, d[2] / l];
-          const p = place([inner[0] + n[0] * rr, inner[1] + n[1] * rr, inner[2] + n[2] * rr]);
-          points.push(p);
-          const tip = place([inner[0] + n[0], inner[1] + n[1], inner[2] + n[2]]);
-          const base = place(inner as V3);
-          normals.push(unit(sub(tip, base)));
-        }
-      const at = (k: number, l: number) => k * sw.length + l;
-      const tris: Tri[] = [];
-      for (let k = 0; k < su.length - 1; k++)
-        for (let l = 0; l < sw.length - 1; l++) {
-          const quad = [at(k, l), at(k + 1, l), at(k + 1, l + 1), at(k, l + 1)];
-          // turning from u to w faces along the axis; on the far side, the other way round
-          const [p, q, m, o] = s > 0 ? quad : [quad[0], quad[3], quad[2], quad[1]];
-          tris.push([p, q, m], [p, m, o]);
-        }
-      emit(b, points, tris, normals);
-    }
-}
-
-/**
  * A tube of radius `r` and `sides` round through `line`, turning smoothly at
  * each point of it: for a string that sags, or a stem or a rail. Open at its
  * ends, which butt into a post or are too thin to see.

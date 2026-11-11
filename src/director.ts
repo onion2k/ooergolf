@@ -90,6 +90,9 @@ export class Director {
   private readonly ndc: [number, number] = [0, 0];
   /** The target's speed as the hand-over last left it, written each frame and never made. */
   private readonly vel = [0, 0, 0];
+  /** What `limit` works out each frame it holds the camera's change of speed, written into and never made. */
+  private readonly want = [0, 0, 0];
+  private readonly gap = [0, 0, 0];
   /** Whether the camera took the ball up this stroke from a hold, so its change of speed is held (`HAND_OVER`). */
   private handing = false;
   /** Whether the camera has been put on a hole yet: the first has nowhere to glide from. */
@@ -261,10 +264,15 @@ export class Director {
     if (!game) return;
     const { world, ball, layout } = game;
     const { rig, worked } = this;
-    const [x, y, t] = [world.x[ball], world.y[ball], Math.PI / 2 - rig.headed];
+    const x = world.x[ball],
+      y = world.y[ball],
+      t = Math.PI / 2 - rig.headed;
     const roll = rollsFor(game.hardest, game.putRoll);
     if (x === worked.x && y === worked.y && t === worked.t && roll === worked.roll) return;
-    [worked.x, worked.y, worked.t, worked.roll] = [x, y, t, roll];
+    worked.x = x;
+    worked.y = y;
+    worked.t = t;
+    worked.roll = roll;
     const reach = reachOnMinigolf(layout, x, y, t, roll);
     if (fitsHome(reach, this.aspect, this.height)) {
       const floor = floorFor(reach, this.aspect, this.height, TILT.home, LEAD);
@@ -362,7 +370,9 @@ export class Director {
     const golf = game.layout.golf;
     const up = golf ? Math.max(0, world.z[ball] - ground - KIND_RADIUS[BALL]) : 0;
     const ease = golf ? catchUp(Math.hypot(world.vx[ball], world.vy[ball], world.vz[ball])) : undefined;
-    const [x0, y0, z0] = rig.target;
+    const x0 = rig.target[0],
+      y0 = rig.target[1],
+      z0 = rig.target[2];
     const base = ease ?? catchUp(0);
     rig.follow(world.x[ball], world.y[ball], dt, ground + up, base * pace);
     if (this.handing) this.limit(x0, y0, z0, dt, world.x[ball], world.y[ball], ground + up);
@@ -407,7 +417,10 @@ export class Director {
   private limit(x0: number, y0: number, z0: number, dt: number, bx: number, by: number, bz: number) {
     const { target } = this.rig;
     const { vel } = this;
-    const want = [(target[0] - x0) / dt - vel[0], (target[1] - y0) / dt - vel[1], (target[2] - z0) / dt - vel[2]];
+    const want = this.want;
+    want[0] = (target[0] - x0) / dt - vel[0];
+    want[1] = (target[1] - y0) / dt - vel[1];
+    want[2] = (target[2] - z0) / dt - vel[2];
     const most = HAND_OVER.accel * dt;
     const size = Math.hypot(want[0], want[1], want[2]);
     const share = size > most ? most / size : 1;
@@ -415,7 +428,10 @@ export class Director {
     // toward the ball no faster than stops at it braking at half the hand-over's rate, so the ease above has the rest of it
     // to slow the last of the way gently, and never past it in a frame: along each of the three ways alone, since a ball come
     // to rest a little above the target is a gap mostly up, which would let the speed along the ground past it
-    const gap = [bx - x0, by - y0, bz - z0];
+    const gap = this.gap;
+    gap[0] = bx - x0;
+    gap[1] = by - y0;
+    gap[2] = bz - z0;
     for (let k = 0; k < 3; k++) {
       const left = Math.abs(gap[k]);
       const cap = Math.min(Math.sqrt(HAND_OVER.accel * left), left / dt);
@@ -444,9 +460,11 @@ export class Director {
     const { azimuth, tilt } = rig.view(game.t, this.seen);
     const tall = tallOf(this.aspect);
     const r = rig.golf ? Math.min(rig.distance * tall, standOf(this.aspect)) : rig.distance * tall;
-    const [dx, dy] = [world.x[ball] - rig.target[0], world.y[ball] - rig.target[1]];
-    const [sin, cos] = [Math.sin(azimuth), Math.cos(azimuth)];
-    const [nx, ny] = screenOf(
+    const dx = world.x[ball] - rig.target[0],
+      dy = world.y[ball] - rig.target[1];
+    const sin = Math.sin(azimuth),
+      cos = Math.cos(azimuth);
+    const ndc = screenOf(
       r,
       tilt,
       rig.lead,
@@ -457,6 +475,8 @@ export class Director {
       this.ndc,
     );
     const box = safeBox(this.aspect, this.height);
+    const nx = ndc[0],
+      ny = ndc[1];
     return Math.max(Math.abs(nx) / box.x, ny >= 0 ? ny / box.top : ny / box.bottom);
   }
 

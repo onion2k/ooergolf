@@ -632,8 +632,11 @@ export class CameraRig {
     const at = this.looking(t);
     const { azimuth, tilt } = this.view(t, this.seen);
     // the way it faces on the ground, and the point it looks at a lead ahead of the ball that way
-    const [fx, fy] = [Math.sin(azimuth), Math.cos(azimuth)];
-    let [x, y, z] = [at[0] + fx * this.lead, at[1] + fy * this.lead, at[2]];
+    const fx = Math.sin(azimuth),
+      fy = Math.cos(azimuth);
+    let x = at[0] + fx * this.lead,
+      y = at[1] + fy * this.lead,
+      z = at[2];
     camera.fov = VIEW.fov;
     const k = this.k;
     if (k > 0) {
@@ -644,11 +647,19 @@ export class CameraRig {
       x += (this.top.x - x) * k;
       y += (this.top.y - y) * k;
       z -= z * k;
-      camera.target = [x, y, z];
-      camera.position = [x - fx * Math.sin(t) * d, y - fy * Math.sin(t) * d, z + Math.cos(t) * d];
+      this.aim(camera, x, y, z, x - fx * Math.sin(t) * d, y - fy * Math.sin(t) * d, z + Math.cos(t) * d);
       return;
     }
-    camera.target = [x, y, z];
-    camera.position = [x - fx * Math.sin(tilt) * r, y - fy * Math.sin(tilt) * r, z + Math.cos(tilt) * r];
+    this.aim(camera, x, y, z, x - fx * Math.sin(tilt) * r, y - fy * Math.sin(tilt) * r, z + Math.cos(tilt) * r);
+  }
+
+  /** The camera's target and position written into the arrays it has, so that placing it each frame makes nothing. */
+  private aim(camera: Camera, tx: number, ty: number, tz: number, px: number, py: number, pz: number) {
+    camera.target[0] = tx;
+    camera.target[1] = ty;
+    camera.target[2] = tz;
+    camera.position[0] = px;
+    camera.position[1] = py;
+    camera.position[2] = pz;
   }
 }

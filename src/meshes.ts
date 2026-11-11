@@ -51,22 +51,6 @@ export function tri(b: MeshBuilder, p0: V3, p1: V3, p2: V3) {
   b.triangle(a, a + 1, a + 2);
 }
 
-/** A box `w` along X, `d` along Y and `h` up Z, centred in X and Y and standing on z = 0, or centred in Z too. */
-export function box(w: number, d: number, h: number, centred = false): Mesh {
-  const b = new MeshBuilder();
-  const x = w / 2,
-    y = d / 2,
-    z0 = centred ? -h / 2 : 0,
-    z1 = z0 + h;
-  face(b, [-x, -y, z1], [x, -y, z1], [x, y, z1], [-x, y, z1]);
-  face(b, [-x, y, z0], [x, y, z0], [x, -y, z0], [-x, -y, z0]);
-  face(b, [-x, -y, z0], [x, -y, z0], [x, -y, z1], [-x, -y, z1]);
-  face(b, [x, y, z0], [-x, y, z0], [-x, y, z1], [x, y, z1]);
-  face(b, [x, -y, z0], [x, y, z0], [x, y, z1], [x, -y, z1]);
-  face(b, [-x, y, z0], [-x, -y, z0], [-x, -y, z1], [-x, y, z1]);
-  return b.build();
-}
-
 /** A low-poly ball, centred. */
 export function ball(radius: number, rings = 6, segments = 10): Mesh {
   const b = new MeshBuilder();
@@ -97,21 +81,5 @@ export function plane(side: number): Mesh {
   const b = new MeshBuilder();
   const h = side / 2;
   face(b, [-h, -h, 0], [h, -h, 0], [h, h, 0], [-h, h, 0]);
-  return b.build();
-}
-
-/** A flat disc at z = 0, facing up. */
-export function disc(radius: number, segments = 24): Mesh {
-  const b = new MeshBuilder();
-  for (let i = 0; i < segments; i++) {
-    const a0 = (i / segments) * Math.PI * 2,
-      a1 = ((i + 1) / segments) * Math.PI * 2;
-    tri(
-      b,
-      [0, 0, 0],
-      [Math.cos(a0) * radius, Math.sin(a0) * radius, 0],
-      [Math.cos(a1) * radius, Math.sin(a1) * radius, 0],
-    );
-  }
   return b.build();
 }

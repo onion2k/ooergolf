@@ -1713,7 +1713,14 @@ export class Scene {
    * which a shape and the wind turn from the way it was aimed.
    */
   setShot(preview: Preview | null, scale = 1) {
-    this.shot = preview ? { preview, scale } : null;
+    if (!preview) {
+      this.shot = null;
+      return;
+    }
+    // written into the one held while a shot is aimed, so a frame of aiming makes nothing
+    const held = (this.shot ??= { preview, scale });
+    held.preview = preview;
+    held.scale = scale;
   }
 
   /**
@@ -1848,7 +1855,11 @@ export class Scene {
       for (let i = 0; i < this.shares[k]; i++) {
         const s = sparkle(t, p.seed, i, this.scratch.spark);
         if (s.brightness <= 0) continue;
-        out.set([p.x + s.u * p.free.hx, p.y + s.v * p.free.hy, WATER_LEVEL, s.brightness], n * 4);
+        const o = n * 4;
+        out[o] = p.x + s.u * p.free.hx;
+        out[o + 1] = p.y + s.v * p.free.hy;
+        out[o + 2] = WATER_LEVEL;
+        out[o + 3] = s.brightness;
         n++;
       }
     }
@@ -1918,7 +1929,11 @@ export class Scene {
       const size = pulse(now, k);
       place(this.aim, k, ax, ay, (this.layout ? heightAt(this.layout, ax, ay) : 0) + AIM_RADIUS * size + 0.05, 0, size);
       const t = shot.power * ((k + 1) / n);
-      this.aimLooks.set([sr + (hr - sr) * t, sg + (hg - sg) * t, sb + (hb - sb) * t, 0.3], k * MATERIAL_STRIDE);
+      const lo = k * MATERIAL_STRIDE;
+      this.aimLooks[lo] = sr + (hr - sr) * t;
+      this.aimLooks[lo + 1] = sg + (hg - sg) * t;
+      this.aimLooks[lo + 2] = sb + (hb - sb) * t;
+      this.aimLooks[lo + 3] = 0.3;
     }
     return n;
   }
