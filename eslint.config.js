@@ -39,6 +39,7 @@ const PICTURE = [
   'sound',
   'theme',
   'sceneryset',
+  'effects',
   'turf',
   'tint',
   'turfTexture',

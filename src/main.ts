@@ -11,7 +11,6 @@ import { GameRenderer, antialiasFor } from 'artshape-render/game/renderer';
 import {
   BALL,
   HARDEST_SHOT,
-  KICKER,
   KIND_RADIUS,
   KNOCK,
   heightAt,
@@ -87,19 +86,18 @@ import { STILL } from 'artshape-render/game/grass';
 import { carryFrom } from './flight';
 import { CADDIE, CaddieTalk } from './caddie';
 import { clearings } from './scenery';
-import { FIREWORK_STEPS, craterDust, cupBurst, fireworkAt, fireworkEmits, splash, strikePuff } from './bursts';
+import { craterDust, cupBurst, splash, strikePuff } from './bursts';
 import { CRATER } from './waterdraw';
 import { Input } from './input';
-import { SPARKLE, flash, glint, kickFlash } from './glints';
+import { flash } from './glints';
 import { Squash, squashInto, squashOf } from './squash';
 import { waggle } from './sway';
 import { EFFECT_STRIDE } from 'artshape-render/game/renderer';
 import { Governor, RUNGS, economyFor } from './quality';
-import { PALETTE } from './models/palette';
 import { retakeShown } from './retake';
-import { SPRITE_FLOATS, TRAIL, Trail, trailDrawn, trailInto } from './trail';
 import { HeldView, groundAt } from './shot';
 import { between } from './frames';
+import { Effects } from './effects';
 
 /** How many millimetres a world unit is: the renderer fixes a few real sizes by it. */
 const MM_PER_UNIT = 100;
@@ -629,11 +627,8 @@ async function main() {
     // whether the renderer took it: it does not where the field has no trample, or off it
     took: false,
   };
-  /** The glow ball's trail: a ring made once and the sprites it is written into each frame, used only with the item held. */
-  const trail = new Trail();
-  const trailSprites = new Float32Array(TRAIL.most * SPRITE_FLOATS);
-  /** When each kicker of this hole was last hit, in game time: a kicker a hole, made as the hole begins, so never more than it has. */
-  let kickedAt: number[] = [];
+  /** The glows, sparks, trail and fireworks of the frame, which keep their own storage. */
+  const effects = new Effects(renderer, renderer.camera, scene, game, governor, drawn, EFFECT_CAPACITY);
   /** The disc of grass pressed round a ball at rest in the rough, written each frame: nothing is made. */
   const flatten = { x: 0, y: 0, radius: 0 };
   /** The grass of the hole being grown, which the first frame waits for so it is never drawn bare. */
@@ -653,8 +648,6 @@ async function main() {
   let leans = false;
   /** Whether the putt on this hole of minigolf is shown as the roll it makes, to where it rests: the ground leans, or the rangefinder is worn. */
   let rolls = false;
-  /** The fireworks over the cup: when the hole was holed, in game time, and the next step to go off (all of them, once they are over). */
-  const fireworks = { at: 0, step: FIREWORK_STEPS };
   /** The shot the preview was last worked out for, so it is worked out again only when the aim, the club or the ball changes; and whether one is shown. */
   const previewed = { x: NaN, y: NaN, angle: NaN, power: NaN, club: '', shape: NaN, spin: NaN, tick: NaN };
   let previewShown = false;
@@ -728,6 +721,8 @@ async function main() {
     const held = game;
     const { layout } = game;
     const { name } = game.course[index];
+    // the gold's places are worked out as soon as the hole is known, since a frame can be drawn between its checkpoints
+    effects.begun(layout, game.cup.radius);
     try {
       // ---- built ----
       // the title's lettering, in groups after the hole's own, when this is the hole the title is drawn over
@@ -767,7 +762,6 @@ async function main() {
       yield 'built';
 
       // ---- shown ----
-      kickedAt = layout.kickers.map(() => -Infinity);
       // the hole's wind, for the line under the pin and for how far the camera must stand back for a tailwind
       const blowing = game.wind;
       windNow.x = blowing.x;
@@ -801,7 +795,7 @@ async function main() {
       talk.hole(layout.golf ? game : null);
       hud.setTip(null);
       // the fireworks of the hole before are over with it
-      fireworks.step = FIREWORK_STEPS;
+      effects.stopFireworks();
       previewed.club = '';
       previewShown = false;
       shownPreview = null;
@@ -823,7 +817,7 @@ async function main() {
       // a hole is begun aiming, and the view eases home to the tee's over the glide
       backToAim?.();
       squash.clear();
-      trail.clear();
+      effects.clearTrail();
       hud.started({ index, count: game.course.length, name, par });
       // the bag on a golf hole, with the driver in hand, and none on a hole of minigolf
       hud.setBag(
@@ -906,7 +900,7 @@ async function main() {
       squash.knock(game.t, hard, dx, dy, dz);
       // a kicker that was hit lights up, and a hit on it again lights it anew
       const k = kickerAt(game.layout, x, y, KIND_RADIUS[BALL] + 0.25);
-      if (k >= 0) kickedAt[k] = game.t;
+      if (k >= 0) effects.kicked(k, game.t);
       // a wooden knock as hard as the hit, and the kicker's spring with it
       sound.knocked(hard, KNOCK.least, k >= 0);
       log(`sound knocked ${hard.toFixed(1)}${k >= 0 ? ' kicker' : ''}`);
@@ -920,7 +914,7 @@ async function main() {
       hud.setStrokes(game.strokes);
       hud.mulligan();
       squash.clear();
-      trail.clear();
+      effects.clearTrail();
     },
     // the penny used up: the purse and the shop show it gone
     spent: showPurse,
@@ -930,7 +924,7 @@ async function main() {
       hud.splash(wadedNow, BIOMES[game.layout.biome].words.lake);
       wadedNow = false;
       squash.clear();
-      trail.clear();
+      effects.clearTrail();
       // a splash up, and a ring spreading over the water from where it went in; into a crater, a burst of dust and no ring
       const crater = themeOf(game.layout).water.crater;
       if (!crater) scene.splashedAt(x, y, game.t);
@@ -949,7 +943,7 @@ async function main() {
       log('sound lost');
       wadedNow = false;
       squash.clear();
-      trail.clear();
+      effects.clearTrail();
     },
     // in the cup: confetti out of it, the flag waggling and its gold flashing, from the moment it dropped
     holed(strokes, par) {
@@ -972,8 +966,7 @@ async function main() {
       }
       // a birdie or better sends the fireworks up over the cup, a shell at a time, from game time
       if (game.kit.fireworks && strokes < par) {
-        fireworks.at = game.t;
-        fireworks.step = 0;
+        effects.launch(game.t);
       }
     },
     pickedUp: (strokes, par) => {
@@ -1518,9 +1511,9 @@ async function main() {
     });
     // the grass's wind and its track keep game time, as everything else that moves does
     renderer.time = game.t;
-    shine();
-    glowTrail();
-    flyFireworks();
+    effects.shine(titled !== null);
+    effects.glowTrail();
+    effects.flyFireworks();
     if (titled) writeTitle(titled);
   }
 
@@ -1540,121 +1533,6 @@ async function main() {
       poseMatrix(t.mats[i], t.frame, piece.pivot, t.pose);
     });
     t.groups.forEach((_, j) => renderer.move(base + j, t.mats[t.owners[j]], 1));
-  }
-
-  /** The fireworks that are due by game time, thrown over the cup: none when none is under way. */
-  function flyFireworks() {
-    if (fireworks.step >= FIREWORK_STEPS) return;
-    const { cup } = game.layout;
-    const z = heightAt(game.layout, cup.x, cup.y);
-    while (fireworks.step < FIREWORK_STEPS && game.t - fireworks.at >= fireworkAt(fireworks.step)) {
-      for (const e of fireworkEmits(cup.x, cup.y, z, fireworks.step)) renderer.emit(e);
-      fireworks.step++;
-    }
-  }
-
-  /**
-   * The glow ball's trail: the ball's place stamped into the ring as it moves and the ring written out as sprites, each
-   * frame, with the item held and the picture on a rung that draws particles (the renderer gives sprites up with them, and
-   * the lowest rungs have no room for the glow). Without the item nothing is written, and what was drawn is put away once.
-   */
-  function glowTrail() {
-    const { world, ball } = game;
-    if (!trailDrawn(game.kit.trail, RUNGS[governor.rung])) {
-      trail.clear();
-      if (drawn.trail) renderer.setSprites(trailSprites, (drawn.trail = 0));
-      return;
-    }
-    // only a ball that is going leaves a place: one at rest on the tee would glow there for as long as time stood still
-    if (world.alive[ball] && Math.hypot(world.vx[ball], world.vy[ball], world.vz[ball]) > TRAIL.moving)
-      trail.record(game.t, world.x[ball], world.y[ball], world.z[ball]);
-    drawn.trail = trailInto(trailSprites, trail, game.t, KIND_RADIUS[BALL], PALETTE.trail);
-    renderer.setSprites(trailSprites, drawn.trail);
-  }
-
-  /** The gold that glints: round the cup's rim, and the knob on the pin. */
-  const glinting = (): [number, number, number][] => {
-    const { cup } = game.layout;
-    const rim = game.cup.radius + 0.15;
-    // on the ground the cup is cut in, however high that stands, and all round its rim where it slopes
-    const on = (x: number, y: number) => heightAt(game.layout, x, y);
-    return [
-      ...[0.3, 1.9, 3.4, 4.9].map((a): [number, number, number] => {
-        const x = cup.x + Math.cos(a) * rim,
-          y = cup.y + Math.sin(a) * rim;
-        return [x, y, on(x, y) + 0.1];
-      }),
-      [cup.x, cup.y, on(cup.x, cup.y) + 8.75],
-    ];
-  };
-  /** The kicker's flash: warm, a little smaller than the gold's, and round. */
-  const KICK: Glow = { size: 0.05, power: 3, colour: [1, 0.78, 0.45], falloff: 2.6 };
-  /** Room for a glint at every place the gold is, which a flash lights all at once, and the sparkles of the water after them. */
-  const glintQuad = new Float32Array(EFFECT_STRIDE * EFFECT_CAPACITY);
-  /** Where the water's sparkles are this frame, four numbers each: written into, never made. */
-  const sparkQuads = new Float32Array(SPARKLE.most * 4);
-  /** How a glow looks: its half size on the screen, how bright at most, its colour, and how hard its edge falls off. */
-  interface Glow {
-    size: number;
-    power: number;
-    colour: [number, number, number];
-    falloff: number;
-  }
-  /** The gold's: big, warm and star-shaped. The sun on the water is small, cool and sharp, and there are several at once. */
-  const GOLD: Glow = { size: 0.07, power: 3.5, colour: [1, 0.93, 0.7], falloff: 2.2 };
-  const SUN: Glow = { size: 0.028, power: 3.2, colour: [0.85, 0.96, 1], falloff: 3 };
-  /** A glow, `brightness` from 0 to 1, at quad `k`, where (x, y, z) is on the screen. */
-  function glow(k: number, x: number, y: number, z: number, brightness: number, look: Glow = GOLD) {
-    const m = cam.viewProjection;
-    const w = m[3] * x + m[7] * y + m[11] * z + m[15];
-    const o = k * EFFECT_STRIDE;
-    glintQuad[o] = (m[0] * x + m[4] * y + m[8] * z + m[12]) / w;
-    glintQuad[o + 1] = (m[1] * x + m[5] * y + m[9] * z + m[13]) / w;
-    glintQuad[o + 2] = look.size * brightness;
-    glintQuad[o + 3] = look.power * brightness;
-    glintQuad[o + 4] = look.colour[0];
-    glintQuad[o + 5] = look.colour[1];
-    glintQuad[o + 6] = look.colour[2];
-    glintQuad[o + 7] = look.falloff;
-  }
-  /** The gold's glow this frame into the first quads: how many. The glint of the moment; or all of them, as a ball drops. */
-  function gold(): number {
-    const places = glinting();
-    const lit = flash(game.t - scene.holedAt);
-    if (lit > 0) {
-      const count = Math.min(places.length, EFFECT_CAPACITY);
-      for (let k = 0; k < count; k++) glow(k, places[k][0], places[k][1], places[k][2], lit);
-      return count;
-    }
-    const g = glint(game.t, places.length);
-    if (g.brightness <= 0) return 0;
-    const [x, y, z] = places[g.at];
-    glow(0, x, y, z, g.brightness);
-    return 1;
-  }
-  /** The glows of the frame: the gold's, and after them, in what room is left, the sparkles of sun on the water. */
-  function shine() {
-    // the title is no hole to play: the gold's twinkle and the cup's flash are not there, so no white spot shows in it
-    if (titled) {
-      drawn.glints = drawn.sparkles = drawn.kicks = 0;
-      renderer.setEffects(glintQuad, 0);
-      return;
-    }
-    let used = (drawn.glints = gold());
-    const sparks = scene.sparkleInto(game.t, sparkQuads);
-    let lit = 0;
-    for (; lit < sparks && used < EFFECT_CAPACITY; lit++)
-      glow(used++, sparkQuads[lit * 4], sparkQuads[lit * 4 + 1], sparkQuads[lit * 4 + 2], sparkQuads[lit * 4 + 3], SUN);
-    drawn.sparkles = lit;
-    // the kickers a ball has just hit, after all the rest, in what room is left
-    drawn.kicks = 0;
-    game.layout.kickers.forEach((k, i) => {
-      const lit = kickFlash(game.t - (kickedAt[i] ?? -Infinity));
-      if (lit <= 0 || used >= EFFECT_CAPACITY) return;
-      glow(used++, k.x, k.y, heightAt(game.layout, k.x, k.y) + KICKER.height + 0.2, lit, KICK);
-      drawn.kicks++;
-    });
-    renderer.setEffects(glintQuad, used);
   }
 
   /** What a frame of the scene as it stands costs, drawn to a texture of our own rather than the canvas, so no wait to be shown is counted. */
@@ -1913,7 +1791,10 @@ async function main() {
       sparklesAt: Array.from({ length: drawn.sparkles }, (_, k) => {
         const o = (drawn.glints + k) * EFFECT_STRIDE;
         const r = canvas.getBoundingClientRect();
-        return { x: r.left + ((glintQuad[o] + 1) / 2) * r.width, y: r.top + ((1 - glintQuad[o + 1]) / 2) * r.height };
+        return {
+          x: r.left + ((effects.quads[o] + 1) / 2) * r.width,
+          y: r.top + ((1 - effects.quads[o + 1]) / 2) * r.height,
+        };
       }),
       splash: scene.splashReach(game.t),
       puff: drawn.puff,
