@@ -302,7 +302,7 @@ today, and what the next features must hand it:
   Meadow and again on each golf course (`GOLF_COURSES` in `scripts/leaks.ts`: the six, and one course of each biome, The
   Saltpan, Copernicus and Chrome Heights, since a biome's three courses share every line a run watches; under
   the Links' ceilings but for the save's bytes, 20,400 since 31 October 2026 for a hundred and sixty-two holes' bests, the career's eighteen
-  course records, all five tours' seasons at their longest, an event kept and the caddie's three counts at their limit (19,732 measured, held to the byte by `test/leaks.test.ts`; it was 10,800 for eighty-one holes' bests, 10,203 measured); `leaks:check` queues the ten, an hour and forty minutes of play in parallel, and `--on` narrows a run to one kind for a short look; a test holds that a hole
+  course records, all five tours' seasons at their longest, an event kept and the caddie's three counts at their limit (20,022 measured since the trophy room, with ten figures of six figures and every feat, held to the byte by `test/leaks.test.ts`, 378 under the ceiling, which is about three holes' bests; it was 19,732 and 10,800 for eighty-one holes' bests, 10,203 measured; it was 10,800 for eighty-one holes' bests, 10,203 measured); `leaks:check` queues the ten, an hour and forty minutes of play in parallel, and `--on` narrows a run to one kind for a short look; a test holds that a hole
   with a lane is collectable, so `laneOf`'s cache keeps nothing alive, and one each that `zonesOf`'s and `pondOf`'s tables are weak; the
   arena's reused ground weights are emptied at 256, held by a test, and nothing of the new caches is kept for a game's life, so
   nothing was added to `scripts/leaks.ts`). The card is emptied each round and
@@ -1240,6 +1240,28 @@ minigolf: true }`, read through `oceanFor`) is the one switch: `waterBed` and `s
   not sell is dropped and a slot is read only if owned, so a save from before the three aisles loads with its coins, gems and bests and
   no items. `Game` pays into it when a hole is done (golf too; never in free play, see the career), and buys, equips (`equip`,
   `unequip(aisle)`) from it. Every save shape is in `test/saves/`. Chance comes from `random.ts`, handed in.
+- **The trophy room** (11 November 2026; plan `~/.claude/plans/synthetic-soaring-meteor.md`, part D). The save keeps `life`, ten
+  figures (`rounds`, `wins`, `holes`, `aces`, `eagles`, `birdies`, `lost`, `lipOuts`, `longestPutt`, `longestDrive`; each read
+  alone, a whole number from nought) and `feats`, the ids earned (`featids.ts`, a leaf, so the save imports no content). `game.ts`
+  counts them, and only for a hole that pays: not in free play, not for a hole begun again from the menu (or a restart would farm an
+  ace), and a hole picked up counts no hole holed. In `done` a hole holed is a hole and one of an ace (one stroke), an eagle (two
+  under or better, on a golf hole) or a birdie (any other hole under par); a round of a named course is counted at its last hole,
+  picked up or not, and an event won (`place` 1, tied or not) in `closeRound`; `lost` in `putBack`; the lip-out where `lipped` is told;
+  the longest putt and drive, in whole yards rounded down, where `longPutt` and `longDrive` are told. A figure counted by a
+  hole later picked up stays (the lip-out was real), and one counted outside `done` is written by the next save, not at once.
+  `feats.ts` has an entry for each id, each a function of the save alone (`newFeats(save)`), so an old save earns what it has done
+  at its next hole: Ace, Ten aces, Winner, Champion, Kitted out (fifteen owned), Eagle, Red figures (a record of a golf course
+  under its par, which only an event round writes), Grand slam, Record book and From downtown (`DOWNTOWN`, 20 yards). `Game.earn`
+  keeps a new one in the save with the hole's own write (or `buy`'s) and tells `feat(id)` after the hole is paid; it pays nothing.
+  A feat is for having done it, so `trophyProblems` (`invariants.ts`) holds the figures and the ids and not that a feat is still
+  earned. **Two of the plan's twelve are not built:** off the pin (the pin waits on `c5-pin`) and seven daily holes running (the daily hole,
+  part E); each will be an id in `featids.ts`, an entry in `feats.ts` and its case in `test/feats.test.ts`. `trophywords.ts` is the
+  words (`trophyView(save, courses)`: the five tours with cups to three and then a number, the eight figures, the feats and the
+  records, and `featWords`), and `#trophies` in `index.html`, drawn by the hud from that, is the screen: a cup button at the left
+  of Play opens it from the start screen, and the menu's Trophies from a hole, where it hides the menu, which Back gives back (the
+  game still stopped; the escape key shuts the room, then the menu); on a phone two columns and the short grade. The hud says a feat
+  on the second line of the score word (`hud.feat`; several the one hole earns are one line), or on a word of its own when a purchase
+  earned it. The test API's `trophies()` reads the figures, the feats and the room as drawn.
 - **The career is a season of tournaments** (15 and 16 October 2026; plan `~/.claude/plans/wobbly-sprouting-gizmo.md`, which says
   what was chosen from its mock and why). Two tours, golf (the six courses in their order, six events) and mini (three), each of
   three grades, club, county and championship; each event is a field of the player and eleven named rivals (`src/rivals.ts`, a
@@ -1343,7 +1365,7 @@ button's action (the other way to now when not told; refused under the start scr
 the flag it looks to, which strokes it follows) as well as the game's chance, `faceFlag()` presses the flag button's action (false when it did nothing), `menu(open?)` presses the Menu button's action (the other way
 to now when not told; refused, and shut, where `menuMayOpen` says no) and says whether the menu is up after (`state().menu`), `menuShown()` reads the panel
 as drawn (whether it is up, whether Restart is there, what Give up says and whether it is asking, its words and its note), `pickUp()` and `restartHole()`
-press what Give up's second press and Restart do (each says whether the game took it; a restart is refused in an event), and `measureFrame`;
+press what Give up's second press and Restart do (each says whether the game took it; a restart is refused in an event), `trophies()` reads the save's `life` and `feats` and the trophy room as drawn (up, whether the menu stands behind it, its tours, figures, feats and records; it is opened by its buttons), and `measureFrame`;
 `judge(frames, gapMs, workMs)` feeds the quality governor as the frame loop does, and says
 the rung; `grass()` how many blades of the rough the last frame drew near
 and far, and the wind; `bladesAround(x, y, radius)` how many the GPU drew
@@ -1383,6 +1405,10 @@ always taken at the top rung unless a test asks. In unit tests, `game.place(x, y
 ball down at a lie.
 
 ## What is not there yet
+
+- The trophy room's feats are ten of the plan's twelve (see _The trophy room_ above). A round under par counts only where the career
+  keeps it (an event round's record), since the save has no count of rounds under par, and a feat earned by the last hole of a round
+  is told as the card comes up, which the card's own words follow without saying it.
 
 - The biomes, as they are. **No person has played a biome course** (they landed on 31 October 2026 before the full pass, which
   this section's gates came from), so how the Desert's firm ground, the Moon's slower flight and the Future's holograms feel to
@@ -1496,7 +1522,7 @@ What the project file said at more length, moved here word for word on 1 Novembe
 
 ### The test API's readings
 
-`caddie()`, `season()`, `sound()` (awake, mute, volume, voices, loops, what is loaded and what each load took, the
+`trophies()` (the lifetime figures, the feats and the trophy room as drawn), `caddie()`, `season()`, `sound()` (awake, mute, volume, voices, loops, what is loaded and what each load took, the
 music's beat, and the controls as drawn), `theme()` (the biome's look as the renderer has it: sky, background, sun, haze,
 environment, and whether blades are grown) and `dust()` (the colour a stroke threw up). Playing: `shoot`, `club`, `chooseCourse`, `startHole`, `playCourse`, `buy`,
 `equip`; `mute(on)`, `volume(v)`, and `wake()` for the first gesture. The event log has a `sound …` line for each sound
@@ -1506,6 +1532,11 @@ save of its own, and drives a real mouse or finger with `drag` and `touches`. Ne
 
 ### Edge cases in full
 
+- **the trophy room:** opened from the start screen and from the menu (the menu hidden under it and given back by Back, time stopped
+  throughout, the escape key shutting the room first); a hole done in free play, restarted or picked up, and a ball lost, lipped
+  out or a putt holed in each; a save from before it (nothing counted, every feat it had already earned told at the next hole); a
+  tour with no title, one and four; a feat told with a long putt's second line, with another feat on the same hole, and from the
+  shop; the five tours and the eight figures at 400 px wide.
 - **a biome:** the first hole of one after a hole of another (look, sky, environment, grass and dust all swapped, and an
   earth hole after it takes earth's back, the title's sky too); none of the grass on the Moon and in the Future on every
   rung, and a press and a puff that do nothing wrong; a cactus's foot, a ball passed through a hologram at the fastest

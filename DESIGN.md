@@ -414,7 +414,13 @@ phone held upright it turns so the hole runs up the screen. On a desktop the
 wheel zooms and on a phone two fingers do. An Overhead button shows the
 whole hole from above to look round, by dragging, and never to aim from. A Menu button beside it (and the Escape key) stops
 the hole and offers the way back, a restart of the hole (not in an event, and a hole begun again pays nothing), giving the hole
-up (asked twice: it scores the limit, as a hole picked up does) and the courses, where an event round waits to be gone on with.
+up (asked twice: it scores the limit, as a hole picked up does), the trophy room and the courses, where an event round waits to be gone on with.
+
+The trophy room, opened from the start screen by a cup beside Play and from the menu, shows what a player has done and pays them
+nothing for it: a cup for each title on each of the five tours, a career's eight figures (rounds, events won, holes, holes in
+one, eagles, birdies and the longest putt and drive), the feats as badges (earned in green, the rest grey with how each is won) and
+the best round on every course. A feat is told when it is earned, on the hole's own word. Free play counts nothing, and neither
+does a hole begun again from the menu.
 
 ## Phone and desktop
 

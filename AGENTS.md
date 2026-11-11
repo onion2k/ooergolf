@@ -132,7 +132,7 @@ What to copy the shape of, when building something new:
 `window.game`, in `src/debug.ts`, typed, and the smoke tests compile against it; every call is in `HOW-IT-WORKS.md`'s
 _The test API_. Time: `pause`, `resume`, `step(frames)`, `seed(n)`, and `?seed=N`, `?paused=1`, `?rung=N`, `?title=0`,
 `?flyin=0` on the page. Reading: `state`, `ball`, `bodies`, `content`, `events`, `invariants`, `view()`, `motions()`,
-`caddie()`, `season()`, `sound()`, `theme()`, `dust()`, `menuShown()`. Playing: `shoot`, `club`, `chooseCourse`, `startHole`,
+`caddie()`, `season()`, `sound()`, `theme()`, `dust()`, `menuShown()`, `trophies()`. Playing: `shoot`, `club`, `chooseCourse`, `startHole`,
 `playCourse`, `buy`, `equip`, `mute`, `volume`, `wake`, `menu(open?)`, `pickUp()`, `restartHole()`. A smoke test starts the page headless with
 `start(page, { save, seed, paused, rung })` in `smoke/game.ts`, a fresh context and a save of its own, and drives a real
 mouse or finger with `drag` and `touches`. Never a timeout: pause, seed, step.
@@ -163,6 +163,9 @@ For anything new, check what it does (`HOW-IT-WORKS.md`'s _Edge cases in full_ h
   stands under it and nothing is struck through it; in an event no Restart, and Courses keeps the round; a restarted hole pays
   nothing; a hole picked up with the ball in the air tells of nothing after; a restart in the middle of the fly-in; Escape after the
   phone drawer's own
+- **the trophy room:** from the start screen and the menu (which it hides and gives back, time standing under both); counted for
+  a hole that pays only (not free play, a hole restarted or a hole picked up); a save from before it earns its feats at the next
+  hole; the five tours with no title, one, and more than three; a feat told with a score's word, and one a purchase earned
 - **the camera:** hidden behind something taller than the ball; every heading and tilt limit; the ball and the reach on
   the screen, desk and phone; a drag turned to the aim and taken back; the flag button; a stroke followed and one held;
   the overhead view and back
