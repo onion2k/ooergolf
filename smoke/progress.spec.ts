@@ -1564,11 +1564,19 @@ async function longBend(page: Page) {
   await expect(page.locator('#start')).toBeHidden();
 }
 
+/**
+ * How far down the page a drag is pressed, high on it: below the view's buttons on a phone, which reach the middle of the page
+ * there since the menu's joined them, and a press on a button aims nothing.
+ */
+function pressedAt(size: { width: number; height: number }): number {
+  return size.height * (size.width < 600 ? 0.22 : 0.15);
+}
+
 /** A drag pressed high on the page and pulled down by `share` of the most a shot takes, `across` pixels over, held. */
 async function pull(page: Page, share: number, across = 0, touch = false) {
   const size = page.viewportSize()!;
   const short = Math.min(size.width, size.height);
-  const from = { x: size.width / 2, y: size.height * 0.15 };
+  const from = { x: size.width / 2, y: pressedAt(size) };
   await drag(page, from, { x: from.x + across, y: from.y + 0.35 * short * share }, { hold: true, touch });
   await page.evaluate(() => window.game!.step(2));
 }
@@ -1650,7 +1658,7 @@ test.describe('aiming a golf shot', () => {
           // taken back to where it began, which is no shot (letting go of a full pull would strike the ball, and in a wind it
           // would not be at rest for the next club)
           const size = page.viewportSize()!;
-          await page.mouse.move(size.width / 2, size.height * 0.15);
+          await page.mouse.move(size.width / 2, pressedAt(size));
           await page.mouse.up().catch(() => undefined);
           if (touch) await page.evaluate(() => window.game!.step(1));
           expect(await page.evaluate(() => window.game!.invariants())).toEqual([]);
@@ -1778,7 +1786,7 @@ test.describe('aiming a golf shot', () => {
     expect(turned.azimuth).toBeCloseTo(heading, 3);
     expect([turned.distance, turned.tilt, turned.lead]).toEqual([before.distance, before.tilt, before.lead]);
     // taken back to where it began: no shot, and no stroke, and the camera is left looking where it was turned to
-    const from = { x: (page.viewportSize()!.width / 2) | 0, y: (page.viewportSize()!.height * 0.15) | 0 };
+    const from = { x: (page.viewportSize()!.width / 2) | 0, y: pressedAt(page.viewportSize()!) | 0 };
     await page.mouse.move(from.x, from.y);
     await page.evaluate(() => window.game!.step(2));
     expect(await page.evaluate(() => window.game!.motions().shot)).toBeNull();

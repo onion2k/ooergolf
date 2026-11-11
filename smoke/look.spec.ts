@@ -111,7 +111,9 @@ async function aim(page: Page, share: number, across = 0) {
 async function pullDown(page: Page, share: number, across = 0, touch = false) {
   const size = page.viewportSize()!;
   const short = Math.min(size.width, size.height);
-  const from = { x: size.width / 2, y: size.height * 0.15 };
+  // on a phone the view's buttons, with the menu's among them, reach the middle of the page at that height, and a press on a
+  // button aims nothing: the finger goes down below them there. The pull is the same, so the shot is
+  const from = { x: size.width / 2, y: size.height * (size.width < 600 ? 0.22 : 0.15) };
   await drag(page, from, { x: from.x + across, y: from.y + share * 0.35 * short }, { hold: true, touch });
   await page.evaluate(() => window.game!.step(2));
   // a drag held that aims nothing is said for what it is, with what was under the finger, and not left to fail later as a
