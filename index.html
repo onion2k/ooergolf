@@ -1158,6 +1158,15 @@
     min-width: 44px;
     padding: 0;
   }
+  /* on a desk it stands at the panel's top left, as the Install button does at the right: the foot has no width to spare (the
+     career's switch fell to a row of its own with it there) */
+  @media (min-width: 601px) {
+    #trophiesOpen {
+      position: absolute;
+      top: 12px;
+      left: 14px;
+    }
+  }
   #trophiesOpen svg {
     width: 26px;
     height: 26px;

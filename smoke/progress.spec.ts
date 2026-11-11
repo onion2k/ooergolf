@@ -142,7 +142,7 @@ test('a hole played out to the cup by drags, its score shown, and the next hole 
   expect(done.coins, 'the hole paid').toBeGreaterThan(0);
   await expect(page.locator('#coins')).toHaveText(String(done.coins));
   await expect(page.locator('#toast')).toBeVisible();
-  await expect(page.locator('#toast'), "the score's name").toHaveText(scoreName(done.card[0], done.par));
+  await expect(page.locator('#toastWords'), "the score's name").toHaveText(scoreName(done.card[0], done.par));
   await info.attach('holed', { body: await page.screenshot(), contentType: 'image/png' });
   // the cup answers the ball dropping: its gold flashing, and its flag waggling, a frame at a time
   const cup = await page.evaluate(() => {
@@ -1187,8 +1187,10 @@ test('a putt that lips out of the cup says so until the next stroke, and a long 
   expect(done.phase).toBe('done');
   await expect(toast).toBeVisible();
   await expect(page.locator('#toastWords'), "the score's name").toHaveText(scoreName(done.card[0], done.par));
-  await expect(page.locator('#toastFrom'), 'and where it was holed from').toHaveText(fromWords(22));
-  await expect(page.locator('#toastFrom')).toHaveText('from 22 yards');
+  // where it was holed from, and after it the feat a putt of twenty yards is, on the one line
+  await expect(page.locator('#toastFrom'), 'and where it was holed from').toHaveText(
+    `${fromWords(22)} · Feat earned: From downtown`,
+  );
 
   // the next hole's score is its own: a hole holed with no long putt has no second line
   await page.evaluate(() => window.game!.startHole(1));
@@ -1225,7 +1227,7 @@ test.describe('on a phone', () => {
     await page.evaluate(() => {
       for (let f = 0; f < 600 && window.game!.state().phase === 'play'; f++) window.game!.step(1);
     });
-    await expect(page.locator('#toastFrom')).toHaveText('from 22 yards');
+    await expect(page.locator('#toastFrom')).toHaveText('from 22 yards · Feat earned: From downtown');
     const from = await read(page);
     expect(from.outside, 'nothing past the screen').toEqual([]);
     expect(from.scrollWidth).toBeLessThanOrEqual(400);

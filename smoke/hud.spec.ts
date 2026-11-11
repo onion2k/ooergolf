@@ -889,7 +889,8 @@ for (const [where, device] of [
       expect(done.phase).toBe('done');
       const toast = page.locator('#toast');
       await expect(toast).toBeVisible();
-      await expect(toast).toHaveText(scoreName(done.card[0], done.par));
+      // the score's own words: a feat the hole earned (a first ace is one) is said after them, on the second line
+      await expect(page.locator('#toastWords')).toHaveText(scoreName(done.card[0], done.par));
       await expect(toast).toHaveAttribute('data-kind', scoreKind(done.card[0], done.par));
       const size = await toast.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
       // larger by far than anything else over the course: a word to be read from across the room
