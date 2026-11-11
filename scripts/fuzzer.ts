@@ -291,6 +291,11 @@ export function fuzz(
           }
           // a stroke struck: the camera is told, which has it follow the ball for one in five and hold still for the rest
           if (name === 'struck' && playing && directing) directing.struck();
+          // a hole holed: the camera is told, and an ace has it turn about the cup, which is held to the view's rules below
+          if (name === 'holed' && playing && directing) {
+            directing.holed(args[0]);
+            if (args[0] === 1) count(checked, 'ace');
+          }
           // a ball come to rest on a golf hole lies as the zones say, which is what the ground under it is drawn by; counted,
           // since a check that never ran passes in silence
           if (name === 'stopped' && playing && playing.layout.golf) {
@@ -1852,6 +1857,22 @@ export function fuzz(
         if (rig.flying(game.t)) count(checked, 'flying');
         // the sky is held to the same rule, which it is only as strong as the frames it was seen in (`flyInProblems` fails the rest)
         if (rig.seesSky(game.t)) count(checked, 'sky seen');
+      }
+      // the turn about the cup an ace has is held to the view's rules in every frame, and the cup is kept on the screen (the ball is
+      // in it and gone from the world, so the framing rule, which is of the ball, is not asked)
+      if (rig.circling(game.t)) {
+        const { cup } = game.layout;
+        const there = { x: cup.x, y: cup.y, z: heightAt(game.layout, cup.x, cup.y) };
+        rig.place(cam, game.t);
+        cam.update();
+        const bad = [
+          ...viewProblems(rig),
+          ...framingProblems(rig, cam, there, null, safeBox(cam.aspect, SCREEN.h)).map(
+            (p) => `${p} (the ace's turn about the cup, ${game.def.name})`,
+          ),
+        ];
+        if (bad.length) return fail(bad);
+        count(checked, 'ace turning');
       }
       // a kicker throws the hardest of anything on a course, so what it does to the ball is checked in every frame
       if (game.layout.kickers.length) {

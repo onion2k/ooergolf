@@ -6,15 +6,15 @@
 import { describe, expect, it } from 'vitest';
 import { LANDS_PAST, aimView, reachOf } from '../src/aimview';
 import { bagClub } from '../src/bag';
-import { CameraRig, catchUp, facing, wrap } from '../src/camera';
+import { ACE_TURN, CameraRig, catchUp, facing, wrap } from '../src/camera';
 import { AIM_DEAD, AIM_TURN, ARRIVED, Director, FOLLOW } from '../src/director';
 import { Camera } from 'artshape-render/gpu/camera';
 import { safeBox } from '../src/aimview';
-import { heightAt } from '../src/arena';
+import { heightAt, layoutOf } from '../src/arena';
 import type { BiomeName } from '../src/biome';
 import { KICKER_HOLES } from '../scripts/fuzzer';
 import { Progress, memoryStore } from '../src/progress';
-import { Game } from '../src/game';
+import { BETWEEN_HOLES, Game } from '../src/game';
 import { seeded } from '../src/random';
 import { carryFrom } from '../src/flight';
 import type { HoleDef } from '../src/course';
@@ -22,7 +22,11 @@ import { PLAY_AHEAD, lookAlong } from '../src/lineofplay';
 import { links } from '../src/links';
 import { windReach } from '../src/shaping';
 import { LIE } from '../src/surfaces';
-import { DT, field, golfGame, newGame, settle } from './helpers';
+import { framingProblems, viewProblems } from '../src/invariants';
+import { DT, GREEN, SAMPLE_HOLES, field, golfGame, newGame, settle } from './helpers';
+import { holeInOne } from './rounds';
+
+const near = (a: number[], b: number[]) => a.forEach((v, k) => expect(v).toBeCloseTo(b[k], 6));
 
 /** The most the camera's target may change speed by, a second a second, on a full drive: the smooth hand-over's worst is its cap of 400 (`HAND_OVER.accel`), and the sudden latch's was 132,000 and more. */
 const HANDOVER_ACCEL = 500;
@@ -1030,4 +1034,200 @@ describe('following the ball one shot in five', () => {
         expect(frames, 'the ball flew').toBeGreaterThan(60);
       });
     }
+});
+
+describe("the ace's beat", () => {
+  /** A game of one minigolf hole with a director whose `holed` is the page's own, wired to the game's events. */
+  function ace(options: { flyIn?: boolean; still?: boolean } = {}) {
+    const rig = new CameraRig();
+    const director = new Director(rig, options);
+    const events = new Proxy(
+      {},
+      { get: (_, name: string) => (name === 'holed' ? (s: number) => director.holed(s) : () => undefined) },
+    );
+    const game = new Game(new Progress(memoryStore(null)), events, { random: seeded(3), course: [GREEN] });
+    director.use(game);
+    director.setScreen(ASPECT, HEIGHT);
+    director.started();
+    return { game, rig, director };
+  }
+  it('starts at a hole in one, as the ball drops, and not at any other score', () => {
+    const one = ace();
+    holeInOne(one.game);
+    expect(one.rig.circling(one.game.t)).toBe(true);
+    for (const strokes of [2, 3, 0, 9]) {
+      const { game, rig, director } = ace();
+      director.holed(strokes);
+      expect(rig.circling(game.t), `${strokes}`).toBe(false);
+    }
+    const { game, rig, director } = ace();
+    director.holed(1);
+    expect(rig.circling(game.t)).toBe(true);
+  });
+
+  it('leaves the camera exactly as it was at any other score', () => {
+    const a = ace(),
+      b = ace();
+    a.director.holed(2);
+    const ca = new Camera(),
+      cb = new Camera();
+    for (let f = 0; f < 120; f++) {
+      a.game.step(DT);
+      b.game.step(DT);
+      a.director.frame(DT, false);
+      b.director.frame(DT, false);
+    }
+    a.rig.place(ca, a.game.t);
+    b.rig.place(cb, b.game.t);
+    expect([...ca.position, ...ca.target]).toEqual([...cb.position, ...cb.target]);
+  });
+
+  it('does not start in the overhead view, with the camera parked, or when the player prefers reduced motion', () => {
+    const over = ace();
+    over.rig.setOverhead(true, { bounds: { minX: 0, minY: 0, maxX: 10, maxY: 10 }, distance: 100 });
+    over.director.holed(1);
+    expect(over.rig.circling(over.game.t)).toBe(false);
+    const parked = ace();
+    parked.director.park(true);
+    parked.director.holed(1);
+    expect(parked.rig.circling(parked.game.t)).toBe(false);
+    const still = ace({ still: true });
+    still.director.holed(1);
+    expect(still.rig.circling(still.game.t)).toBe(false);
+    const free = ace({ still: false });
+    free.director.holed(1);
+    expect(free.rig.circling(free.game.t)).toBe(true);
+  });
+
+  it('turns about the cup of the hole in play, a quarter turn, and is over inside the wait between holes', () => {
+    const { game, rig, director } = ace();
+    holeInOne(game);
+    const began = game.t;
+    expect(BETWEEN_HOLES).toBeGreaterThan(ACE_TURN.time);
+    const was = rig.view(began).azimuth;
+    const cam = new Camera();
+    cam.aspect = ASPECT;
+    let steps = 0;
+    while (game.phase === 'done' && game.t - began < BETWEEN_HOLES - 0.05) {
+      game.step(DT);
+      director.frame(DT, false);
+      steps++;
+    }
+    expect(game.t - began).toBeGreaterThan(ACE_TURN.time);
+    expect(rig.circling(game.t)).toBe(false);
+    expect(rig.view(game.t).azimuth - was).toBeCloseTo(ACE_TURN.turn, 6);
+    rig.place(cam, game.t);
+    expect(cam.target[0]).toBeCloseTo(game.layout.cup.x, 6);
+    expect(cam.target[1]).toBeCloseTo(game.layout.cup.y, 6);
+    expect(steps).toBeGreaterThan(60);
+  });
+
+  it('is not fought by the frames of the director: its goal and its own view stay as they were while it is under way', () => {
+    const { game, rig, director } = ace();
+    holeInOne(game);
+    const own = [rig.azimuth, rig.tilt, rig.distance, rig.lead, rig.aiming, rig.turning];
+    const cam = new Camera();
+    while (rig.circling(game.t)) {
+      game.step(DT);
+      director.frame(DT, false);
+      expect([rig.azimuth, rig.tilt, rig.distance, rig.lead, rig.aiming, rig.turning]).toEqual(own);
+    }
+    cam.aspect = ASPECT;
+    rig.place(cam, game.t);
+    expect(Number.isFinite(cam.position[0])).toBe(true);
+  });
+
+  it('is ended by the next hole, whose fly-in is exactly what it is without the beat', () => {
+    const withBeat = ace({ flyIn: true }),
+      without = ace({ flyIn: true, still: true });
+    holeInOne(withBeat.game);
+    holeInOne(without.game);
+    // the beat is made on the one, half way through, and the next hole begun on both at the same moment of game time
+    for (let f = 0; f < 45; f++) {
+      withBeat.game.step(DT);
+      without.game.step(DT);
+      withBeat.director.frame(DT, false);
+      without.director.frame(DT, false);
+    }
+    expect(withBeat.rig.circling(withBeat.game.t)).toBe(true);
+    expect(without.rig.circling(without.game.t)).toBe(false);
+    withBeat.director.started();
+    without.director.started();
+    expect(withBeat.rig.circling(withBeat.game.t)).toBe(false);
+    const ca = new Camera(),
+      cb = new Camera();
+    ca.aspect = cb.aspect = ASPECT;
+    for (let f = 0; f < 200; f++) {
+      withBeat.game.step(DT);
+      without.game.step(DT);
+      withBeat.director.frame(DT, false);
+      without.director.frame(DT, false);
+      withBeat.rig.place(ca, withBeat.game.t);
+      without.rig.place(cb, without.game.t);
+      expect([...ca.position, ...ca.target], `frame ${f}`).toEqual([...cb.position, ...cb.target]);
+    }
+  });
+
+  it('is glided from when the next hole has no fly-in, from where the beat left the camera, with nothing jumping', () => {
+    const { game, rig, director } = ace();
+    holeInOne(game);
+    for (let f = 0; f < 80; f++) {
+      game.step(DT);
+      director.frame(DT, false);
+    }
+    const before = new Camera(),
+      after = new Camera();
+    before.aspect = after.aspect = ASPECT;
+    rig.place(before, game.t);
+    director.started();
+    rig.place(after, game.t);
+    expect(rig.circling(game.t)).toBe(false);
+    near([...after.position], [...before.position]);
+    near([...after.target], [...before.target]);
+  });
+
+  for (const which of ['a minigolf hole', 'a golf hole']) {
+    it(`keeps the view's rules, and the cup on the screen, in every frame of it, on ${which}`, () => {
+      const hole = SAMPLE_HOLES.find(
+        (h) => layoutOf(h.map, h.terrain, h.way, h.biome).golf === (which === 'a golf hole'),
+      )!;
+      const { game } = golfGame(hole);
+      for (const [aspect, height] of [
+        [ASPECT, HEIGHT],
+        [400 / 860, 860],
+      ]) {
+        const rig = new CameraRig();
+        const director = new Director(rig, { flyIn: true });
+        director.use(game);
+        director.setScreen(aspect, height);
+        director.started();
+        // run the fly-in out, then the ball is in the cup and gone from the world, as a holed ball is
+        for (let f = 0; f < 60 * 4; f++) director.frame(DT, false);
+        if (game.world.alive[game.ball]) game.world.remove(game.ball);
+        director.holed(1);
+        const cam = new Camera();
+        cam.aspect = aspect;
+        const { cup } = game.layout;
+        const z = heightAt(game.layout, cup.x, cup.y);
+        let frames = 0;
+        const t0 = game.t;
+        while (game.t < t0 + BETWEEN_HOLES - 0.1) {
+          game.step(DT);
+          director.frame(DT, false);
+          const t = game.t;
+          expect(viewProblems(rig), `${hole.name} at ${t - t0}`).toEqual([]);
+          if (rig.circling(t)) {
+            frames++;
+            rig.place(cam, t);
+            cam.update();
+            const box = safeBox(aspect, height);
+            expect(framingProblems(rig, cam, { x: cup.x, y: cup.y, z }, null, box), `${hole.name} ${aspect}`).toEqual(
+              [],
+            );
+          }
+        }
+        expect(frames).toBeGreaterThan(0);
+      }
+    });
+  }
 });

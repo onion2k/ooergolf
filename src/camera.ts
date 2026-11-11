@@ -185,6 +185,14 @@ export const GLIDE = 0.8;
  */
 export const FLY_IN = { tilt: 1.45, hold: 0.5, time: 2.2, cut: 0.4, share: 0.3, most: 90 } as const;
 
+/**
+ * The ace's turn: a hole holed in one has the camera go a quarter turn (`turn`, radians, toward +X) about the cup over `time`
+ * seconds of game time, eased at both ends, looking at the cup in the end, to mark it. It stands no nearer: a hole begun after it
+ * glides from the pose it left (`glide`), which knows a turn and a place and not a distance, and a nearer view would jump back
+ * as that began. `time` is well inside the two seconds before the next hole (`BETWEEN_HOLES`), so it is over, and held, when that begins.
+ */
+export const ACE_TURN = { turn: Math.PI / 2, time: 1.5 } as const;
+
 export class CameraRig {
   readonly fov = VIEW.fov;
   /** Where it looks, on the ground. */
@@ -232,6 +240,14 @@ export class CameraRig {
   /** Whether the glide under way is a fly-in, which draws as far as the horizon, and whether it has been cut short. */
   private flown = false;
   private cut = false;
+  /**
+   * The ace's turn about the cup (`circle`): whether one has been sent, when, where the cup is, and, once it has been cut short, the
+   * share of it that was done (below nought while it has not). Held at its end until a hole begins, so the camera stays on the cup.
+   */
+  private ringed = false;
+  private ringFrom = 0;
+  private ringStill = -1;
+  private readonly ringCup: [number, number, number] = [0, 0, 0];
   /** The view `place` works from, written and never made. */
   private readonly seen = { azimuth: 0, tilt: 0 };
   /** Where it looks, glide and all, written by `looking` for `place`. */
@@ -255,6 +271,8 @@ export class CameraRig {
     this.glideTime = GLIDE;
     this.flown = false;
     this.cut = false;
+    this.ringed = false;
+    this.ringStill = -1;
   }
 
   /**
@@ -322,6 +340,41 @@ export class CameraRig {
     this.glideTime = FLY_IN.cut;
   }
 
+  /**
+   * The ace's turn begun at game time `t`: a quarter turn about the cup at (x, y) on ground `z` high over `ACE_TURN.time`, from the
+   * view it has now, looking at the cup in the end and a little nearer (`ACE_TURN`). It is a function of game time alone. A turn to
+   * face a place and an ease to an aim view are left where they are, since the hole is done. A place that is not one is refused.
+   */
+  circle(x: number, y: number, z: number, t: number) {
+    if (![x, y, z, t].every(Number.isFinite)) return;
+    this.heading = null;
+    this.goal = null;
+    this.ringed = true;
+    this.ringFrom = t;
+    this.ringStill = -1;
+    this.ringCup[0] = x;
+    this.ringCup[1] = y;
+    this.ringCup[2] = z;
+  }
+
+  /** Whether the ace's turn is under way at game time `t`: begun, and not yet over or cut short. */
+  circling(t: number): boolean {
+    return this.ringed && this.ringStill < 0 && t >= this.ringFrom && t - this.ringFrom < ACE_TURN.time;
+  }
+
+  /** The ace's turn cut short at game time `t`: it stays as far round as it has got, and goes no further. Nothing when none is under way. */
+  cutCircle(t: number) {
+    if (this.circling(t)) this.ringStill = this.ring(t);
+  }
+
+  /** The share of the ace's turn done at game time `t`, eased at both ends: nought before it and without one, one from its end on. */
+  private ring(t: number): number {
+    if (!this.ringed) return 0;
+    if (this.ringStill >= 0) return this.ringStill;
+    const u = Math.max(0, Math.min(1, (t - this.ringFrom) / ACE_TURN.time));
+    return u * u * (3 - 2 * u);
+  }
+
   /** Whether a fly-in is still under way at game time `t`. */
   flying(t: number): boolean {
     return this.flown && this.left(t) > 0;
@@ -358,6 +411,16 @@ export class CameraRig {
   private looking(t: number): [number, number, number] {
     const k = this.left(t);
     for (let a = 0; a < 3; a++) this.at[a] = this.target[a] + this.behind[a] * k;
+    const e = this.ring(t);
+    if (e > 0) {
+      // the point it looks at, a lead ahead of this, comes to the cup as the turn is made: so it is the place where the cup is,
+      // less the lead the way the view ends up facing
+      const end = this.azimuth + this.easeTurn * k + ACE_TURN.turn;
+      const c = this.ringCup;
+      this.at[0] += (c[0] - Math.sin(end) * this.lead - this.at[0]) * e;
+      this.at[1] += (c[1] - Math.cos(end) * this.lead - this.at[1]) * e;
+      this.at[2] += (c[2] - this.at[2]) * e;
+    }
     return this.at;
   }
 
@@ -572,7 +635,10 @@ export class CameraRig {
    */
   setOverhead(on: boolean, fit?: OverheadFit, t?: number): boolean {
     // a player who looks from overhead means to look: a fly-in under way is cut short
-    if (on && t !== undefined) this.cutShort(t);
+    if (on && t !== undefined) {
+      this.cutShort(t);
+      this.cutCircle(t);
+    }
     if (!on) {
       this.wanted = false;
       return false;
@@ -613,7 +679,7 @@ export class CameraRig {
   /** How it is turned and tilted at game time `t`: what a player has done to it, and what is left to ease away. */
   view(t: number, out = { azimuth: 0, tilt: 0 }): { azimuth: number; tilt: number } {
     const k = this.left(t);
-    out.azimuth = this.azimuth + this.easeTurn * k;
+    out.azimuth = this.azimuth + this.easeTurn * k + ACE_TURN.turn * this.ring(t);
     out.tilt = this.flown ? this.tilt + (this.easeFrom - this.tilt) * k : this.tilt + this.easeTilt * k;
     return out;
   }

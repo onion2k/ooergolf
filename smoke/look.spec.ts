@@ -668,6 +668,28 @@ test.describe('what it looks like', () => {
     expect(problems).toEqual([]);
   });
 
+  test('a hole in one: the camera half way round the cup, its word and the confetti over it', async ({ page }) => {
+    const problems = watch(page);
+    await start(page, { seed: 1, paused: true });
+    const view = await page.evaluate(() => {
+      const g = window.game!;
+      const { cup } = g.content();
+      // holed in one as the first hole of the course is, from a yard and a half
+      g.place(g.bodies('ball')[0].slot, cup.x, cup.y - 4, 1);
+      g.step(30);
+      g.events();
+      g.shoot(Math.PI / 2, (Math.sqrt(15 * 15 + 2 * 16 * 2.55) / g.content().hardest) ** 2);
+      for (let f = 0; f < 120 && !g.events().some((e) => e.startsWith('holed')); f++) g.step(1);
+      // the middle of the move, three-quarters of a second in, a frame at a time since the confetti moves only as it is drawn
+      for (let f = 0; f < 45; f++) g.step(1);
+      return g.view();
+    });
+    expect(view.circling, 'half way through the turn').toBe(true);
+    await hideStats(page);
+    await expect(page).toHaveScreenshot('ace-beat.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
   test('a putt lipped out of the cup: its word over the course, and the ball rolled on past the cup', async ({
     page,
   }) => {

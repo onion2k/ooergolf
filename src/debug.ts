@@ -315,6 +315,8 @@ export interface GameApi {
     farPlane: number;
     /** Whether the camera is flying in to the hole: low behind the tee looking to the horizon, easing to the play view. */
     flying: boolean;
+    /** Whether the camera is making the ace's turn about the cup: a hole holed in one, a quarter turn in about a second and a half. */
+    circling: boolean;
     azimuth: number;
     /** The azimuth the camera is turning to: its own azimuth when it is turning to none. */
     heading: number;

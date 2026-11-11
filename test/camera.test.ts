@@ -3,6 +3,7 @@ import { Camera } from 'artshape-render/gpu/camera';
 import { describe, expect, it } from 'vitest';
 import { layoutOf } from '../src/arena';
 import {
+  ACE_TURN,
   CLIP,
   CameraRig,
   GLIDE,
@@ -902,5 +903,137 @@ describe('the far plane', () => {
     rig.setOverhead(false);
     for (let f = 0; f < 240; f++) rig.settle(1 / 60);
     expect(rig.farPlane).toBe(CLIP.far);
+  });
+});
+
+describe("the ace's turn about the cup", () => {
+  const CUP = { x: 12, y: 40, z: 0 };
+  /** A rig that has followed a ball to near the cup, looking at it from the home view, and is sent round it at game time `at`. */
+  const sent = (at = 10) => {
+    const rig = new CameraRig();
+    rig.jump(CUP.x - 0.4, CUP.y + 0.3, 0);
+    rig.circle(CUP.x, CUP.y, CUP.z, at);
+    return rig;
+  };
+  const heading = (rig: CameraRig, t: number) => rig.view(t).azimuth;
+
+  it('turns the heading a quarter turn in its time, never back, and slowly at both ends', () => {
+    const rig = sent();
+    const was = heading(rig, 10);
+    let last = 0;
+    const step = 1 / 60;
+    let first = 0,
+      mid = 0;
+    for (let t = 10; t <= 10 + ACE_TURN.time + 0.5; t += step) {
+      const turned = heading(rig, t) - was;
+      expect(turned).toBeGreaterThanOrEqual(last - 1e-12);
+      expect(turned).toBeLessThanOrEqual(ACE_TURN.turn + 1e-9);
+      if (!first && t > 10 + step * 1.5) first = turned;
+      if (!mid && t >= 10 + ACE_TURN.time / 2) mid = turned;
+      last = turned;
+    }
+    expect(last).toBeCloseTo(ACE_TURN.turn, 9);
+    expect(ACE_TURN.turn).toBeCloseTo(Math.PI / 2, 9);
+    // eased: the first frames cover next to nothing, and the middle is half way
+    expect(first).toBeLessThan(ACE_TURN.turn * 0.002);
+    expect(mid).toBeCloseTo(ACE_TURN.turn / 2, 2);
+    // and the end of it is as slow as the start: a frame short of the end is a hair from the whole
+    expect(ACE_TURN.turn - (heading(rig, 10 + ACE_TURN.time - step) - was)).toBeLessThan(ACE_TURN.turn * 0.002);
+  });
+
+  it('is under way from its start to its end and at no other time', () => {
+    const rig = sent();
+    expect(rig.circling(9.9)).toBe(false);
+    expect(rig.circling(10)).toBe(true);
+    expect(rig.circling(10 + ACE_TURN.time - 0.01)).toBe(true);
+    expect(rig.circling(10 + ACE_TURN.time)).toBe(false);
+    expect(rig.circling(1000)).toBe(false);
+    expect(new CameraRig().circling(0)).toBe(false);
+  });
+
+  it('ends looking at the cup, and stays there until a hole begins', () => {
+    const rig = sent();
+    const cam = new Camera();
+    for (const aspect of [1.6, 0.46]) {
+      cam.aspect = aspect;
+      for (const t of [10 + ACE_TURN.time, 10 + ACE_TURN.time + 1.9, 1e6]) {
+        rig.place(cam, t);
+        expect(cam.target[0]).toBeCloseTo(CUP.x, 6);
+        expect(cam.target[1]).toBeCloseTo(CUP.y, 6);
+        expect(cam.target[2]).toBeCloseTo(CUP.z, 6);
+      }
+    }
+    // a hole begun takes the beat away, and the rig is as a rig that never had it
+    rig.jump(1, 2, 0);
+    const fresh = new CameraRig();
+    fresh.jump(1, 2, 0);
+    expect(heading(rig, 20)).toBe(heading(fresh, 20));
+    const a = new Camera(),
+      b = new Camera();
+    rig.place(a, 20);
+    fresh.place(b, 20);
+    near([...a.position], [...b.position]);
+    near([...a.target], [...b.target]);
+  });
+
+  it('has the cup on the screen all the way, on a desk and a phone', () => {
+    const rig = sent();
+    const cam = new Camera();
+    for (const aspect of [1.6, 0.46]) {
+      cam.aspect = aspect;
+      for (let t = 10; t <= 10 + ACE_TURN.time + 0.1; t += 1 / 60) {
+        rig.place(cam, t);
+        cam.update();
+        const [nx, ny] = ndc(cam, CUP.x, CUP.y, CUP.z);
+        expect(Math.abs(nx)).toBeLessThan(0.6);
+        expect(Math.abs(ny)).toBeLessThan(0.7);
+      }
+    }
+  });
+
+  it('is cut short where it stands, and goes no further', () => {
+    const rig = sent();
+    const t = 10 + ACE_TURN.time / 2;
+    const cam = new Camera();
+    rig.place(cam, t);
+    const there = [...cam.position];
+    const turned = heading(rig, t);
+    rig.cutCircle(t);
+    expect(rig.circling(t)).toBe(false);
+    expect(rig.circling(t + 0.1)).toBe(false);
+    expect(heading(rig, t)).toBeCloseTo(turned, 12);
+    expect(heading(rig, t + 5)).toBeCloseTo(turned, 12);
+    rig.place(cam, t + 5);
+    near([...cam.position], there);
+    // cut again, or with none under way, it does nothing
+    rig.cutCircle(t + 6);
+    expect(heading(rig, t + 7)).toBeCloseTo(turned, 12);
+    expect(() => new CameraRig().cutCircle(0)).not.toThrow();
+  });
+
+  it('is a function of game time alone: the same moment gives the same pose, however it was reached', () => {
+    const a = sent(),
+      b = sent();
+    const ca = new Camera(),
+      cb = new Camera();
+    for (let t = 10; t < 12; t += 0.37) a.place(ca, t);
+    b.place(cb, 11.5);
+    a.place(ca, 11.5);
+    near([...ca.position], [...cb.position]);
+    near([...ca.target], [...cb.target]);
+  });
+
+  it("leaves the rig's own turn, tilt, distance and lead as they were, so the view's rules still hold", () => {
+    const rig = sent();
+    const own = [rig.azimuth, rig.tilt, rig.distance, rig.lead];
+    rig.place(new Camera(), 11);
+    expect([rig.azimuth, rig.tilt, rig.distance, rig.lead]).toEqual(own);
+  });
+
+  it('is refused for a place that is not one', () => {
+    const rig = new CameraRig();
+    rig.jump(1, 1, 0);
+    rig.circle(Number.NaN, 0, 0, 0);
+    expect(rig.circling(0.1)).toBe(false);
   });
 });

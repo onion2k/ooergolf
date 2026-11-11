@@ -598,7 +598,10 @@ async function main() {
    * What is done to the camera as the game goes on: the aim view, the tee, the flag and the follow; and the fly-in to each
    * hole, which a test's page leaves out with `?flyin=0` so its pictures are of the view a shot is played from.
    */
-  const director = new Director(rig, { flyIn: new URLSearchParams(location.search).get('flyin') !== '0' });
+  const director = new Director(rig, {
+    flyIn: new URLSearchParams(location.search).get('flyin') !== '0',
+    still: reducedMotion,
+  });
   /** The ball squashed by its last knock, until it springs back. */
   const squash = new Squash();
   /**
@@ -952,6 +955,8 @@ async function main() {
       log(`sound holed ${strokes} ${par}`);
       hud.setBoard(boardNow(season, game.event, game.card, eventSeason));
       scene.holedAt = game.t;
+      // an ace has the camera turn about the cup (not for a player who prefers reduced motion)
+      director.holed(strokes);
       // the confetti cup throws more, for longer, in the rainbow's colours
       drawn.confetti = 0;
       for (const e of cupBurst(

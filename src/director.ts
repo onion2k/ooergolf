@@ -111,11 +111,12 @@ export class Director {
 
   /**
    * `flyIn`: each hole begun with the fly-in (`FLY_IN`), as the page and the fuzzer have it; left out, a hole is glided to
-   * as it always was, which the tests of the director that were written before it rest on.
+   * as it always was, which the tests of the director that were written before it rest on. `still`: the player prefers reduced
+   * motion, which has no turn about the cup for an ace (`holed`); the page reads that and the director, which is headless, is told.
    */
   constructor(
     readonly rig: CameraRig,
-    private readonly options: { flyIn?: boolean } = {},
+    private readonly options: { flyIn?: boolean; still?: boolean } = {},
   ) {}
 
   /** The game it directs for: the page's, or a test's own, which may be swapped for another. */
@@ -162,12 +163,26 @@ export class Director {
     this.handing = false;
     this.toLine = false;
     this.rig.cutShort(game.t);
+    this.rig.cutCircle(game.t);
     this.chasing =
       this.mode === 'always'
         ? true
         : this.mode === 'never'
           ? false
           : hashed(this.seed, game.hole, game.strokes, SALT.follow) < FOLLOW.share;
+  }
+
+  /**
+   * A hole holed in `strokes`: in one, the camera makes the ace's turn about the cup (`CameraRig.circle`), by game time from this
+   * moment, and is over well inside the wait before the next hole, which cuts it short. Any other score leaves the camera alone, as
+   * does the overhead view, a camera a test has parked, and a player who prefers reduced motion.
+   */
+  holed(strokes: number) {
+    const game = this.game;
+    if (!game || strokes !== 1 || this.options.still === true || this.left || this.rig.overhead) return;
+    const { cup } = game.layout;
+    this.toLine = false;
+    this.rig.circle(cup.x, cup.y, heightAt(game.layout, cup.x, cup.y), game.t);
   }
 
   /** Told the shape and the height of the screen, which the aim view depends on: the view is worked out again. */
@@ -337,6 +352,12 @@ export class Director {
     if (game.ready && !this.wasReady) this.toLine = true;
     if (!game.ready) this.toLine = false;
     this.wasReady = game.ready;
+    // the ace's turn is the camera's alone while it lasts: nothing is sent to it, and no ball is followed
+    if (rig.circling(game.t)) {
+      rig.settle(dt);
+      this.vel.fill(0);
+      return;
+    }
     this.arrived(game);
     if (game.layout.golf) {
       if (!game.ready) this.aimedFor = '';
@@ -493,7 +514,10 @@ export class Director {
     // a drag held is the player's say in where the camera looks: the turn to the flag a ball come to rest was waiting on is not made
     if (aim) this.toLine = false;
     // a player who drags means to play: a fly-in under way is cut short
-    if (game && aim) this.rig.cutShort(game.t);
+    if (game && aim) {
+      this.rig.cutShort(game.t);
+      this.rig.cutCircle(game.t);
+    }
     if (!game || !aim || !game.ready || this.rig.overhead || aim.power < AIM_TURN.least) return;
     const off = wrap(aim.angle - (Math.PI / 2 - this.rig.headed));
     if (Math.abs(off) <= AIM_DEAD.half) return;
@@ -540,6 +564,7 @@ export class Director {
     if (!game || held || this.rig.overhead) return false;
     this.toLine = false;
     this.rig.cutShort(game.t);
+    this.rig.cutCircle(game.t);
     const to = this.nearFlag();
     if (to === null) return false;
     this.rig.turnTo(to);

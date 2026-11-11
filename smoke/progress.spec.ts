@@ -544,6 +544,79 @@ test('a ball knocked in the cup as it drops is holed once, and nothing of the kn
   expect(problems).toEqual([]);
 });
 
+/** Hole 1 of seed 1 holed in one, the way the test above does, stopped on the frame the ball drops: the page is paused and the camera has not moved yet. */
+async function aceInOne(page: Page) {
+  return page.evaluate(() => {
+    const g = window.game!;
+    const { cup } = g.content();
+    g.place(g.bodies('ball')[0].slot, cup.x, cup.y - 4, 1);
+    g.step(30);
+    g.events();
+    const before = g.view();
+    g.shoot(Math.PI / 2, (Math.sqrt(15 * 15 + 2 * 16 * 2.55) / g.content().hardest) ** 2);
+    for (let f = 0; f < 120; f++) {
+      g.step(1);
+      if (g.events().some((e) => e.startsWith('holed'))) return { before, began: g.view(), found: true };
+    }
+    return { before, began: before, found: false };
+  });
+}
+
+test('a hole in one has the camera turn a quarter turn about the cup, and the next hole begins as always', async ({
+  page,
+}) => {
+  const problems = watch(page);
+  await start(page, { seed: 1, paused: true });
+  const { before, began, found } = await aceInOne(page);
+  expect(found, 'holed').toBe(true);
+  expect(before.circling, 'not before the ball drops').toBe(false);
+  expect(began.circling, 'begun as it drops').toBe(true);
+  const turn = (a: number) => Math.atan2(Math.sin(a - began.azimuth), Math.cos(a - began.azimuth));
+  const at = async (frames: number) =>
+    page.evaluate((n) => {
+      window.game!.step(n);
+      return window.game!.view();
+    }, frames);
+  const early = await at(15);
+  expect(early.circling, 'under way a quarter second in').toBe(true);
+  expect(turn(early.azimuth), 'and begun').toBeGreaterThan(0);
+  expect(turn(early.azimuth), 'but not far on').toBeLessThan(Math.PI / 4);
+  const middle = await at(30);
+  expect(middle.circling, 'under way in the middle').toBe(true);
+  expect(turn(middle.azimuth), 'half way round, eased').toBeGreaterThan(Math.PI / 8);
+  const end = await at(60);
+  expect(end.circling, 'over by the end of its time').toBe(false);
+  expect(turn(end.azimuth), 'a quarter turn').toBeCloseTo(Math.PI / 2, 3);
+  expect(await page.evaluate(() => window.game!.state().phase), 'the wait is not over').toBe('done');
+  // past the wait the next hole begins, and the camera is back on a tee's view: nothing of the turn is left
+  await at(60);
+  const state = await page.evaluate(() => window.game!.state());
+  expect(state.hole, 'the next hole').toBe(1);
+  expect(state.phase).toBe('play');
+  const home = await at(240);
+  expect(home.circling).toBe(false);
+  expect(Math.abs(turn(home.azimuth)), 'turned home').toBeLessThan(0.05);
+  expect(await page.evaluate(() => window.game!.invariants())).toEqual([]);
+  expect(problems).toEqual([]);
+});
+
+test('a hole in one has no turn for a player who prefers reduced motion', async ({ page }) => {
+  const problems = watch(page);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await start(page, { seed: 1, paused: true });
+  const { began, found } = await aceInOne(page);
+  expect(found, 'holed').toBe(true);
+  for (const frames of [1, 20, 40]) {
+    const view = await page.evaluate((n) => {
+      window.game!.step(n);
+      return window.game!.view();
+    }, frames);
+    expect(view.circling).toBe(false);
+    expect(view.azimuth).toBe(began.azimuth);
+  }
+  expect(problems).toEqual([]);
+});
+
 test('the round finished to the card, and begun again from its button', async ({ page }) => {
   const problems = watch(page);
   await start(page, { seed: 1, paused: true });

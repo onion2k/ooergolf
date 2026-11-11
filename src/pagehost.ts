@@ -176,6 +176,7 @@ export class PageHost {
       blend: rig.blend,
       farPlane: cam.far,
       flying: rig.flying(game.t),
+      circling: rig.circling(game.t),
       ...rig.view(game.t),
       putt: hud.puttDrawn().putt,
       greens: hud.puttDrawn().greens,
