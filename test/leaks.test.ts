@@ -72,6 +72,8 @@ describe('what must stay bounded', () => {
     // holes is a lifetime) and every feat earned, so that a feat added is seen here and not in a player's storage
     for (const key of LIFE_KEYS) progress.save.life[key] = 999_999;
     progress.save.feats = [...FEAT_IDS];
+    // and the daily hole's slot at its most: a day, ten strokes on a par of five (the limit), and a run of a thousand days
+    progress.save.daily = { day: '2026-11-11', strokes: 10, par: 5, streak: 999 };
     // and the caddie's tips taken at their limit, past which they are not counted
     progress.save.caddie = { club: CADDIE.taken, shape: CADDIE.taken, spin: CADDIE.taken };
     expect(ITEMS.length, 'the forty-five').toBe(45);
@@ -86,7 +88,10 @@ describe('what must stay bounded', () => {
     // 11 November 2026: 20,022 with the trophy room, the ten lifetime figures at six figures each (+136 at nought, which is the
     // key names, and +154 more for the figures at six figures and the ten feats' ids); the ceiling, 20,400, is not raised, and has
     // 378 bytes of room, which is about three holes and not six: the next course will want it thought about again
-    expect(bytes, `${bytes} bytes for ${holes.length} holes`).toBe(20_022);
+    // 11 November 2026: 20,098 with the daily hole, one fixed slot (a day, strokes, par and a run: +63 at nought, which is the key names
+    // and the empty day, +13 more for the slot at its most, a day and a run of three figures, and the id of the feat of seven running);
+    // the ceiling, 20,400, is not raised, and has 302 bytes of room, which is about three holes: still no more
+    expect(bytes, `${bytes} bytes for ${holes.length} holes`).toBe(20_098);
     expect(bytes, 'under the ceiling').toBeLessThan(WATCH['save bytes']!.ceiling);
     expect(WATCH['save bytes']!.ceiling, 'with room for about six holes more and no more').toBeLessThan(bytes * 1.15);
   });

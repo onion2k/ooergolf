@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import { COURSES } from '../src/course';
 import { FEAT_IDS } from '../src/featids';
-import { FEATS, DOWNTOWN, featOf, newFeats } from '../src/feats';
+import { FEATS, DAILY_RUN, DOWNTOWN, featOf, newFeats } from '../src/feats';
 import { Game, type GameEvents } from '../src/game';
 import { ITEMS } from '../src/items';
 import { Progress, memoryStore, type Save } from '../src/progress';
@@ -149,6 +149,14 @@ describe('each feat, earned and not', () => {
     const own = (n: number) => (s: Save) => (s.owned = ITEMS.slice(0, n).map((i) => i.id));
     expect(earned('kittedOut', saved(own(14)))).toBe(false);
     expect(earned('kittedOut', saved(own(15)))).toBe(true);
+  });
+
+  it('A week of days: seven daily holes running, and not six', () => {
+    const run = (n: number) => (s: Save) => (s.daily = { day: '2026-11-11', strokes: 3, par: 4, streak: n });
+    expect(earned('dailySeven', saved())).toBe(false);
+    expect(earned('dailySeven', saved(run(DAILY_RUN - 1)))).toBe(false);
+    expect(earned('dailySeven', saved(run(DAILY_RUN)))).toBe(true);
+    expect(DAILY_RUN).toBe(7);
   });
 
   it('lists only the feats earned and not yet kept', () => {

@@ -36,7 +36,7 @@ const NO_TIPS = { club: 0, shape: 0, spin: 0 };
 const CAREER = { mode: 'career', records: {}, round: null, season: NO_SEASON, caddie: NO_TIPS };
 /** What a save from before the sound loads its setting as: on, at full volume. */
 const NO_SOUND = { muted: false, volume: 1 };
-/** What a save from before the trophy room loads its lifetime figures and feats as: nothing counted, nothing earned. */
+/** What a save from before the trophy room loads its lifetime figures and feats as (nothing counted, nothing earned), and from before the daily hole its slot: no day taken. */
 const NO_LIFE = {
   life: {
     rounds: 0,
@@ -51,6 +51,8 @@ const NO_LIFE = {
     longestDrive: 0,
   },
   feats: [],
+  // and the daily hole's slot, before there was one: no day taken
+  daily: { day: '', strokes: 0, par: 0, streak: 0 },
 };
 const FRESH = { coins: 0, gems: 0, owned: [], kit: NONE, best: {}, ...CAREER, ...NO_SOUND, ...NO_LIFE };
 
@@ -224,6 +226,34 @@ const KEPT: Record<string, Record<string, unknown>> = {
       longestDrive: 268,
     },
     feats: ['ace', 'winner'],
+    daily: NO_LIFE.daily,
+  },
+  // the daily hole of 11 November 2026: the day taken 12 November, scored three on a par of four, the seventh in a row, which is
+  // the feat of seven running, kept beside the two before it
+  '14-daily.json': {
+    ...BEFORE_SOUND['10-caddie-spin.json'],
+    muted: true,
+    volume: 0.4,
+    coins: 260,
+    gems: 1,
+    season: {
+      ...NO_SEASON,
+      moon: { grade: 'championship', begun: 4, played: [[4, 4, 3, 4, 5, 3, 4, 4, 5], null], titles: 1 },
+    },
+    life: {
+      rounds: 41,
+      wins: 9,
+      holes: 380,
+      aces: 23,
+      eagles: 4,
+      birdies: 96,
+      lost: 58,
+      lipOuts: 31,
+      longestPutt: 31,
+      longestDrive: 268,
+    },
+    feats: ['ace', 'winner', 'dailySeven'],
+    daily: { day: '2026-11-12', strokes: 3, par: 4, streak: 7 },
   },
 };
 

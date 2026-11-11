@@ -15,8 +15,11 @@ import type { BiomeName } from './biome';
 import type { HoleDef } from './course';
 import { golfHole, type GolfSpec } from './golf';
 import { seeded } from './random';
+import { dayNumber, dayWords, isDay } from './days';
 import { nameSeed } from './shaping';
 import { scoreName } from './score';
+
+export { dayNumber, dayWords, followsDay, isDay, shiftDay, utcDay } from './days';
 
 /** Where the game is played, which a shared result carries and nothing else of the player. */
 export const GAME_ADDRESS = 'https://golf.ooer.com/';
@@ -26,66 +29,6 @@ export const RETRIES = 8;
 
 /** The biomes in the order the days turn through them: a day's is its number of days since 1 January 1970, modulo these. */
 export const TURN: readonly BiomeName[] = ['earth', 'desert', 'moon', 'future'];
-
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;
-
-/** The UTC day of a moment, as `YYYY-MM-DD`: where a day turns, for every player at once. */
-export function utcDay(date: Date): string {
-  const y = date.getUTCFullYear();
-  return `${String(y).padStart(4, '0')}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
-}
-
-/** Whether `day` is a day: `YYYY-MM-DD`, a real date. */
-export function isDay(day: unknown): day is string {
-  if (typeof day !== 'string' || !/^\d{4}-\d\d-\d\d$/.test(day)) return false;
-  const [y, m, d] = day.split('-').map(Number);
-  return m >= 1 && m <= 12 && d >= 1 && d <= daysIn(y, m) && dayOf(dayNumber(day)) === day;
-}
-
-function daysIn(year: number, month: number): number {
-  if (month === 2) return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0) ? 29 : 28;
-  return [4, 6, 9, 11].includes(month) ? 30 : 31;
-}
-
-/** How many days `day` is after 1 January 1970, by the civil calendar's own arithmetic, so no clock is read to work it out. */
-export function dayNumber(day: string): number {
-  const [y0, m, d] = day.split('-').map(Number);
-  const y = m <= 2 ? y0 - 1 : y0;
-  const era = Math.floor(y / 400);
-  const yoe = y - era * 400;
-  const doy = Math.floor((153 * (m + (m > 2 ? -3 : 9)) + 2) / 5) + d - 1;
-  return era * 146097 + yoe * 365 + Math.floor(yoe / 4) - Math.floor(yoe / 100) + doy - 719468;
-}
-
-/** The day that is `n` days after day number `n` since 1 January 1970: the inverse of `dayNumber`. */
-function dayOf(n: number): string {
-  const z = n + 719468;
-  const era = Math.floor(z / 146097);
-  const doe = z - era * 146097;
-  const yoe = Math.floor((doe - Math.floor(doe / 1460) + Math.floor(doe / 36524) - Math.floor(doe / 146096)) / 365);
-  const doy = doe - (365 * yoe + Math.floor(yoe / 4) - Math.floor(yoe / 100));
-  const mp = Math.floor((5 * doy + 2) / 153);
-  const d = doy - Math.floor((153 * mp + 2) / 5) + 1;
-  const m = mp < 10 ? mp + 3 : mp - 9;
-  const y = yoe + era * 400 + (m <= 2 ? 1 : 0);
-  return `${String(y).padStart(4, '0')}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-}
-
-/** The day `by` days from `day`: before it if `by` is negative. */
-export function shiftDay(day: string, by: number): string {
-  return dayOf(dayNumber(day) + by);
-}
-
-/** Whether `next` is the day after `day`: what a run of days is made of. */
-export function followsDay(day: string, next: string): boolean {
-  return isDay(day) && isDay(next) && dayNumber(next) === dayNumber(day) + 1;
-}
-
-/** A day as the card says it: `11 Nov 2026`. */
-export function dayWords(day: string): string {
-  const [y, m, d] = day.split('-').map(Number);
-  return `${d} ${MONTHS[m - 1]} ${y}`;
-}
 
 /** The biome of a day: the turn of the days through `TURN`. */
 export function biomeOfDay(day: string): BiomeName {

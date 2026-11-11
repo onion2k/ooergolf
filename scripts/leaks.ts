@@ -67,7 +67,8 @@ export const WATCH: Partial<Record<string, { ceiling: number; climb?: Climb }>> 
   // 31 October 2026, the nine courses of the biomes: a best on each of the 162 holes (about 104 bytes each), a record of each of the
   // eighteen courses, and the seasons of all five tours, the three new ones with a season less one event of two-figure scores, a
   // title count of three figures and the longest grade: measured the same way at 19,732 bytes, held to the byte (the plan's
-  // estimate was 20,000); 20,400 is that and about six holes more, as the ceiling was at 10,800 over 10,228.
+  // estimate was 20,000); 20,400 is that and about six holes more, as the ceiling was at 10,800 over 10,228. 11 November 2026: the
+  // trophy room (20,022) and the daily hole's one slot (20,098) took it to about three holes of room; the ceiling is not raised.
   'save bytes': { ceiling: 20_400 },
   // emptied at every new round: never more than a score a hole
   'card scores': { ceiling: COURSE.length },

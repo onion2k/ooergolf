@@ -20,6 +20,7 @@ import {
 } from './career';
 import { GRADES, TOURS, type Grade, type Tour } from './season';
 import { isFeatId, type FeatId } from './featids';
+import { isDay } from './days';
 
 export interface Best {
   strokes: number;
@@ -54,7 +55,23 @@ export interface Save {
   life: Life;
   /** The feats earned, by id, each once and each one the game knows, in the order they were earned. */
   feats: FeatId[];
+  /** The latest daily hole taken: one small fixed slot, and never a list that grows with the days. See `DailySlot`. */
+  daily: DailySlot;
 }
+
+/**
+ * The daily hole's slot: the latest day taken (`''` for none yet), what it was scored (nought while it is not finished, which reads as
+ * did not finish), its par, and the run of days finished in turn up to it (while a day is not finished, the run up to the day before,
+ * which finishing it adds one to). Written at the day's first stroke and again at its finish, and never again that day.
+ */
+export interface DailySlot {
+  day: string;
+  strokes: number;
+  par: number;
+  streak: number;
+}
+
+const noDaily = (): DailySlot => ({ day: '', strokes: 0, par: 0, streak: 0 });
 
 /**
  * The lifetime figures, each a whole number from nought (the distances in whole yards, rounded down). Counted for a hole that pays:
@@ -176,6 +193,7 @@ const fresh = (): Save => ({
   volume: 1,
   life: freshLife(),
   feats: [],
+  daily: noDaily(),
 });
 
 /** A kit from a save, slot by slot: an id of the slot's own aisle that the shop sells, and '' for anything else. */
@@ -306,6 +324,14 @@ function read(json: string | null): Save {
   // a feat the game does not know (one since withdrawn) is dropped, and so is a repeat
   if (Array.isArray(from.feats))
     for (const id of from.feats) if (isFeatId(id) && !save.feats.includes(id)) save.feats.push(id);
+  // a slot with no day is no slot: its other fields are not read, and each that is not a count is nought
+  if (isMap(from.daily) && isDay(from.daily.day))
+    save.daily = {
+      day: from.daily.day,
+      strokes: count(from.daily.strokes, 0),
+      par: count(from.daily.par, 0),
+      streak: count(from.daily.streak, 0),
+    };
   return save;
 }
 

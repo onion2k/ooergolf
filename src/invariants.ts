@@ -69,7 +69,9 @@ import { CUP } from './course';
 import { AISLES, CEILINGS, FIRST_STROKE_MOST, itemById, kitOf, type Kit } from './items';
 import { LIMIT_OVER_PAR, MOMENTS, fastest, type Game } from './game';
 import { PLAY_MODES } from './career';
+import { isDay } from './days';
 import { isFeatId } from './featids';
+import type { DailySlot } from './progress';
 import { LIFE_KEYS } from './progress';
 import { GRADES, TOURS } from './season';
 import { holeCount, nextEvent } from './tournament';
@@ -665,6 +667,7 @@ export function checkInvariants(game: Game): string[] {
   report('a flipper', flipperProblems(game.obstacles));
   report('the career', careerProblems(game));
   report('the trophy room', trophyProblems(game));
+  report('the daily hole', dailyProblems(game));
   return out;
 }
 
@@ -684,6 +687,54 @@ export function trophyProblems(game: Game): string[] {
     if (feats.indexOf(id) !== i) out.push(`the feat ${id} is kept twice`);
     if (!isFeatId(id)) out.push(`the feat ${String(id)} is not one the game knows`);
   });
+  return out;
+}
+
+/**
+ * What is wrong with the daily hole's slot as the save keeps it, and with the go in play: the slot is no day yet or a day, its strokes
+ * and par whole numbers from nought, strokes no more than the limit of a hole of its par, and a day scored has a par and a run of at
+ * least one day. A go that pays is the slot's day once a stroke is struck or the hole is done, with its par, and once done its strokes
+ * are what the go was scored; a later go is of a day no later than the slot's, or it would have paid.
+ */
+export function dailyProblems(game: Game): string[] {
+  const out: string[] = [];
+  const slot = game.progress.save.daily;
+  const bad = (n: number) => !Number.isInteger(n) || n < 0;
+  if (slot.day !== '' && !isDay(slot.day)) out.push(`the slot's day, ${String(slot.day)}, is not a day`);
+  if (bad(slot.strokes)) out.push(`the slot's strokes are ${slot.strokes}`);
+  if (bad(slot.par)) out.push(`the slot's par is ${slot.par}`);
+  if (bad(slot.streak)) out.push(`the slot's run is ${slot.streak}`);
+  if (slot.day !== '' && slot.par < 1) out.push(`the slot has a day and a par of ${slot.par}`);
+  if (slot.strokes > slot.par + LIMIT_OVER_PAR)
+    out.push(`the slot has ${slot.strokes} strokes on a par of ${slot.par}, more than the limit`);
+  if (slot.strokes > 0 && slot.streak < 1) out.push(`the slot has a day scored and a run of ${slot.streak}`);
+  const go = game.daily;
+  if (go === null) return out;
+  const done = game.phase !== 'play';
+  if (go.pays && (game.strokes >= 1 || done)) {
+    if (slot.day !== go.day) out.push(`the slot is of ${slot.day}, not the day played, ${go.day}`);
+    else if (slot.par !== game.def.par) out.push(`the slot's par is ${slot.par}, and the hole's ${game.def.par}`);
+    if (done && slot.day === go.day && slot.strokes !== game.card[0])
+      out.push(`the slot has ${slot.strokes} strokes, and the go was scored ${game.card[0]}`);
+  }
+  if (!go.pays && slot.day < go.day)
+    out.push(`the slot's day, ${slot.day}, is earlier than the day being played, ${go.day}`);
+  return out;
+}
+
+/**
+ * What a slot may not have done between two moments: its day going back, and a day's strokes or run changing once the day is scored
+ * (a day not yet scored may be scored, and a later day may take the slot).
+ */
+export function dailyKeptProblems(before: DailySlot, after: DailySlot): string[] {
+  const out: string[] = [];
+  if (after.day < before.day) out.push(`the slot's day went back from ${before.day} to ${after.day}`);
+  if (after.day === before.day && before.strokes > 0) {
+    if (after.strokes !== before.strokes)
+      out.push(`the day ${before.day}'s strokes changed from ${before.strokes} to ${after.strokes} once scored`);
+    else if (after.streak !== before.streak)
+      out.push(`the day ${before.day}'s run changed from ${before.streak} to ${after.streak} once scored`);
+  }
   return out;
 }
 

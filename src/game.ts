@@ -47,6 +47,7 @@ import { chipLoft, puttAngle, strike } from './flight';
 import { Obstacles } from './obstacles';
 import { PHYSICS, THE_CUP, makeWorld, type Cup, type World } from './physics';
 import { Progress, memoryStore } from './progress';
+import { followsDay, isDay } from './days';
 import { newFeats } from './feats';
 import type { FeatId } from './featids';
 import { PRIZE, TOURS, type Grade, type Tour } from './season';
@@ -152,6 +153,12 @@ export interface Placement {
   seasonOver: boolean;
   promotedTo: Grade | null;
   title: boolean;
+}
+
+/** A round of the daily hole: its day, and whether this go is the first of the day, which is paid and kept, and not a later one, which is neither. */
+export interface DailyGo {
+  day: string;
+  pays: boolean;
 }
 
 export interface GameOptions {
@@ -384,6 +391,8 @@ export class Game {
   private practice = false;
   /** Whether this hole was begun again from its tee by the menu, which pays it nothing when it is finished: cleared by each hole begun. */
   private restarted = false;
+  /** The daily hole this round is, with whether its go pays (it is the first of the day, which is the one kept); null for any round that is not one. */
+  private dailyGo: DailyGo | null = null;
   /** The piggy bank's id if one was worn when this hole began, which is the hole it pays double for; '' otherwise. */
   private piggy = '';
 
@@ -747,13 +756,20 @@ export class Game {
     return true;
   }
 
-  /** Why a restart is not allowed, if it is not: in an event, where a stroke counts against the field. The one place a rule is added to. */
+  /** Why a restart is not allowed, if it is not: in an event, where a stroke counts against the field, and on the daily hole's first go. The one place a rule is added to. */
   private restartRefused(): boolean {
-    return this.event !== null;
+    // the daily hole's first go is the one kept, so it is played once: no stroke of it is taken back
+    return this.event !== null || this.dailyGo?.pays === true;
   }
 
   /** A new round from the first hole, the card cleared: an event round kept is given up for it, as `withdraw` has it. */
   newRound() {
+    this.startRound(null);
+  }
+
+  /** A new round, the daily hole's if `daily` is given: told to the page by `started`, which reads it, so it is set before the hole is begun. */
+  private startRound(daily: DailyGo | null) {
+    this.dailyGo = daily;
     this.card.length = 0;
     this.retaken = false;
     this.pickedUp = false;
@@ -793,6 +809,54 @@ export class Game {
   }
 
   /**
+   * The daily hole of `day` played, as a round of its one hole that is no course's: it is no event, so a round kept to go on with is
+   * left as it is, as practice leaves it, and it keeps no record and no round. The first go of a day is the one kept and paid: it is
+   * taken at its first stroke, paid as a hole is paid, in the career and in free play, and counted into the life; every later go
+   * pays nothing, counts nothing and changes nothing. A day before the one in the slot is a later go too, so that a clock set back is
+   * no second pay. Refused, with nothing changed, for a day that is not one.
+   */
+  playDaily(hole: HoleDef, day: string): boolean {
+    if (!isDay(day)) return false;
+    const held = this.progress.save.daily.day;
+    this.course = [hole];
+    this.of = null;
+    this.startRound({ day, pays: held === '' || day > held });
+    return true;
+  }
+
+  /** The daily hole this round is, and whether its go is the first of the day (paid and kept); null for a round that is not one. */
+  get daily(): Readonly<DailyGo> | null {
+    return this.dailyGo;
+  }
+
+  /**
+   * The day of a daily go that pays, taken: the slot written for it, not finished (nought strokes reads as did not finish), with the
+   * run of days up to the day before if that day was finished. Once, by the first stroke or the hole's end, whichever comes first.
+   */
+  private takeDaily() {
+    const go = this.dailyGo;
+    const save = this.progress.save;
+    if (go === null || !go.pays || save.daily.day === go.day) return;
+    const last = save.daily;
+    save.daily = {
+      day: go.day,
+      strokes: 0,
+      par: this.def.par,
+      streak: followsDay(last.day, go.day) && last.strokes > 0 ? last.streak : 0,
+    };
+    this.persist();
+  }
+
+  /** The daily go that pays finished at `score`: the slot's strokes set, once, and a day added to the run. The caller writes the save. */
+  private finishDaily(score: number) {
+    this.takeDaily();
+    const slot = this.progress.save.daily;
+    if (slot.strokes > 0) return;
+    slot.strokes = score;
+    slot.streak++;
+  }
+
+  /**
    * A practice round of `holes`, named by `of`: each hole paid and its best kept, as any paid hole is (the piggy bank too), so a
    * player short of an event's fee can earn it (16 October 2026, the user's choice); but no prize, record or round is kept and
    * the season is not touched, and the mode is left as it was. An event round kept is left as it is, to go on with. Retakes
@@ -802,6 +866,7 @@ export class Game {
     this.course = holes;
     this.of = of;
     this.event = null;
+    this.dailyGo = null;
     this.card.length = 0;
     this.retaken = false;
     this.pickedUp = false;
@@ -841,6 +906,7 @@ export class Game {
     this.course = next.course.holes;
     this.of = { name: next.course.name, purse: next.course.purse };
     this.event = { tour, index: next.index };
+    this.dailyGo = null;
     this.practice = false;
     this.card.length = 0;
     this.retaken = false;
@@ -882,6 +948,7 @@ export class Game {
     this.course = holes;
     this.of = of;
     this.event = { tour: round.tour, index: next.index };
+    this.dailyGo = null;
     this.practice = false;
     this.card.length = 0;
     this.card.push(...round.card);
@@ -900,6 +967,7 @@ export class Game {
     if (this.hole !== 0 || this.strokes !== 0 || this.card.length || this.phase !== 'play') return false;
     this.of = of;
     this.event = null;
+    this.dailyGo = null;
     this.practice = false;
     this.withdraw();
     return true;
@@ -934,6 +1002,7 @@ export class Game {
     // holes not played are no career's: the round is no course's, so it is no event, and keeps no record or round
     this.of = null;
     this.event = null;
+    this.dailyGo = null;
     this.practice = false;
     this.card.length = 0;
     this.retaken = false;
@@ -1039,6 +1108,8 @@ export class Game {
     this.struckSpin = this.spin;
     this.shape = this.spin = 0;
     this.strokes++;
+    // the first stroke of the day's first go takes the day
+    if (this.strokes === 1) this.takeDaily();
     this.moving = true;
     this.struckAt = this.t;
     this.firstStep = true;
@@ -1509,7 +1580,9 @@ export class Game {
     this.events[how]?.(score, this.def.par);
     if (how === 'pickedUp') this.pickedUp = true;
     const save = this.progress.save;
-    if (save.mode === 'free' && !this.rehearsing) return;
+    // a later go at the daily hole changes nothing; its first pays whatever the mode, as it keeps its own slot
+    if (this.dailyGo !== null && !this.dailyGo.pays) return;
+    if (save.mode === 'free' && !this.rehearsing && this.dailyGo === null) return;
     // a hole begun again pays nothing, as one picked up does
     const pay = paid(score, this.def.par, how === 'pickedUp' || this.restarted, this.kit.underParPay);
     // the piggy bank doubles the coins of the hole it was worn for, if it is finished, and is used up by it: not by one paying nothing
@@ -1520,7 +1593,8 @@ export class Game {
     save.gems += pay.gems;
     // a hole not yet holed has no best
     const best = Object.hasOwn(save.best, this.def.name) ? save.best[this.def.name] : undefined;
-    if (how === 'holed' && (!best || score < best.strokes))
+    // the daily hole is never a hole's best: its name is a day's, and a best is kept by name
+    if (how === 'holed' && this.dailyGo === null && (!best || score < best.strokes))
       save.best[this.def.name] = { strokes: score, kit: { ...save.kit } };
     if (spend) {
       this.piggy = '';
@@ -1528,6 +1602,7 @@ export class Game {
       for (const aisle of AISLES) if (save.kit[aisle] === spent) save.kit[aisle] = '';
     }
     this.tally(how, score);
+    if (this.dailyGo !== null) this.finishDaily(score);
     const prize = this.counting ? this.closeRound() : null;
     const feats = this.earn();
     this.persist();
@@ -1549,11 +1624,14 @@ export class Game {
   }
 
   /**
-   * Whether what a player does is counted in their life: for a hole that pays, which is the career's and not free play's, and
-   * not a hole begun again from the menu (or a restart would farm an ace). A rehearsal, which no one plays, counts nothing.
+   * Whether what a player does is counted in their life: for a hole that pays, which is the career's and not free play's (but for
+   * the daily hole's first go, which pays in both), and not a hole begun again from the menu (or a restart would farm an ace). A rehearsal, which no one plays, counts nothing.
    */
   private get tallying(): boolean {
-    return !this.rehearsing && !this.restarted && this.progress.save.mode === 'career';
+    if (this.rehearsing || this.restarted) return false;
+    // the daily hole's first go counts in either mode, and its later goes in neither
+    if (this.dailyGo !== null) return this.dailyGo.pays;
+    return this.progress.save.mode === 'career';
   }
 
   /** A longest figure of the life raised to `value` whole yards, if it is more than it was and the hole counts. */

@@ -196,6 +196,7 @@ describe('the game', () => {
         longestDrive: 0,
       },
       feats: [],
+      daily: { day: '', strokes: 0, par: 0, streak: 0 },
     });
   });
 });

@@ -26,6 +26,9 @@ export const DOWNTOWN = 20;
 /** The things owned that make a player kitted out. */
 export const KITTED_OUT = 15;
 
+/** The daily holes finished on days in turn that make a run a feat. */
+export const DAILY_RUN = 7;
+
 /** Whether `course` is one of golf's, as the career's records know it by name: a course no longer played is not. */
 const isGolf = (course: string) => COURSES.find((c) => c.name === course)?.golf === true;
 
@@ -77,6 +80,13 @@ export const FEATS: readonly Feat[] = [
     how: `a putt from ${DOWNTOWN} yards`,
     icon: String(DOWNTOWN),
     earned: (s) => s.life.longestPutt >= DOWNTOWN,
+  },
+  {
+    id: 'dailySeven',
+    name: 'A week of days',
+    how: 'seven daily holes running',
+    icon: String(DAILY_RUN),
+    earned: (s) => s.daily.streak >= DAILY_RUN,
   },
 ];
 
