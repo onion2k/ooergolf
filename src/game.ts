@@ -378,6 +378,8 @@ export class Game {
   private pickedUp = false;
   /** Whether this round is a practice round, which pays its holes and keeps nothing of the season's, and leaves the mode as it was. */
   private practice = false;
+  /** Whether this hole was begun again from its tee by the menu, which pays it nothing when it is finished: cleared by each hole begun. */
+  private restarted = false;
   /** The piggy bank's id if one was worn when this hole began, which is the hole it pays double for; '' otherwise. */
   private piggy = '';
 
@@ -690,6 +692,7 @@ export class Game {
     this.strokes = 0;
     this.moving = false;
     this.phase = 'play';
+    this.restarted = false;
     // what the kit gives a hole is given afresh: the free loss again, and the piggy bank only if it is worn as the hole begins
     this.waded = false;
     this.piggy = kit.piggy ? this.progress.save.kit.accessory : '';
@@ -715,13 +718,40 @@ export class Game {
     this.events.started?.(index, this.def.par);
   }
 
-  /** A new round from the first hole, the card cleared: an event round kept is given up for it, as `giveUp` has it. */
+  /**
+   * The hole in play picked up, at the menu's asking: scored at the limit and paid nothing, as a ball lost at the limit is, and
+   * an event's card and kept round are written as for any hole done. Refused but for a hole in play.
+   */
+  pickUp(): boolean {
+    if (this.phase !== 'play') return false;
+    this.done('pickedUp');
+    return true;
+  }
+
+  /**
+   * The hole in play begun again from its tee, at the menu's asking: no strokes, the card and the retake as they were. Refused
+   * where `restartRefused` says, and but for a hole in play. A hole begun again pays nothing when it is finished, in practice
+   * and in a round that pays, or a restart would farm the gems of an ace. Whether it was.
+   */
+  restartHole(): boolean {
+    if (this.phase !== 'play' || this.restartRefused()) return false;
+    this.begin(this.hole);
+    this.restarted = true;
+    return true;
+  }
+
+  /** Why a restart is not allowed, if it is not: in an event, where a stroke counts against the field. The one place a rule is added to. */
+  private restartRefused(): boolean {
+    return this.event !== null;
+  }
+
+  /** A new round from the first hole, the card cleared: an event round kept is given up for it, as `withdraw` has it. */
   newRound() {
     this.card.length = 0;
     this.retaken = false;
     this.pickedUp = false;
     this.practice = false;
-    this.giveUp();
+    this.withdraw();
     this.event = null;
     this.begin(0);
   }
@@ -732,7 +762,7 @@ export class Game {
    * (a test's holes and the title's, which have no name, leave the round alone, and so does free play, which leaves it to go on with in the
    * career). Every way a round begins that is not going on with the kept one calls this.
    */
-  private giveUp() {
+  private withdraw() {
     const save = this.progress.save;
     const round = save.round;
     if (round === null || save.mode !== 'career' || this.rehearsing || this.of === null) return;
@@ -864,7 +894,7 @@ export class Game {
     this.of = of;
     this.event = null;
     this.practice = false;
-    this.giveUp();
+    this.withdraw();
     return true;
   }
 
@@ -1465,10 +1495,11 @@ export class Game {
     if (how === 'pickedUp') this.pickedUp = true;
     const save = this.progress.save;
     if (save.mode === 'free' && !this.rehearsing) return;
-    const pay = paid(score, this.def.par, how === 'pickedUp', this.kit.underParPay);
-    // the piggy bank doubles the coins of the hole it was worn for, if it is finished, and is used up by it
+    // a hole begun again pays nothing, as one picked up does
+    const pay = paid(score, this.def.par, how === 'pickedUp' || this.restarted, this.kit.underParPay);
+    // the piggy bank doubles the coins of the hole it was worn for, if it is finished, and is used up by it: not by one paying nothing
     const spent = this.piggy;
-    const spend = spent !== '' && how === 'holed';
+    const spend = spent !== '' && how === 'holed' && !this.restarted;
     if (spend) pay.coins *= 2;
     save.coins += pay.coins;
     save.gems += pay.gems;
