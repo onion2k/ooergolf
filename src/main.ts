@@ -32,13 +32,12 @@ import { createApi } from './debug';
 import { holeFailureText, reasonOf } from './failure';
 import { frameCost } from './frame-cost';
 import { COURSES, type Course } from './course';
-import { dayOf, recordText, type RoundOf } from './career';
+import { dayOf, type RoundOf } from './career';
 import { seasonContext } from './tours';
-import { closedIfFull, eventField, eventsIn, nextEvent, seasonMerit, type SeasonContext } from './tournament';
-import { PRIZE, PROMOTED, TOURS, YOU, standings, type Tour } from './season';
+import { closedIfFull, nextEvent, type SeasonContext } from './tournament';
+import type { Tour } from './season';
 import type { TourSeason } from './career';
-import type { Board, EventCard, Results } from './hud';
-import type { Placement } from './game';
+import { boardNow, careerWords, eventCards, resultsOf, type LastPlaced } from './board';
 import { Picker, kindOfCourse, tourOfKind, KINDS, type PickerCourse } from './picker';
 import type { CoursePreview } from './previews';
 import previewData from './previews.json';
@@ -400,61 +399,17 @@ async function main() {
   /** The start screen up with the picker, the save's bests and the career as they now are, held back while the title's letters drop. */
   const openStart = (wait: boolean) => {
     picker.setBests(game.progress.save.best);
-    hud.showStart(picker, wait, careerWords());
-    hud.setEvents(eventCards());
+    hud.showStart(picker, wait, careerWords(progress.save));
+    hud.setEvents(eventCards(season, progress.save));
   };
   /** A course as the career knows a round of it: its name and its purse. */
   const roundOf = (c: Course): RoundOf => ({ name: c.name, purse: c.purse });
   /** The season's courses, rivals and their scores: one for the page, handed to the game and read here for the screens. */
   const season: SeasonContext = seasonContext();
-  /** A course's par, from the field table, so a golf course need not be made to say it. */
-  const parOf = (course: string, holes = Infinity) =>
-    season.table[course].slice(0, holes).reduce((a, h) => a + h.par, 0);
-  /** The first `n` of a table's rows, and the player's after them if theirs is not among them. */
-  const topAndYou = <T extends { name: string }>(rows: readonly T[], n: number): T[] => {
-    const top = rows.slice(0, n);
-    const you = rows.find((r) => r.name === YOU);
-    return you && !top.includes(you) ? [...top, you] : top;
-  };
-  /** The player's place in an order of merit, or nought where they have none yet. */
-  const meritPlace = (tour: Tour, tourSeason: TourSeason) =>
-    seasonMerit(season, tour, tourSeason).find((m) => m.name === YOU)?.place ?? 0;
-  /** Each tour's next event, as its tab on the start screen shows it in the career; none in free play. */
-  const eventCards = (): Partial<Record<Tour, EventCard>> | null => {
-    const save = progress.save;
-    if (save.mode !== 'career') return null;
-    const cards: Partial<Record<Tour, EventCard>> = {};
-    for (const tour of TOURS) {
-      const tourSeason = closedIfFull(season, tour, save.season[tour]);
-      const next = nextEvent(season, tour, tourSeason);
-      cards[tour] = {
-        tour,
-        grade: tourSeason.grade,
-        event: next.index + 1,
-        events: eventsIn(season, tour),
-        course: next.course.name,
-        par: parOf(next.course.name),
-        fee: next.fee,
-        pot: next.pot,
-        paid: PRIZE.shares.length,
-        coins: save.coins,
-        merit: topAndYou(seasonMerit(season, tour, tourSeason), 4).map((m) => ({
-          place: m.place,
-          tied: m.tied,
-          name: m.name,
-          points: m.points,
-          you: m.name === YOU,
-        })),
-        promoted: PROMOTED,
-        kept: save.round?.tour === tour ? save.round.hole + 1 : null,
-      };
-    }
-    return cards;
-  };
   /** The career's words and each tour's event drawn on the start screen, from the save as it stands. */
   const drawCareer = () => {
-    hud.setCareer(careerWords());
-    hud.setEvents(eventCards());
+    hud.setCareer(careerWords(progress.save));
+    hud.setEvents(eventCards(season, progress.save));
   };
   /**
    * The season of the event in play, as it stood when its holes began: the order of merit and the field are worked out from
@@ -462,62 +417,7 @@ async function main() {
    */
   let eventSeason: TourSeason | null = null;
   /** Where the last event finished was placed, kept from its `placed` until the card is drawn. */
-  let lastPlaced: { result: Placement; tour: Tour; index: number; card: number[]; before: TourSeason } | null = null;
-  /** How the field stands in the event in play, thru the holes finished: none away from an event. */
-  const boardNow = (): Board | null => {
-    if (!game.event || !eventSeason) return null;
-    const { tour, index } = game.event;
-    const thru = game.card.length;
-    const placed = standings(eventField(season, tour, eventSeason, index, game.card), thru);
-    const par = parOf(season.tours[tour][index].name, thru);
-    const you = placed.find((p) => p.name === YOU)!;
-    const cut = placed[Math.min(PRIZE.shares.length, placed.length) - 1];
-    return {
-      thru,
-      rows: topAndYou(placed, 3).map((p) => ({
-        place: p.place,
-        tied: p.tied,
-        name: p.name,
-        toPar: p.total - par,
-        you: p.name === YOU,
-      })),
-      cut: cut.total - par,
-      behind: placed.filter((p) => p.total > you.total).length,
-    };
-  };
-  /** What an event came to, for the card at its end: the field, the place and the season, from where it was placed. */
-  const resultsOf = (course: string): Results | null => {
-    if (!lastPlaced) return null;
-    const { result, tour, index, card, before } = lastPlaced;
-    const placed = eventField(season, tour, before, index, card);
-    return {
-      course,
-      place: result.place,
-      tied: result.tied,
-      prize: result.prize,
-      rows: topAndYou(placed, 4).map((p) => ({
-        place: p.place,
-        tied: p.tied,
-        name: p.name,
-        total: p.total,
-        you: p.name === YOU,
-      })),
-      meritFrom: meritPlace(tour, before),
-      meritTo: meritPlace(tour, { ...before, played: [...before.played, card] }),
-      seasonOver: result.seasonOver,
-      promotedTo: result.promotedTo,
-      title: result.title,
-    };
-  };
-  /** What the start screen says of the career, from the save as it stands. */
-  const careerWords = () => {
-    const save = progress.save;
-    return {
-      mode: save.mode,
-      records: Object.fromEntries(Object.entries(save.records).map(([name, r]) => [name, recordText(r)])),
-      round: save.round ? { course: save.round.course, hole: save.round.hole + 1 } : null,
-    };
-  };
+  let lastPlaced: LastPlaced | null = null;
   /** What the round's last hole paid as its prize, told before the card is shown, and let go as a round begins. */
   let prized: { coins: number; record: boolean } | null = null;
   /** The start screen put away for a course now in play: the course's words up, and its purse. */
@@ -959,7 +859,7 @@ async function main() {
       while (!steps.next().done);
       // an event's season is unchanged until its last hole, so it is kept as each hole begins, which a reload's hole does too
       eventSeason = game.event ? structuredClone(progress.save.season[game.event.tour]) : null;
-      hud.setBoard(boardNow());
+      hud.setBoard(boardNow(season, game.event, game.card, eventSeason));
     },
     struck(power, x, y) {
       // one stroke in five has the camera follow the ball, and the rest hold the view where it stood
@@ -1057,7 +957,7 @@ async function main() {
       // the ball rattling in the cup, and a run up the marimba as good as the score
       sound.holed(strokes, par);
       log(`sound holed ${strokes} ${par}`);
-      hud.setBoard(boardNow());
+      hud.setBoard(boardNow(season, game.event, game.card, eventSeason));
       scene.holedAt = game.t;
       // the confetti cup throws more, for longer, in the rainbow's colours
       drawn.confetti = 0;
@@ -1080,7 +980,7 @@ async function main() {
       hud.done(strokes, par, true);
       sound.lost(true);
       log('sound picked up');
-      hud.setBoard(boardNow());
+      hud.setBoard(boardNow(season, game.event, game.card, eventSeason));
     },
     finished: () => {
       const best = progress.save.best;
@@ -1093,7 +993,7 @@ async function main() {
           record: prized?.record ?? false,
           free: progress.save.mode === 'free' && game.of !== null,
         },
-        resultsOf(game.of?.name ?? courseName),
+        resultsOf(season, lastPlaced, game.of?.name ?? courseName),
       );
       prized = null;
       lastPlaced = null;
