@@ -13,6 +13,7 @@ import { FIREWORK_STEPS, fireworkAt, fireworkEmits } from './bursts';
 import type { Game } from './game';
 import { SPARKLE, flash, glint, kickFlash } from './glints';
 import { PALETTE } from './models/palette';
+import { projectInto } from './shot';
 
 import { RUNGS, type Governor } from './quality';
 import type { Scene } from './scene';
@@ -78,6 +79,8 @@ export class Effects {
   private readonly trailSprites = new Float32Array(TRAIL.most * SPRITE_FLOATS);
   /** Room for a glint at every place the gold is, which a flash lights all at once, and the sparkles of the water after them. */
   private readonly glintQuad: Float32Array<ArrayBuffer>;
+  /** Where `glow` found its point on the screen, written by `projectInto` so that nothing is made each frame. */
+  private readonly scratch = new Float64Array(2);
   /** Where the water's sparkles are this frame, four numbers each: written into, never made. */
   private readonly sparkQuads = new Float32Array(SPARKLE.most * 4);
   /** The gold's places on this hole, x, y and z each: worked out as the hole begins, since the cup does not move within it. */
@@ -167,12 +170,11 @@ export class Effects {
 
   /** A glow, `brightness` from 0 to 1, at quad `k`, where (x, y, z) is on the screen. */
   private glow(k: number, x: number, y: number, z: number, brightness: number, look: Glow = GOLD) {
-    const m = this.cam.viewProjection;
     const quad = this.glintQuad;
-    const w = m[3] * x + m[7] * y + m[11] * z + m[15];
     const o = k * EFFECT_STRIDE;
-    quad[o] = (m[0] * x + m[4] * y + m[8] * z + m[12]) / w;
-    quad[o + 1] = (m[1] * x + m[5] * y + m[9] * z + m[13]) / w;
+    projectInto(this.cam.viewProjection, x, y, z, this.scratch);
+    quad[o] = this.scratch[0];
+    quad[o + 1] = this.scratch[1];
     quad[o + 2] = look.size * brightness;
     quad[o + 3] = look.power * brightness;
     quad[o + 4] = look.colour[0];

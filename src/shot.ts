@@ -104,6 +104,26 @@ export class HeldView {
 }
 
 /**
+ * Where the world's point (x, y, z) is on the screen through the view-projection matrix `m`, in normalised device
+ * coordinates from minus one to one, written into `out` (nothing is made, since a frame calls it). Returns the point's `w`:
+ * a `w` of nothing or less is behind the camera, and what was written is then not on the screen, which each caller says
+ * what to do with. The sum is said here once, so that the picture's glows, the invariants' framing rule and the test API's
+ * read-backs cannot come to disagree about where a point is drawn.
+ */
+export function projectInto(
+  m: ArrayLike<number>,
+  x: number,
+  y: number,
+  z: number,
+  out: { [k: number]: number },
+): number {
+  const w = m[3] * x + m[7] * y + m[11] * z + m[15];
+  out[0] = (m[0] * x + m[4] * y + m[8] * z + m[12]) / w;
+  out[1] = (m[1] * x + m[5] * y + m[9] * z + m[13]) / w;
+  return w;
+}
+
+/**
  * The point on the ground at height `z` that the view shows at (nx, ny) in
  * normalised device coordinates, or null where that is sky, written into `out`
  * (made for the caller unless it gives one, which a frame does). A camera must

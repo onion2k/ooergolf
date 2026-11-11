@@ -8,6 +8,7 @@
  * Without this the page would work the fit out in the middle of drawing a frame, and the layout of the cards would
  * be said once in the stylesheet and once in the code that keeps the word clear of them.
  */
+import { projectInto } from './shot';
 
 /** What the word is, from the lettering, in the title's own units: its width and height. */
 export interface Word {
@@ -350,6 +351,9 @@ export function poseMatrix(out: Float32Array, frame: Frame, pivot: readonly numb
   out[15] = 1;
 }
 
+/** Where a corner was found on the screen, so that finding one makes nothing. */
+const corner = new Float64Array(2);
+
 /**
  * Where a piece is on the screen: its corners through the camera's view and projection (`viewProjection`, column by
  * column), written as the left, foot, right and top of the box that holds them, from -1 to 1 each way and y up.
@@ -373,9 +377,9 @@ export function boxOf(
     const px = pivot[0] + lx * pose.sx,
       py = pivot[1] + pose.lift + ly * pose.sy;
     const w = [0, 1, 2].map((a) => frame.origin[a] + (frame.right[a] * px + frame.up[a] * py) * frame.scale);
-    const cw = m[3] * w[0] + m[7] * w[1] + m[11] * w[2] + m[15];
-    const nx = (m[0] * w[0] + m[4] * w[1] + m[8] * w[2] + m[12]) / cw;
-    const ny = (m[1] * w[0] + m[5] * w[1] + m[9] * w[2] + m[13]) / cw;
+    projectInto(m, w[0], w[1], w[2], corner);
+    const nx = corner[0];
+    const ny = corner[1];
     x0 = Math.min(x0, nx);
     x1 = Math.max(x1, nx);
     y0 = Math.min(y0, ny);

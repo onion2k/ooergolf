@@ -1,7 +1,7 @@
 /** Turning a drag on the screen into a shot on the course, and finding where on the ground the pointer is. */
 import { Camera } from 'artshape-render/gpu/camera';
 import { describe, expect, it } from 'vitest';
-import { DRAG, HeldView, groundAt, shotFromDrag } from '../src/shot';
+import { DRAG, HeldView, groundAt, projectInto, shotFromDrag } from '../src/shot';
 
 /** A camera looking up the course from the south, three-quarters from above. */
 function camera(aspect = 1.6) {
@@ -124,5 +124,46 @@ describe('a held view', () => {
     held.hold(c);
     const out: [number, number] = [0, 0];
     expect(held.ground(0, 0, 0, out)).toBe(out);
+  });
+});
+
+describe('the projection of a point through a view-projection matrix', () => {
+  it('leaves a point as it is under the identity, with w of one', () => {
+    const identity = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+    const out: number[] = [0, 0];
+    expect(projectInto(identity, 0.25, -0.5, 3, out)).toBe(1);
+    expect(out).toEqual([0.25, -0.5]);
+  });
+
+  it('divides by w as a perspective matrix gives it, worked by hand', () => {
+    // columns, as the camera lays them: x scaled by 2, y by 3, w taken from z (m[11] = 1) and a shift of 1 in w
+    const m = [2, 0, 0, 0, 0, 3, 0, 0, 0, 0, 1, 1, 0, 0, 0, 1];
+    const out: number[] = [0, 0];
+    // w = 1 * 3 + 1 = 4; x = 2 * 4 / 4 = 2; y = 3 * 6 / 4 = 4.5
+    expect(projectInto(m, 4, 6, 3, out)).toBe(4);
+    expect(out).toEqual([2, 4.5]);
+  });
+
+  it('writes a point behind the camera too, and says so by a w of nothing or less', () => {
+    const m = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0];
+    const out: number[] = [0, 0];
+    expect(projectInto(m, 1, 1, -2, out)).toBe(-2);
+  });
+
+  it('gives bit for bit what `drawnAt` in the invariants gave before the sum was said once', () => {
+    // the figures were taken from `drawnAt`'s own sum on the commit before `projectInto` was written, for this camera
+    const c = camera(1.6);
+    const out: number[] = [0, 0];
+    const taken: [number, number, number, number, number, number][] = [
+      [0, 0, 0, 0, 0, 78.10249328613281],
+      [10, 20, 0, 0.18371990497531723, 0.37636681011110745, 93.46691846847534],
+      [-25, -30, 1, -0.7889148947829484, -0.930910109759392, 54.4156711101532],
+      [30, 30, 1, 0.51254342873378, 0.545995568793285, 100.50894665718079],
+    ];
+    for (const [x, y, z, nx, ny, w] of taken) {
+      expect(projectInto(c.viewProjection, x, y, z, out), `w of ${x},${y},${z}`).toBe(w);
+      expect(out[0], `x of ${x},${y},${z}`).toBe(nx);
+      expect(out[1], `y of ${x},${y},${z}`).toBe(ny);
+    }
   });
 });

@@ -20,6 +20,7 @@ import { CACTUS, HOLOGRAM, TREE } from './trees';
 import { daylight } from './look';
 import { THEMES } from './theme';
 import { place } from './matrix';
+import { projectInto } from './shot';
 import { square } from './meshes';
 import {
   FLAG_COLOURS,
@@ -634,10 +635,9 @@ async function main() {
 
   /** Where a point in the world is on the page, or null behind the camera. */
   const project = ([x, y, z]: V3): [number, number] | null => {
-    const m = cam.viewProjection;
-    const w = m[3] * x + m[7] * y + m[11] * z + m[15];
-    if (w <= 0) return null;
-    return [(m[0] * x + m[4] * y + m[8] * z + m[12]) / w, (m[1] * x + m[5] * y + m[9] * z + m[13]) / w];
+    const at: [number, number] = [0, 0];
+    if (projectInto(cam.viewProjection, x, y, z, at) <= 0) return null;
+    return at;
   };
 
   /** The camera from the south or the west, looking down at the view's polar angle, as near as it can be with the whole box on the screen. */

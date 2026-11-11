@@ -7,7 +7,7 @@
  */
 import { createContext } from 'artshape-render/gpu/context';
 import { LightPool } from 'artshape-render/game/lights';
-import { GameRenderer, antialiasFor } from 'artshape-render/game/renderer';
+import { GameRenderer } from 'artshape-render/game/renderer';
 import {
   BALL,
   HARDEST_SHOT,
@@ -23,8 +23,6 @@ import {
 import { bendRate } from './shaping';
 import { BAG, carryOf } from './bag';
 import { AimReadout } from './aimreadout';
-import { safeBox } from './aimview';
-import { framingProblems } from './invariants';
 import { CLIP, CameraRig, LEAD, TILT, overheadFit } from './camera';
 import { Director } from './director';
 import { ITEMS, itemById } from './items';
@@ -43,6 +41,7 @@ import type { CoursePreview } from './previews';
 import previewData from './previews.json';
 import { Game, type GameEvents } from './game';
 import { Hud } from './hud';
+import { PageHost } from './pagehost';
 import { InstallOffer, registerWorker, shouldRegister, type WorkerState } from './install';
 import { uiScale } from './uiscale';
 import { mapInto, mapSize, paintMap, type MapSize } from './holemap';
@@ -58,12 +57,10 @@ import { titlePage } from './titlepage';
 import { BootProgress, type BootStep } from './bootsteps';
 import {
   TitleScene,
-  boxOf as titleBoxOf,
   cardsMax,
   cardsTop,
   fitTitle,
   newFrame,
-  piecesBounds,
   placeCamera,
   poseMatrix,
   titleFrame,
@@ -90,10 +87,7 @@ import { clearings } from './scenery';
 import { craterDust, cupBurst, splash, strikePuff } from './bursts';
 import { CRATER } from './waterdraw';
 import { Input } from './input';
-import { flash } from './glints';
 import { Squash, squashInto, squashOf } from './squash';
-import { waggle } from './sway';
-import { EFFECT_STRIDE } from 'artshape-render/game/renderer';
 import { Governor, RUNGS, economyFor } from './quality';
 import { retakeShown } from './retake';
 import { HeldView } from './shot';
@@ -1388,32 +1382,6 @@ async function main() {
     // (by the world's seconds, which a biome's pace makes fewer than the clock's: a ball's speed is the world's, and so is its roll)
     roll(scene.ballTurn, world.vx[ball], world.vy[ball], KIND_RADIUS[BALL], game.worldSeconds(dt));
   }
-  /**
-   * The framing as the camera is placed now, for the test API: where the ball and the furthest reach are on the screen
-   * (from minus one to one each way), the safe box, whether the view has settled so that the rule is asked of it, and what is
-   * wrong with it if it has. Not asked while the camera is parked by a test, gliding to a tee, easing, turning or overhead.
-   */
-  function framing() {
-    const { world, ball } = game;
-    rig.place(cam, game.t);
-    cam.update();
-    const box = safeBox(aspect, innerHeight);
-    const at = (x: number, y: number, z: number): [number, number] => {
-      const m = cam.viewProjection;
-      const w = m[3] * x + m[7] * y + m[11] * z + m[15];
-      return [(m[0] * x + m[4] * y + m[8] * z + m[12]) / w, (m[1] * x + m[5] * y + m[9] * z + m[13]) / w];
-    };
-    const there = { x: world.x[ball], y: world.y[ball], z: world.z[ball] };
-    const reach = director.reachPoint(reaching) ? reaching : null;
-    const settled = !parked && !choosing && !rig.easing(game.t) && !rig.aiming && !rig.turning && rig.blend === 0;
-    return {
-      ball: at(there.x, there.y, there.z),
-      reach: reach ? at(reach.x, reach.y, reach.z) : null,
-      box,
-      settled,
-      problems: settled ? framingProblems(rig, cam, there, reach, box) : [],
-    };
-  }
   /** The frame drawn, and when it was begun, for the governor to measure the drawing against. */
   function draw(dt: number): number {
     // nothing is drawn once the page is stopped on the boot screen: the scene is left as the build that failed left it
@@ -1475,6 +1443,18 @@ async function main() {
   let paused = startsPaused;
   let ready = false;
   let bootMs = 0;
+  /** What the test API reads back of the page: the projection, the view, the frame's motions and the title. */
+  const host = new PageHost(
+    { game, renderer, cam, canvas, scene, hud, rig, director, governor, input, effects, aim, drawn, reaching, marks },
+    {
+      titled: () => titled,
+      titlesAlive: () => titlesAlive,
+      aspect: () => aspect,
+      parked: () => parked,
+      choosing: () => choosing,
+      titleCamera,
+    },
+  );
   window.game = createApi({
     game,
     ready: () => ready,
@@ -1501,16 +1481,7 @@ async function main() {
       parked = false;
       director.park(false);
     },
-    project(x, y, z) {
-      rig.place(cam, game.t);
-      cam.update();
-      const m = cam.viewProjection;
-      const w = m[3] * x + m[7] * y + m[11] * z + m[15];
-      const nx = (m[0] * x + m[4] * y + m[8] * z + m[12]) / w,
-        ny = (m[1] * x + m[5] * y + m[9] * z + m[13]) / w;
-      const r = canvas.getBoundingClientRect();
-      return { x: r.left + ((nx + 1) / 2) * r.width, y: r.top + ((1 - ny) / 2) * r.height };
-    },
+    project: host.project,
     aiming: () => (game.ready && input.aim ? { ...input.aim } : null),
     map: () => {
       if (!mapped) return null;
@@ -1523,28 +1494,7 @@ async function main() {
         aim: o.aim ? [o.to[0], o.to[1]] : null,
       };
     },
-    view: () => ({
-      framing: framing(),
-      distance: rig.distance,
-      lead: rig.lead,
-      aiming: rig.aiming,
-      turning: rig.turning,
-      heading: rig.headed,
-      flag: director.nearFlag(),
-      line: director.nearLine(),
-      following: director.following,
-      rung: governor.rung,
-      held: governor.held,
-      antialias: antialiasFor(renderer.look, renderer.economy),
-      swaying: renderer.economy.wind !== false,
-      mode: input.mode,
-      blend: rig.blend,
-      farPlane: cam.far,
-      flying: rig.flying(game.t),
-      ...rig.view(game.t),
-      putt: hud.puttDrawn().putt,
-      greens: hud.puttDrawn().greens,
-    }),
+    view: host.view,
     orbit: (turn, tilt) => rig.orbit(turn, tilt),
     overhead: (on) => setOverhead(on ?? !rig.overhead),
     faceFlag,
@@ -1560,96 +1510,12 @@ async function main() {
     shopTab: (aisle) => hud.pressTab(aisle),
     measureFrame,
     judge,
-    motions: () => ({
-      squash: drawn.squash,
-      waggle: waggle(game.t - scene.holedAt),
-      flash: flash(game.t - scene.holedAt),
-      glints: drawn.glints,
-      glide: rig.gliding(game.t),
-      pulse: drawn.pulse,
-      sparkles: drawn.sparkles,
-      // read back from the quads the frame wrote, which come after the gold's
-      sparklesAt: Array.from({ length: drawn.sparkles }, (_, k) => {
-        const o = (drawn.glints + k) * EFFECT_STRIDE;
-        const r = canvas.getBoundingClientRect();
-        return {
-          x: r.left + ((effects.quads[o] + 1) / 2) * r.width,
-          y: r.top + ((1 - effects.quads[o + 1]) / 2) * r.height,
-        };
-      }),
-      splash: scene.splashReach(game.t),
-      puff: drawn.puff,
-      landing: scene.landingMark(),
-      // the grass pressed flat round the ball this frame: where and how wide, or none
-      press: drawn.press ? { ...drawn.press, took: drawn.took } : null,
-      // the preview of the shot in hand as the last frame placed it, and what it comes to
-      shot: (() => {
-        const m = scene.shotMarks();
-        if (!m.ring || !aim.preview) return null;
-        const p = aim.preview;
-        return { ...m, end: p.end, carry: p.carry, lie: p.lie, heading: p.heading };
-      })(),
-      // the wind's arrow as it was last turned, and the words beside it; and the shape and spin buttons as they are drawn
-      wind: hud.windDrawn(),
-      controls: hud.controls(),
-      arrows: scene.arrowsDrawn(),
-      // only while one is lit, so a hole with none, and every moment none is hit, reads as it always did
-      ...(drawn.kicks ? { kicks: drawn.kicks } : {}),
-      trail: drawn.trail,
-      confetti: drawn.confetti,
-      strips: scene.flagStrips(),
-      retake: hud.retakeDrawn(),
-      sky: scene.skyDrawn(),
-      help: hud.helpDrawn(),
-    }),
+    motions: host.motions,
     course: () => courseName,
     choosing: () => choosing,
     app: () => ({ worker, offered: offer.offered, standalone: matchMedia('(display-mode: standalone)').matches }),
     install: () => offer.prompt(),
-    title() {
-      const t = titled;
-      const at = { lettersAt: marks.letters, courseAt: marks.course };
-      if (!t) return { up: false, t: 0, landed: false, cards: false, fit: null, alive: titlesAlive, pieces: [], ...at };
-      // the camera and the word's plane as they stand now, so a box is of the frame that would be drawn
-      titleCamera(t);
-      cam.update();
-      titleFrame(cam, t.fit, t.word, t.frame);
-      const r = canvas.getBoundingClientRect();
-      return {
-        up: true,
-        ...at,
-        alive: titlesAlive,
-        t: t.scene.t,
-        landed: t.scene.landed,
-        cards: !document.getElementById('start')!.hidden,
-        fit: { share: t.fit.share, centre: [...t.fit.centre] as [number, number] },
-        pieces: t.pieces.map((piece) => {
-          const pose = t.scene.pose(piece, { shown: true, lift: 0, sx: 1, sy: 1 });
-          let box: [number, number, number, number] | null = null;
-          if (pose.shown) {
-            titleBoxOf(t.box, cam.viewProjection, t.frame, piece.pivot, piecesBounds(piece), pose);
-            // from -1 to 1 with y up to the page's own pixels
-            box = [
-              r.left + ((t.box[0] + 1) / 2) * r.width,
-              r.top + ((1 - t.box[3]) / 2) * r.height,
-              r.left + ((t.box[2] + 1) / 2) * r.width,
-              r.top + ((1 - t.box[1]) / 2) * r.height,
-            ];
-          }
-          return {
-            name: piece.name,
-            kind: piece.kind,
-            owner: piece.owner,
-            step: piece.step,
-            shown: pose.shown,
-            lift: pose.lift,
-            sx: pose.sx,
-            sy: pose.sy,
-            box,
-          };
-        }),
-      };
-    },
+    title: host.title,
     playMode: (mode) => {
       const button = document.getElementById('playMode') as HTMLButtonElement;
       if (button.dataset.mode !== mode) button.click();

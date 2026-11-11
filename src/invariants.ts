@@ -35,6 +35,7 @@
  */
 import type { Camera } from 'artshape-render/gpu/camera';
 import type { SafeBox } from './aimview';
+import { projectInto } from './shot';
 import { DROP, type Pose, type PoseOf, type TitleScene } from './titlescene';
 import { KICKER, fromKickers } from './arena';
 import {
@@ -182,9 +183,9 @@ export const FRAMING = { tolerance: 0.02 } as const;
 
 /** Where a point is drawn by the camera as last placed, in the device's coordinates, from minus one to one each way. */
 function drawnAt(camera: Camera, x: number, y: number, z: number): [number, number] {
-  const m = camera.viewProjection;
-  const w = m[3] * x + m[7] * y + m[11] * z + m[15];
-  return [(m[0] * x + m[4] * y + m[8] * z + m[12]) / w, (m[1] * x + m[5] * y + m[9] * z + m[13]) / w];
+  const at: [number, number] = [0, 0];
+  projectInto(camera.viewProjection, x, y, z, at);
+  return at;
 }
 
 /**

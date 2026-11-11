@@ -41,6 +41,7 @@ const PICTURE = [
   'sceneryset',
   'effects',
   'aimreadout',
+  'pagehost',
   'turf',
   'tint',
   'turfTexture',
