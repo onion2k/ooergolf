@@ -1319,6 +1319,33 @@
       left: 14px;
     }
   }
+  /* under the title the panel has no heading, so the daily strip is its first row and the cup stood on the strip's plate: the
+     strip begins past the cup there, and the cup comes down to the strip's middle */
+  @media (min-width: 601px) {
+    html[data-title] #daily {
+      margin-left: 46px;
+    }
+    html[data-title] #trophiesOpen {
+      top: 38px;
+    }
+  }
+  /* and the Install button, at the panel's top right, stood on the strip's Play. A tablet's panel has the height, so the
+     strip begins below the button there and the cup comes down with it; a desk's has none to spare under the title, but its
+     tabs' row is empty at the right, so the button stands there, level with the tabs (the strip is one line of 74 and its
+     margin of 12 on a desk, which is what 113 is made of) */
+  @media (min-width: 601px) and (max-width: 900px) {
+    html[data-title] #start:has(#install:not([hidden])) #daily:not([hidden]) {
+      margin-top: 38px;
+    }
+    html[data-title] #start:has(#install:not([hidden])):has(#daily:not([hidden])) #trophiesOpen {
+      top: 76px;
+    }
+  }
+  @media (min-width: 901px) {
+    html[data-title] #start:has(#daily:not([hidden])) #install {
+      top: 113px;
+    }
+  }
   #trophiesOpen svg {
     width: 26px;
     height: 26px;
@@ -1631,7 +1658,8 @@
   /* on a tablet the five tabs and the Install button, at the panel's top right, would meet: with the button up, the tabs'
      row stands below it, as the title's own panel has always done on a phone */
   @media (min-width: 601px) and (max-width: 900px) {
-    html[data-title] #start:has(#install:not([hidden])) #startHead {
+    /* with the daily strip shown it is the strip that stands below the button, and the tabs below the strip */
+    html[data-title] #start:has(#install:not([hidden])):has(#daily[hidden]) #startHead {
       margin-top: 40px;
     }
   }

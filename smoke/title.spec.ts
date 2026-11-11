@@ -222,6 +222,21 @@ test.describe('the picker fits the screen under the title', () => {
         await offerInstall(page);
         // the panel springs in: measured once it has landed
         await landed(page);
+        // the daily strip is the panel's first row under the title, where the cup and the Install button stand in the panel's
+        // corners: neither may stand on the strip (the cup stood on its plate, and the picture's tolerance let it through)
+        const corners = await page.evaluate(() =>
+          ['daily', 'trophiesOpen', 'install'].map((id) => {
+            const r = document.getElementById(id)!.getBoundingClientRect();
+            return { id, x0: r.left, y0: r.top, x1: r.right, y1: r.bottom, shown: r.width > 0 };
+          }),
+        );
+        const strip = corners[0];
+        expect(strip.shown, 'the daily strip is shown').toBe(true);
+        for (const c of corners.slice(1)) {
+          if (!c.shown) continue;
+          const over = c.x0 < strip.x1 && c.x1 > strip.x0 && c.y0 < strip.y1 && c.y1 > strip.y0;
+          expect(over, `${c.id} stands on the daily strip`).toBe(false);
+        }
         const screen = { x0: 0, y0: 0, x1: width, y1: height };
         // every course of every tab, since the longest name and the widest preview are what could not fit
         for (const [tab, count] of [
