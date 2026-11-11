@@ -300,6 +300,17 @@ export class CameraRig {
   }
 
   /**
+   * `aimAt` put there at once, for a hole just glided to (`glide`): the view's tilt as it is eased from stays the one it was, whatever
+   * tilt the aim view has, since `glide` eases from the tilt it saw to the home tilt and the aim view's tilt is added to that.
+   * Easing the aim view as well, which a golf hole's glide did, overshot by the difference and showed the sky.
+   */
+  aimAtGliding(goal: { distance: number; tilt: number; lead?: number; floor?: number }) {
+    const was = this.tilt;
+    this.aimAt(goal, true);
+    if (!this.flown) this.easeTilt -= this.tilt - was;
+  }
+
+  /**
    * A hole begun at game time `t` with a fly-in: looking at (x, y) on ground `z` high in the end, as `glide` does, but from
    * a place `ahead` of it (up the hole toward the cup), tilted down to `FLY_IN.tilt`, held there `FLY_IN.hold` and eased to
    * the play view over `FLY_IN.time`. It follows the ball all the while, as a glide does.

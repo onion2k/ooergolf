@@ -187,6 +187,50 @@ describe('the fly-in by the director', () => {
     expect(rig.flying(game.t), 'the next hole').toBe(true);
   });
 
+  it('puts the camera on the tee at the play view for a hole begun again in the middle of the fly-in, which never sees the sky', () => {
+    // found 11 November 2026 by the fuzzer (seed 1, a restart a frame into the fly-in): the glide eased from the fly-in's low
+    // view, and the sky was seen with no fly-in under way
+    const { game } = newGame(1);
+    const { rig, director } = begun(game);
+    for (let f = 0; f < 20; f++) {
+      game.step(DT);
+      director.frame(DT, false);
+    }
+    expect(rig.flying(game.t), 'under way').toBe(true);
+    director.started(true);
+    for (let f = 0; f < 60 * 3; f++) {
+      expect(rig.flying(game.t), `frame ${f}`).toBe(false);
+      expect(rig.seesSky(game.t), `frame ${f}`).toBe(false);
+      game.step(DT);
+      director.frame(DT, false);
+    }
+  });
+
+  it('glides to the tee of a golf hole begun again without the sky ever coming into view, and arrives at the aim view', () => {
+    // found 11 November 2026 by the fuzzer (seed 4, a restart a few frames after a restart): the glide eased the tilt from the
+    // view's as it was to the home tilt, the aim view's own ease was added to it, and the two together overshot into the sky
+    const { game } = golfGame(FLAT.long);
+    const { rig, director } = begun(game);
+    for (let f = 0; f < 60 * 6; f++) {
+      game.step(DT);
+      director.frame(DT, false);
+    }
+    const arrived = rig.view(game.t).tilt;
+    for (const again of [1, 2]) {
+      director.started(true);
+      let most = 0;
+      for (let f = 0; f < 60 * 3; f++) {
+        game.step(DT);
+        director.frame(DT, false);
+        const { tilt } = rig.view(game.t);
+        most = Math.max(most, tilt);
+        expect(rig.seesSky(game.t), `restart ${again}, frame ${f}`).toBe(false);
+      }
+      expect(most, `restart ${again}: the tilt never goes past where it was`).toBeLessThanOrEqual(arrived + 1e-6);
+      expect(rig.view(game.t).tilt, `restart ${again}`).toBeCloseTo(arrived, 3);
+    }
+  });
+
   it('is cut short by the overhead view', () => {
     const { game } = newGame(1);
     const { rig } = begun(game);

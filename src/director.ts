@@ -200,11 +200,13 @@ export class Director {
    * always had. A hole begun again (`again`) is glided to and never flown in to, whatever the page has for new holes.
    */
   started(again = false) {
-    const glide = this.looked;
     const game = this.game;
     if (!game) return;
     const { layout, t } = game;
     const { rig } = this;
+    // a hole begun again while the last fly-in is still under way is not glided to: the glide would ease from the fly-in's low view,
+    // which sees the sky, and the sky is seen by a fly-in alone; the camera is put on the tee at the play view instead
+    const glide = this.looked && !rig.flying(t);
     const teeZ = heightAt(layout, layout.tee.x, layout.tee.y);
     const flyIn = !again && this.options.flyIn === true;
     if (flyIn) rig.jump(layout.tee.x, layout.tee.y, teeZ);
@@ -218,7 +220,8 @@ export class Director {
     this.toLine = false;
     this.wasReady = game.ready;
     // the aim view at once for a fly-in, which eases from its own low view to it
-    if (layout.golf) this.aimFor(flyIn || !glide);
+    // (a hole begun again has the aim view at once, kept continuous with the glide, which eased its own tilt as well and overshot into the sky)
+    if (layout.golf) this.aimFor(flyIn || !glide || again, again && glide);
     if (flyIn) {
       // from up the hole toward the cup, a share of the way and no further than `FLY_IN.most`, on the ground there
       const { tee, cup } = layout;
@@ -245,27 +248,26 @@ export class Director {
    * The camera sent to the view that shows where the club in hand comes down from the lie the ball is on, at the pace of an
    * ease, or at once for the very first view. Never worked out from a drag, which would move the ground under the finger.
    */
-  private aimFor(now: boolean) {
+  private aimFor(now: boolean, gliding = false) {
     const game = this.game;
     if (!game?.layout.golf) return;
     const { world, ball, layout, inHand } = game;
     const lie = lieAt(layout, world.x[ball], world.y[ball]);
     this.aimedFor = this.keyOf(inHand.id, lie);
-    this.rig.aimAt(
-      aimView(
-        reachOf(
-          inHand,
-          lie,
-          game.wind.speed,
-          game.kit,
-          game.opening ? game.kit.firstStroke.power : 1,
-          surfacesOf(layout),
-        ),
-        this.aspect,
-        this.height,
+    const goal = aimView(
+      reachOf(
+        inHand,
+        lie,
+        game.wind.speed,
+        game.kit,
+        game.opening ? game.kit.firstStroke.power : 1,
+        surfacesOf(layout),
       ),
-      now,
+      this.aspect,
+      this.height,
     );
+    if (gliding) this.rig.aimAtGliding(goal);
+    else this.rig.aimAt(goal, now);
   }
 
   /**
