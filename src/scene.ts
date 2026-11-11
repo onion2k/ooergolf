@@ -118,7 +118,7 @@ import {
 } from './sway';
 import { SPARKLE, sparkle, sparkles as sparkleShares } from './glints';
 import { MARK, markSize } from './marker';
-import type { Preview } from './preview';
+import { SPREAD_SHOWN, type Preview } from './preview';
 import type { BallLook } from './models/course';
 import { pulse } from './pulse';
 import { PUTT_SHAPE } from './shaping';
@@ -1677,12 +1677,12 @@ export class Scene {
       const angle = p.heading;
       const { across, along } = p.footprint;
       // where a ball goes in water or drops in the cup has no spread to show, and a tap hardly any
-      if (p.end === 'holed' || p.end === 'water' || (across < 0.4 && along < 0.4)) return;
+      if (p.end === 'holed' || p.end === 'water' || (across < SPREAD_SHOWN && along < SPREAD_SHOWN)) return;
       const cx = p.x - Math.cos(angle) * along,
         cy = p.y - Math.sin(angle) * along;
       slopeInto(layout, cx, cy, slope);
-      const rx = Math.max(along, 0.4),
-        ry = Math.max(across, 0.4);
+      const rx = Math.max(along, SPREAD_SHOWN),
+        ry = Math.max(across, SPREAD_SHOWN);
       const lift = ringLift(layout, cx, cy, slope[0], slope[1], rx, ry, angle) * Math.hypot(slope[0], slope[1], 1);
       placeOnSlope(m, 0, cx, cy, heightAt(layout, cx, cy), slope[0], slope[1], angle, rx, ry, lift);
       spread.count = 1;

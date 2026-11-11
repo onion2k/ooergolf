@@ -97,6 +97,17 @@ export class Rest {
  */
 export type Ending = 'landed' | 'holed' | 'water' | 'out';
 
+/** The code of the ring a preview's ending is drawn in on the map: none for a landing, then the water, out of bounds and the cup. */
+export function END_RING(end: Ending): 0 | 1 | 2 | 3 {
+  return end === 'water' ? 1 : end === 'out' ? 2 : end === 'holed' ? 3 : 0;
+}
+
+/**
+ * How far a landing's scatter has to reach, across or along, in yards, before it is drawn: under it the ball goes where it
+ * was aimed, and a tap has hardly any. It is also the least the drawn ellipse is, so a scatter just past it is not a dot.
+ */
+export const SPREAD_SHOWN = 0.4;
+
 /** A flight, from the ball to where it first comes down. */
 export class Preview {
   /** How many points of `points` are the flight: none for a shot that is not lofted, unless it is a putt's roll (`Previewer.roll`). */

@@ -40,6 +40,7 @@ const PICTURE = [
   'theme',
   'sceneryset',
   'effects',
+  'aimreadout',
   'turf',
   'tint',
   'turfTexture',
