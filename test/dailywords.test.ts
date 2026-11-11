@@ -45,6 +45,16 @@ describe('the strip on the start screen', () => {
     });
   });
 
+  it('splits what a phone has no room for, the date, from the lead, in every state', () => {
+    const open = stripView(NONE, DAY, FACTS);
+    expect([open.lead, open.date]).toEqual(['Today’s hole', 'Wednesday 11 November']);
+    expect(`${open.lead} · ${open.date}`).toBe(open.title);
+    const done = stripView({ day: DAY, strokes: 3, par: 4, streak: 4 }, DAY, FACTS);
+    expect([done.lead, done.date]).toEqual([done.title, '']);
+    const dnf = stripView({ day: DAY, strokes: 0, par: 4, streak: 1 }, DAY, FACTS);
+    expect([dnf.lead, dnf.date]).toEqual([dnf.title, '']);
+  });
+
   it('is the same for a slot of another day, whichever way it lies, and says still air where there is none', () => {
     expect(stripView({ day: shiftDay(DAY, -1), strokes: 3, par: 4, streak: 5 }, DAY, FACTS).state).toBe('open');
     expect(stripView({ day: shiftDay(DAY, 1), strokes: 3, par: 4, streak: 5 }, DAY, FACTS).state).toBe('open');

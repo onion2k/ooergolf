@@ -1160,13 +1160,17 @@
   }
   @media (max-width: 600px) {
     #daily {
-      grid-template-columns: 46px minmax(0, 1fr) auto;
+      grid-template-columns: 40px minmax(0, 1fr) auto;
       gap: 8px;
-      padding: 6px 8px 6px 6px;
+      margin-bottom: 8px;
+      padding: 5px 6px 5px 5px;
+    }
+    #daily .long {
+      display: none;
     }
     #dailyPic {
-      width: 46px;
-      height: 46px;
+      width: 40px;
+      height: 40px;
     }
     #dailyText b {
       font-size: 14px;
@@ -3118,7 +3122,9 @@
     <canvas id="dailyPic" width="58" height="58" aria-hidden="true"></canvas>
     <div id="dailyText"><b id="dailyTitle"></b><small id="dailyMeta"></small></div>
     <div id="dailyActs">
-      <button id="dailyPlay" type="button">Play today’s hole</button>
+      <button id="dailyPlay" type="button" aria-label="Play today’s hole">
+        Play<span class="long"> today’s hole</span>
+      </button>
       <button id="dailyShare" type="button" class="quiet">Share</button>
       <button
         id="dailyAgain"

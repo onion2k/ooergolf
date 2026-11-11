@@ -153,7 +153,8 @@ const FRESH_SAVE =
   '"desert":{"grade":"club","begun":0,"played":[],"titles":0},"moon":{"grade":"club","begun":0,"played":[],"titles":0},' +
   '"future":{"grade":"club","begun":0,"played":[],"titles":0}},' +
   '"caddie":{"club":0,"shape":0,"spin":0},"muted":false,"volume":1,' +
-  '"life":{"rounds":0,"wins":0,"holes":0,"aces":0,"eagles":0,"birdies":0,"lost":0,"lipOuts":0,"longestPutt":0,"longestDrive":0},"feats":[]}';
+  '"life":{"rounds":0,"wins":0,"holes":0,"aces":0,"eagles":0,"birdies":0,"lost":0,"lipOuts":0,"longestPutt":0,"longestDrive":0},"feats":[],' +
+  '"daily":{"day":"","strokes":0,"par":0,"streak":0}}';
 
 test('writes its save, and boots again from it', async ({ page }) => {
   const problems = watch(page);

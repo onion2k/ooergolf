@@ -1297,7 +1297,7 @@ minigolf: true }`, read through `oceanFor`) is the one switch: `waterBed` and `s
 daily, 11 Nov 2026`, `Par 4: 3 strokes, Birdie` and `https://golf.ooer.com/`, nothing of the player (the mock also had the biome, the yards
   and the run, which are left out). The menu says `Today's hole · 11 Nov 2026 · 2 strokes · par 4`, that the first go is the one that counts
   or that a later go pays nothing, Give up scores the limit for the day, Restart is there only on a later go, Courses leaves the go as it
-  stands (not finished, if a stroke was taken), and Trophies as ever. `npm run daily:check` (`scripts/daily.ts`, `daily-check.ts`) builds
+  stands (not finished, if a stroke was taken), and Trophies as ever. The strip stands inside the title's cards, which had no room for it: `CARDS.share` is 0.65 (it was 0.56) and `tall` 0.7 (0.6), so the panel may be 520 of 800 on a desk and 560 of 800 on a phone (504 and 547 of content), and on a phone the strip is a smaller plate, the lead alone ('Today's hole', the date is a span) and Play for the button's word; the title's word is fitted above the higher cards and the title pictures moved with it. `npm run daily:check` (`scripts/daily.ts`, `daily-check.ts`) builds
   400 days from 11 November 2026 and plays each on eight seeds with the pace player: 3 minutes 19 seconds, held to 98% of all rounds holed
   inside the limit and each day to 60%, none stuck and none on the plain hole, and 15% of days at most with a spec refused. Measured on
   ten seeds: 99.3% (17 days of 400 at nine in ten, 4 at eight and 1 at seven, which is why the bar is not nine in ten for each day as the plan

@@ -1478,7 +1478,15 @@ export class Hud {
     this.daily.hidden = view === null;
     if (view === null) return;
     this.daily.dataset.state = view.state;
-    document.getElementById('dailyTitle')!.textContent = view.title;
+    // the date is a span a phone has no room for, so the lead alone is what it reads
+    const title = document.getElementById('dailyTitle')!;
+    title.textContent = view.lead;
+    if (view.date !== '') {
+      const date = document.createElement('span');
+      date.className = 'long';
+      date.textContent = ` · ${view.date}`;
+      title.append(date);
+    }
     document.getElementById('dailyMeta')!.textContent = view.meta;
     (document.getElementById('dailyPlay') as HTMLButtonElement).hidden = !view.play;
     (document.getElementById('dailyShare') as HTMLButtonElement).hidden = !view.share;

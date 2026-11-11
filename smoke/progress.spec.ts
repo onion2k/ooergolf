@@ -35,7 +35,7 @@ import { CADDIE_HOLES, FLAT } from '../test/level';
 import { wideHole } from '../test/wide-hole';
 import { smallHole } from './bighole';
 import { BUDGET } from './budget';
-import { TROPHIES_SAVE, drag, intoThePond, landed, puttAtCup, puttingHole, start, watch } from './game';
+import { TROPHIES_SAVE, drag, intoThePond, landed, puttAtCup, puttingHole, start, turnTheDay, watch } from './game';
 import { CONTRAST, THUMB, holeOut, openDrawer, read } from './panels';
 import { alone } from './gpu';
 
@@ -978,7 +978,7 @@ test('the daily hole: the strip asks for a go, the first go is paid and kept and
   expect(await page.evaluate(() => window.game!.invariants())).toEqual([]);
 
   // the day turns at midnight UTC: the strip, read when the start screen opens, asks for a go again, and the old day stays kept
-  await page.clock.setFixedTime(new Date(`${NEXT}T00:00:01Z`));
+  await turnTheDay(page, `${NEXT}T00:00:01Z`);
   await page.evaluate(() => window.game!.playDaily('2026-11-11'));
   await page.evaluate(() => window.game!.menu(true));
   await page.locator('#menuCourses').click();

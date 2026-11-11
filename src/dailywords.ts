@@ -72,7 +72,10 @@ export type StripState = 'open' | 'done' | 'unfinished';
 
 export interface StripView {
   state: StripState;
+  /** The words over the strip in full, and in two parts: the lead, and what follows it that a phone has no room for (the date). */
   title: string;
+  lead: string;
+  date: string;
   meta: string;
   /** Which buttons are there: Play today's hole, Share, and a go again for nothing. */
   play: boolean;
@@ -92,6 +95,8 @@ export function stripView(slot: Readonly<DailySlot>, day: string, facts: DailyFa
     return {
       state: 'open',
       title: `Today’s hole · ${dayLong(day)}`,
+      lead: 'Today’s hole',
+      date: dayLong(day),
       meta: `${BIOME_NAMES[facts.biome]} · par ${facts.par} · ${facts.yards} yards · ${wind} · one go counts`,
       play: true,
       share: false,
@@ -102,14 +107,19 @@ export function stripView(slot: Readonly<DailySlot>, day: string, facts: DailyFa
     return {
       state: 'unfinished',
       title: 'Today: did not finish',
+      lead: 'Today: did not finish',
+      date: '',
       meta: 'One go counts, and it was taken',
       play: false,
       share: false,
       again: true,
     };
+  const score = `Today: ${plain(slot.strokes, slot.par)} · ${slot.strokes}`;
   return {
     state: 'done',
-    title: `Today: ${plain(slot.strokes, slot.par)} · ${slot.strokes}`,
+    title: score,
+    lead: score,
+    date: '',
     meta: days(slot.streak),
     play: false,
     share: true,

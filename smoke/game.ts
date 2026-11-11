@@ -16,6 +16,35 @@ declare global {
   }
 }
 
+/**
+ * The page's clock held to a moment, so the day by it (and so the daily hole) is the same whenever a test is run: `Date` is put an
+ * offset from the real one and goes on at the real pace, and nothing else is touched (a frozen clock stopped `performance.now`
+ * too, and with it every timing the boot's tests read). Run in the page, before its own scripts.
+ */
+function holdTheDay(iso: string) {
+  const Real = Date;
+  const clock = { real: Real, offset: Real.parse(iso) - Real.now() };
+  (window as unknown as { dayClock: typeof clock }).dayClock = clock;
+  class Held extends Real {
+    constructor(...args: unknown[]) {
+      if (args.length === 0) super(Real.now() + clock.offset);
+      else super(...(args as ConstructorParameters<DateConstructor>));
+    }
+    static now() {
+      return Real.now() + clock.offset;
+    }
+  }
+  window.Date = Held as DateConstructor;
+}
+
+/** The day turned, on a page opened with `start`: its clock now reads `iso`, and goes on from there. */
+export function turnTheDay(page: Page, iso: string) {
+  return page.evaluate((to) => {
+    const clock = (window as unknown as { dayClock: { real: DateConstructor; offset: number } }).dayClock;
+    clock.offset = clock.real.parse(to) - clock.real.now();
+  }, iso);
+}
+
 /** Errors on the page, and requests that failed, collected as they happen. */
 export function watch(page: Page): string[] {
   const problems: string[] = [];
@@ -55,7 +84,7 @@ export async function start(
   } = {},
 ) {
   const { save, seed, paused, screen, rung, title, flyIn, day = '2026-11-11' } = options;
-  await page.clock.setFixedTime(new Date(`${day}T12:00:00Z`));
+  await page.addInitScript(holdTheDay, `${day}T12:00:00Z`);
   if (save)
     await page.addInitScript((s) => {
       if (sessionStorage.getItem('ooergolf-test-seeded')) return;

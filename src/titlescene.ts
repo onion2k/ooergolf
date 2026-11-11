@@ -54,11 +54,13 @@ export const VIEW = {
  * The course cards on the start screen, which the stylesheet places and this says: the panel stands on the foot of the
  * screen `foot` pixels up, and is no taller than `share` of it, `tall` of a phone's (0.6 since 15 October 2026, when the
  * course picker came: its tabs, a course's card with the preview above its figures, and Play are about 460 pixels on a
- * phone, where 0.5 gave 390 on one 360 by 800; the word is limited by the width on a phone and stands as high as it did).
+ * phone, where 0.5 gave 390 on one 360 by 800; the word is limited by the width on a phone and stands as high as it did). On 11 November
+ * 2026 the daily hole's strip came above the tabs, which is 66 pixels more on a desk (the share was 0.56 and is 0.65: 504 of
+ * content in 520 at 1280 by 800) and 60 more on a phone (0.6 to 0.7: 547 of content in 560 at 360 by 800).
  * One place, so the word is held clear of the most the panel can be, and the stylesheet reads the height through
  * `--cards-max` and holds no figure of its own.
  */
-export const CARDS = { foot: 14, share: 0.56, tall: 0.6, gap: 0.05, top: 0.05, side: 0.92 } as const;
+export const CARDS = { foot: 14, share: 0.65, tall: 0.7, gap: 0.05, top: 0.05, side: 0.92 } as const;
 
 /** Whether a screen of this size is a phone's or a short one's, which the cards take half the height of. */
 const isPhone = (width: number, height: number) => width <= 600 || height <= 500;
