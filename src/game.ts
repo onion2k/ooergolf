@@ -720,11 +720,14 @@ export class Game {
 
   /**
    * The hole in play picked up, at the menu's asking: scored at the limit and paid nothing, as a ball lost at the limit is, and
-   * an event's card and kept round are written as for any hole done. Refused but for a hole in play.
+   * an event's card and kept round are written as for any hole done, and the ball is taken out of the world, in the air or not.
+   * Refused but for a hole in play.
    */
   pickUp(): boolean {
     if (this.phase !== 'play') return false;
     this.done('pickedUp');
+    // the ball is picked up: a ball still rolling or in the air would go on to land, lip out or be lost, told of a hole that is done
+    if (this.world.alive[this.ball]) this.world.remove(this.ball);
     return true;
   }
 

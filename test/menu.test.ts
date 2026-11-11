@@ -10,7 +10,7 @@ import { checkInvariants } from '../src/invariants';
 import { paid } from '../src/items';
 import { Progress, memoryStore } from '../src/progress';
 import { seeded } from '../src/random';
-import { DT, GREEN, settle } from './helpers';
+import { DT, GREEN, field, golfGame, settle } from './helpers';
 import { NORTH, holeInOne, next } from './rounds';
 import { SMALL, SMALL_A, SMALL_C, roundOfEvent } from './small-season';
 
@@ -61,6 +61,22 @@ describe('picking a hole up', () => {
     expect(checkInvariants(game)).toEqual([]);
     next(game);
     expect(game.hole, 'the next hole follows').toBe(1);
+  });
+
+  it('takes the ball up, so that one in the air tells of no landing, long drive or lost ball on a hole that is done', () => {
+    const { game, calls } = golfGame(field('f'));
+    expect(game.layout.golf).toBe(true);
+    game.shoot(NORTH, 1);
+    settle(game, 10);
+    expect(game.world.alive[game.ball], 'in the air').toBe(1);
+    expect(game.pickUp()).toBe(true);
+    expect(game.world.alive[game.ball], 'picked up').toBe(0);
+    const told = calls.length;
+    settle(game, 60 * 8);
+    // nothing of the ball, only the round's end, which this one hole's course comes to
+    expect(calls.slice(told).map(([name]) => name)).toEqual(['finished']);
+    expect(game.card).toEqual([game.def.par + LIMIT_OVER_PAR]);
+    expect(checkInvariants(game)).toEqual([]);
   });
 
   it('does the same with the ball at rest, and is refused once the hole is done or the round over', () => {
