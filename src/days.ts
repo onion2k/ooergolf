@@ -13,16 +13,11 @@ export function utcDay(date: Date): string {
   return `${String(y).padStart(4, '0')}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
 }
 
-/** Whether `day` is a day: `YYYY-MM-DD`, a real date. */
+/** Whether `day` is a day: `YYYY-MM-DD`, a real date (a day the calendar would carry over, such as 30 February, is not one). */
 export function isDay(day: unknown): day is string {
   if (typeof day !== 'string' || !/^\d{4}-\d\d-\d\d$/.test(day)) return false;
-  const [y, m, d] = day.split('-').map(Number);
-  return m >= 1 && m <= 12 && d >= 1 && d <= daysIn(y, m) && dayOf(dayNumber(day)) === day;
-}
-
-function daysIn(year: number, month: number): number {
-  if (month === 2) return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0) ? 29 : 28;
-  return [4, 6, 9, 11].includes(month) ? 30 : 31;
+  const [, m, d] = day.split('-').map(Number);
+  return m >= 1 && m <= 12 && d >= 1 && dayOf(dayNumber(day)) === day;
 }
 
 /** How many days `day` is after 1 January 1970, by the civil calendar's own arithmetic, so no clock is read to work it out. */
