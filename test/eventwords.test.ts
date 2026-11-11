@@ -5,8 +5,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   cutLine,
+  driveWords,
   eventHeader,
+  fromWords,
   gradeName,
+  lipWords,
   meritMove,
   ordinal,
   placeText,
@@ -79,5 +82,36 @@ describe("a tournament's words", () => {
     expect(seasonLine(true, 'county', false)).toBe('Season over: up to the County tour');
     expect(seasonLine(true, null, true)).toBe('Season over: champions of the Championship');
     expect(seasonLine(true, null, false)).toBe('Season over: another season at this grade');
+  });
+});
+
+describe('the words of a moment', () => {
+  it('says a lip-out as a near miss', () => {
+    expect(lipWords()).toBe('Lipped out!');
+  });
+
+  it('says a long drive with its carry in whole yards', () => {
+    expect(driveWords(262)).toBe('Long drive! 262 yd');
+    expect(driveWords(262.4)).toBe('Long drive! 262 yd');
+    expect(driveWords(262.5)).toBe('Long drive! 263 yd');
+    expect(driveWords(250)).toBe('Long drive! 250 yd');
+  });
+
+  it('says how far a hole was holed from, in whole yards, and one yard in the singular', () => {
+    expect(fromWords(14)).toBe('from 14 yards');
+    expect(fromWords(14.6)).toBe('from 15 yards');
+    expect(fromWords(20.49)).toBe('from 20 yards');
+    expect(fromWords(1)).toBe('from 1 yard');
+    expect(fromWords(1.4)).toBe('from 1 yard');
+    expect(fromWords(1.6)).toBe('from 2 yards');
+  });
+
+  it('says nothing wrong for a strange number: no NaN, no minus, no infinity', () => {
+    for (const bad of [NaN, Infinity, -Infinity, -3]) {
+      expect(fromWords(bad), `from ${bad}`).toBe('');
+      expect(driveWords(bad), `drive ${bad}`).toBe('Long drive!');
+    }
+    for (const words of [fromWords(0.2), driveWords(0.2)]) expect(words).not.toMatch(/NaN|Infinity|-/);
+    expect(fromWords(0.2), 'under half a yard rounds to none').toBe('');
   });
 });

@@ -36,7 +36,7 @@ import { BOWL, SIDE_HILL } from '../test/hills';
 import { STREAM_HOLE } from '../test/stream-hole';
 import { wideHole } from '../test/wide-hole';
 import { smallHole } from './bighole';
-import { drag, landed, puttingHole, start, watch } from './game';
+import { drag, landed, puttAtCup, puttingHole, start, watch } from './game';
 import { openDrawer } from './panels';
 import { alone } from './gpu';
 
@@ -665,6 +665,30 @@ test.describe('what it looks like', () => {
     });
     await hideStats(page);
     await expect(page).toHaveScreenshot('holed.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
+  test('a putt lipped out of the cup: its word over the course, and the ball rolled on past the cup', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true });
+    await page.evaluate(() => window.game!.step(30));
+    // twelve a second, 0.6 of the cup's radius off its middle: round the rim and out
+    expect(await puttAtCup(page, 12, 0.6 * 1.45)).toBe(true);
+    await page.evaluate(() => {
+      const g = window.game!;
+      g.events();
+      const { cup } = g.content();
+      // to the step it is told in, and a few frames on, with the camera on the cup so the ball is seen past it
+      for (let f = 0; f < 300 && !g.events().some((l) => l.startsWith('lipped ')); f++) g.step(1);
+      g.step(14);
+      g.look(cup.x, cup.y - 2, 20);
+      g.step(1);
+    });
+    await expect(page.locator('#toast')).toHaveText('Lipped out!');
+    await hideStats(page);
+    await expect(page).toHaveScreenshot('lipped-out.png', TOLERANCE);
     expect(problems).toEqual([]);
   });
 

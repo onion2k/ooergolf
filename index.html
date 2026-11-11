@@ -595,10 +595,31 @@
     color: var(--water-ink);
     font-size: clamp(28px, 7vw, 40px);
   }
-  #toast[data-kind='out'] {
+  #toast[data-kind='out'],
+  #toast[data-kind='lip'] {
     --edge: var(--orange);
     --lip: var(--orange-deep);
     color: var(--orange-ink);
+  }
+  #toast[data-kind='lip'],
+  #toast[data-kind='drive'] {
+    font-size: clamp(28px, 7vw, 40px);
+  }
+  #toast[data-kind='drive'] {
+    --edge: var(--leaf);
+    --lip: var(--leaf-deep);
+    color: var(--leaf-ink);
+  }
+  /* the second line of a score: where a long putt or a chip-in was holed from */
+  #toastFrom {
+    display: block;
+    margin-top: 2px;
+    font-size: 0.4em;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+  }
+  #toastFrom[hidden] {
+    display: none;
   }
 
   /* ---- the card, the shop and the start screen: in the middle, over everything ---- */
@@ -2559,7 +2580,7 @@
     <small id="boardCut"></small>
   </div>
 </div>
-<div class="panel" id="toast" hidden></div>
+<div class="panel" id="toast" hidden><span id="toastWords"></span><span id="toastFrom" hidden></span></div>
 <div class="panel" id="card" hidden>
   <h2>The card</h2>
   <table>

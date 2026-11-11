@@ -213,8 +213,8 @@ export function intoThePond(): number {
  * A putt at the cup of the hole in play, as `test/open-green.ts` strikes one: the ball laid `back` short of the cup's clear
  * distance from the south (or `from` yards due south of the cup, when given), `aside` off its middle, and struck north so as
  * to arrive at the cup's edge at `speed` units a second. Twelve a second, 0.6 of the cup's radius off the middle, lips out on
- * a level green with room all round, and five through the middle drops. The hole's first hole-in-the-cup ground is a
- * minigolf hole with a straight run south of the cup (The Meadow's first). Whether the shot was taken.
+ * a level green with room all round, and five through the middle drops. For a minigolf hole with a straight run south of
+ * the cup, as The Meadow's first has. Whether the shot was taken.
  */
 export async function puttAtCup(page: Page, speed: number, aside = 0, options: { back?: number; from?: number } = {}) {
   const cup = await page.evaluate(() => window.game!.content().cup);

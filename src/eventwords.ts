@@ -15,6 +15,25 @@ export function splashWords(waded: boolean, lake = 'water'): string {
   return waded ? `In the ${lake}! Waders: free` : `In the ${lake}! +1`;
 }
 
+/** What the callout says when the ball lips out of the cup. */
+export function lipWords(): string {
+  return 'Lipped out!';
+}
+
+/** What the callout says of a long drive: its carry in whole yards, or only the cheer for a number that is not a distance. */
+export function driveWords(yards: number): string {
+  return Number.isFinite(yards) && yards >= 0.5 ? `Long drive! ${Math.round(yards)} yd` : 'Long drive!';
+}
+
+/**
+ * The second line under a score word, for a hole holed from afar: "from 14 yards", in whole yards, "from 1 yard" in the
+ * singular. Nothing (an empty line) for a distance that rounds to none or is not one.
+ */
+export function fromWords(yards: number): string {
+  const n = Number.isFinite(yards) ? Math.round(yards) : 0;
+  return n < 1 ? '' : `from ${n} ${n === 1 ? 'yard' : 'yards'}`;
+}
+
 /** A grade as a player reads it. */
 export function gradeName(grade: Grade): string {
   return grade === 'club' ? 'Club' : grade === 'county' ? 'County' : 'Championship';

@@ -23,7 +23,10 @@ import { KINDS, tourOfKind, type Kind, type Picker } from './picker';
 import type { Grade, Tour } from './season';
 import {
   cutLine,
+  driveWords,
   eventHeader,
+  fromWords,
+  lipWords,
   meritMove,
   placeText,
   promotionLine,
@@ -33,8 +36,11 @@ import {
   toParText,
 } from './eventwords';
 
-/** Each kind of word the callout over the course says, which the stylesheet colours: a score's kind, the water, or out of bounds. */
-export const CALLOUTS = [...SCORE_KINDS, 'splash', 'out'] as const;
+/**
+ * Each kind of word the callout over the course says, which the stylesheet colours: a score's kind, the water, out of bounds,
+ * a lip-out and a long drive. The last four stay until the next stroke is struck.
+ */
+export const CALLOUTS = [...SCORE_KINDS, 'splash', 'out', 'lip', 'drive'] as const;
 export type Callout = (typeof CALLOUTS)[number];
 
 export interface HudHandlers {
@@ -264,6 +270,9 @@ export class Hud {
   private readonly holeTitle = this.hole.querySelector('.name')!;
   private readonly par = document.getElementById('holePar')!;
   private readonly toast = document.getElementById('toast')!;
+  /** The toast's two lines: the word, and under it, smaller, where a long putt or a chip-in was holed from. */
+  private readonly toastWords = document.getElementById('toastWords')!;
+  private readonly toastFrom = document.getElementById('toastFrom')!;
   private readonly card = document.getElementById('card')!;
   private readonly rows = document.getElementById('cardRows')!;
   private readonly total = document.getElementById('cardTotal')!;
@@ -1358,10 +1367,11 @@ export class Hud {
     this.shop.hidden = true;
   }
 
-  /** The strokes taken; a new stroke takes away the water's word left over the course by the last. */
+  /** The strokes taken; a new stroke takes away the word left over the course by the last (the water's, out of bounds, a lip-out, a long drive). */
   setStrokes(n: number) {
-    const loss = this.toast.dataset.kind === 'splash' || this.toast.dataset.kind === 'out';
-    if (this.strokes.textContent !== String(n) && loss) this.toast.hidden = true;
+    const kind = this.toast.dataset.kind;
+    const stays = kind === 'splash' || kind === 'out' || kind === 'lip' || kind === 'drive';
+    if (this.strokes.textContent !== String(n) && stays) this.toast.hidden = true;
     this.strokes.textContent = String(n);
     this.unit.textContent = n === 1 ? 'stroke' : 'strokes';
     this.chipStrokes.textContent = String(n);
@@ -1369,8 +1379,10 @@ export class Hud {
   }
 
   /** The word over the course, of its kind, which the stylesheet colours and pops in. */
-  private callout(text: string, kind: Callout) {
-    this.toast.textContent = text;
+  private callout(text: string, kind: Callout, from = '') {
+    this.toastWords.textContent = text;
+    this.toastFrom.textContent = from;
+    this.toastFrom.hidden = from === '';
     this.toast.dataset.kind = kind;
     this.toast.hidden = false;
   }
@@ -1390,9 +1402,22 @@ export class Hud {
     this.callout('Mulligan! Take it again', 'splash');
   }
 
-  /** A hole done: what the score is called, large, until the next begins. */
-  done(strokes: number, par: number, pickedUp: boolean) {
-    this.callout(scoreName(strokes, par, pickedUp), scoreKind(strokes, par, pickedUp));
+  /** The ball lipped out of the cup: a word for it, until the next stroke. */
+  lipped() {
+    this.callout(lipWords(), 'lip');
+  }
+
+  /** A long drive come down, of `yards`: a word for it, until the next stroke. */
+  longDrive(yards: number) {
+    this.callout(driveWords(yards), 'drive');
+  }
+
+  /**
+   * A hole done: what the score is called, large, until the next begins. A hole holed with a long putt or a chip-in from
+   * `from` yards says so on a second, smaller line; a hole picked up was not holed from anywhere.
+   */
+  done(strokes: number, par: number, pickedUp: boolean, from = 0) {
+    this.callout(scoreName(strokes, par, pickedUp), scoreKind(strokes, par, pickedUp), pickedUp ? '' : fromWords(from));
   }
 
   /** The round over: every hole's par and score, each score marked by its kind, and the total against par. */

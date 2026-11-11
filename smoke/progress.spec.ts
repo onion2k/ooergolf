@@ -23,13 +23,14 @@ import { onBank } from '../src/slopes';
 import { puttText } from '../src/readout';
 import { DRAG } from '../src/shot';
 import { scoreName } from '../src/score';
+import { driveWords, fromWords, lipWords } from '../src/eventwords';
 import { LIE } from '../src/surfaces';
 import { zonesOf } from '../src/zones';
 import { CADDIE_HOLES, FLAT } from '../test/level';
 import { wideHole } from '../test/wide-hole';
 import { smallHole } from './bighole';
 import { BUDGET } from './budget';
-import { drag, intoThePond, landed, puttingHole, start, watch } from './game';
+import { drag, intoThePond, landed, puttAtCup, puttingHole, start, watch } from './game';
 import { CONTRAST, THUMB, holeOut, openDrawer, read } from './panels';
 import { alone } from './gpu';
 
@@ -747,6 +748,151 @@ test('a ball putted into the water costs a stroke, is splashed, and comes back t
     'the next stroke taken',
   ).toBe(true);
   await expect(page.locator('#toast'), "the water's word gone with it").toBeHidden();
+  expect(problems).toEqual([]);
+});
+
+test('a putt that lips out of the cup says so until the next stroke, and a long putt holed says how far on a second line', async ({
+  page,
+}) => {
+  const problems = watch(page);
+  await start(page, { seed: 3, paused: true });
+  await page.evaluate(() => window.game!.step(30));
+  const toast = page.locator('#toast');
+
+  // twelve a second, 0.6 of the cup's radius off its middle: round the rim and out
+  expect(await puttAtCup(page, 12, 0.6 * 1.45)).toBe(true);
+  await untilReady(page, 'lipped out');
+  expect((await page.evaluate(() => window.game!.state())).phase, 'not holed').toBe('play');
+  await expect(toast).toBeVisible();
+  await expect(toast).toHaveText(lipWords());
+  await expect(toast).toHaveAttribute('data-kind', 'lip');
+  await expect(page.locator('#toastFrom'), 'a lip-out has no second line').toBeHidden();
+  // it stays while the ball is at rest, and goes with the next stroke
+  await play(page, 60, 'the word left up');
+  await expect(toast).toBeVisible();
+  expect(
+    await page.evaluate(() => {
+      const s = window.game!.suggest()!;
+      return window.game!.shoot(s.angle, s.power);
+    }),
+    'the next stroke taken',
+  ).toBe(true);
+  await expect(toast, 'the lip-out gone with the stroke').toBeHidden();
+
+  // a long putt: the hole's first stroke is a hole in one whatever it is, so one is taken first, and then one from 22 yards
+  await page.evaluate(() => {
+    window.game!.startHole(0);
+    window.game!.step(5);
+    window.game!.shoot(0, 0.05);
+  });
+  await untilReady(page, 'the first stroke');
+  expect(await puttAtCup(page, 5, 0, { from: 22 })).toBe(true);
+  // stopped as the hole is done, before the next is begun for the player two seconds on
+  await page.evaluate(() => {
+    for (let f = 0; f < 600 && window.game!.state().phase === 'play'; f++) window.game!.step(1);
+  });
+  const done = await page.evaluate(() => window.game!.state());
+  expect(done.phase).toBe('done');
+  await expect(toast).toBeVisible();
+  await expect(page.locator('#toastWords'), "the score's name").toHaveText(scoreName(done.card[0], done.par));
+  await expect(page.locator('#toastFrom'), 'and where it was holed from').toHaveText(fromWords(22));
+  await expect(page.locator('#toastFrom')).toHaveText('from 22 yards');
+
+  // the next hole's score is its own: a hole holed with no long putt has no second line
+  await page.evaluate(() => window.game!.startHole(1));
+  await expect(toast).toBeHidden();
+  expect((await holeOut(page)).phase).toBe('done');
+  await expect(toast).toBeVisible();
+  await expect(page.locator('#toastFrom'), 'no second line the next time').toBeHidden();
+  expect(problems).toEqual([]);
+});
+
+test.describe('on a phone', () => {
+  test.use({ viewport: { width: 400, height: 860 }, hasTouch: true, isMobile: true });
+  test('the lip-out word and the long putt’s second line are whole, on the screen and legible', async ({ page }) => {
+    const problems = watch(page);
+    await start(page, { seed: 3, paused: true });
+    await page.evaluate(() => window.game!.step(30));
+    expect(await puttAtCup(page, 12, 0.6 * 1.45)).toBe(true);
+    await untilReady(page, 'lipped out');
+    await expect(page.locator('#toast')).toHaveText(lipWords());
+    const lip = await read(page);
+    expect(lip.outside, 'nothing past the screen').toEqual([]);
+    expect(lip.scrollWidth).toBeLessThanOrEqual(400);
+    const word = lip.texts.find((t) => t.text === lipWords())!;
+    console.log(`lip-out word at 400 wide: contrast ${word.ratio.toFixed(2)}`);
+    expect(word.ratio, 'the lip-out word against its panel').toBeGreaterThanOrEqual(CONTRAST);
+
+    await page.evaluate(() => {
+      window.game!.startHole(0);
+      window.game!.step(5);
+      window.game!.shoot(0, 0.05);
+    });
+    await untilReady(page, 'the first stroke');
+    expect(await puttAtCup(page, 5, 0, { from: 22 })).toBe(true);
+    await page.evaluate(() => {
+      for (let f = 0; f < 600 && window.game!.state().phase === 'play'; f++) window.game!.step(1);
+    });
+    await expect(page.locator('#toastFrom')).toHaveText('from 22 yards');
+    const from = await read(page);
+    expect(from.outside, 'nothing past the screen').toEqual([]);
+    expect(from.scrollWidth).toBeLessThanOrEqual(400);
+    for (const text of from.texts.filter((t) => t.text.includes('from 22 yards') || t.text === 'Par!')) {
+      console.log(`${text.text} at 400 wide: contrast ${text.ratio.toFixed(2)}`);
+      expect(text.ratio, text.text).toBeGreaterThanOrEqual(CONTRAST);
+    }
+    expect(problems).toEqual([]);
+  });
+});
+
+test('a long drive says so over the course, with its carry in whole yards, until the next stroke', async ({ page }) => {
+  const problems = watch(page);
+  await start(page, { seed: 3, paused: true });
+  await page.evaluate(() => window.game!.wake());
+  let told: string | undefined;
+  for (const name of ['The Links', 'The Heath', 'The Woods', 'The Old Course', 'The Fells', 'The Isles']) {
+    await page.evaluate((n) => window.game!.chooseCourse(n), name);
+    const holes = (await page.evaluate(() => window.game!.content())).holes.length;
+    for (let hole = 0; hole < holes && !told; hole++) {
+      await page.evaluate((h) => {
+        window.game!.startHole(h);
+        window.game!.step(5);
+        window.game!.events();
+        const s = window.game!.suggest()!;
+        window.game!.shoot(s.angle, s.power, s.club);
+      }, hole);
+      // in slices, since the log keeps the latest lines, until it lands or comes to rest
+      for (let slice = 0; slice < 30 && !told; slice++) {
+        const seen = await page.evaluate(() => {
+          const g = window.game!;
+          for (let f = 0; f < 15 && !g.state().ready; f++) g.step(1);
+          return g.events();
+        });
+        told = seen.find((l) => l.startsWith('longDrive '));
+        if (await page.evaluate(() => window.game!.state().ready)) break;
+      }
+    }
+    if (told) break;
+  }
+  expect(told, 'a long drive within these holes, as the seed gives it').toBeDefined();
+  const yards = Number(told!.split(' ')[1]);
+  const toast = page.locator('#toast');
+  await expect(toast).toBeVisible();
+  await expect(toast).toHaveAttribute('data-kind', 'drive');
+  const shown = Number((await toast.textContent())!.match(/^Long drive! (\d+) yd$/)![1]);
+  expect(Math.abs(shown - yards), 'whole yards of the carry told').toBeLessThanOrEqual(1);
+  expect(await toast.textContent()).toBe(driveWords(shown));
+  // it stays while the ball runs and rests, and goes with the next stroke
+  await untilReady(page, 'the drive run out');
+  await expect(toast).toBeVisible();
+  expect(
+    await page.evaluate(() => {
+      const s = window.game!.suggest()!;
+      return window.game!.shoot(s.angle, s.power, s.club);
+    }),
+    'the next stroke taken',
+  ).toBe(true);
+  await expect(toast, 'the long drive gone with the stroke').toBeHidden();
   expect(problems).toEqual([]);
 });
 

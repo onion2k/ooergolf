@@ -575,6 +575,8 @@ async function main() {
   let worker: WorkerState = 'none';
   /** Whether the waders took the loss being told of, which the word for it says: set just before it, and read by it. */
   let wadedNow = false;
+  /** How far the stroke that is about to hole was struck from, in yards, told just before `holed` for it to say so: none (0) otherwise, and put back at each hole and stroke. */
+  let holedFrom = 0;
   const showPurse = () => hud.setPurse(game.progress.save);
   /**
    * What the boot screen says once a hole could not be drawn, and nothing before: the page is stopped while it says
@@ -791,6 +793,7 @@ async function main() {
       squash.clear();
       effects.clearTrail();
       hud.started({ index, count: game.course.length, name, par });
+      holedFrom = 0;
       // the bag on a golf hole, with the driver in hand, and none on a hole of minigolf
       hud.setBag(
         layout.golf
@@ -830,6 +833,7 @@ async function main() {
     struck(power, x, y) {
       // one stroke in five has the camera follow the ball, and the rest hold the view where it stood
       director.struck();
+      holedFrom = 0;
       hud.setStrokes(game.strokes);
       // a stroke that took the caddie's tip for it is counted, so it goes quiet on that kind once it has been taken enough
       const took = talk.struck(game.inHand.id, game.struckShape, game.struckSpin);
@@ -917,27 +921,32 @@ async function main() {
       squash.clear();
       effects.clearTrail();
     },
-    // round the rim and out: a rattle and two hollow knocks falling away
+    // round the rim and out: a word for it, and a rattle and two hollow knocks falling away
     lipped() {
+      hud.lipped();
       sound.lipped();
       log('sound lipped');
     },
-    // a long putt or a chip about to drop, and a long drive come down: each cheered a little, the hole's own cheer after
-    longPutt() {
+    // a long putt or a chip about to drop (the yards kept for the hole's word, just after) and a long drive come down: each cheered a little, the hole's own cheer after
+    longPutt(yards) {
+      holedFrom = yards;
       sound.longPutt();
       log('sound longPutt');
     },
-    chippedIn() {
+    chippedIn(yards) {
+      holedFrom = yards;
       sound.chippedIn();
       log('sound chippedIn');
     },
-    longDrive() {
+    longDrive(yards) {
+      hud.longDrive(yards);
       sound.longDrive();
       log('sound longDrive');
     },
     // in the cup: confetti out of it, the flag waggling and its gold flashing, from the moment it dropped
     holed(strokes, par) {
-      hud.done(strokes, par, false);
+      hud.done(strokes, par, false, holedFrom);
+      holedFrom = 0;
       // the ball rattling in the cup, and a run up the marimba as good as the score
       sound.holed(strokes, par);
       log(`sound holed ${strokes} ${par}`);
