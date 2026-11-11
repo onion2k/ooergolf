@@ -29,10 +29,16 @@ export const FRAME_BUDGET_MS = 20;
 /** Frames longer than this are the page hidden, or a stall, and not the drawing: left out. */
 const STALL_MS = 100;
 /**
- * How much of the time between frames the drawing must take, on the mean, for the machine to be what is slow: over
- * half. A page given thirty frames a second that draws each in two milliseconds spends a fifteenth.
+ * How much of the time between frames the drawing must take, on the mean, for the machine to be what is slow: about two
+ * thirds. A page given thirty frames a second that draws each in two milliseconds spends a fifteenth, but that is not what
+ * the page can measure: the GPU says a frame is done no sooner than the screen's next refresh, so on a machine given half
+ * its screen's frames the measure reads one refresh and the drawing before it, which is half the gap and a little more
+ * (0.53 on the mean and 0.59 at the worst with three milliseconds of drawing, measured at thirty frames a second on a
+ * sixty hertz screen, 11 November 2026). At a half, where this stood, that machine lost a rung for nothing. A machine that
+ * misses a refresh by its own drawing reads from there up to the whole gap, so the line is between the two: one whose
+ * frames take 17 to 22 ms on a sixty hertz screen is let through, and plays at thirty a second on the rung it has.
  */
-const DRAWING_SHARE = 0.5;
+const DRAWING_SHARE = 0.65;
 
 /**
  * The rungs, each what it takes away, in the order it takes them.

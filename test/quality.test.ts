@@ -103,6 +103,21 @@ describe('the quality ladder', () => {
     expect(feed(new Governor(), 40, 10_000, 15)).toBe(0);
   });
 
+  it("stays where it is when the done signal waits on the screen: a fast machine given half its screen's frames", () => {
+    // the GPU says a frame is done no sooner than the screen's next refresh, whatever the frame cost: at thirty frames a
+    // second on a sixty hertz screen it came 14.3 ms after it was asked for on the median and 15.7 at the ninth decile
+    // (measured headless, 11 November 2026), which with two or three of drawing before it is over half the gap, on a
+    // machine that draws the frame in three
+    expect(feed(new Governor(), 33.3, 10_000, 17.7)).toBe(0);
+    expect(feed(new Governor(), 33.3, 10_000, 19.5), 'with three of drawing before the worst of them').toBe(0);
+    // and the same on a fifty hertz screen given twenty-five
+    expect(feed(new Governor(), 40, 10_000, 23)).toBe(0);
+    // a machine that misses the refresh by its own drawing is still slow
+    const slow = new Governor();
+    feed(slow, 33.3, 10_000, 24);
+    expect(slow.rung).toBe(RUNGS.length - 1);
+  });
+
   it('steps down when the drawing is what takes the time, on any screen', () => {
     const slow = new Governor();
     // a GPU that takes 45 ms to finish a frame: frames come every 48
