@@ -89,6 +89,7 @@ import { CRATER } from './waterdraw';
 import { Input } from './input';
 import { Squash, squashInto, squashOf } from './squash';
 import { Governor, RUNGS, economyFor } from './quality';
+import { menuMayOpen } from './menu';
 import { retakeShown, type RetakeState } from './retake';
 import { HeldView } from './shot';
 import { between } from './frames';
@@ -347,6 +348,8 @@ async function main() {
   /** The course being played, and whether the start screen is up to choose one: it is, as the page opens. */
   let courseName = COURSES[0].name;
   let choosing = true;
+  /** Whether the hole's menu is up: the game and the camera wait under it, and nothing is struck through it. */
+  let menuOpen = false;
   /**
    * The title scene while it is up: the title hole is the game's hole and its lettering is drawn over it. Null once a course
    * is chosen, which lets go of every group of it, and on a page that leaves the title out. `wantTitle` says the next hole begun
@@ -822,6 +825,8 @@ async function main() {
     // leaves them as the last hole had them and not half of one hole and half of another. And the page stops there, on the
     // boot screen, which says which hole and why: the game has begun a hole that no one can see, and is not played over
     started(index, par) {
+      // a hole begun is no hole left behind a menu
+      if (menuOpen) setMenu(false);
       if (underTitle) {
         underTitle = false;
         return;
@@ -1179,8 +1184,18 @@ async function main() {
     // the view from above dragged: the ground goes with the finger, over the height of the canvas
     pan: (dx, dy) => rig.pan(dx, dy, canvas.getBoundingClientRect().height),
     // nothing is struck through the start screen
-    blocked: () => choosing,
+    blocked: () => choosing || menuOpen,
   });
+  /**
+   * The hole's menu opened or shut, as its button and the escape key do, and whether it is open. It opens only where
+   * `menuMayOpen` says; shut, it is simply shut. Time waits while it is up (`simulate`).
+   */
+  function setMenu(open: boolean): boolean {
+    if (open && !menuMayOpen({ phase: game.phase, choosing, titled: titled !== null })) return menuOpen;
+    menuOpen = open;
+    hud.setMenu(open);
+    return menuOpen;
+  }
   /**
    * The view from above switched on or off, as the button does: on, fitted to the whole of the hole and a drag a pan that
    * never strikes; off, the view as it was. Whether it is on. Not under the start screen, where there is no hole to look
@@ -1227,7 +1242,7 @@ async function main() {
     'wheel',
     (e) => {
       e.preventDefault();
-      rig.zoom(e.deltaY * WHEEL);
+      if (!menuOpen) rig.zoom(e.deltaY * WHEEL);
     },
     { passive: false },
   );
@@ -1391,6 +1406,12 @@ async function main() {
       titled.scene.advance(dt);
       if (titled.scene.landed) hud.releaseStart();
     }
+    // under the menu the game and the camera wait, and the sound goes on, so that the music plays and a sound is loaded
+    if (menuOpen) {
+      sound.setMusic(true);
+      sound.step(dt, true);
+      return;
+    }
     game.step(dt);
     // after the game, so that a game that is not stepping has no music: the music under a menu, and a sound loaded a step
     // until all are
@@ -1532,6 +1553,8 @@ async function main() {
     orbit: (turn, tilt) => rig.orbit(turn, tilt),
     overhead: (on) => setOverhead(on ?? !rig.overhead),
     faceFlag,
+    menu: (open) => setMenu(open ?? !menuOpen),
+    menuUp: () => menuOpen,
     caddie: () => ({
       said: hud.tipShown(),
       offered: talk.offered

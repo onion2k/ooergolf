@@ -40,6 +40,8 @@ export interface GameState {
   t: number;
   frame: number;
   paused: boolean;
+  /** Whether the hole's menu is up, which stops the game. */
+  menu: boolean;
   /** How many bodies are on the course. */
   live: number;
   /** Strokes taken on this hole. */
@@ -275,6 +277,11 @@ export interface GameApi {
   unequip(aisle: 'club' | 'ball' | 'accessory'): void;
   /** A tab of the shop pressed, as a click on it does (the shop need not be open): the aisle it shows. */
   shopTab(aisle: 'club' | 'ball' | 'accessory'): void;
+  /**
+   * The hole's menu opened or shut as its button and the escape key do (the other way to now, when not told): whether it is open
+   * after. It opens over a hole in play and over nothing else, and the game waits while it is up.
+   */
+  menu(open?: boolean): boolean;
   /** The mulligan: the last stroke undone and the ball back where it was struck from; whether it did anything. */
   mulligan(): boolean;
   /** The save written now, and what it is. */
@@ -523,6 +530,9 @@ export interface DebugHost {
   orbit(turn: number, tilt: number): void;
   overhead(on?: boolean): boolean;
   faceFlag(): boolean;
+  menu(open?: boolean): boolean;
+  /** Whether the hole's menu is up. */
+  menuUp(): boolean;
   shopTab(aisle: 'club' | 'ball' | 'accessory'): void;
   measureFrame(warmup?: number): Promise<number>;
   judge(gap: number, work: number): number;
@@ -613,6 +623,7 @@ export function createApi(host: DebugHost): GameApi {
         t: game.t,
         frame: host.frame(),
         paused: host.paused(),
+        menu: host.menuUp(),
         live: game.world.live,
         strokes: game.strokes,
         ready: game.ready,
@@ -740,6 +751,7 @@ export function createApi(host: DebugHost): GameApi {
     equip: (id) => game.equip(id),
     unequip: (aisle) => game.unequip(aisle),
     shopTab: (aisle) => host.shopTab(aisle),
+    menu: (open) => host.menu(open),
     mulligan: () => game.mulligan(),
     aiming: () => host.aiming(),
     map: () => host.map(),

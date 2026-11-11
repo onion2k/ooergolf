@@ -283,6 +283,8 @@ export class Hud {
   private readonly chipStrokes = document.getElementById('chipStrokes')!;
   private readonly chipUnit = document.getElementById('chipUnit')!;
   private readonly scrim = document.getElementById('drawerScrim')!;
+  /** Whether the hole's menu is up. */
+  private menuUp = false;
   private readonly coins = document.getElementById('coins')!;
   private readonly gems = document.getElementById('gems')!;
   private readonly shop = document.getElementById('shop')!;
@@ -670,9 +672,14 @@ export class Hud {
     };
   }
 
-  /** Whether a menu is up: the start screen (or the title it waits under), the shop or the card. The music plays under them. */
+  /** The hole's menu put up or away: it is a menu, so the music plays under it. */
+  setMenu(open: boolean) {
+    this.menuUp = open;
+  }
+
+  /** Whether a menu is up: the start screen (or the title it waits under), the shop, the card or the hole's menu. The music plays under them. */
   get inMenus(): boolean {
-    return this.startUp || !this.shop.hidden || !this.card.hidden;
+    return this.startUp || !this.shop.hidden || !this.card.hidden || this.menuUp;
   }
 
   /**

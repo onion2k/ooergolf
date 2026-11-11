@@ -511,6 +511,44 @@ test('the aim pulses while a drag is held, and is gone when it is let go', async
   expect(problems).toEqual([]);
 });
 
+test('time stands still under the hole’s menu: the game does not step and nothing is struck, and both go on when it is shut', async ({
+  page,
+}) => {
+  const problems = watch(page);
+  await start(page, { seed: 1, paused: true });
+  const t = () => page.evaluate(() => window.game!.state().t);
+  const at = await page.evaluate(() => {
+    const b = window.game!.ball();
+    return window.game!.project(b.x, b.y, b.z);
+  });
+  const t0 = await t();
+  await play(page, 30, 'before the menu');
+  const t1 = await t();
+  expect(t1, 'the game steps with no menu').toBeGreaterThan(t0);
+  expect(await page.evaluate(() => window.game!.menu(true)), 'opened').toBe(true);
+  expect((await page.evaluate(() => window.game!.state())).menu).toBe(true);
+  await play(page, 60, 'under the menu');
+  expect(await t(), 'sixty frames under the menu are no time').toBe(t1);
+  await drag(page, at, { x: at.x, y: at.y + 150 });
+  await play(page, 2, 'a drag under the menu');
+  expect(await page.evaluate(() => window.game!.state().strokes), 'nothing is struck through the menu').toBe(0);
+  expect(await page.evaluate(() => window.game!.menu(false)), 'shut').toBe(false);
+  await play(page, 30, 'after the menu');
+  expect(await t(), 'and the game goes on').toBeGreaterThan(t1);
+  await drag(page, at, { x: at.x, y: at.y + 150 });
+  await play(page, 2, 'a drag after the menu');
+  expect(await page.evaluate(() => window.game!.state().strokes), 'a shot is struck again').toBe(1);
+  expect(problems).toEqual([]);
+});
+
+test('the hole’s menu does not open under the start screen', async ({ page }) => {
+  const problems = watch(page);
+  await start(page, { seed: 1, paused: true, screen: true });
+  expect(await page.evaluate(() => window.game!.menu(true))).toBe(false);
+  expect((await page.evaluate(() => window.game!.state())).menu).toBe(false);
+  expect(problems).toEqual([]);
+});
+
 test('a ball knocked in the cup as it drops is holed once, and nothing of the knock is drawn', async ({ page }) => {
   const problems = watch(page);
   await start(page, { seed: 1, paused: true });
