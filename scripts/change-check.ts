@@ -100,30 +100,22 @@ const plan = reach(changed, inputs, existsSync, specs, pictureOf);
 const steps: { name: string; cmd: string[] }[] = [
   { name: 'check:quick', cmd: ['npm', 'run', '--silent', 'check:quick'] },
 ];
-steps.push(
-  plan.whole
-    ? {
-        name: 'the slow unit tests, all',
-        cmd: ['npx', 'vitest', 'run', '--project', 'slow', '--reporter', 'dot', '--maxWorkers', '50%'],
-      }
-    : {
-        name: 'the slow unit tests that import what changed',
-        cmd: [
-          'npx',
-          'vitest',
-          'run',
-          '--project',
-          'slow',
-          '--reporter',
-          'dot',
-          '--maxWorkers',
-          '50%',
-          '--changed',
-          base,
-          '--passWithNoTests',
-        ],
-      },
-);
+const slow = ['npx', 'vitest', 'run', '--project', 'slow', '--reporter', 'dot', '--maxWorkers', '50%'];
+if (plan.whole) steps.push({ name: 'the slow unit tests, all', cmd: slow });
+else {
+  // counted first, so a run that found no test to run is said and is not a step that passed
+  const listed = lines(
+    execFileSync('npx', ['vitest', 'list', '--project', 'slow', '--changed', base, '--filesOnly'], {
+      encoding: 'utf8',
+    }),
+  ).filter((l) => l.includes('test/'));
+  if (listed.length)
+    steps.push({
+      name: `the ${listed.length} slow test files that import what changed`,
+      cmd: [...slow, '--changed', base],
+    });
+  else plan.why.push('no slow test file imports what changed, so none is run');
+}
 for (const g of plan.gates) steps.push({ name: g, cmd: ['npm', 'run', '--silent', g] });
 if (plan.smoke === 'all')
   steps.push({ name: 'smoke, all of it', cmd: ['npx', 'playwright', 'test', '--trace', 'off'] });
