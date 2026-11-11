@@ -29,6 +29,7 @@ import { Autopilot, timeAlong } from '../src/autopilot';
 import { CameraRig, facing, overheadFit, wrap } from '../src/camera';
 import { AISLES, ITEMS, paid } from '../src/items';
 import { retakeShown } from '../src/retake';
+import { dailyHole, shiftDay } from '../src/daily';
 import { COURSES, type Course, type HoleDef } from '../src/course';
 import type { RoundOf } from '../src/career';
 import { POINTS, FIELD_SIZE, GRADES, PRIZE, TOURS, entryFee, potOf, stakeOf, type Tour } from '../src/season';
@@ -41,6 +42,7 @@ import {
   arrowProblems,
   breakProblems,
   checkInvariants,
+  dailyKeptProblems,
   framingProblems,
   flyInProblems,
   lineProblems,
@@ -72,7 +74,7 @@ import { BAG, PUTTER, type BagClub } from '../src/bag';
 import { bankOf, makeBank } from '../src/bank';
 import { carryFrom } from '../src/flight';
 import { TILE, lieAt, type Layout } from '../src/arena';
-import { Progress, memoryStore } from '../src/progress';
+import { Progress, memoryStore, type DailySlot } from '../src/progress';
 import { seeded } from '../src/random';
 import { DRAG, HeldView, type Shot } from '../src/shot';
 import { GREENS, LIE } from '../src/surfaces';
@@ -98,6 +100,18 @@ const CONTOURED_GREENS = [
 ];
 
 let contouredHoles: readonly HoleDef[] | undefined;
+
+/**
+ * The eight days the monkey plays the daily hole on, from the first of the day's own, two turns of the four biomes. Fixed, so a
+ * failure replays; each hole is made the first time its day is asked for and kept, which is eight holes and no more.
+ */
+export const FUZZ_DAYS: readonly string[] = Array.from({ length: 8 }, (_, k) => shiftDay('2026-11-11', k));
+const dailyHoles = new Map<string, HoleDef>();
+const dailyOf = (day: string): HoleDef => {
+  let hole = dailyHoles.get(day);
+  if (!hole) dailyHoles.set(day, (hole = dailyHole(day)));
+  return hole;
+};
 
 /**
  * The nine holes of The Links made again with the steepest contour a green may have, at greens that run at each of
@@ -284,7 +298,7 @@ export function fuzz(
             entries++;
           }
           if (name === 'placed') lately.placed = args[0] as unknown as Placement;
-          if ((name === 'paid' || name === 'spent') && playing?.progress.save.mode === 'free')
+          if ((name === 'paid' || name === 'spent') && playing?.progress.save.mode === 'free' && playing.daily === null)
             told.push(`free play was told it was ${name}`);
           if (name === 'holed' || name === 'pickedUp')
             lately.finished = { holed: name === 'holed', score: args[0], par: args[1] };
@@ -1604,14 +1618,16 @@ export function fuzz(
         // practice pays its holes as any paid hole, so a player short of a fee can earn it, and like free play it leaves the
         // round kept and the seasons as they were
         // (and a hole begun again from the menu, which pays nothing whatever the mode)
-        const unpaid = free || restartedHole;
+        // (and the daily hole's first go pays in either mode, where its later goes pay nothing)
+        const go = game.daily;
+        const unpaid = go ? !go.pays || restartedHole : free || restartedHole;
         const pay = unpaid
           ? { coins: 0, gems: 0 }
           : paid(finished.score, finished.par, !finished.holed, game.kit.underParPay);
         const double = !unpaid && finished.holed && was.penny;
         const save = game.progress.save;
         const coins = pay.coins * (double ? 2 : 1) + prize;
-        if (free) count(checked, 'free hole paid nothing');
+        if (free && !go) count(checked, 'free hole paid nothing');
         else if (game.practising) count(checked, 'practice paid its hole');
         if (
           (free || game.practising) &&
@@ -1636,6 +1652,7 @@ export function fuzz(
           }
         }
       }
+      if (finished && game.daily) dailyEnd(finished);
       if (placed) placement(placed, was, prize);
     };
     /**
@@ -1708,7 +1725,7 @@ export function fuzz(
       const play = game.phase === 'play';
       quiet();
       if (menuer() < 0.5) {
-        const wanted = play && game.event === null;
+        const wanted = play && game.event === null && game.daily?.pays !== true;
         restarting = true;
         let took: boolean;
         try {
@@ -1751,6 +1768,96 @@ export function fuzz(
       afterwards(was);
       did('pick up the hole');
       count(checked, 'pick up');
+    };
+    /**
+     * A player starting the daily hole from the start screen, on a chance of its own and only on some seeds (so the runs the figures
+     * of the fuzzer's own tests are held to, which play none, are as they were): any of eight fixed days, whether or not a day later
+     * is in the slot. Held to what starting one is (nothing moved in the save until the first stroke, the go that pays being the first
+     * of a day later than the slot's), to what finishing one is (the first go kept, in the slot, with no best and a hole counted; a
+     * later go leaving the life, the bests and the slot as they were), and, every frame, to what the slot may never do.
+     */
+    const dailier = seeded(seed * 83 + 41);
+    const dailying = !course && seed % 7 < 3;
+    let dailyStart: { game: Game; day: string; life: string; best: string; slot: string; holes: number } | null = null;
+    let slotWas = JSON.stringify(game.progress.save.daily);
+    const playTheDay = () => {
+      const day = FUZZ_DAYS[Math.floor(dailier() * FUZZ_DAYS.length)];
+      const hole = dailyOf(day);
+      const save = game.progress.save;
+      const was = [
+        save.coins,
+        save.gems,
+        JSON.stringify(save.round),
+        JSON.stringify(save.season),
+        JSON.stringify(save.best),
+      ];
+      const held = save.daily.day;
+      const [phase, daily] = [game.phase, game.daily];
+      if (game.playDaily(hole, 'not a day') || game.phase !== phase || game.daily !== daily)
+        throw new Error('a day that is not one was played, or changed the game');
+      if (!game.playDaily(hole, day)) throw new Error(`the daily hole of ${day} was refused`);
+      const go = game.daily;
+      if (!go || go.day !== day || go.pays !== (held === '' || day > held))
+        throw new Error(
+          `the daily hole of ${day} began as ${JSON.stringify(go)}, the slot being of ${held || 'no day'}`,
+        );
+      if (game.event !== null || game.of !== null || game.hole !== 0 || game.strokes !== 0 || game.phase !== 'play')
+        throw new Error('the daily hole began as no round of one hole with no stroke');
+      if (game.def !== hole) throw new Error('the daily hole is not the hole of the day');
+      if (
+        save.coins !== was[0] ||
+        save.gems !== was[1] ||
+        JSON.stringify(save.round) !== was[2] ||
+        JSON.stringify(save.season) !== was[3] ||
+        JSON.stringify(save.best) !== was[4] ||
+        save.daily.day !== held
+      )
+        throw new Error('beginning the daily hole changed the save before a stroke');
+      dailyStart = {
+        game,
+        day,
+        life: JSON.stringify(save.life),
+        best: JSON.stringify(save.best),
+        slot: JSON.stringify(save.daily),
+        holes: save.life.holes,
+      };
+      count(checked, go.pays ? 'daily first go begun' : 'daily later go begun');
+      did('play the daily hole', `${day}, ${go.pays ? 'first go' : 'a later go'}`);
+    };
+    /** A daily go done, held to what it leaves: told with the score and the par of the hole done. */
+    const dailyEnd = (finished: { holed: boolean; par: number; score: number }) => {
+      const go = game.daily;
+      const start = dailyStart;
+      if (!go || !start || start.game !== game || start.day !== go.day) return;
+      const save = game.progress.save;
+      if (JSON.stringify(save.best) !== start.best)
+        told.push('the daily hole made a best, which a name of a day would grow for ever');
+      if (save.life.rounds !== (JSON.parse(start.life) as typeof save.life).rounds)
+        told.push('the daily hole counted a round');
+      if (go.pays) {
+        if (save.daily.day !== go.day || save.daily.strokes !== finished.score || save.daily.par !== finished.par)
+          told.push(
+            `the first go of ${go.day}, scored ${finished.score} on ${finished.par}, is kept as ${JSON.stringify(save.daily)}`,
+          );
+        if (save.life.holes !== start.holes + (finished.holed ? 1 : 0))
+          told.push(
+            `the first go of ${go.day} ${finished.holed ? 'holed' : 'picked up'} left ${save.life.holes} holes, from ${start.holes}`,
+          );
+        count(checked, 'daily first go kept');
+      } else {
+        if (JSON.stringify(save.life) !== start.life || JSON.stringify(save.daily) !== start.slot)
+          told.push(`a later go of ${go.day} changed the life or the slot`);
+        count(checked, 'daily later go left alone');
+      }
+      dailyStart = null;
+    };
+    /** The slot held to what it may never do, between one frame and the next. */
+    const watchDaily = () => {
+      const now = JSON.stringify(game.progress.save.daily);
+      if (now === slotWas) return;
+      told.push(...dailyKeptProblems(JSON.parse(slotWas) as DailySlot, game.progress.save.daily));
+      slotWas = now;
+      count(checked, 'daily slot written');
     };
     const retaker = seeded(seed * 43 + 11);
     const retake = () => {
@@ -1909,6 +2016,7 @@ export function fuzz(
       if (seed % 5 === 0 && wardrobe() < 0.004) tryOn();
       if (retaker() < 0.01) retake();
       if (menuer() < 0.0006) leaveHole();
+      if (dailying && dailier() < 0.0015) playTheDay();
       if (careerer() < 0.01) career();
       if (reading() < 0.03) readOff();
       if (!game.layout.golf && ranging() < 0.03) rangeOff();
@@ -1916,6 +2024,7 @@ export function fuzz(
       quiet();
       game.step(DT);
       afterwards(was);
+      watchDaily();
       director.frame(DT, false);
       // the fly-in is held to its rule every frame, as the camera's turn is: tilted within its limit, and over in its time
       {

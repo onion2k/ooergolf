@@ -31,6 +31,7 @@ const SLOW = [
   'test/farside-play.test.ts',
   'test/farside.test.ts',
   'test/fells-ground.test.ts',
+  'test/fuzz-daily.test.ts',
   'test/fuzz-desert.test.ts',
   'test/fuzz-pan.test.ts',
   'test/fuzz-trees.test.ts',
