@@ -87,7 +87,10 @@ describe('the fuzzer', () => {
     // choosing among the first nine in a scratch edit, which gives its 3202 again), and seed 26, which also enters other tours'
     // events, plays on with other coins (that edit gives it 3104, not 3095); 3 (level golf) did not move. The monkey's own draws
     // are no more a stroke than they were: nothing in the biome tours or tabs draws from its stream.
-    expect([one.drawn, two.drawn, golf.drawn], "draws from the monkey's main stream").toEqual([3104, 3213, 2699]);
+    // They moved to 3327, 2973 and 2676 on 11 November 2026 when the menu's pick-up and restart began to be done (`leaveHole`, on a
+    // chance of its own: the three were 3104, 3213 and 2699 again with that chance at nought, so no draw is the menu's, but a hole
+    // given up or begun again is a round played another way).
+    expect([one.drawn, two.drawn, golf.drawn], "draws from the monkey's main stream").toEqual([3327, 2973, 2676]);
     // a reload went on with the event round kept, as the start screen's Continue does: a check that never ran passes in silence
     expect(one.checked['event gone on with'], 'event rounds gone on with after a reload').toBeGreaterThan(0);
     // the framing rule was asked of the camera, on golf and on minigolf, a good many times: a check that never ran passes in silence
@@ -129,10 +132,13 @@ describe('the fuzzer', () => {
       'hear the caddie',
       'line up a putt',
       'look from overhead',
+      // the menu's Give up and Restart, held to the game's rules of both
+      'pick up the hole',
       'play again',
       'putt by the break',
       'read the break',
       'reload',
+      'restart the hole',
       // seed 25's round is on minigolf for a while, where the watch's retake, a putt's shape and spin and the shop's try-on are
       'retake',
       // the sound turned off and on and its slider moved, which only the save keeps
@@ -165,6 +171,9 @@ describe('the fuzzer', () => {
               'give up an event',
               'practise',
               'drive at a tree',
+              // nor a flight to a pan, done only where a round reaches a hole of The Saltpan or The Mesa (seed 26's did once the menu's
+              // actions moved its rounds, on 11 November 2026, and none did before): `fuzz-desert` holds it
+              'fly to a pan',
             ].includes(a),
         )
         .sort(),
@@ -178,7 +187,8 @@ describe('the fuzzer', () => {
         r.done['fly to an island'] +
         (r.done['drive the lane'] ?? 0) +
         (r.done['strike a kicker'] ?? 0) +
-        (r.done['drive at a tree'] ?? 0),
+        (r.done['drive at a tree'] ?? 0) +
+        (r.done['fly to a pan'] ?? 0),
     );
     expect(r.happened.stopped, 'and come to rest').toBeGreaterThan(0);
     expect(r.happened.holed, 'holed out').toBeGreaterThan(0);
@@ -192,7 +202,9 @@ describe('the fuzzer', () => {
     const hole = FLAT_HOLES.slice(0, 1);
     // seed 24 is a player with no coins on the golf tour's county grade given no windfall, so an entry is refused for its fee (since
     // 16 October 2026, when the club grade became free, the seven before it never were)
-    for (const seed of [3, 4, 7, 12, 17, 19, 20, 24]) {
+    // seed 9 was added on 11 November 2026, when the menu's pick-up and restart began to be done (a chance of their own, which moved
+    // what the eight reached): none of them then entered an event on the Moon's tour, which seed 9 does
+    for (const seed of [3, 4, 7, 12, 17, 19, 20, 24, 9]) {
       const r = fuzz(seed, 6000, hole, { name: 'Fuzz pitch', purse: 1.2 });
       expect(r.failure, `seed ${seed}: ${JSON.stringify(r.failure)}`).toBe(null);
       for (const [k, n] of Object.entries(r.checked)) total[k] = (total[k] ?? 0) + n;

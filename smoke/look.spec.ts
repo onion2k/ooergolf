@@ -1927,6 +1927,56 @@ test.describe('the flag button', () => {
   });
 });
 
+test.describe('the hole’s menu', () => {
+  /** The menu opened by its button, the mouse put away and the panel come to rest. */
+  async function opened(page: Page, tap = false) {
+    await page.evaluate(() => window.game!.step(60));
+    await hideStats(page);
+    const button = page.locator('#viewMenu');
+    if (tap) await button.tap();
+    else await button.click();
+    await page.mouse.move(0, 0);
+    await settled(page);
+    expect(await page.evaluate(() => window.game!.state().menu)).toBe(true);
+  }
+
+  test('over the first hole in free play: the way back, Restart, Give up and Courses over the dimmed course, and the button among the view’s', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true });
+    await opened(page);
+    await expect(page).toHaveScreenshot('menu.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
+  test('in an event, with Give up asked: no Restart, the question in the grape, and Courses keeps the round', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 11, paused: true, screen: true, save: { coins: 10 } });
+    expect(await page.evaluate(() => window.game!.enter('mini'))).toBe(true);
+    await opened(page);
+    await page.locator('#menuGiveUp').click();
+    await page.mouse.move(0, 0);
+    await settled(page);
+    await expect(page).toHaveScreenshot('menu-event.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
+  test.describe('on a phone', () => {
+    test.use({ viewport: { width: 400, height: 860 }, hasTouch: true, isMobile: true });
+
+    test('the menu over a hole, its button three bars beside Overhead and the flag', async ({ page }) => {
+      const problems = watch(page);
+      await start(page, { seed: 11, paused: true });
+      await opened(page, true);
+      await expect(page).toHaveScreenshot('phone-menu.png', TOLERANCE);
+      expect(problems).toEqual([]);
+    });
+  });
+});
+
 test.describe('a stream', () => {
   test('running water in a channel, close to: foam at its edges, open water in it with no streaks, level with the grass', async ({
     page,

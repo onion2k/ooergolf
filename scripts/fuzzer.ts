@@ -251,6 +251,9 @@ export function fuzz(
   let directing: Director | null = null;
   /** When the hole being played began, in game time, which the fly-in's rule is held to. */
   let holeBegan = 0;
+  /** Whether the hole now beginning is the menu's restart of the one in play, and whether the hole in play is one: a restarted hole pays nothing. */
+  let restarting = false;
+  let restartedHole = false;
   const events: GameEvents = new Proxy(
     {},
     {
@@ -286,9 +289,10 @@ export function fuzz(
           if (name === 'holed' || name === 'pickedUp')
             lately.finished = { holed: name === 'holed', score: args[0], par: args[1] };
           if (name === 'started' && playing && directing) {
-            directing.started();
+            directing.started(restarting);
             holeBegan = playing.t;
           }
+          if (name === 'started') restartedHole = restarting;
           // a stroke struck: the camera is told, which has it follow the ball for one in five and hold still for the rest
           if (name === 'struck' && playing && directing) directing.struck();
           // a hole holed: the camera is told, and an ace has it turn about the cup, which is held to the view's rules below
@@ -1599,7 +1603,8 @@ export function fuzz(
         const free = game.progress.save.mode === 'free';
         // practice pays its holes as any paid hole, so a player short of a fee can earn it, and like free play it leaves the
         // round kept and the seasons as they were
-        const unpaid = free;
+        // (and a hole begun again from the menu, which pays nothing whatever the mode)
+        const unpaid = free || restartedHole;
         const pay = unpaid
           ? { coins: 0, gems: 0 }
           : paid(finished.score, finished.par, !finished.holed, game.kit.underParPay);
@@ -1688,6 +1693,65 @@ export function fuzz(
      * was struck from, and the game's chance and clock are as they were. Done on a chance of its own, so no run without the
      * item plays differently.
      */
+    const menuer = seeded(seed * 53 + 17);
+    /**
+     * A player opening the menu and leaving the hole: picking it up (Give up) or beginning it again (Restart), the same calls the
+     * page's buttons make. Held to the rules: a pick-up is taken exactly while a hole is in play, scores the limit and puts it on
+     * the card, and a restart is taken exactly while a hole is in play outside an event, and leaves the hole, the card and the retake
+     * as they were with no strokes and the ball on the tee; a refusal changes nothing. Done on a chance of its own (`menuer`), so
+     * no run plays differently where it does nothing, and the pay a hole done after it is held to is the rule's in `afterwards`.
+     */
+    const leaveHole = () => {
+      const was = snapshot();
+      const card = [...game.card];
+      const used = game.mulliganUsed;
+      const play = game.phase === 'play';
+      quiet();
+      if (menuer() < 0.5) {
+        const wanted = play && game.event === null;
+        restarting = true;
+        let took: boolean;
+        try {
+          took = game.restartHole();
+        } finally {
+          restarting = false;
+        }
+        if (took !== wanted)
+          throw new Error(`a restart ${took ? 'was taken' : 'was refused'} where the rule says ${wanted}`);
+        if (game.card.join() !== card.join() || game.mulliganUsed !== used)
+          throw new Error('a restart changed the card or the retake');
+        if (!took) {
+          if (game.strokes !== was.strokes || game.hole !== was.hole || game.phase !== was.phase)
+            throw new Error('a refused restart changed the game');
+          count(checked, 'restart refused');
+          return;
+        }
+        const { world, ball, layout } = game;
+        if (game.strokes !== 0 || game.hole !== was.hole || game.phase !== 'play')
+          throw new Error(`a restart left ${game.strokes} strokes on hole ${game.hole + 1}, ${game.phase}`);
+        if (!world.alive[ball] || Math.hypot(world.x[ball] - layout.tee.x, world.y[ball] - layout.tee.y) > 0.5)
+          throw new Error('a restart did not put the ball on the tee');
+        afterwards(was);
+        did('restart the hole');
+        count(checked, 'restart');
+        return;
+      }
+      const took = game.pickUp();
+      if (took !== play) throw new Error(`a pick-up ${took ? 'was taken' : 'was refused'} where the rule says ${play}`);
+      if (!took) {
+        if (game.card.join() !== card.join()) throw new Error('a refused pick-up changed the card');
+        count(checked, 'pick up refused');
+        return;
+      }
+      if (game.phase === 'play') throw new Error('a hole picked up is still in play');
+      // the ball is picked up in the air or on the ground, and tells of no landing or rest: the shot aimed is not the next one's
+      aimed = null;
+      if (game.card.length !== card.length + 1 || game.card[card.length] !== game.limit)
+        throw new Error(`a hole picked up put ${game.card.join()} on the card, not ${[...card, game.limit].join()}`);
+      afterwards(was);
+      did('pick up the hole');
+      count(checked, 'pick up');
+    };
     const retaker = seeded(seed * 43 + 11);
     const retake = () => {
       // the button is away in an event, where a stroke counts against the field, as the page has it
@@ -1718,6 +1782,8 @@ export function fuzz(
       if (game.strokes !== was.strokes - 1)
         throw new Error(`a retake took the strokes from ${was.strokes} to ${game.strokes}, not by one`);
       if (!game.mulliganUsed) throw new Error('a retake was taken and not marked used');
+      // a stroke undone in the air never lands, and the shot aimed for it is not the next one's (seed 5 of the wind's golf, 11 November 2026)
+      aimed = null;
       if (game.phase === 'play') {
         const { world, ball } = game;
         if (!world.alive[ball] || Math.hypot(world.x[ball] - lie.x, world.y[ball] - lie.y) > 0.05)
@@ -1842,6 +1908,7 @@ export function fuzz(
       count(itemFrames, `${game.slots.club || '-'}|${game.slots.ball || '-'}|${game.slots.accessory || '-'}`);
       if (seed % 5 === 0 && wardrobe() < 0.004) tryOn();
       if (retaker() < 0.01) retake();
+      if (menuer() < 0.0006) leaveHole();
       if (careerer() < 0.01) career();
       if (reading() < 0.03) readOff();
       if (!game.layout.golf && ranging() < 0.03) rangeOff();
