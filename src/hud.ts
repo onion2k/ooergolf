@@ -16,6 +16,7 @@
 import { AISLES, type Aisle, type Item, type KitSlots } from './items';
 import type { Mode } from './gesture';
 import type { MenuWords } from './menu';
+import { featWords, type TrophyView } from './trophywords';
 import { helpText, windText, type Held } from './readout';
 import { swatchOf } from './swatch';
 import { SCORE_KINDS, againstPar, scoreKind, scoreName } from './score';
@@ -69,6 +70,8 @@ export interface HudHandlers {
   pickUp(): void;
   /** Restart pressed in the menu: the hole begun again from its tee. */
   restart(): void;
+  /** The trophy room opened (from the start screen or the hole's menu): what it says, from the save as it is now. */
+  trophies(): TrophyView;
   /** A club of the bag chosen on a golf hole, by its id. */
   club(id: string): void;
   /** The shape button pressed: the next shape in its cycle, from minus one (a draw) to one (a fade). */
@@ -300,6 +303,12 @@ export class Hud {
   private readonly menuNote = document.getElementById('menuNote')!;
   private readonly menuRestart = document.getElementById('menuRestart') as HTMLButtonElement;
   private readonly menuGiveUp = document.getElementById('menuGiveUp') as HTMLButtonElement;
+  private readonly trophies = document.getElementById('trophies')!;
+  /** The second line the callout was given, and the feats added to it since: a feat is said after what the callout already says. */
+  private calloutFrom = '';
+  private readonly feats: string[] = [];
+  /** The button that opened the trophy room, which has the focus again when it is shut. */
+  private trophiesFrom: HTMLElement | null = null;
   private readonly coins = document.getElementById('coins')!;
   private readonly gems = document.getElementById('gems')!;
   private readonly shop = document.getElementById('shop')!;
@@ -526,6 +535,7 @@ export class Hud {
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return;
       if (this.drawerOpen()) this.setDrawer(false);
+      else if (!this.trophies.hidden) this.closeTrophies();
       else if (this.menuUp) handlers.menu(false);
       else if (this.shop.hidden && this.card.hidden) handlers.menu(true);
     });
@@ -539,6 +549,12 @@ export class Hud {
       else handlers.pickUp();
     });
     document.getElementById('menuCourses')!.addEventListener('click', () => handlers.courses());
+    // the trophy room, from the start screen or from the menu, and its way back to whichever it was opened from
+    for (const id of ['trophiesOpen', 'menuTrophies']) {
+      const button = document.getElementById(id)!;
+      button.addEventListener('click', () => this.openTrophies(handlers.trophies(), button));
+    }
+    document.getElementById('trophiesClose')!.addEventListener('click', () => this.closeTrophies());
     this.overheadButton.addEventListener('click', () => handlers.overhead(this.mode !== 'overhead'));
     this.flagButton.addEventListener('click', () => handlers.flag());
     for (const speaker of [this.soundButton, this.purseSound])
@@ -715,9 +731,125 @@ export class Hud {
       this.menuNote.textContent = words.note ?? '';
     }
     this.askGiveUp(false);
-    this.menuPanel.hidden = !open;
+    // the menu put away takes the trophy room with it; and while the room is up over it the menu waits behind, hidden
+    if (!open) this.trophies.hidden = true;
+    this.menuPanel.hidden = !open || !this.trophies.hidden;
     this.menuScrim.hidden = !open;
     if (open) document.getElementById('menuResume')!.focus();
+  }
+
+  /**
+   * The trophy room put up with `view`, drawn afresh, over the start screen or the hole's menu: the menu steps aside for it (it
+   * is still up, and time still stands) and comes back when the room is shut.
+   */
+  private openTrophies(view: TrophyView, from: HTMLElement) {
+    this.drawTrophies(view);
+    this.trophiesFrom = from;
+    this.trophies.hidden = false;
+    if (this.menuUp) this.menuPanel.hidden = true;
+    document.getElementById('trophiesClose')!.focus();
+  }
+
+  /** The trophy room shut, and the menu it was opened from given back; the focus goes back to the button that opened it. */
+  private closeTrophies() {
+    this.trophies.hidden = true;
+    if (this.menuUp) this.menuPanel.hidden = false;
+    const from = this.trophiesFrom;
+    this.trophiesFrom = null;
+    if (from && !from.closest('[hidden]')) from.focus();
+  }
+
+  /** What the trophy room says, put on the page: a node for each tour, figure, feat and record, made when it is opened. */
+  private drawTrophies(view: TrophyView) {
+    const node = <K extends keyof HTMLElementTagNameMap>(tag: K, text = '', ...rest: Node[]) => {
+      const el = document.createElement(tag);
+      el.textContent = text;
+      el.append(...rest);
+      return el;
+    };
+    const tours = view.tours.map((t) => {
+      const cups = node('span', t.cups);
+      cups.className = 'cups';
+      cups.setAttribute('aria-hidden', 'true');
+      const long = node('span', t.grade),
+        short = node('span', t.short);
+      long.className = 'long';
+      short.className = 'short';
+      const el = node('div', t.name, cups, node('small', '', long, short));
+      el.className = 'tour';
+      el.dataset.tour = t.tour;
+      el.setAttribute('role', 'listitem');
+      el.setAttribute('aria-label', t.label);
+      if (t.won) el.dataset.won = '';
+      return el;
+    });
+    document.getElementById('trophyTours')!.replaceChildren(...tours);
+    document.getElementById('trophyFigures')!.replaceChildren(
+      ...view.figures.map((f) => {
+        const el = node('div', f.label, node('b', f.value));
+        // the figure above its word, as the page reads it; a reader hears the word after the figure
+        el.prepend(el.lastChild!);
+        return el;
+      }),
+    );
+    document.getElementById('trophyFeatsHead')!.textContent = view.featsHead;
+    document.getElementById('trophyFeats')!.replaceChildren(
+      ...view.feats.map((f) => {
+        const icon = node('i', f.icon);
+        icon.setAttribute('aria-hidden', 'true');
+        const el = node('div', '', icon, node('span', f.name, node('small', f.how)));
+        el.className = 'feat';
+        el.dataset.feat = f.id;
+        el.setAttribute('role', 'listitem');
+        el.setAttribute('aria-label', `${f.name}, ${f.how}, ${f.earned ? 'earned' : 'not yet earned'}`);
+        if (f.earned) el.dataset.earned = '';
+        return el;
+      }),
+    );
+    document.getElementById('trophyRecords')!.replaceChildren(
+      ...view.records.map((r) => {
+        const el = node('li', '', node('span', r.course), node('span', r.text));
+        if (r.held) el.dataset.held = '';
+        return el;
+      }),
+    );
+  }
+
+  /** The trophy room as drawn, for the test API: whether it is up, whether the menu stands behind it, and what it says. */
+  trophiesDrawn(): {
+    shown: boolean;
+    menuBehind: boolean;
+    tours: { name: string; cups: string; won: boolean }[];
+    figures: { label: string; value: string }[];
+    featsHead: string;
+    feats: { id: string; earned: boolean }[];
+    records: { course: string; text: string; held: boolean }[];
+  } {
+    const all = (id: string) => Array.from(document.getElementById(id)!.children) as HTMLElement[];
+    const text = (node: Node | null) => node?.textContent ?? '';
+    return {
+      shown: !this.trophies.hidden,
+      menuBehind: this.menuUp && !this.trophies.hidden,
+      tours: all('trophyTours').map((el) => ({
+        name: text(el.firstChild),
+        cups: text(el.querySelector('.cups')),
+        won: el.dataset.won !== undefined,
+      })),
+      figures: all('trophyFigures').map((el) => ({
+        label: text(el.lastChild),
+        value: text(el.firstChild),
+      })),
+      featsHead: text(document.getElementById('trophyFeatsHead')),
+      feats: all('trophyFeats').map((el) => ({
+        id: el.getAttribute('data-feat') ?? '',
+        earned: el.dataset.earned !== undefined,
+      })),
+      records: all('trophyRecords').map((el) => ({
+        course: text(el.children[0]),
+        text: text(el.children[1]),
+        held: el.dataset.held !== undefined,
+      })),
+    };
   }
 
   /** Give up shown as it first is, or as the question it turns to once pressed. */
@@ -742,7 +874,7 @@ export class Hud {
 
   /** Whether a menu is up: the start screen (or the title it waits under), the shop, the card or the hole's menu. The music plays under them. */
   get inMenus(): boolean {
-    return this.startUp || !this.shop.hidden || !this.card.hidden || this.menuUp;
+    return this.startUp || !this.shop.hidden || !this.card.hidden || this.menuUp || !this.trophies.hidden;
   }
 
   /**
@@ -1275,6 +1407,7 @@ export class Hud {
       this.toast,
       this.menuPanel,
       this.menuScrim,
+      this.trophies,
     ])
       el.hidden = true;
     this.menuUp = false;
@@ -1438,6 +1571,7 @@ export class Hud {
     this.toast.hidden = true;
     this.card.hidden = true;
     this.shop.hidden = true;
+    this.trophies.hidden = true;
     this.setMenu(false);
   }
 
@@ -1454,6 +1588,8 @@ export class Hud {
 
   /** The word over the course, of its kind, which the stylesheet colours and pops in. */
   private callout(text: string, kind: Callout, from = '') {
+    this.calloutFrom = from;
+    this.feats.length = 0;
     this.toastWords.textContent = text;
     this.toastFrom.textContent = from;
     this.toastFrom.hidden = from === '';
@@ -1474,6 +1610,24 @@ export class Hud {
   /** The mulligan taken: a word for it, until the next stroke. */
   mulligan() {
     this.callout('Mulligan! Take it again', 'splash');
+  }
+
+  /**
+   * A feat earned, `name`: said on the second line of the score word over the hole, after the distance a long putt was holed from
+   * if it has one, and with the others the same hole earned, so that a hole's own word is never taken from it; with no score word
+   * up (a feat earned in the shop) it is a word of its own, until the next hole.
+   */
+  feat(name: string) {
+    const kind = this.toast.dataset.kind;
+    if (!this.toast.hidden && (SCORE_KINDS as readonly string[]).includes(kind ?? '')) {
+      this.feats.push(name);
+      const words = featWords(this.feats);
+      this.toastFrom.textContent = this.calloutFrom ? `${this.calloutFrom} · ${words}` : words;
+      this.toastFrom.hidden = false;
+    } else {
+      this.callout(featWords([name]), 'drive');
+      this.feats.push(name);
+    }
   }
 
   /** The ball lipped out of the cup: a word for it, until the next stroke. */

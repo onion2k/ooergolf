@@ -90,6 +90,8 @@ import { Input } from './input';
 import { Squash, squashInto, squashOf } from './squash';
 import { Governor, RUNGS, economyFor } from './quality';
 import { menuMayOpen, menuWords, type MenuFacts } from './menu';
+import { featOf } from './feats';
+import { trophyView } from './trophywords';
 import { retakeShown, type RetakeState } from './retake';
 import { HeldView } from './shot';
 import { between } from './frames';
@@ -550,6 +552,8 @@ async function main() {
       restart() {
         restartHole();
       },
+      // the trophy room, opened from the start screen or the menu: what it says, from the save as it is now
+      trophies: () => trophyView(progress.save, COURSES),
       // the Retake button: the kit's free retake, which the game says whether it took (and tells of, through `mulliganed`)
       retake() {
         game.mulligan();
@@ -1031,6 +1035,11 @@ async function main() {
       showPurse();
     },
     paid: showPurse,
+    // a feat earned: its name on the hole's word, and no sound of its own (a feat pays nothing and is not a moment of the ball's)
+    feat(id) {
+      hud.feat(featOf(id).name);
+      log(`feat ${id}`);
+    },
     bought: showPurse,
     equipped: showPurse,
   } satisfies GameEvents);
@@ -1603,6 +1612,7 @@ async function main() {
     pickUp: pickUpHole,
     restartHole,
     menuDrawn: () => hud.menuDrawn(),
+    trophiesDrawn: () => hud.trophiesDrawn(),
     caddie: () => ({
       said: hud.tipShown(),
       offered: talk.offered

@@ -15,6 +15,8 @@
 import type { WorkerState } from './install';
 import type { Board, EventCard, Results } from './hud';
 import type { Tour } from './season';
+import type { FeatId } from './featids';
+import type { Life } from './progress';
 import type { Antialias } from 'artshape-render/game/renderer';
 import { KIND_NAME, TILE, type Layout } from './arena';
 import { Autopilot, type Plan } from './autopilot';
@@ -288,6 +290,11 @@ export interface GameApi {
   restartHole(): boolean;
   /** The hole's menu as drawn: whether it is up, whether Restart is there, what Give up says and whether it is asking, and its words. */
   menuShown(): ReturnType<DebugHost['menuDrawn']>;
+  /**
+   * The trophy room: the lifetime figures and the feats as the save has them, and the room as drawn (whether it is up, whether the
+   * menu stands behind it, and every tour, figure, feat and record on it). It is opened by its buttons, the start screen's and the menu's.
+   */
+  trophies(): TrophyReport;
   /** The mulligan: the last stroke undone and the ball back where it was struck from; whether it did anything. */
   mulligan(): boolean;
   /** The save written now, and what it is. */
@@ -541,6 +548,7 @@ export interface DebugHost {
   menuUp(): boolean;
   pickUp(): boolean;
   restartHole(): boolean;
+  trophiesDrawn(): TrophyReport['shown'];
   menuDrawn(): {
     shown: boolean;
     restart: boolean;
@@ -582,6 +590,21 @@ export interface DebugHost {
   practise(tour: Tour): boolean;
   board(): { head: string; rows: string[][]; cut: string } | null;
   events: string[];
+}
+
+/** What `trophies()` reads: the save's lifetime figures and feats, and the trophy room as the page draws it. */
+export interface TrophyReport {
+  life: Life;
+  feats: FeatId[];
+  shown: {
+    shown: boolean;
+    menuBehind: boolean;
+    tours: { name: string; cups: string; won: boolean }[];
+    figures: { label: string; value: string }[];
+    featsHead: string;
+    feats: { id: string; earned: boolean }[];
+    records: { course: string; text: string; held: boolean }[];
+  };
 }
 
 /** What `season()` reads: each tour's season as the save has it, the event in play, practice, and the leaderboard drawn. */
@@ -771,6 +794,7 @@ export function createApi(host: DebugHost): GameApi {
     pickUp: () => host.pickUp(),
     restartHole: () => host.restartHole(),
     menuShown: () => host.menuDrawn(),
+    trophies: () => ({ life: { ...progress.save.life }, feats: [...progress.save.feats], shown: host.trophiesDrawn() }),
     mulligan: () => game.mulligan(),
     aiming: () => host.aiming(),
     map: () => host.map(),

@@ -201,6 +201,7 @@
   #bag:not([hidden]),
   #card:not([hidden]),
   #menu:not([hidden]),
+  #trophies:not([hidden]),
   #shop:not([hidden]),
   #start:not([hidden]) {
     pointer-events: auto;
@@ -627,6 +628,7 @@
 
   #card,
   #menu,
+  #trophies,
   #shop,
   #start {
     position: fixed;
@@ -646,6 +648,7 @@
   }
   #card h2,
   #menu h2,
+  #trophies h2,
   #shop h2 {
     margin: 0 0 8px;
     font-size: 24px;
@@ -795,6 +798,170 @@
   #menuNote[hidden],
   #menuRestart[hidden] {
     display: none;
+  }
+
+  /*
+   * the trophy room: over the start screen, or over the hole's menu (which it hides and gives back), in the sun's yellow. The five
+   * tours with their cups, the career's eight figures, the feats as badges (earned in green, the rest grey with how each is
+   * won) and the best round on every course below, which scrolls with the rest. Two columns of figures and feats on a phone.
+   */
+  #trophies {
+    --edge: var(--sun);
+    --lip: var(--sun-deep);
+    width: min(760px, calc(100vw / var(--ui, 1) - 32px));
+    z-index: 4;
+  }
+  #trophiesHead {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  #trophiesHead h2 {
+    margin: 0;
+  }
+  #trophies .cap {
+    display: block;
+    margin: 14px 0 6px;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+  #trophyTours {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+    margin-top: 10px;
+  }
+  #trophyTours .tour {
+    padding: 8px 6px;
+    font-weight: 800;
+    text-align: center;
+    background: var(--mist);
+    border-radius: 14px;
+  }
+  #trophyTours .tour[data-won] {
+    background: var(--sun-tint);
+  }
+  #trophyTours .cups {
+    display: block;
+    min-height: 28px;
+    font-size: 20px;
+    letter-spacing: 2px;
+  }
+  #trophyTours small {
+    display: block;
+    font-weight: 700;
+    color: var(--ink-soft);
+  }
+  #trophyTours .short {
+    display: none;
+  }
+  #trophyFigures,
+  #trophyFeats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+  #trophyFigures div {
+    padding: 6px 10px;
+    border: 2px solid var(--mist);
+    border-radius: 12px;
+  }
+  #trophyFigures b {
+    display: block;
+    font-size: 22px;
+    font-weight: 900;
+    font-variant-numeric: tabular-nums;
+  }
+  #trophyFeats .feat {
+    display: grid;
+    grid-template-columns: 34px 1fr;
+    gap: 8px;
+    align-items: center;
+    padding: 6px 8px;
+    font-weight: 800;
+    line-height: 1.15;
+    background: var(--leaf-tint);
+    border-radius: 12px;
+  }
+  #trophyFeats i {
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    font-size: 16px;
+    font-style: normal;
+    background: var(--sun);
+    border-radius: 50%;
+    box-shadow: inset 0 0 0 3px var(--sun-deep);
+  }
+  #trophyFeats small {
+    display: block;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--ink-soft);
+  }
+  #trophyFeats .feat:not([data-earned]) {
+    background: var(--mist);
+  }
+  #trophyFeats .feat:not([data-earned]) i {
+    background: var(--paper);
+    box-shadow: inset 0 0 0 3px var(--mist-deep);
+  }
+  #trophyRecords {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 2px 24px;
+    margin: 0;
+    padding: 0;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    list-style: none;
+  }
+  #trophyRecords li {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 3px 0;
+    border-bottom: 2px solid var(--mist);
+  }
+  #trophyRecords li:not([data-held]) {
+    color: var(--ink-soft);
+  }
+  @media (max-width: 600px) {
+    #trophies {
+      width: min(380px, calc(100vw / var(--ui, 1) - 16px));
+      padding: 14px 14px 18px;
+    }
+    #trophyTours {
+      gap: 4px;
+    }
+    #trophyTours .tour {
+      padding: 6px 2px;
+      font-size: 12px;
+    }
+    #trophyTours .cups {
+      min-height: 20px;
+      font-size: 14px;
+      letter-spacing: 0;
+    }
+    #trophyTours .long {
+      display: none;
+    }
+    #trophyTours .short {
+      display: inline;
+    }
+    #trophyFigures,
+    #trophyFeats,
+    #trophyRecords {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    #trophyRecords {
+      gap: 2px 14px;
+    }
   }
 
   #shop {
@@ -982,6 +1149,19 @@
     justify-content: center;
     align-items: center;
     gap: 10px;
+  }
+  /* the trophy room's button, a cup, at the left of Play */
+  #trophiesOpen {
+    display: grid;
+    flex: none;
+    place-items: center;
+    min-width: 44px;
+    padding: 0;
+  }
+  #trophiesOpen svg {
+    width: 26px;
+    height: 26px;
+    pointer-events: none;
   }
   /*
    * The career's switch (16 October 2026; it was a cycle button at the foot, whose words left it unclear whether they said
@@ -2699,9 +2879,25 @@
     <button id="menuResume" type="button">Back to the hole</button>
     <button id="menuRestart" class="quiet" type="button">Restart the hole</button>
     <button id="menuGiveUp" class="quiet" type="button">Give up the hole</button>
-    <button id="menuCourses" class="quiet" type="button">Courses</button>
+    <div class="pair">
+      <button id="menuTrophies" class="quiet" type="button">Trophies</button>
+      <button id="menuCourses" class="quiet" type="button">Courses</button>
+    </div>
   </div>
   <p id="menuNote" hidden></p>
+</div>
+<div class="panel" id="trophies" role="dialog" aria-modal="true" aria-labelledby="trophiesTitle" hidden>
+  <div id="trophiesHead">
+    <h2 id="trophiesTitle">The trophy room</h2>
+    <button id="trophiesClose" class="quiet" type="button">Back</button>
+  </div>
+  <div id="trophyTours" role="list" aria-label="Titles on each tour"></div>
+  <span class="cap">A career so far</span>
+  <div id="trophyFigures"></div>
+  <span class="cap" id="trophyFeatsHead"></span>
+  <div id="trophyFeats" role="list" aria-labelledby="trophyFeatsHead"></div>
+  <span class="cap">Course records</span>
+  <ul id="trophyRecords"></ul>
 </div>
 <div class="panel" id="shop" hidden>
   <div id="shopHead">
@@ -2838,6 +3034,25 @@
       /></label>
     </div>
     <div id="startPlay">
+      <button id="trophiesOpen" type="button" class="quiet" aria-label="Trophies" title="Trophies">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path
+            d="M7 4h10v5a5 5 0 0 1-10 0Z"
+            fill="var(--sun)"
+            stroke="var(--ink)"
+            stroke-width="2"
+            stroke-linejoin="round"
+          />
+          <path
+            d="M7 6H4v2a3 3 0 0 0 3 3M17 6h3v2a3 3 0 0 1-3 3"
+            fill="none"
+            stroke="var(--ink)"
+            stroke-width="2"
+            stroke-linecap="round"
+          />
+          <path d="M12 14v4M8 20h8" fill="none" stroke="var(--ink)" stroke-width="2.5" stroke-linecap="round" />
+        </svg>
+      </button>
       <button id="playCourse" type="button">Play course</button>
       <button id="enterEvent" type="button" hidden>Enter</button>
       <button id="practise" type="button" class="quiet" hidden>Practise</button>
