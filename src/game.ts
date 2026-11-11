@@ -144,6 +144,12 @@ export interface GameOptions {
   today?: () => string;
   /** The courses, rivals and scores a season is made from. Without it no event can be entered, and the game is as it was before there were events. */
   season?: SeasonContext;
+  /**
+   * Whether the game waits to be begun: the constructor builds it and begins no hole, tells nothing, and the first `begin(0)` is the
+   * caller's. A page needs its game before it can wire the handlers that hear the first `started`, and without this it must hold
+   * the game as maybe-there until then. Off unless told, and then the first hole is begun as the game is built, as it always was.
+   */
+  held?: boolean;
 }
 
 /** Where a round is: a hole in play, a hole done and the next about to begin, or the round over. */
@@ -326,7 +332,7 @@ export class Game {
     this.posed = options.posed;
     this.today = options.today ?? (() => '');
     this.season = options.season ?? null;
-    this.begin(0);
+    if (options.held !== true) this.begin(0);
   }
 
   /**

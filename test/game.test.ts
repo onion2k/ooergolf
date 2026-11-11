@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { BALL, HARDEST_SHOT, KIND_RADIUS, ROLL, powerFor, rollsFor, strikeSpeed } from '../src/arena';
 import { checkInvariants } from '../src/invariants';
-import { DT, onGreen as newGame, settle } from './helpers';
+import { Game, type GameEvents } from '../src/game';
+import { Progress, memoryStore } from '../src/progress';
+import { seeded } from '../src/random';
+import { DT, GREEN, newGame as plainGame, onGreen as newGame, settle } from './helpers';
 
 /** Play until the ball is ready to be struck again, or `seconds` pass; the time it took, or Infinity. */
 function untilReady(game: ReturnType<typeof newGame>['game'], seconds = 20): number {
@@ -181,5 +184,50 @@ describe('the game', () => {
       muted: false,
       volume: 1,
     });
+  });
+});
+
+describe('a game held back', () => {
+  /** A game over the practice green that tells what it is told, held or not. */
+  function built(held: boolean | undefined) {
+    const told: string[] = [];
+    const events: GameEvents = new Proxy(
+      {},
+      {
+        get:
+          (_, name: string) =>
+          (...args: unknown[]) =>
+            told.push(`${name} ${args.filter((a) => typeof a === 'number').join(' ')}`.trim()),
+      },
+    );
+    const game = new Game(new Progress(memoryStore()), events, {
+      random: seeded(1),
+      course: [GREEN],
+      ...(held === undefined ? {} : { held }),
+    });
+    return { game, told };
+  }
+
+  it('tells nothing and has begun no hole until it is begun, and is then as a game built without the option', () => {
+    const { game, told } = built(true);
+    expect(told).toEqual([]);
+    expect(game.world).toBeUndefined();
+    game.begin(0);
+    const plain = plainGame(1, null, [GREEN]);
+    expect(told).toEqual(plain.told);
+    expect(game.hole).toBe(plain.game.hole);
+    expect(game.strokes).toBe(plain.game.strokes);
+    expect(game.ready).toBe(plain.game.ready);
+    expect(game.layout.tee).toEqual(plain.game.layout.tee);
+    expect(game.world.x[game.ball]).toBe(plain.game.world.x[plain.game.ball]);
+    expect(checkInvariants(game)).toEqual([]);
+  });
+
+  it('begins its hole as it is built when not held, whether the option is false or left out', () => {
+    for (const held of [undefined, false]) {
+      const { game, told } = built(held);
+      expect(told).toEqual(['started 0 3']);
+      expect(game.world).toBeDefined();
+    }
   });
 });
