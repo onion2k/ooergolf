@@ -39,8 +39,10 @@ import { projectInto } from './shot';
 import { DROP, type Pose, type PoseOf, type TitleScene } from './titlescene';
 import { KICKER, fromKickers } from './arena';
 import {
+  BALL,
   BUMPER,
   KINDS,
+  KIND_RADIUS,
   KIND_NAME,
   HARDEST_SHOT,
   KNOCK,
@@ -65,7 +67,7 @@ import type { Plan } from './autopilot';
 import { BAG, PUTTER, bagClub, carrying, strikeFactor, type BagClub } from './bag';
 import { CUP } from './course';
 import { AISLES, CEILINGS, FIRST_STROKE_MOST, itemById, kitOf, type Kit } from './items';
-import { LIMIT_OVER_PAR, fastest, type Game } from './game';
+import { LIMIT_OVER_PAR, MOMENTS, fastest, type Game } from './game';
 import { PLAY_MODES } from './career';
 import { GRADES, TOURS } from './season';
 import { holeCount, nextEvent } from './tournament';
@@ -827,6 +829,46 @@ export function landingProblems(game: Game, speed: number, x: number, y: number)
   else if (!(Math.abs(world.x[ball] - x) < 1e-9 && Math.abs(world.y[ball] - y) < 1e-9))
     out.push(`a landing told at ${x},${y}, not where the ball is`);
   if (!(speed >= LANDING.least) || !Number.isFinite(speed)) out.push(`a landing at ${speed}, softer than a landing is`);
+  return out;
+}
+
+/**
+ * What is wrong with a lip-out told, checked as it is told: the hole is in play (a lip-out is never told after the ball is
+ * holed), it is the first of the stroke (`told` counts it), and it is told at the cup's rim, where the ball left it, within a
+ * ball's width: the page marks the place, and a lip-out told from across the green would be drawn there.
+ */
+export function lippedProblems(game: Game, x: number, y: number, told: number): string[] {
+  const out: string[] = [];
+  if (game.phase !== 'play') out.push(`a lip-out told while the hole is not in play (${game.phase})`);
+  if (told > 1) out.push(`a lip-out told ${told} times in one stroke, more than once a stroke`);
+  const away = Math.hypot(x - game.layout.cup.x, y - game.layout.cup.y) - game.cup.radius;
+  if (!(away >= 0 && away < 2 * KIND_RADIUS[BALL]))
+    out.push(`a lip-out told ${away.toFixed(2)} from the cup's rim, not at the cup's rim`);
+  return out;
+}
+
+/**
+ * What is wrong with a long putt, a chip-in or a long drive told, checked as it is told: the hole is in play, and the distance is a
+ * number, at least as far as the moment's threshold says, and no further than the hole is long (its corner to its corner), since
+ * the page says it in words to the player.
+ */
+export function momentProblems(game: Game, kind: 'longPutt' | 'chippedIn' | 'longDrive', yards: number): string[] {
+  const out: string[] = [];
+  if (game.phase !== 'play') out.push(`a ${kind} told while the hole is not in play (${game.phase})`);
+  if (!Number.isFinite(yards)) return [...out, `a ${kind} of ${yards}, not a distance`];
+  const golf = game.layout.golf;
+  const least =
+    kind === 'longDrive'
+      ? MOMENTS.longDrive
+      : kind === 'chippedIn'
+        ? MOMENTS.chipIn
+        : golf
+          ? MOMENTS.longPuttGolf
+          : MOMENTS.longPuttMinigolf;
+  if (yards < least) out.push(`a ${kind} of ${yards.toFixed(1)} yards, short of the ${least} that makes one`);
+  const { minX, minY, maxX, maxY } = game.layout.bounds;
+  if (yards > Math.hypot(maxX - minX, maxY - minY))
+    out.push(`a ${kind} of ${yards.toFixed(1)} yards, longer than the hole is`);
   return out;
 }
 

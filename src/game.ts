@@ -76,6 +76,29 @@ export interface GameEvents {
   /** The ball entered a hologram's canopy at (x, y), losing half its speed to it: told once for each time it goes in, for the picture to flicker it. */
   flickered?(x: number, y: number): void;
   knocked?(hard: number, x: number, y: number, dx: number, dy: number, dz: number): void;
+  /**
+   * The ball lipped out at (x, y): a ball on the ground whose middle came inside the cup's radius while it moved, and left it
+   * without dropping, told once, at the step it leaves, and at most once a stroke. A ball flying over the cup is not lipped out,
+   * and a ball that sleeps on the lip and is woken to drop is holed. Told when it leaves, so a ball that lips out and later in
+   * the same stroke drops in (off a wall, back down a slope) is told of both, in that order and never the other way round.
+   */
+  lipped?(x: number, y: number): void;
+  /**
+   * A putt holed from `yards` away, told just before `holed`: the distance from where the stroke was struck to the cup, from at
+   * least `MOMENTS.longPuttMinigolf` on minigolf and `MOMENTS.longPuttGolf` on golf, and never for a hole in one. Whether it was a
+   * putt is what the club was when it was struck, and not what is in hand by the time it drops.
+   */
+  longPutt?(yards: number): void;
+  /**
+   * A stroke that was not a putt holed from `yards` away, on a golf hole, told just before `holed`: a chip, a pitch or a full
+   * shot from off the green, from at least `MOMENTS.chipIn`. A hole in one is the ace it is and is not told as this as well.
+   */
+  chippedIn?(yards: number): void;
+  /**
+   * A drive of `yards` told at its first landing: the driver struck from the tee, on a golf hole, as the hole's first stroke,
+   * come down on the fairway at least `MOMENTS.longDrive` from where it was struck.
+   */
+  longDrive?(yards: number): void;
   /** The ball in the cup, in `strokes`, on a hole of `par`. */
   holed?(strokes: number, par: number): void;
   /** The ball lost in water at (x, y): a stroke more, and it is put back where it was struck from. */
@@ -188,6 +211,29 @@ const LIP_SUNK = 0.02;
 /** How fast a ball woken from the lip of the cup is sent toward its middle, in yards a second: more than it sleeps at (2). */
 const LIP_PUSH = 3;
 
+/**
+ * How far, in yards, a moment must be to be told of: set from `npm run moments`, which plays every course with the pace player
+ * (the autopilot with a player's slips, eight seeds a course, 1,284 holes holed) and reads off where about one hole in ten
+ * earns it. They are the autopilot's figures and not a person's. A unit is a yard, and no conversion is made.
+ */
+export const MOMENTS = {
+  /**
+   * A putt holed on minigolf, where every stroke is a putt: the median holed putt is 7 yards and the 90th percentile 20.7,
+   * and 9.8% of the holes holed on minigolf were holed from 20 or more.
+   */
+  longPuttMinigolf: 20,
+  /** A putt holed on golf, from the green: the median is 4.7 yards, the 90th percentile 16.8, and 10.8% of holes reach 15. */
+  longPuttGolf: 15,
+  /** A shot that was not a putt, holed on golf: the median is 21 yards, and 10.1% of holes reach 20. */
+  chipIn: 20,
+  /**
+   * A driver's carry from the tee onto the fairway: the median is 209 yards and the 90th percentile 253, which is the best one
+   * drive in ten. A full driver on the level carries 249, so 250 is earned with a hill or the wind behind it, as the best
+   * drives were; 4.8% of holes caught.
+   */
+  longDrive: 250,
+} as const;
+
 /** The share of the way to a belt's speed that the physics pulls a ball on it each step (its own figure, which `pullBelts` repeats for a ball that is pulled otherwise). */
 const BELT_PULL = 0.12;
 
@@ -274,6 +320,22 @@ export class Game {
   private windAy = 0;
   /** Whether the ball's next landing is the first since it was struck. */
   private firstLanding = false;
+  /**
+   * What the stroke in play was, latched at the strike like a flight's, since the club in hand may be changed while the ball
+   * rolls: a putt (every stroke on minigolf, and the putter on golf), the hole's first stroke (an ace, if it drops), and a
+   * driver from the tee (a long drive, if it lands on the fairway far enough).
+   */
+  private struckPutt = false;
+  private struckOpening = false;
+  private struckDriver = false;
+  /**
+   * Where the ball is in the cup's radius, for a lip-out: `lipArmed` once it has been outside the radius this stroke (a ball
+   * struck from the rim starts inside it and is not leaving it), `lipInside` once it has been inside on the ground since,
+   * and `lipTold` once the stroke has told of its lip-out.
+   */
+  private lipArmed = false;
+  private lipInside = false;
+  private lipTold = false;
   /** Whether the ball was moving at the end of the last step: its coming to rest is told once, when it does. */
   private moving = false;
   /** When the ball was last struck, in game time: a ball kept moving long enough after it may be struck again. */
@@ -872,6 +934,11 @@ export class Game {
     this.struckWith = this.hardest * first.power;
     this.lie.x = world.x[ball];
     this.lie.y = world.y[ball];
+    this.struckOpening = this.strokes === 0;
+    this.struckPutt = !this.layout.golf || this.inHand.loft === 0;
+    this.struckDriver = this.layout.golf && this.struckOpening && this.inHand.id === 'driver';
+    this.lipArmed = Math.hypot(this.lie.x - this.layout.cup.x, this.lie.y - this.layout.cup.y) >= this.cup.radius;
+    this.lipInside = this.lipTold = false;
     // a ball ready is at rest, and asleep or held by a belt: what it has of the belt's speed is not the shot's
     world.vx[ball] = world.vy[ball] = world.vz[ball] = 0;
     if (this.layout.golf) {
@@ -987,9 +1054,13 @@ export class Game {
       this.heldToFastest();
       this.knock(vx * kept, vy * kept, vz * kept);
       if (fell.holed || fell.wet) break;
+      this.lipOut();
     }
     if (this.phase !== 'play') return;
-    if (fell.holed) return this.done('holed');
+    if (fell.holed) {
+      this.tellHoledFrom();
+      return this.done('holed');
+    }
     if (fell.wet) return this.putBack(fell.x, fell.y, (x, y) => this.events.splash?.(x, y));
     if (fell.out) return this.putBack(fell.x, fell.y, (x, y) => this.events.outOfBounds?.(x, y));
     // asleep hanging on the lip, its middle in the mouth and lower than a ball stands, held by one side of the rim: the
@@ -1014,6 +1085,42 @@ export class Game {
       this.events.stopped?.(this.world.x[this.ball], this.world.y[this.ball]);
       if (this.strokes >= this.limit) this.done('pickedUp');
     }
+  }
+
+  /**
+   * A lip-out told, if the ball came inside the cup's radius on the ground in this stroke and has left it. Only read, so the
+   * game plays exactly as it would untold. A ball in the air over the cup is not inside it, and one that sleeps on the lip and
+   * is woken to drop never leaves.
+   */
+  private lipOut() {
+    const { world, ball, layout } = this;
+    if (!this.moving || !world.alive[ball]) return;
+    const x = world.x[ball],
+      y = world.y[ball];
+    if (Math.hypot(x - layout.cup.x, y - layout.cup.y) < this.cup.radius) {
+      const above = world.z[ball] - heightAt(layout, x, y) - restingAbove(layout, x, y, world.r[ball]);
+      if (this.lipArmed && above < ON_THE_GROUND) this.lipInside = true;
+      return;
+    }
+    this.lipArmed = true;
+    if (!this.lipInside) return;
+    this.lipInside = false;
+    if (this.lipTold) return;
+    this.lipTold = true;
+    this.events.lipped?.(x, y);
+  }
+
+  /**
+   * The moment of a stroke that holes the ball, told just before `holed`: a long putt, or a chip-in on golf, by what the stroke
+   * was when it was struck and how far it was struck from. Not for a hole in one, which is its own.
+   */
+  private tellHoledFrom() {
+    if (this.struckOpening) return;
+    const { layout } = this;
+    const yards = Math.hypot(layout.cup.x - this.lie.x, layout.cup.y - this.lie.y);
+    if (this.struckPutt) {
+      if (yards >= (layout.golf ? MOMENTS.longPuttGolf : MOMENTS.longPuttMinigolf)) this.events.longPutt?.(yards);
+    } else if (layout.golf && yards >= MOMENTS.chipIn) this.events.chippedIn?.(yards);
   }
 
   /**
@@ -1263,6 +1370,11 @@ export class Game {
     world.vy[ball] = ty + ny * back;
     world.vz[ball] = tz + nz * back;
     this.events.landed?.(x, y, into, this.firstLanding);
+    // the driver's first landing from the tee, on the fairway and far enough, is a long drive
+    if (this.firstLanding && this.struckDriver && lieAt(layout, x, y) === LIE.fairway) {
+      const yards = Math.hypot(x - this.lie.x, y - this.lie.y);
+      if (yards >= MOMENTS.longDrive) this.events.longDrive?.(yards);
+    }
     this.firstLanding = false;
   }
 

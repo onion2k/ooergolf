@@ -48,7 +48,9 @@ import {
   knockProblems,
   landingProblems,
   lieProblems,
+  lippedProblems,
   lostOnStreamProblems,
+  momentProblems,
   planProblems,
   bankProblems,
   previewProblems,
@@ -242,6 +244,8 @@ export function fuzz(
   /** The game being played, once there is one, and what was wrong with a knock as it was told, for the next check. */
   let playing: Game | null = null;
   const told: string[] = [];
+  /** How many lip-outs the stroke in play has told of, which is at most one. */
+  let lipsThisStroke = 0;
   /** How often the framing rule was asked, and the page's own camera director (made once the game's screen is known), which is told of each hole begun. */
   let framed = 0;
   let directing: Director | null = null;
@@ -304,6 +308,12 @@ export function fuzz(
             if (line !== null && flag !== null && Math.abs(line - flag) > 0.05) count(checked, 'line off the flag');
           }
           if (name === 'knocked' && playing) told.push(...knockProblems(playing, ...(args as Knock)));
+          // a lip-out is told once a stroke, at the rim, while the hole is in play; a long putt, a chip-in or a long drive is a
+          // distance in range: counted, since a check that never ran passes in silence
+          if (name === 'struck') lipsThisStroke = 0;
+          if (name === 'lipped' && playing) told.push(...lippedProblems(playing, args[0], args[1], ++lipsThisStroke));
+          if ((name === 'longPutt' || name === 'chippedIn' || name === 'longDrive') && playing)
+            told.push(...momentProblems(playing, name, args[0]));
           // a stream is a belt: the ball is carried on it, and never lost
           if ((name === 'splash' || name === 'outOfBounds') && playing)
             told.push(...lostOnStreamProblems(playing, name, args[0], args[1]));

@@ -8,25 +8,11 @@
  * again here on the game's own green.
  */
 import { describe, expect, it } from 'vitest';
-import { HARDEST_SHOT, ROLL, powerFor } from '../src/arena';
+import { HARDEST_SHOT } from '../src/arena';
 import { CUP } from '../src/course';
-import type { HoleDef } from '../src/course';
 import { CLEAR_OF_CUP } from '../src/game';
 import { DT, newGame } from './helpers';
-
-/** A green with the cup in its middle and room all round, so a ball that runs past goes on. */
-const OPEN: HoleDef = {
-  name: 'Open green',
-  par: 2,
-  map: [
-    '#################',
-    ...Array.from({ length: 7 }, () => '#...............#'),
-    '#.......C.......#',
-    ...Array.from({ length: 7 }, () => '#...............#'),
-    '#.......T.......#',
-    '#################',
-  ],
-};
+import { OPEN, shootAtCup } from './open-green';
 
 /**
  * A ball struck at the cup from just clear of it, `aside` off its middle,
@@ -37,10 +23,7 @@ const OPEN: HoleDef = {
 function putt(speed: number, aside = 0): { holed: boolean; turned: number } {
   const { game } = newGame(1, null, [OPEN]);
   const { cup } = game.layout;
-  const y0 = cup.y - CLEAR_OF_CUP - 0.1;
-  game.place(cup.x + aside, y0);
-  const toEdge = cup.y - Math.sqrt(Math.max(0, CUP.radius ** 2 - aside ** 2)) - y0;
-  game.shoot(Math.PI / 2, powerFor(Math.sqrt(speed * speed + 2 * ROLL.roll * toEdge), HARDEST_SHOT));
+  shootAtCup(game, speed, aside);
   const { world, ball } = game;
   let turned = 0;
   for (let f = 0; f < 300 && game.phase === 'play'; f++) {
