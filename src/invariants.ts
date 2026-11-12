@@ -282,7 +282,7 @@ export function titleProblems(scene: TitleScene, pieces: readonly PoseOf[]): str
 export const GREEN_RULES = { steepest: GREEN.steepest * 1.1 } as const;
 
 /** How much steeper than its lie holds a ball on a slope may be for a ball at rest on it, before the rule calls it a ball that should have rolled: a quarter, and a hair for the very flat. */
-const HOLDS = { share: 1.25, hair: 0.01 } as const;
+const HOLDS = { share: 1.25, hair: 0.01, leaning: 0.1 } as const;
 
 /** The middle of a tile, as the rules say where one is. */
 const place = (layout: Layout, t: number) =>
@@ -600,7 +600,12 @@ export function checkInvariants(game: Game): string[] {
       if (t >= 0 && layout.water[t] && !layout.solid[t]) out.push(`the ball is at rest on water: ${at(ball)}`);
     }
     // at rest on ground its lie holds it on: a ball that stopped on a slope steeper than the roll can hold would have rolled
-    if (layout.golf && world.asleep[ball]) {
+    // (one leaning on a tree's trunk or on a post is held by that, on any slope: `HOLDS.leaning` is how near counts as on it)
+    const leaning =
+      Math.min(fromTrees(layout, world.x[ball], world.y[ball]), fromPosts(layout, world.x[ball], world.y[ball])) -
+        world.r[ball] <=
+      HOLDS.leaning;
+    if (layout.golf && world.asleep[ball] && !leaning) {
       const slope = Math.hypot(...slopeAt(layout, world.x[ball], world.y[ball]));
       // by the tile's roll, as the physics holds a ball (`rollAt` is the tile's): the lie is what is drawn and the roll is what is rolled
       const holds = Math.tan(Math.asin(Math.min(1, game.rollAt(world.x[ball], world.y[ball]) / PHYSICS.gravity)));

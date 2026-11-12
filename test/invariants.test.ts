@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BALL, BUMPER, FASTEST, HARDEST_SHOT, TILE, heightAt, restingAbove } from '../src/arena';
+import { treeOf } from '../src/biome';
 import { links as linksHoles } from '../src/links';
 import { GREEN as GREEN_RULES_REAL, greenArrows } from '../src/green';
 import { GREENS, LIE } from '../src/surfaces';
@@ -635,6 +636,16 @@ describe('what must always hold of the greens, the first cut and the break', () 
     for (const dx of [1, 2]) layout.terrain[c - dx] -= TILE * 3 * dx;
     world.z[ball] = heightAt(layout, x, y) + restingAbove(layout, x, y, world.r[ball]);
     expect(checkInvariants(game).join('\n')).toMatch(/at rest on a slope of .*, which the first cut holds no ball on/);
+    // but a ball leaning on a tree's trunk is held by the trunk, on any slope: the fuzzer found one so on The Fells (seed 3,
+    // 12 November 2026), come to rest against a trunk on a bank no lie would hold it on
+    const trees = layout.trees.slice();
+    const trunk = treeOf(layout)!.trunk;
+    (layout.trees as { x: number; y: number }[]).push({ ...layout.trees[0], x: x + trunk + world.r[ball], y });
+    expect(checkInvariants(game).join('\n')).not.toMatch(/at rest on a slope/);
+    // and one a yard clear of the trunk is not
+    (layout.trees as { x: number; y: number }[])[layout.trees.length - 1].x = x + trunk + world.r[ball] + 1;
+    expect(checkInvariants(game).join('\n')).toMatch(/at rest on a slope of .*, which the first cut holds no ball on/);
+    (layout.trees as { x: number; y: number }[]).length = trees.length;
     layout.terrain.set(was);
   });
 
