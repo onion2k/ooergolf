@@ -36,7 +36,19 @@ export interface Piece {
  * how far apart, and how far out from the course it may stand: close enough
  * to be seen from the camera's usual place, far enough not to crowd it.
  */
-export const SCENERY = { least: 12, most: 30, clear: 3, spacing: 4.5, reach: 16 } as const;
+export const SCENERY = { least: 12, most: 30, clear: 3, spacing: 4.5, reach: 26 } as const;
+
+/**
+ * How tall a scattered tree is at its model's own size, how far from the course it must stand for its height, and how far
+ * from another tree for the two's heights. The trees were 7 and 8 tall until 12 November 2026, shorter than the flag (9)
+ * beside a ball 2 across, and read as shrubs: these are not a tree's true size beside a ball, only one that does not jar
+ * (the user's word). A camera at its home tilt looks down at 45 degrees, so a tree hides the ground as far behind it as it
+ * is tall, and one this size 3 from the rail, as they stood, would hide a tile and more of the green: at three quarters
+ * of its height away it hides no more of the course than the small ones did. Two trees stand apart by `apart` of their
+ * heights together, about a canopy and a gap, so the same thirty pieces spread over more of the ground and a hole looks
+ * fuller for no more drawn. `reach` grew from 16 with them, so they have somewhere to stand.
+ */
+export const TREES = { height: { broadleaf: 11.5, conifer: 13.5 }, stand: 0.75, apart: 0.55 } as const;
 
 /**
  * What the scenery was placed for: the perimeter of the biggest hole there was when it was, fifteen tiles by seventeen,
@@ -205,15 +217,16 @@ function underBunting(bunting: Bunting[], x: number, y: number): boolean {
   });
 }
 
-/** Whether a point is on the rough, clear of every tile of the course and its rail by `SCENERY.clear`. */
-function onRough(l: Layout, x: number, y: number): boolean {
-  for (let a = 0; a < 8; a++) {
-    const t = tileAt(
-      l,
-      x + Math.cos((a / 8) * Math.PI * 2) * SCENERY.clear,
-      y + Math.sin((a / 8) * Math.PI * 2) * SCENERY.clear,
-    );
-    if (t >= 0 && (l.solid[t] === 0 || l.rail[t] === 1)) return false;
+/** Whether a point is on the rough, clear of every tile of the course and its rail by `clear` (`SCENERY.clear`, or more for a tree). */
+function onRough(l: Layout, x: number, y: number, clear: number = SCENERY.clear): boolean {
+  // rings a tile apart out to `clear`, so a tile between the point and a far ring is not stepped over
+  for (let r = Math.min(clear, SCENERY.clear); ; r = Math.min(clear, r + TILE)) {
+    const around = Math.max(8, Math.ceil((2 * Math.PI * r) / TILE));
+    for (let a = 0; a < around; a++) {
+      const t = tileAt(l, x + Math.cos((a / around) * Math.PI * 2) * r, y + Math.sin((a / around) * Math.PI * 2) * r);
+      if (t >= 0 && (l.solid[t] === 0 || l.rail[t] === 1)) return false;
+    }
+    if (r >= clear) break;
   }
   const t = tileAt(l, x, y);
   return t < 0 || (l.solid[t] === 1 && l.rail[t] === 0);
@@ -250,14 +263,29 @@ export function scatter(layout: Layout, name: string): Piece[] {
         kind = k;
         break;
       }
-    out.push({
-      kind,
-      x,
-      y,
-      yaw: random() * Math.PI * 2,
-      scale: SCALE.least + random() * SCALE.spread,
-      variant: Math.floor(random() * 3),
-    });
+    const yaw = random() * Math.PI * 2,
+      scale = SCALE.least + random() * SCALE.spread,
+      variant = Math.floor(random() * 3);
+    // a tree stands back by its height, so it hides none of the course it frames: nearer than that, nothing is placed
+    // here, and a later try may put a bush, a bed of flowers or a rock in the gap
+    if (
+      (kind === 'broadleaf' || kind === 'conifer') &&
+      !onRough(layout, x, y, TREES.stand * TREES.height[kind] * scale)
+    )
+      continue;
+    // and apart from every tree already standing, by the two's heights
+    if (kind === 'broadleaf' || kind === 'conifer') {
+      const tall = TREES.height[kind] * scale;
+      if (
+        out.some(
+          (p) =>
+            (p.kind === 'broadleaf' || p.kind === 'conifer') &&
+            Math.hypot(p.x - x, p.y - y) < TREES.apart * (tall + TREES.height[p.kind] * p.scale),
+        )
+      )
+        continue;
+    }
+    out.push({ kind, x, y, yaw, scale, variant });
   }
   return out;
 }

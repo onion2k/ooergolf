@@ -28,7 +28,7 @@ import type { Model } from './models/part';
 import { BANK_TINT } from './tint';
 import { PUFF, type Puffs } from './bursts';
 import { DRIFT } from './drift';
-import { ROCK_SIZE, type SceneryKind } from './scenery';
+import { ROCK_SIZE, TREES, type SceneryKind } from './scenery';
 import type { TreeFigures } from './trees';
 
 export type Rgb = readonly [number, number, number];
@@ -133,15 +133,15 @@ export interface Scenery {
 export function earthScenery(): Scenery {
   return {
     scatter: {
-      broadleaf: () => broadleaf({ height: 7 }),
-      conifer: () => conifer({ height: 8 }),
-      bush: () => bush(1.8),
+      broadleaf: () => broadleaf({ height: TREES.height.broadleaf }),
+      conifer: () => conifer({ height: TREES.height.conifer }),
+      bush: () => bush(2.4),
       fern: () => fern(2.2),
       rock: () => boulder(ROCK_SIZE, { colour: PALETTE.rockWarm }),
     },
     beyond: {
-      broadleaf: () => broadleaf({ height: 12, seed: 4 }),
-      conifer: () => conifer({ height: 15, seed: 2 }),
+      broadleaf: () => broadleaf({ height: 12, seed: 4, fine: false }),
+      conifer: () => conifer({ height: 15, seed: 2, tiers: 4, fine: false }),
       bush: () => bush(2.8, { seed: 6 }),
       fern: () => fern(3.2, { seed: 8 }),
       rock: () => boulder(2.6, { seed: 9, colour: PALETTE.rockWarm }),

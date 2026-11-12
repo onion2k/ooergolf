@@ -28,8 +28,42 @@ export const FACETS = {
   rockRings: 3,
   rockSegments: 5,
   /** A broadleaf's lumps, rounder than a bush's: the title's crowns are, and a crown of twenty-four facets reads as a die. */
-  crown: { rings: 4, segments: 8 },
+  crown: { rings: 4, segments: 7 },
+  /** The points of a conifer's skirt, out and in by turns, so its edge is cut in teeth and not a plain rim. */
+  skirt: 8,
+  /** And of one in a wood seen from far, which has fewer. */
+  farSkirt: 4,
 } as const;
+
+/**
+ * A tier of a conifer: a cone to `apex` whose rim is cut in teeth, `points` of them out at radius `r` and height `z0`
+ * and as many between them drawn in to `inner` of that and lifted by `lift`, closed underneath. No point is wider than
+ * `r` nor lower than `z0`, so a tier made to the physics' cone at `z0` is inside it.
+ */
+function skirt(
+  b: MeshBuilder,
+  points: number,
+  r: number,
+  inner: number,
+  z0: number,
+  lift: number,
+  apex: number,
+  phase: number,
+) {
+  const n = points * 2;
+  const rim = Array.from({ length: n }, (_, i): V3 => {
+    const a = phase + (i / n) * Math.PI * 2;
+    const out = i % 2 === 0;
+    return [Math.cos(a) * r * (out ? 1 : inner), Math.sin(a) * r * (out ? 1 : inner), out ? z0 : z0 + lift];
+  });
+  const tip: V3 = [0, 0, apex];
+  const under: V3 = [0, 0, z0 + lift];
+  const middle: V3 = [0, 0, (z0 + lift + apex) / 2];
+  for (let i = 0; i < n; i++) {
+    faceOut(b, [rim[i], rim[(i + 1) % n], tip], middle);
+    faceOut(b, [rim[i], rim[(i + 1) % n], under], middle);
+  }
+}
 
 /** A trunk of `sides` flat faces from radius `r` at the ground, tapering to seven tenths of it at `top`: open, since it stands in its canopy. */
 function trunk(b: MeshBuilder, r: number, top: number, sides: number = FACETS.trunk) {
@@ -37,53 +71,80 @@ function trunk(b: MeshBuilder, r: number, top: number, sides: number = FACETS.tr
 }
 
 /**
- * A broadleaf `height` tall: a trunk up into three faceted lumps round its middle and a lighter one on top, as a canopy
- * is lit from above. The crown's top is the tree's height.
+ * A broadleaf `height` tall: a trunk up into a canopy of faceted lumps, three big ones round its middle, two smaller
+ * hung lower between them so the canopy's foot is not one line, and a lighter crown of two on top, the second a cap to
+ * one side, as a canopy is lit from above. No two lumps are one size or one shape, so the outline is a tree's and not a
+ * clover's. The crown's top is the tree's height. (Three lumps and a crown until 12 November 2026.) One that is not
+ * `fine` has none hung lower and no cap, for a wood of hundreds seen from far: a frame of the biggest hole cost 0.3 ms
+ * more with every tree of its woods cut fine.
  */
-export function broadleaf({ height = 7, seed = 1 } = {}): Model {
+export function broadleaf({ height = 7, seed = 1, fine = true } = {}): Model {
   const random = seeded(seed * 9973 + 11);
   const { rings, segments } = FACETS.crown;
-  const R = 0.4 * height;
-  const crownR = 0.68 * R;
+  const R = 0.44 * height;
+  const crownR = 0.64 * R;
   const crownZ = height - 0.6 * R;
   const turn = random() * Math.PI * 2;
   const leaves = built((b) => {
     for (let k = 0; k < 3; k++) {
-      const a = turn + (k / 3) * Math.PI * 2;
-      const r = R * (0.62 + random() * 0.1);
+      const a = turn + (k / 3) * Math.PI * 2 + (random() - 0.5) * 0.5;
+      const r = R * (0.54 + random() * 0.14);
+      const out = R * (0.4 + random() * 0.14);
       lump(
         b,
-        at(Math.cos(a) * R * 0.45, Math.sin(a) * R * 0.45, crownZ - 0.5 * R, a),
+        at(Math.cos(a) * out, Math.sin(a) * out, crownZ - R * (0.34 + random() * 0.06), a),
         random,
         rings,
         segments,
-        [r, r, r * 0.9],
-        {
-          give: 0.12,
-        },
+        [r, r * (0.86 + random() * 0.12), r * (0.76 + random() * 0.1)],
+        { give: 0.16 },
+      );
+    }
+    // the two hung lower, each between two of the three and further out
+    for (let k = 0; k < (fine ? 2 : 0); k++) {
+      const a = turn + ((k + 0.5) / 3) * Math.PI * 2 + (random() - 0.5) * 0.4;
+      const r = R * (0.32 + random() * 0.06);
+      lump(
+        b,
+        at(Math.cos(a) * R * 0.7, Math.sin(a) * R * 0.7, crownZ - R * (0.48 + random() * 0.08), a),
+        random,
+        rings - 1,
+        segments - 1,
+        [r, r, r * 0.82],
+        { give: 0.16 },
       );
     }
   });
   // the crown's top stays where it is, `crownR * 0.88` above its middle, and that is the tree's height
-  const crown = built((b) =>
+  const crown = built((b) => {
     lump(
       b,
       at(0, 0, height - crownR * 0.88, random() * Math.PI * 2),
       random,
       rings,
       segments,
-      [crownR, crownR, crownR * 0.88],
-      {
-        give: 0.12,
-      },
-    ),
-  );
+      [crownR, crownR * 0.92, crownR * 0.88],
+      { give: 0.14 },
+    );
+    if (!fine) return;
+    const a = turn + Math.PI + (random() - 0.5);
+    const r = crownR * 0.6;
+    lump(
+      b,
+      at(Math.cos(a) * crownR * 0.66, Math.sin(a) * crownR * 0.66, height - crownR * 1.15, a),
+      random,
+      rings - 1,
+      segments - 1,
+      [r, r, r * 0.85],
+      { give: 0.14 },
+    );
+  });
   return {
     name: 'broadleaf',
     parts: [
       {
         name: 'trunk',
-        mesh: built((b) => trunk(b, 0.3 * (height / 7), 0.62 * height)),
+        mesh: built((b) => trunk(b, 0.32 * (height / 7), 0.62 * height)),
         material: matte(PALETTE.trunk, ROUGH.wood),
       },
       { name: 'leaves', mesh: leaves, material: matte(PALETTE.leaves, ROUGH.leaves) },
@@ -93,15 +154,19 @@ export function broadleaf({ height = 7, seed = 1 } = {}): Model {
   };
 }
 
-/** A conifer `height` tall: `tiers` faceted cones stacked on a short trunk, each narrower than the one below. */
-export function conifer({ height = 8, seed = 1, tiers = 4 } = {}): Model {
+/**
+ * A conifer `height` tall: `tiers` faceted cones stacked on a short trunk, each narrower than the one below and each cut
+ * in teeth round its skirt, turned from the last so no two line up. (Plain six-sided cones, four of them, until
+ * 12 November 2026.)
+ */
+export function conifer({ height = 8, seed = 1, tiers = 5, fine = true } = {}): Model {
   const random = seeded(seed * 6151 + 5);
   const leaves = built((b) => {
     for (let k = 0; k < tiers; k++) {
-      const z0 = height * (0.16 + (0.62 / tiers) * k);
-      const z1 = k === tiers - 1 ? height : z0 + height * 0.36;
-      const r = height * (0.3 - (0.17 / tiers) * k) * (0.92 + random() * 0.14);
-      frustum(b, at(0, 0, 0), FACETS.cone, r, 0, z0, z1, { bottom: true, phase: random() * Math.PI });
+      const z0 = height * (0.15 + (0.64 / tiers) * k);
+      const z1 = k === tiers - 1 ? height : z0 + height * (0.2 + 0.7 / tiers);
+      const r = height * (0.32 - (0.2 / tiers) * k) * (0.92 + random() * 0.14);
+      skirt(b, fine ? FACETS.skirt : FACETS.farSkirt, r, 0.7, z0, height * 0.03, z1, random() * Math.PI);
     }
   });
   return {
@@ -109,7 +174,7 @@ export function conifer({ height = 8, seed = 1, tiers = 4 } = {}): Model {
     parts: [
       {
         name: 'trunk',
-        mesh: built((b) => trunk(b, 0.22 * (height / 8), 0.3 * height, 5)),
+        mesh: built((b) => trunk(b, 0.24 * (height / 8), 0.3 * height, 5)),
         material: matte(PALETTE.trunk, ROUGH.wood),
       },
       { name: 'leaves', mesh: leaves, material: matte(PALETTE.pine, ROUGH.leaves) },
@@ -138,25 +203,27 @@ export function boulder(size: number, { seed = 1, colour = PALETTE.rock } = {}):
   return { name: 'boulder', parts: [{ name: 'rock', mesh, material: matte(colour, ROUGH.rock) }], moving: [] };
 }
 
-/** A round bush about `size` across from its middle: three faceted lumps, flattened where they meet the ground. */
+/**
+ * A round bush about `size` across from its middle: three faceted lumps and two smaller between them, no two one size,
+ * flattened where they meet the ground. (Three lumps until 12 November 2026.)
+ */
 export function bush(size: number, { seed = 1 } = {}): Model {
   const random = seeded(seed * 4441 + 9);
   const { rings, segments } = FACETS;
   const mesh = built((b) => {
-    for (let k = 0; k < 3; k++) {
-      const a = (k / 3) * Math.PI * 2 + random();
-      const r = size * (0.55 + random() * 0.2);
+    for (let k = 0; k < 5; k++) {
+      const small = k >= 3;
+      const a = ((small ? k - 2.5 : k) / 3) * Math.PI * 2 + random();
+      const r = size * (small ? 0.34 + random() * 0.1 : 0.52 + random() * 0.2);
+      const out = size * (small ? 0.72 : 0.42);
       lump(
         b,
-        at(Math.cos(a) * size * 0.45, Math.sin(a) * size * 0.45, r * 0.4),
+        at(Math.cos(a) * out, Math.sin(a) * out, r * 0.4, a),
         random,
         rings,
         segments,
-        [r, r, r * 0.85],
-        {
-          give: 0.15,
-          floor: -r * 0.4,
-        },
+        [r, r * (0.85 + random() * 0.15), r * 0.85],
+        { give: 0.18, floor: -r * 0.4 },
       );
     }
   });
@@ -216,8 +283,8 @@ export interface GolfTreeFigures {
 
 /**
  * A tree of golf as a faceted conifer, to the figures the game gives its physics: a trunk as wide as the physics' post,
- * and a canopy of three cones whose corners lie on circles no wider than the physics' cone at their height, so the flat
- * faces between them are inside it, and the cone is a ball's radius bigger again by the time a ball meets it: no ball is
+ * and a canopy of three toothed cones whose corners lie on circles no wider than the physics' cone at their height, so the
+ * flat faces between them are inside it, and the cone is a ball's radius bigger again by the time a ball meets it: no ball is
  * seen inside a branch.
  */
 export function golfTree({ trunk: post, base, radius, apex }: GolfTreeFigures, { seed = 1 } = {}): Model {
@@ -229,8 +296,10 @@ export function golfTree({ trunk: post, base, radius, apex }: GolfTreeFigures, {
     for (let k = 0; k < 3; k++) {
       const z0 = base + (k / 3) * 0.7 * h;
       const z1 = k === 2 ? apex : z0 + 0.5 * h;
+      // its teeth stand out to the physics' cone at the tier's foot, and between them it is drawn in and lifted: every
+      // point is inside the cone, which only narrows upward
       const r = coneAt(z0) * (0.93 + random() * 0.04);
-      frustum(b, at(0, 0, 0), FACETS.golfCone, r, 0, z0, z1, { bottom: true, phase: random() * Math.PI });
+      skirt(b, FACETS.golfCone, r, 0.72, z0, 0.03 * h, z1, random() * Math.PI);
     }
   });
   return {

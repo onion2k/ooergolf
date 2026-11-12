@@ -11,6 +11,7 @@ import {
   ROCK_SIZE,
   SCENERY,
   SCALE,
+  TREES,
   beyond,
   BROADLEAF,
   bigness,
@@ -44,6 +45,35 @@ describe('the scenery', () => {
       for (let i = 0; i < items.length; i++)
         for (let j = i + 1; j < items.length; j++)
           expect(Math.hypot(items[i].x - items[j].x, items[i].y - items[j].y)).toBeGreaterThanOrEqual(SCENERY.spacing);
+    });
+
+    it(`round ${hole.name}: two trees stand apart by their heights, so the same pieces fill more of the ground`, () => {
+      const tall = (s: (typeof items)[number]) => TREES.height[s.kind as 'broadleaf' | 'conifer'] * s.scale;
+      const trees = items.filter((s) => s.kind === 'broadleaf' || s.kind === 'conifer');
+      expect(trees.length, 'some trees').toBeGreaterThanOrEqual(3);
+      for (let i = 0; i < trees.length; i++)
+        for (let j = i + 1; j < trees.length; j++)
+          expect(Math.hypot(trees[i].x - trees[j].x, trees[i].y - trees[j].y)).toBeGreaterThanOrEqual(
+            TREES.apart * (tall(trees[i]) + tall(trees[j])),
+          );
+    });
+
+    it(`round ${hole.name}: a tree stands back from the course by three quarters of its height, so it hides none of it`, () => {
+      const trees = items.filter((s) => s.kind === 'broadleaf' || s.kind === 'conifer');
+      for (const s of trees) {
+        const need = TREES.stand * TREES.height[s.kind as 'broadleaf' | 'conifer'] * s.scale;
+        expect(need, 'further than a bush need stand').toBeGreaterThan(SCENERY.clear);
+        // every point within that of the tree, on a grid finer than a tile, is off the course and its rail
+        for (let dx = -need; dx <= need; dx += 1)
+          for (let dy = -need; dy <= need; dy += 1) {
+            if (Math.hypot(dx, dy) > need - 1.5) continue;
+            const t = tileAt(l, s.x + dx, s.y + dy);
+            expect(
+              t < 0 || (l.solid[t] === 1 && l.rail[t] === 0),
+              `${s.kind} at ${s.x.toFixed(1)},${s.y.toFixed(1)}, ${dx},${dy} from it`,
+            ).toBe(true);
+          }
+      }
     });
   }
 
@@ -180,7 +210,9 @@ describe('the scenery of a big hole', () => {
    */
   const WRITTEN_AS: Record<string, string> = { broadleaf: 'round tree', conifer: 'pine', bush: 'hedge' };
   /** Every hole that exists: its scatter, its dressing and its clearings, hashed, written before any of it grew. */
-  const GOLDEN = '79bc75c85fe56b7ccbc4ccaf640b47c7accf5015a328c9f104d9d2e5eb6254ee';
+  // Written again on 12 November 2026 (79bc75c8… before), on purpose: the scattered trees are half as tall again, stand apart by their heights and stand
+  // back from the course by their height, and the scatter reaches 26 past the hole and not 16, so every piece's place moved.
+  const GOLDEN = '1a1ff0549facc6eb42b6ddfeda9753aca8f905dc68d00b0faa9fdc3d15c7e685';
   /**
    * The holes the golden was written from, in the order it was: the Meadow but for the windmill and the mill race, which
    * were drawn again so that the cup shows, and the four slope holes the tests keep (the four The Hills had first, which
@@ -205,7 +237,9 @@ describe('the scenery of a big hole', () => {
       holes++;
     }
     expect(holes).toBe(11);
-    expect(all.digest('hex'), 'the hand-drawn holes').toBe(GOLDEN);
+    const hex = all.digest('hex');
+    if (process.env.SCENERY_PRINT) console.log('GOLDEN', hex);
+    expect(hex, 'the hand-drawn holes').toBe(GOLDEN);
   });
 
   it('gives every hole added since the same scenery twice, and none of them bigger than the biggest drawn by hand', () => {

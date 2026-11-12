@@ -587,9 +587,20 @@ pictures, better trees and grass. Built over seven rounds of pictures of the rea
   in colour alone. With their height as shade too, a frame of the biggest water hole cost 5.41 ms against 4.14; in
   colour alone it is 4.84 to 4.86 over three runs, inside the gate's tolerance, and no baseline was written.
 
+- **The trees' shapes** (12 November, after the user saw the first): a broadleaf is seven lumps where it was four, no two
+  one size, with two hung lower so the canopy's foot is uneven and a cap to one side of the crown; a conifer is five tiers
+  with skirts cut in teeth; a bush is five lumps. A golf tree has toothed skirts and is the size it was, since the ball
+  is tested against it. The far woods of a golf hole are cut more simply (`fine: false`: a broadleaf of
+  four lumps, a conifer of four tiers with four teeth): with every tree fine, a frame of the biggest hole rose from 4.85
+  to 5.15 ms and one hole's near woods passed their ceiling of 200,000 triangles, and with the woods simple the frame is
+  4.87 and the ceiling holds.
+- **The trees' size round a minigolf hole:** 11.5 and 13.5 tall where they were 7 and 8, shorter than the flag. Not a
+  tree's true size beside the ball, only one that does not jar (the user's words). Each stands back from the course by
+  three quarters of its height, so it hides none of the green, and apart from another tree by 0.55 of their heights
+  together; the scatter reaches 26 past the hole and is the same thirty pieces, so a hole looks fuller for no more drawn.
+
 Not done, and why: the blades of the lawn are coloured by the renderer, whose one patchiness was turned down on
-9 October 2026 to keep the lawn calm, and large soft patches in the blades are a renderer release; the trees' shapes are
-as they were.
+9 October 2026 to keep the lawn calm, and large soft patches in the blades are a renderer release.
 
 ## Across every stage
 

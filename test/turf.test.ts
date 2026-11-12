@@ -227,7 +227,9 @@ describe('the grass of a big hole', () => {
     );
 
   /** The fields of every hole that exists, made as the page makes them, hashed: written from the game before any coarser cell was. */
-  const GOLDEN = '29be30e09d95e421af49f0a82732bb8dd8d8130baeff1291ff9ac46f29aae2bf';
+  // Written again on 12 November 2026 (29be30e0… before), for the clearings alone: the scenery's rocks stand in other
+  // places since its trees were made bigger and stood apart, and the grass stands back round each rock where it is now.
+  const GOLDEN = 'c647b089fb9fda658f543dadf064557bee90f3668701ac692f1f28cbc3210a0a';
   /**
    * The holes the golden was written from, in the order it was: the Meadow but for the windmill and the mill race, which
    * were drawn again so that the cup shows, and the four slope holes the tests keep (the four The Hills had first, which

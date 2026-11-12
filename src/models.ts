@@ -123,10 +123,10 @@ export const BUDGET = {
   kicker: 420,
   flipper: 120,
   /** The low-poly scenery, chunky as chosen: a broadleaf is four lumps of forty-eight facets on a trunk of six, rounder than the twenty-four they had (a budget of 120), as the title's crowns are. */
-  broadleaf: 210,
-  conifer: 60,
+  broadleaf: 300,
+  conifer: 180,
   boulder: 40,
-  bush: 80,
+  bush: 130,
   fern: 40,
   cloud: 100,
   'bank stone': 40,

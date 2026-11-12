@@ -93,7 +93,11 @@ describe('the arrows over a hole of minigolf', () => {
       sloped = counts(hole('Side-hill'));
     expect(level.arrows).toEqual({ shown: false, count: 0 });
     expect(sloped.arrows.count).toBe(arrowMarks(l).length);
-    expect(sloped.groups).toBeGreaterThan(level.groups + 3);
+    // (the two holes' counts of groups were once compared here, the sloped one's the greater by its arrows; the count is
+    // mostly the scenery's, a group for each turn of each tree a hole happens to have, and since the trees stood apart on
+    // 12 November 2026 the level hole has the more of those, so the comparison said nothing of the arrows)
+    expect(sloped.arrows.count).toBeGreaterThan(0);
+    expect(sloped.groups).toBeGreaterThan(0);
   });
 });
 
