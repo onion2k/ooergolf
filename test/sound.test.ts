@@ -138,6 +138,7 @@ describe('the game sound', () => {
     sound.longPutt();
     sound.chippedIn();
     sound.longDrive();
+    sound.pinned();
     sound.splashed();
     sound.lost(false);
     sound.knocked(30, 6, true);
@@ -255,6 +256,7 @@ describe('the game sound', () => {
       ['longPutt', () => sound.longPutt()],
       ['chippedIn', () => sound.chippedIn()],
       ['longDrive', () => sound.longDrive()],
+      ['pinned', () => sound.pinned()],
     ];
     const lists = each.map(([name, ask]) => {
       asked.plays.length = 0;
@@ -267,7 +269,21 @@ describe('the game sound', () => {
       }
       return JSON.stringify(asked.plays);
     });
-    expect(new Set(lists).size, 'four different answers').toBe(4);
+    expect(new Set(lists).size, 'five different answers').toBe(5);
+  });
+
+  it('rings the pin as one short high bell, quiet, with no applause and no marimba run', () => {
+    const sound = loadedSound();
+    asked.plays.length = 0;
+    sound.pinned();
+    expect(names()).toEqual(['bell']);
+    const bell = asked.plays[0];
+    expect(bell.gain).toBeLessThan(0.5);
+    // higher than the bell of an ace's run, which plays an octave and more down
+    asked.plays.length = 0;
+    sound.holed(1, 3);
+    const ace = asked.plays.filter((p) => p.name === 'bell').map((p) => p.pitch);
+    expect(bell.pitch).toBeGreaterThan(Math.max(...ace));
   });
 
   it('keeps a long putt or a chip-in from doubling the applause of the hole it comes before', () => {
@@ -346,6 +362,7 @@ describe('the sound made on the first gesture', () => {
     lazy.longPutt();
     lazy.chippedIn();
     lazy.longDrive();
+    lazy.pinned();
     lazy.step(1 / 60, true);
     lazy.mute(true);
     lazy.volume = 0.25;

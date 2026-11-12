@@ -290,3 +290,54 @@ export const TROPHIES_SAVE = {
   },
   records: { 'The Meadow': { strokes: 19, par: 26, kit: { club: '', ball: '', accessory: '' }, when: '2026-10-15' } },
 };
+
+/** The powers a wedge is tried at, the hard ones first: a ball at a wedge's full strength comes down through the pin's height most often. */
+const POWERS = [
+  ...Array.from({ length: 16 }, (_, i) => 1 - i * 0.01),
+  ...Array.from({ length: 35 }, (_, i) => 0.84 - i * 0.01),
+];
+
+/**
+ * A sand wedge struck at the pin of the golf hole in play, from a point of the compass that will take the ball, at one power
+ * after another until a ball comes down through the pole's height, which the game tells as `pinned`. Searched in the page, from
+ * the test API, since the lies that will hold a ball are the hole's and the wedge's flight is the hole's wind's. With `stop`, the
+ * page is left the moment it is told; otherwise the stroke is played out to rest. The events of the step it was told in (the log is read as it goes), or null if no ball struck the pin.
+ */
+export async function strikeThePin(page: Page, options: { stop?: boolean } = {}): Promise<string[] | null> {
+  return page.evaluate(
+    ([stop, powers]) => {
+      const g = window.game!;
+      const { cup } = g.content();
+      for (const back of [75, 70, 65, 60, 55, 50, 45]) {
+        for (let k = 0; k < 8; k++) {
+          const a = (k * Math.PI) / 4;
+          for (const power of powers) {
+            // a ball holed ends the hole: begin it again, as the player would
+            if (g.state().phase !== 'play') {
+              g.startHole(0);
+              g.step(30);
+            }
+            try {
+              g.lay(cup.x - Math.cos(a) * back, cup.y - Math.sin(a) * back);
+            } catch {
+              break;
+            }
+            g.events();
+            if (!g.shoot(a, power, 'sand-wedge')) continue;
+            for (let f = 0; f < 900 && g.state().phase === 'play'; f++) {
+              g.step(1);
+              const lines = g.events();
+              if (lines.some((l) => l.startsWith('pinned '))) {
+                if (!stop) for (let r = 0; r < 900 && g.state().phase === 'play' && !g.state().ready; r++) g.step(1);
+                return lines;
+              }
+              if (f > 5 && g.state().ready) break;
+            }
+          }
+        }
+      }
+      return null;
+    },
+    [options.stop ?? false, POWERS] as const,
+  );
+}

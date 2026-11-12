@@ -88,6 +88,13 @@ export const FEATS: readonly Feat[] = [
     icon: String(DAILY_RUN),
     earned: (s) => s.daily.streak >= DAILY_RUN,
   },
+  {
+    id: 'offThePin',
+    name: 'Off the pin',
+    how: 'the pin met, in the air',
+    icon: '\u{1F6A9}',
+    earned: (s) => s.life.pinned >= 1,
+  },
 ];
 
 /** The feat of an id: every id has one, which a test holds. */

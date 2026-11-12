@@ -387,6 +387,11 @@ export class GameSound {
     this.play('bell', 0.25, bend(84), 0.08);
   }
 
+  /** The ball in the air off the pin: one short, high bell, a ting. */
+  pinned() {
+    this.play('bell', 0.3, bend(96));
+  }
+
   /** The ball into water. */
   splashed() {
     this.play('splash', 1, 0.85);
@@ -518,6 +523,10 @@ export class LazySound {
 
   longDrive() {
     this.sound?.longDrive();
+  }
+
+  pinned() {
+    this.sound?.pinned();
   }
 
   splashed() {

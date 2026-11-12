@@ -42,7 +42,7 @@ import {
 import { BAG, PUTTER, bagClub, boosted, isWedge, strikeFactor, tuned, type BagClub } from './bag';
 import { AISLES, NO_KIT, itemById, kitOf, paid, type Aisle, type Kit, type KitSlots } from './items';
 import { PLAY_MODES, isRecord, type PlayMode, type RoundOf } from './career';
-import { COURSE, CUP, type HoleDef } from './course';
+import { COURSE, CUP, PIN, pinTarget, type HoleDef } from './course';
 import { chipLoft, puttAngle, strike } from './flight';
 import { Obstacles } from './obstacles';
 import { PHYSICS, THE_CUP, makeWorld, type Cup, type World } from './physics';
@@ -102,6 +102,12 @@ export interface GameEvents {
    * come down on the fairway at least `MOMENTS.longDrive` from where it was struck.
    */
   longDrive?(yards: number): void;
+  /**
+   * The ball in the air met the flag's pin at (x, y), and lost half its speed along the ground to it (`PIN` in `course.ts`): told
+   * once, at the step it met it, and at most once a stroke. A ball rolling is never pinned, and nor is one that passes beside or
+   * above the pin; one that is pinned and then drops in the cup is holed as well.
+   */
+  pinned?(x: number, y: number): void;
   /** The ball in the cup, in `strokes`, on a hole of `par`. */
   holed?(strokes: number, par: number): void;
   /** The ball lost in water at (x, y): a stroke more, and it is put back where it was struck from. */
@@ -347,6 +353,8 @@ export class Game {
   private lipArmed = false;
   private lipInside = false;
   private lipTold = false;
+  /** Whether the ball has met the pin this stroke: it is told of once. */
+  private pinTold = false;
   /** Whether the ball was moving at the end of the last step: its coming to rest is told once, when it does. */
   private moving = false;
   /** When the ball was last struck, in game time: a ball kept moving long enough after it may be struck again. */
@@ -1050,6 +1058,7 @@ export class Game {
     this.struckDriver = this.layout.golf && this.struckOpening && this.inHand.id === 'driver';
     this.lipArmed = Math.hypot(this.lie.x - this.layout.cup.x, this.lie.y - this.layout.cup.y) >= this.cup.radius;
     this.lipInside = this.lipTold = false;
+    this.pinTold = false;
     // a ball ready is at rest, and asleep or held by a belt: what it has of the belt's speed is not the shot's
     world.vx[ball] = world.vy[ball] = world.vz[ball] = 0;
     if (this.layout.golf) {
@@ -1158,14 +1167,16 @@ export class Game {
       world.step(PHYSICS.step, collect);
       // a ball that went through a hologram lost half its speed to it, which is not a landing's or a knock's to count
       const kept = this.canopies(px, py, pz);
-      this.landing(vx * kept, vy * kept, vz * kept);
+      // and one that met the pin lost half its speed along the ground, which is no landing's or knock's either
+      const pinned = this.pin(px, py, pz);
+      this.landing(vx * kept * pinned, vy * kept * pinned, vz * kept);
       // on the ground out of bounds it is lost, as in water; in the air over the line it is not
       if (this.isOut()) {
         Object.assign(fell, { out: true, x: world.x[ball], y: world.y[ball] });
         break;
       }
       this.heldToFastest();
-      this.knock(vx * kept, vy * kept, vz * kept);
+      this.knock(vx * kept * pinned, vy * kept * pinned, vz * kept);
       if (fell.holed || fell.wet) break;
       this.lipOut();
     }
@@ -1361,6 +1372,55 @@ export class Game {
     world.vy[ball] = out[1];
     world.vz[ball] = out[2];
     return 1;
+  }
+
+  /**
+   * The ball's step just taken, from (px, py, pz), tested against the flag's pin, a round pole at the cup's middle (`PIN`):
+   * a ball in the air whose middle came within `pinTarget` of its axis (the pole's radius and a quarter of the ball's, so a ball drawn
+   * over the pole's edge is not always slowed), anywhere along the step and not only at its end (a fast ball moves several yards a step and
+   * the pole is a fraction of one across), loses half its speed along the ground, vertical left as it is, and the game tells
+   * of it, once a stroke. The ball is not moved. "In the air" is more than `PIN.clear` above where it would rest where it
+   * met the pole, so a ball that rolls into the cup or across its mouth, or hops on landing beside it, never counts.
+   * Returns what share of its speed along the ground the ball kept.
+   */
+  private pin(px: number, py: number, pz: number): number {
+    const { world, ball, layout } = this;
+    if (this.pinTold || !this.moving || !world.alive[ball]) return 1;
+    const { cup } = layout;
+    const x = world.x[ball],
+      y = world.y[ball],
+      z = world.z[ball];
+    const reach = pinTarget(world.r[ball]);
+    // where along the step (0 at its start, 1 at its end) the middle of the ball is first within reach of the pole's axis, in
+    // the plane: the step's line against a circle
+    const dx = x - px,
+      dy = y - py,
+      fx = px - cup.x,
+      fy = py - cup.y;
+    const a = dx * dx + dy * dy,
+      c = fx * fx + fy * fy - reach * reach;
+    let t: number;
+    if (c <= 0) t = 0;
+    else {
+      if (a === 0) return 1;
+      const b = fx * dx + fy * dy;
+      const disc = b * b - a * c;
+      if (disc < 0) return 1;
+      t = (-b - Math.sqrt(disc)) / a;
+      if (t < 0 || t > 1) return 1;
+    }
+    const hx = px + dx * t,
+      hy = py + dy * t,
+      hz = pz + (z - pz) * t;
+    const floor = heightAt(layout, cup.x, cup.y);
+    if (hz < floor || hz > floor + PIN.height) return 1;
+    if (hz - heightAt(layout, hx, hy) - restingAbove(layout, hx, hy, world.r[ball]) <= PIN.clear) return 1;
+    this.pinTold = true;
+    if (this.tallying) this.progress.save.life.pinned++;
+    world.vx[ball] *= PIN.keep;
+    world.vy[ball] *= PIN.keep;
+    this.events.pinned?.(hx, hy);
+    return PIN.keep;
   }
 
   /**

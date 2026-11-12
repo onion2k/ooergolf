@@ -65,7 +65,7 @@ import {
 import { FLY_IN, TILT, VIEW, type CameraRig } from './camera';
 import type { Plan } from './autopilot';
 import { BAG, PUTTER, bagClub, carrying, strikeFactor, type BagClub } from './bag';
-import { CUP } from './course';
+import { CUP, pinTarget } from './course';
 import { AISLES, CEILINGS, FIRST_STROKE_MOST, itemById, kitOf, type Kit } from './items';
 import { LIMIT_OVER_PAR, MOMENTS, fastest, type Game } from './game';
 import { PLAY_MODES } from './career';
@@ -917,6 +917,27 @@ export function lippedProblems(game: Game, x: number, y: number, told: number): 
   const away = Math.hypot(x - game.layout.cup.x, y - game.layout.cup.y) - game.cup.radius;
   if (!(away >= 0 && away < 2 * KIND_RADIUS[BALL]))
     out.push(`a lip-out told ${away.toFixed(2)} from the cup's rim, not at the cup's rim`);
+  return out;
+}
+
+/**
+ * What is wrong with a ball told to have met the pin at (x, y), checked as it is told: it is the first of the stroke (`told`
+ * counts it), the ball's middle is within the pin's target of the cup's middle (`pinTarget`: the pole's radius and a share of the ball's), and the ball is clear
+ * of the ground there, since a ball that rolls is never pinned: the page waggles the flag and rings a bell for it.
+ */
+export function pinnedProblems(game: Game, x: number, y: number, told: number): string[] {
+  const out: string[] = [];
+  const { layout, world, ball } = game;
+  if (game.phase !== 'play') out.push(`a pin struck while the hole is not in play (${game.phase})`);
+  if (told > 1) out.push(`the pin struck ${told} times in one stroke, more than once a stroke`);
+  const away = Math.hypot(x - layout.cup.x, y - layout.cup.y);
+  const reach = pinTarget(KIND_RADIUS[BALL]);
+  if (!(away <= reach + 1e-6))
+    out.push(`the pin struck ${away.toFixed(2)} from the pin, past its reach of ${reach.toFixed(2)}`);
+  if (world.alive[ball]) {
+    const above = world.z[ball] - heightAt(layout, x, y) - restingAbove(layout, x, y, world.r[ball]);
+    if (!(above > 0)) out.push(`the pin struck by a ball on the ground (${above.toFixed(2)} above where it rests)`);
+  }
   return out;
 }
 

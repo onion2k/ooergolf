@@ -24,6 +24,7 @@ const NONE = {
   birdies: 0,
   lost: 0,
   lipOuts: 0,
+  pinned: 0,
   longestPutt: 0,
   longestDrive: 0,
 };

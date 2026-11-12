@@ -78,7 +78,8 @@ const noDaily = (): DailySlot => ({ day: '', strokes: 0, par: 0, streak: 0 });
  * in the career and not in free play, and not for a hole begun again from the menu, which pays nothing. `holes`, `aces`, `eagles`
  * and `birdies` are holes holed (each hole in one of them at most: an ace is an ace and not a birdie, an eagle is two under or
  * better on a golf hole, and a birdie is any other hole under par); `rounds` are rounds of a named course played to the end, `wins`
- * the events won, `lost` the balls lost in water or out of bounds and `lipOuts` the balls the cup turned away.
+ * the events won, `lost` the balls lost in water or out of bounds, `lipOuts` the balls the cup turned away and `pinned` the
+ * balls that met the flag's pin in the air.
  */
 export interface Life {
   rounds: number;
@@ -89,6 +90,7 @@ export interface Life {
   birdies: number;
   lost: number;
   lipOuts: number;
+  pinned: number;
   longestPutt: number;
   longestDrive: number;
 }
@@ -103,6 +105,7 @@ export const LIFE_KEYS = [
   'birdies',
   'lost',
   'lipOuts',
+  'pinned',
   'longestPutt',
   'longestDrive',
 ] as const satisfies readonly (keyof Life)[];
@@ -116,6 +119,7 @@ const freshLife = (): Life => ({
   birdies: 0,
   lost: 0,
   lipOuts: 0,
+  pinned: 0,
   longestPutt: 0,
   longestDrive: 0,
 });

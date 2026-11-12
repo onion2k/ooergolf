@@ -28,14 +28,25 @@ import { shareText } from '../src/daily';
 import { dailyFacts } from '../src/dailywords';
 import { paid } from '../src/items';
 import { scoreName } from '../src/score';
-import { driveWords, fromWords, lipWords } from '../src/eventwords';
+import { driveWords, fromWords, lipWords, pinWords } from '../src/eventwords';
 import { LIE } from '../src/surfaces';
 import { zonesOf } from '../src/zones';
 import { CADDIE_HOLES, FLAT } from '../test/level';
 import { wideHole } from '../test/wide-hole';
 import { smallHole } from './bighole';
 import { BUDGET } from './budget';
-import { TROPHIES_SAVE, drag, intoThePond, landed, puttAtCup, puttingHole, start, turnTheDay, watch } from './game';
+import {
+  TROPHIES_SAVE,
+  drag,
+  intoThePond,
+  landed,
+  puttAtCup,
+  puttingHole,
+  start,
+  strikeThePin,
+  turnTheDay,
+  watch,
+} from './game';
 import { CONTRAST, THUMB, holeOut, openDrawer, read } from './panels';
 import { alone } from './gpu';
 
@@ -1484,6 +1495,41 @@ test('a putt that lips out of the cup says so until the next stroke, and a long 
   expect((await holeOut(page)).phase).toBe('done');
   await expect(toast).toBeVisible();
   await expect(page.locator('#toastFrom'), 'no second line the next time').toBeHidden();
+  expect(problems).toEqual([]);
+});
+
+test('a lofted ball that strikes the pin says so until the next stroke, and the flag waggles', async ({ page }) => {
+  const problems = watch(page);
+  await start(page, { seed: 5, paused: true });
+  await page.evaluate(() => {
+    window.game!.chooseCourse('Tranquility');
+    window.game!.startHole(0);
+    window.game!.step(30);
+  });
+  const toast = page.locator('#toast');
+  expect(await strikeThePin(page, { stop: true }), 'a wedge flown through the pin').not.toBeNull();
+  // a frame or two on, the flag swinging
+  await page.evaluate(() => window.game!.step(6));
+  expect((await page.evaluate(() => window.game!.motions())).waggle, 'the flag waggles').not.toBe(0);
+  await expect(toast).toBeVisible();
+  await expect(toast).toHaveText(pinWords());
+  await expect(toast).toHaveAttribute('data-kind', 'pin');
+  await page.evaluate(() => {
+    const g = window.game!;
+    for (let f = 0; f < 900 && g.state().phase === 'play' && !g.state().ready; f++) g.step(1);
+  });
+  // it stays while the ball is at rest, and goes with the next stroke
+  if ((await page.evaluate(() => window.game!.state().phase)) === 'play') {
+    await expect(toast).toBeVisible();
+    expect(
+      await page.evaluate(() => {
+        const s = window.game!.suggest()!;
+        return window.game!.shoot(s.angle, s.power);
+      }),
+      'the next stroke taken',
+    ).toBe(true);
+    await expect(toast, 'the pin’s word gone with the stroke').toBeHidden();
+  }
   expect(problems).toEqual([]);
 });
 

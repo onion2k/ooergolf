@@ -11,7 +11,7 @@
  */
 import { expect, test, type Page } from '@playwright/test';
 import { COURSES } from '../src/course';
-import { drag, intoThePond, landed, puttAtCup, start, watch } from './game';
+import { drag, intoThePond, landed, puttAtCup, start, strikeThePin, watch } from './game';
 import { holeOut } from './panels';
 
 const sound = (page: Page) => page.evaluate(() => window.game!.sound());
@@ -209,6 +209,23 @@ test('a lip-out is heard once, and a long putt, a chip-in and a long drive each 
     }
   }
   console.log(`told and heard over the stretch: ${JSON.stringify(told)}`);
+});
+
+test('a ball in the air off the pin is heard once, as often as the game tells of it', async ({ page }) => {
+  await start(page, { seed: 5, paused: true });
+  await page.evaluate(() => {
+    window.game!.chooseCourse('Tranquility');
+    window.game!.startHole(0);
+    window.game!.step(30);
+  });
+  const lines = await strikeThePin(page);
+  expect(lines, 'a wedge flown through the pin').not.toBeNull();
+  expect(count(lines!, /^pinned /), 'the game told of it once').toBe(1);
+  expect(count(lines!, /^sound pinned$/), 'and it was heard once').toBe(1);
+  // the stroke played out to rest: not again
+  const rest = await events(page);
+  expect(count(rest, /^pinned /)).toBe(0);
+  expect(count(rest, /^sound pinned$/)).toBe(0);
 });
 
 test('on a golf hole the club strikes as it is and the landing thuds; the menus have music', async ({ page }) => {

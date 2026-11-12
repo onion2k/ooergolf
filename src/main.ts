@@ -1042,6 +1042,13 @@ async function main() {
       sound.longDrive();
       log('sound longDrive');
     },
+    // the ball in the air off the pin: the flag waggles, a word and a ting
+    pinned() {
+      scene.pinnedAt = game.t;
+      hud.pinned();
+      sound.pinned();
+      log('sound pinned');
+    },
     // in the cup: confetti out of it, the flag waggling and its gold flashing, from the moment it dropped
     holed(strokes, par) {
       dailyDone = { strokes, par, pickedUp: false };

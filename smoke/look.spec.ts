@@ -36,7 +36,7 @@ import { BOWL, SIDE_HILL } from '../test/hills';
 import { STREAM_HOLE } from '../test/stream-hole';
 import { wideHole } from '../test/wide-hole';
 import { smallHole } from './bighole';
-import { TROPHIES_SAVE, drag, landed, puttAtCup, puttingHole, start, watch } from './game';
+import { TROPHIES_SAVE, drag, landed, puttAtCup, puttingHole, start, strikeThePin, watch } from './game';
 import { holeOut, openDrawer } from './panels';
 import { alone } from './gpu';
 
@@ -713,6 +713,33 @@ test.describe('what it looks like', () => {
     await expect(page.locator('#toast')).toHaveText('Lipped out!');
     await hideStats(page);
     await expect(page).toHaveScreenshot('lipped-out.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
+  test('a wedge off the pin: its word over the course, and the flag mid-waggle with the ball past it', async ({
+    page,
+  }) => {
+    const problems = watch(page);
+    await start(page, { seed: 5, paused: true });
+    await page.evaluate(() => {
+      window.game!.chooseCourse('Tranquility');
+      window.game!.startHole(0);
+      window.game!.step(30);
+    });
+    expect(await strikeThePin(page, { stop: true }), 'a wedge flown through the pin').not.toBeNull();
+    const waggle = await page.evaluate(() => {
+      const g = window.game!;
+      const { cup } = g.content();
+      // a few frames on from the strike, a frame at a time, the flag swinging: the camera on the pole so the flag is seen
+      g.step(8);
+      g.look(cup.x, cup.y - 12, 26);
+      g.step(1);
+      return g.motions().waggle;
+    });
+    expect(waggle, 'the flag is part way through its waggle').not.toBe(0);
+    await expect(page.locator('#toast')).toHaveText('Off the pin!');
+    await hideStats(page);
+    await expect(page).toHaveScreenshot('off-the-pin.png', TOLERANCE);
     expect(problems).toEqual([]);
   });
 

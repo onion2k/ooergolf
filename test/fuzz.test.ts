@@ -90,7 +90,10 @@ describe('the fuzzer', () => {
     // They moved to 3327, 2973 and 2676 on 11 November 2026 when the menu's pick-up and restart began to be done (`leaveHole`, on a
     // chance of its own: the three were 3104, 3213 and 2699 again with that chance at nought, so no draw is the menu's, but a hole
     // given up or begun again is a round played another way).
-    expect([one.drawn, two.drawn, golf.drawn], "draws from the monkey's main stream").toEqual([3327, 2973, 2676]);
+    // They moved again to 3318, 2973 and 2481 on 12 November 2026 with the pin: seeds 26 and 3 moved, 17 did not. The rule alone does not
+    // move them (with the pin's test returned early in a scratch edit they are the same): it is the golfer's wedge at the pin, on a
+    // stream of its own which this one does not read, whose strokes it plays on from.
+    expect([one.drawn, two.drawn, golf.drawn], "draws from the monkey's main stream").toEqual([3318, 2973, 2481]);
     // a reload went on with the event round kept, as the start screen's Continue does: a check that never ran passes in silence
     expect(one.checked['event gone on with'], 'event rounds gone on with after a reload').toBeGreaterThan(0);
     // the framing rule was asked of the camera, on golf and on minigolf, a good many times: a check that never ran passes in silence
@@ -146,6 +149,8 @@ describe('the fuzzer', () => {
       'shape and spin a putt',
       'shoot',
       'shoot as aimed',
+      // a golf player lofting a wedge at the pin, from a ball put down a wedge's flight from the cup
+      'shoot at the pin',
       'shoot well',
       'shoot while rolling',
       "take the caddie's tip",
@@ -188,7 +193,8 @@ describe('the fuzzer', () => {
         (r.done['drive the lane'] ?? 0) +
         (r.done['strike a kicker'] ?? 0) +
         (r.done['drive at a tree'] ?? 0) +
-        (r.done['fly to a pan'] ?? 0),
+        (r.done['fly to a pan'] ?? 0) +
+        (r.done['shoot at the pin'] ?? 0),
     );
     expect(r.happened.stopped, 'and come to rest').toBeGreaterThan(0);
     expect(r.happened.holed, 'holed out').toBeGreaterThan(0);
@@ -203,8 +209,8 @@ describe('the fuzzer', () => {
     // seed 24 is a player with no coins on the golf tour's county grade given no windfall, so an entry is refused for its fee (since
     // 16 October 2026, when the club grade became free, the seven before it never were)
     // seed 9 was added on 11 November 2026, when the menu's pick-up and restart began to be done (a chance of their own, which moved
-    // what the eight reached): none of them then entered an event on the Moon's tour, which seed 9 does
-    for (const seed of [3, 4, 7, 12, 17, 19, 20, 24, 9]) {
+    // what the eight reached): none of them then entered an event on the Moon's tour, which seed 9 does. Seed 1 joined with the pin.
+    for (const seed of [1, 3, 4, 7, 12, 17, 19, 20, 24, 9]) {
       const r = fuzz(seed, 6000, hole, { name: 'Fuzz pitch', purse: 1.2 });
       expect(r.failure, `seed ${seed}: ${JSON.stringify(r.failure)}`).toBe(null);
       for (const [k, n] of Object.entries(r.checked)) total[k] = (total[k] ?? 0) + n;

@@ -66,7 +66,9 @@ courses after, as content.
 - **Between holes,** the score is named over the course for two seconds, and
   then the next hole begins. After the last, the card stays until the player
   asks for another round.
-- **A hole in one** pays a gem.
+- **A hole in one** pays a gem, and the camera turns a quarter round the cup to mark it.
+- **The pin** is struck by a ball in the air and not by one that rolls: it loses half its speed along the ground, and the flag
+  waggles. It is met by the ball's middle, not its edge (the pole's radius and a quarter of the ball's), so a ball drawn overlapping the pole may not be slowed, as a ball drawn over the cup's lip is not holed, and a ball that meets it counts toward the "off the pin" feat. A ball that lips out of the cup, a long putt or chip holed, and a long drive are said and heard.
 - **Every hole can be finished** with the starting club and ball. An
   upgrade makes a hole easier, never possible.
 
@@ -412,7 +414,7 @@ and follows the ball on about one stroke in five, holding the view of the shot
 on the rest and taking the ball up only if it would leave the screen. On a
 phone held upright it turns so the hole runs up the screen. On a desktop the
 wheel zooms and on a phone two fingers do. An Overhead button shows the
-whole hole from above to look round, by dragging, and never to aim from. A Menu button beside it (and the Escape key) stops
+whole hole from above to look round, by dragging, and never to aim from. A hole in one has it turn a quarter round the cup, inside the two seconds before the next hole, and not for a player who prefers reduced motion. A Menu button beside it (and the Escape key) stops
 the hole and offers the way back, a restart of the hole (not in an event, and a hole begun again pays nothing), giving the hole
 up (asked twice: it scores the limit, as a hole picked up does), the trophy room and the courses, where an event round waits to be gone on with.
 Over the daily hole it says the day, and offers a restart only for a go that pays nothing.

@@ -613,13 +613,19 @@
     color: var(--orange-ink);
   }
   #toast[data-kind='lip'],
-  #toast[data-kind='drive'] {
+  #toast[data-kind='drive'],
+  #toast[data-kind='pin'] {
     font-size: clamp(28px, 7vw, 40px);
   }
   #toast[data-kind='drive'] {
     --edge: var(--leaf);
     --lip: var(--leaf-deep);
     color: var(--leaf-ink);
+  }
+  #toast[data-kind='pin'] {
+    --edge: var(--sun);
+    --lip: var(--sun-deep);
+    color: var(--sun-ink);
   }
   /* the second line of a score: where a long putt or a chip-in was holed from */
   #toastFrom {

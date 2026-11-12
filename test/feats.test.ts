@@ -159,6 +159,16 @@ describe('each feat, earned and not', () => {
     expect(DAILY_RUN).toBe(7);
   });
 
+  it('Off the pin: the pin met once, in a hole that pays', () => {
+    expect(earned('offThePin', saved())).toBe(false);
+    expect(
+      earned(
+        'offThePin',
+        saved((s) => (s.life.pinned = 1)),
+      ),
+    ).toBe(true);
+  });
+
   it('lists only the feats earned and not yet kept', () => {
     const save = saved((s) => {
       s.life.aces = 10;

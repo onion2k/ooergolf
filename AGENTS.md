@@ -52,6 +52,7 @@ green by moving its baseline.
     npm run look:metrics   the look's colour, framing, contrast, shade and shape, and each biome's fairway, held to their floors
     npm run format         prettier, writing: by hand, never by the hook
     npm run value          what each shop item saves the pace player a round (the prices' measure; slow)
+    npm run moments        the spread of holed putts and drives the moments' thresholds were set from (`MOMENTS`); by hand, when one is looked at again
     npm run field          the rivals' table, src/field.json, again (~40 min; when a course, the autopilot or a skill changes)
     npm run previews       the start screen's hole pictures and src/previews.json again (when a course changes)
     node scripts/make-icons.mjs     the app's icons from src/title_sq.png (when the picture or the crop changes)
@@ -152,7 +153,7 @@ For anything new, check what it does (`HOW-IT-WORKS.md`'s _Edge cases in full_ h
 - **a biome:** after a hole of another biome and before an earth one; no grass on the Moon and in the Future; a cactus,
   a hologram, a pan, a crater and quicksilver; the Moon's slower flight and its calm; the five tabs at 400 px; each tour
 - **the ball in flight:** struck by it, struck into it at full power, landed on from above; never passed through at the
-  fastest shot there is
+  fastest shot there is; the pin (`PIN`): through it, beside it, over its top, with the ball's edge over the pole and its middle outside the target (not slowed), and a ball rolling across the cup never counts
 - **the ball at rest:** on it, against it, wedged between it and a wall; the ball always comes to rest
 - **the cup:** beside it, over it, in the ball's way on the lip; a ball that drops in is holed once and only once
 - **out of bounds:** knocked off the hole or into a hazard by it; where the ball is put back, and the strokes it costs
@@ -167,7 +168,7 @@ For anything new, check what it does (`HOW-IT-WORKS.md`'s _Edge cases in full_ h
   phone drawer's own
 - **the trophy room:** from the start screen and the menu (which it hides and gives back, time standing under both); counted for
   a hole that pays only (not free play, a hole restarted or a hole picked up); a save from before it earns its feats at the next
-  hole; the five tours with no title, one, and more than three; a feat told with a score's word, and one a purchase earned
+  hole; the five tours with no title, one, and more than three; a feat told with a score's word (the pin among them: counted for a hole that pays only), and one a purchase earned
 - **the daily hole:** taken at its first stroke, left unfinished, picked up, and finished; a later go the same day (nothing written), or
   over a later day's slot; restart refused on the first go only; free play; the day turning at midnight UTC; Share by sheet, clipboard,
   put away and neither; the strip and card at 400 px

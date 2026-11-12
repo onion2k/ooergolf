@@ -188,7 +188,7 @@ export class PageHost {
     const { game, scene, rig, drawn, canvas, effects, aim, hud } = this.parts;
     return {
       squash: drawn.squash,
-      waggle: waggle(game.t - scene.holedAt),
+      waggle: waggle(game.t - scene.waggledAt),
       flash: flash(game.t - scene.holedAt),
       glints: drawn.glints,
       glide: rig.gliding(game.t),

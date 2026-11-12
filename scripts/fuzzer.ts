@@ -24,7 +24,7 @@ import titleTrace from '../src/titletrace.json';
 import { TitleScene } from '../src/titlescene';
 import { aimView, reachOf, safeBox } from '../src/aimview';
 import { AIM_DEAD, AIM_TURN, Director } from '../src/director';
-import { heightAt, powerFor, strikeSpeed } from '../src/arena';
+import { heightAt, onFloor, powerFor, slopeAt, strikeSpeed } from '../src/arena';
 import { Autopilot, timeAlong } from '../src/autopilot';
 import { CameraRig, facing, overheadFit, wrap } from '../src/camera';
 import { AISLES, ITEMS, paid } from '../src/items';
@@ -51,6 +51,7 @@ import {
   landingProblems,
   lieProblems,
   lippedProblems,
+  pinnedProblems,
   lostOnStreamProblems,
   momentProblems,
   planProblems,
@@ -260,6 +261,7 @@ export function fuzz(
   const told: string[] = [];
   /** How many lip-outs the stroke in play has told of, which is at most one. */
   let lipsThisStroke = 0;
+  let pinsThisStroke = 0;
   /** How often the framing rule was asked, and the page's own camera director (made once the game's screen is known), which is told of each hole begun. */
   let framed = 0;
   let directing: Director | null = null;
@@ -333,7 +335,12 @@ export function fuzz(
           if (name === 'knocked' && playing) told.push(...knockProblems(playing, ...(args as Knock)));
           // a lip-out is told once a stroke, at the rim, while the hole is in play; a long putt, a chip-in or a long drive is a
           // distance in range: counted, since a check that never ran passes in silence
-          if (name === 'struck') lipsThisStroke = 0;
+          if (name === 'struck') lipsThisStroke = pinsThisStroke = 0;
+          // a ball in the air that strikes the pin: told once a stroke, at the pole, with the ball clear of the ground; counted
+          if (name === 'pinned' && playing) {
+            told.push(...pinnedProblems(playing, args[0], args[1], ++pinsThisStroke));
+            count(checked, 'pin struck');
+          }
           if (name === 'lipped' && playing) told.push(...lippedProblems(playing, args[0], args[1], ++lipsThisStroke));
           if ((name === 'longPutt' || name === 'chippedIn' || name === 'longDrive') && playing)
             told.push(...momentProblems(playing, name, args[0]));
@@ -1505,6 +1512,48 @@ export function fuzz(
       }
     };
     /**
+     * A player lofting a wedge at the pin: on a golf hole, the ball put down a wedge's flight short of the cup on the line of a
+     * random bearing (where it can be put down, and clear of the cup) and struck at the cup with a sand or pitching wedge, with
+     * a player's slips, which comes down through the pole's height more often than any other shot does. Done on a chance of its
+     * own, so no other run changes but for the pin itself. Whatever comes of it the rules hold, the pin's among them.
+     */
+    const pinner = seeded(seed * 53 + 7);
+    const shootAtPin = () => {
+      if (!game.ready || input.aim !== null || game.phase !== 'play' || !game.layout.golf) return;
+      const { cup } = game.layout;
+      const id = pinner() < 0.5 ? 'sand-wedge' : 'pitching-wedge';
+      const club = BAG.find((c) => c.id === id)!;
+      const bearing = pinner() * Math.PI * 2;
+      const away = carryFrom(club, 1, LIE.fairway) * (0.9 + pinner() * 0.25);
+      const x = cup.x - Math.cos(bearing) * away,
+        y = cup.y - Math.sin(bearing) * away;
+      // where the ball cannot be put down (rock, water, out of bounds, a post, ground it would be lost on) the player does not try
+      if (lieAt(game.layout, x, y) === LIE.none) return;
+      // and a player stands the ball on ground that holds it: level enough, with the same ground a few yards all round it
+      const flat = Math.hypot(...slopeAt(game.layout, x, y)) < 0.1;
+      const ringed = [0, 1, 2, 3, 4, 5, 6, 7].every((k) => {
+        const px = x + Math.cos((k * Math.PI) / 4) * 4,
+          py = y + Math.sin((k * Math.PI) / 4) * 4;
+        return (
+          onFloor(game.layout, px, py) && Math.abs(heightAt(game.layout, px, py) - heightAt(game.layout, x, y)) < 1
+        );
+      });
+      if (!flat || !ringed) return;
+      try {
+        game.place(x, y);
+      } catch {
+        return;
+      }
+      game.pick(club.id);
+      game.setShape(0);
+      game.setSpin(0);
+      if (game.shoot(bearing + (pinner() - 0.5) * 0.02, 1 - pinner() * 0.04)) {
+        spent();
+        did('shoot at the pin');
+        busy = Math.floor(between(10, 90));
+      }
+    };
+    /**
      * Flies a ball to a pan, a desert's dried lake, when the hole has one in a driver's carry: the very shape of `flyToIsland`, on a
      * chance of its own and only on a hole with a pan, so no other hole plays differently and the old seeds stay as they were. A
      * ball that lands on a pan runs on across it, hops, is struck from it again, and is never lost to it; whatever comes of it the
@@ -2017,6 +2066,7 @@ export function fuzz(
       if (retaker() < 0.01) retake();
       if (menuer() < 0.0006) leaveHole();
       if (dailying && dailier() < 0.0015) playTheDay();
+      if (game.layout.golf && pinner() < 0.01) shootAtPin();
       if (careerer() < 0.01) career();
       if (reading() < 0.03) readOff();
       if (!game.layout.golf && ranging() < 0.03) rangeOff();

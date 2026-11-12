@@ -20,6 +20,11 @@ export function lipWords(): string {
   return 'Lipped out!';
 }
 
+/** What the callout says when the ball in the air strikes the flag's pin. */
+export function pinWords(): string {
+  return 'Off the pin!';
+}
+
 /** What the callout says of a long drive: its carry in whole yards, or only the cheer for a number that is not a distance. */
 export function driveWords(yards: number): string {
   return Number.isFinite(yards) && yards >= 0.5 ? `Long drive! ${Math.round(yards)} yd` : 'Long drive!';

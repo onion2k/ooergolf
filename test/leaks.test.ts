@@ -91,7 +91,10 @@ describe('what must stay bounded', () => {
     // 11 November 2026: 20,098 with the daily hole, one fixed slot (a day, strokes, par and a run: +63 at nought, which is the key names
     // and the empty day, +13 more for the slot at its most, a day and a run of three figures, and the id of the feat of seven running);
     // the ceiling, 20,400, is not raised, and has 302 bytes of room, which is about three holes: still no more
-    expect(bytes, `${bytes} bytes for ${holes.length} holes`).toBe(20_098);
+    // 12 November 2026: 20,126 with the pin's count, an eleventh lifetime figure (`pinned`: its key and its figure, 28 bytes with the id
+    // below) and the twelfth feat's id (`offThePin`); the ceiling, 20,400, is not raised, and has 274 bytes of room, which is
+    // about three holes: still no more
+    expect(bytes, `${bytes} bytes for ${holes.length} holes`).toBe(20_126);
     expect(bytes, 'under the ceiling').toBeLessThan(WATCH['save bytes']!.ceiling);
     expect(WATCH['save bytes']!.ceiling, 'with room for about six holes more and no more').toBeLessThan(bytes * 1.15);
   });

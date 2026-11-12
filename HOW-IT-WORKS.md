@@ -790,6 +790,21 @@ minigolf: true }`, read through `oceanFor`) is the one switch: `waterBed` and `s
   the smoke port plus one: the worker ready, the build in one cache, the page booted offline with its save, `?sw=0`, and the
   button through a synthetic offer. Not done: no "update ready" toast (a player online is on the new build from their next
   load, and the open page is not told), no hint for iOS, the showcase is not cached.
+- **The moments** are told by `game.ts` and by nothing else, optional on `GameEvents`, and change no play. `lipped(x, y)`: a ball on
+  the ground that came inside the cup's radius and left it, once a stroke. `longPutt`, `chippedIn` (yards, lie to cup, told just
+  before `holed`, by what the stroke was when struck) and `longDrive` (the driver's first landing from the tee, on the fairway),
+  at the thresholds in `MOMENTS` that `npm run moments` measured (about one hole in ten for the pace player; it is a tool and not a
+  gate). `pinned(x, y)` is the one that does change play: a ball in the air (more than `PIN.clear`, one ball's radius, above where it
+  rests) whose middle comes within `pinTarget` of the flag's pole (`PIN` in `course.ts`, also what `flag` in `models/course.ts` is drawn from;
+  the target is the pole's radius and `PIN.reach`, a quarter, of the ball's, so a ball drawn over the pole's edge is not always slowed) loses half its
+  speed along the ground, once a stroke; the step's whole path is tested, since the fastest shot moves 1.75 yards a physics
+  step and the target is 0.74 across. `invariants.ts` holds each (`lippedProblems`, `momentProblems`, `pinnedProblems`).
+  The page says them: `eventwords.ts` ("Lipped out!", "Long drive! 262 yd", "from 14 yards", "Off the pin!"), kinds of the toast kept
+  until the next stroke; `sound.ts` answers `holed` five ways (an ace, two under, a birdie, a par, over par) and each moment once from
+  sounds already in `QUEUE`, logged as `sound lipped` and so on, which the smoke counts against the game's; the flag waggles for a
+  pin struck as for a hole (`scene.waggledAt`, the later of `holedAt` and `pinnedAt`; the gold's flash is the hole's alone); and a
+  hole in one has the camera turn a quarter round the cup inside `BETWEEN_HOLES` (`Director.holed`, by game time, not under
+  reduced motion). Pictures: `lipped-out`, `ace-beat`, `off-the-pin`. The pin moves `pace:check` (a course's mean by a stroke or so, with the pace player meeting it about once in 22 golf holes) and, a little, `src/field.json`.
 - `src/debug.ts` is `window.game`, the test API. `src/invariants.ts` lists
   the rules that must always hold. `src/autopilot.ts` plays the game by
   itself, for the gates and for par; its route over the tiles (`pathToCup`)
@@ -1257,8 +1272,9 @@ minigolf: true }`, read through `oceanFor`) is the one switch: `waterBed` and `s
   under its par, which only an event round writes), Grand slam, Record book and From downtown (`DOWNTOWN`, 20 yards). `Game.earn`
   keeps a new one in the save with the hole's own write (or `buy`'s) and tells `feat(id)` after the hole is paid; it pays nothing.
   A feat is for having done it, so `trophyProblems` (`invariants.ts`) holds the figures and the ids and not that a feat is still
-  earned. **One of the plan's twelve is not built:** off the pin (the pin waits on `c5-pin`); seven daily holes running is built
-  (`dailySeven`, `save.daily.streak >= DAILY_RUN`, see _The daily hole_ below), and the pin's will be an id in `featids.ts`, an entry in `feats.ts` and its case in `test/feats.test.ts`. `trophywords.ts` is the
+  earned. The twelve are all built: seven daily holes running (`dailySeven`,
+  `save.daily.streak >= DAILY_RUN`, see _The daily hole_ below) and off the pin (`offThePin`, `save.life.pinned >= 1`: `life.pinned` is counted in
+  `Game.pin` for a hole that pays, once a stroke). `trophywords.ts` is the
   words (`trophyView(save, courses)`: the five tours with cups to three and then a number, the eight figures, the feats and the
   records, and `featWords`), and `#trophies` in `index.html`, drawn by the hud from that, is the screen: a cup button at the left
   of Play opens it from the start screen, and the menu's Trophies from a hole, where it hides the menu, which Back gives back (the
@@ -1448,7 +1464,7 @@ ball down at a lie.
 
 ## What is not there yet
 
-- The trophy room's feats are eleven of the plan's twelve (see _The trophy room_ above; the one left is off the pin). A round under par counts only where the career
+- The trophy room's feats are the plan's twelve (see _The trophy room_ above). A round under par counts only where the career
   keeps it (an event round's record), since the save has no count of rounds under par, and a feat earned by the last hole of a round
   is told as the card comes up, which the card's own words follow without saying it.
 

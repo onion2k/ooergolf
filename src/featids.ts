@@ -16,6 +16,7 @@ export const FEAT_IDS = [
   'recordBook',
   'downtown',
   'dailySeven',
+  'offThePin',
 ] as const;
 
 export type FeatId = (typeof FEAT_IDS)[number];

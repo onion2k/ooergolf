@@ -31,6 +31,7 @@ import {
   eventHeader,
   fromWords,
   lipWords,
+  pinWords,
   meritMove,
   placeText,
   promotionLine,
@@ -42,9 +43,9 @@ import {
 
 /**
  * Each kind of word the callout over the course says, which the stylesheet colours: a score's kind, the water, out of bounds,
- * a lip-out and a long drive. The last four stay until the next stroke is struck.
+ * a lip-out, a long drive and the pin struck. The last five stay until the next stroke is struck.
  */
-export const CALLOUTS = [...SCORE_KINDS, 'splash', 'out', 'lip', 'drive'] as const;
+export const CALLOUTS = [...SCORE_KINDS, 'splash', 'out', 'lip', 'drive', 'pin'] as const;
 export type Callout = (typeof CALLOUTS)[number];
 
 export interface HudHandlers {
@@ -1730,7 +1731,7 @@ export class Hud {
   /** The strokes taken; a new stroke takes away the word left over the course by the last (the water's, out of bounds, a lip-out, a long drive). */
   setStrokes(n: number) {
     const kind = this.toast.dataset.kind;
-    const stays = kind === 'splash' || kind === 'out' || kind === 'lip' || kind === 'drive';
+    const stays = kind === 'splash' || kind === 'out' || kind === 'lip' || kind === 'drive' || kind === 'pin';
     if (this.strokes.textContent !== String(n) && stays) this.toast.hidden = true;
     this.strokes.textContent = String(n);
     this.unit.textContent = n === 1 ? 'stroke' : 'strokes';
@@ -1785,6 +1786,11 @@ export class Hud {
   /** The ball lipped out of the cup: a word for it, until the next stroke. */
   lipped() {
     this.callout(lipWords(), 'lip');
+  }
+
+  /** The ball in the air struck the pin: a word for it, until the next stroke, or the score's if it drops. */
+  pinned() {
+    this.callout(pinWords(), 'pin');
   }
 
   /** A long drive come down, of `yards`: a word for it, until the next stroke. */

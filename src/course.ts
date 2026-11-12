@@ -98,6 +98,23 @@ export interface HoleDef {
  */
 export const CUP = { radius: 1.45, depth: 6, rim: 0.3, pull: 0 };
 
+/**
+ * The flag's pin, which the picture draws (`flag` in `models/course.ts`) and the game strikes the ball against, so the pin that
+ * is seen and the pin that is hit are one: a round pole of `radius` standing `height` above the grass at the cup's middle. A ball
+ * in the air that meets it loses half its speed along the ground (`keep` is what it keeps). `clear` is how high above its resting
+ * height, in yards, a ball must be to be in the air: the ball's own radius, so one that hops on landing, or rolls, is on the
+ * ground and never meets it.
+ *
+ * The pin is met by the ball's middle, not its edge: `reach` is the share of the ball's radius that counts beyond the pole's own
+ * (`pinTarget`), so the target is a little wider than the pole and a good deal thinner than the pole and the whole ball. A ball
+ * may therefore be drawn overlapping the pole's edge and not be slowed, as a ball is drawn over the cup's lip and not holed.
+ * A quarter (chosen by the user on 12 November 2026) keeps the two pace floors where they were; the whole ball's reach did not.
+ */
+export const PIN = { radius: 0.12, reach: 0.25, height: 9, keep: 0.5, clear: 1 };
+
+/** How far from the pin's axis the middle of a ball of `ballRadius` must come for it to meet the pin: the pole's radius and `PIN.reach` of the ball's. */
+export const pinTarget = (ballRadius: number) => PIN.radius + PIN.reach * ballRadius;
+
 export const COURSE: readonly HoleDef[] = [
   {
     name: 'Straight',

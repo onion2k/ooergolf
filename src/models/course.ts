@@ -18,6 +18,7 @@ import { PATTERN, matte, type Colour, type Model, type V3 } from './part';
 import { at, ballProfile, built, lathe, lifted, rod, type Turned } from './shapes';
 import { fan, outside, type Ring } from '../clip';
 import { face, tri } from '../meshes';
+import { PIN } from '../course';
 
 /**
  * The cup's figures: how deep it is drawn; how wide its gold rim is, a bead
@@ -218,7 +219,7 @@ const PENNANT = { colour: PALETTE.plastic.blue, stripe: PALETTE.cream, scale: 1.
  */
 export function flag(
   colour: Colour,
-  { height = 9, depth = CUP.depth, radius = 0.12, rainbow = false, pennant = false, rigid = false } = {},
+  { height = PIN.height, depth = CUP.depth, radius = PIN.radius, rainbow = false, pennant = false, rigid = false } = {},
 ): Model {
   const knob = 0.28;
   const top = height - knob * 2 - 0.08;

@@ -10,6 +10,7 @@ import {
   fromWords,
   gradeName,
   lipWords,
+  pinWords,
   meritMove,
   ordinal,
   placeText,
@@ -88,6 +89,10 @@ describe("a tournament's words", () => {
 describe('the words of a moment', () => {
   it('says a lip-out as a near miss', () => {
     expect(lipWords()).toBe('Lipped out!');
+  });
+
+  it('says the pin struck as a near thing', () => {
+    expect(pinWords()).toBe('Off the pin!');
   });
 
   it('says a long drive with its carry in whole yards', () => {

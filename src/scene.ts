@@ -598,6 +598,13 @@ export class Scene {
   private flares: Float64Array = new Float64Array(0);
   /** When the ball dropped into this hole's cup, in game time, which the flag waggles from: none until it has. */
   holedAt = -Infinity;
+  /** When the ball in the air struck the pin, in game time: the flag waggles from it too, and the gold does not flash. */
+  pinnedAt = -Infinity;
+
+  /** When the flag was last set waggling, by a ball that struck it or one that dropped. */
+  get waggledAt(): number {
+    return Math.max(this.holedAt, this.pinnedAt);
+  }
 
   /** What does not move on this hole, which is called `name`, with what stands still of what moves on it. */
   static(layout: Layout, name = '', obstacles?: Obstacles, cupRadius: number = CUP.radius): GameGroup[] {
@@ -1182,7 +1189,7 @@ export class Scene {
       { mesh: ball(AIM_RADIUS, 4, 8), matrices: this.aim, count: 0, materials: this.aimLooks },
     ];
     this.moving = [];
-    this.holedAt = -Infinity;
+    this.holedAt = this.pinnedAt = -Infinity;
     this.splashed = null;
     this.landed = null;
     this.mark = null;
@@ -1216,7 +1223,7 @@ export class Scene {
       // ball drops
       const cupZ = heightAt(layout, cup.x, cup.y);
       pool({ parts: cloth }, (m, t) =>
-        place(m, 0, cup.x, cup.y, cupZ, flagTurn(t, cup.x, cup.y, wind, rigid) + waggle(t - this.holedAt)),
+        place(m, 0, cup.x, cup.y, cupZ, flagTurn(t, cup.x, cup.y, wind, rigid) + waggle(t - this.waggledAt)),
       );
       const pieces = scatter(layout, name);
       const scatterModels = sceneryOf(themeOf(layout)).scatter;

@@ -17,6 +17,13 @@
  * The Links' and The Isles' four moved again on 9 October 2026 for the rolling land (the long swell, the banks): with
  * `rolling: false` on both courses' specs (a scratch edit, reverted) they return to the hashes they had before (baddf395, c558b694 for The Links;
  * 78ec0685, bfd03031 for The Isles), and the other eight did not move.
+ *
+ * The golf rounds moved on 12 November 2026 for the pin (a ball in the air whose middle comes within `pinTarget` of the flag's pole
+ * loses half its speed along the ground): 19 of the 30 changed, and the three minigolf courses' six did not. Cause, shown: with the
+ * pin's test returned early (a scratch edit, reverted) all thirty-seven hashes return to the ones above, to the digit. A ball met the
+ * pin in each round that moved, in the round itself or in the rehearsals the autopilot plays to choose a shot (it is told the pin as
+ * it is told the rest of the physics). The pin is met by the ball's middle alone (`PIN.reach`, a quarter), so fewer rounds meet it
+ * than when the whole ball touched it, where 26 of the 30 changed.
  */
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
@@ -84,12 +91,12 @@ export const BEFORE: Record<string, string> = {
   'The Pinball Shed/11': 'fa53edaa',
   'The Waterworks/3': '51299ab1',
   'The Waterworks/11': 'a42d8d4a',
-  'The Links/3': '90870cb6',
-  'The Links/11': '515e67bf',
-  'The Fells/3': 'cde29d08',
-  'The Fells/11': '54fdeeaf',
+  'The Links/3': 'b353838e',
+  'The Links/11': '1a6aae87',
+  'The Fells/3': '3dca3098',
+  'The Fells/11': '11f11524',
   'The Isles/3': '307ee88d',
-  'The Isles/11': '1b9580db',
+  'The Isles/11': '82fd3cbc',
   // the three courses of 14 October 2026, hashed as they landed (7d41e7d): the six above did not move by a digit. Later that
   // day every course of golf but The Isles' seed 3 moved when a crown became the ball's radius round the solid cone (a rounded
   // rim, no cylinder under the base) and trees on steep banks were felled: a ball that passed just under and outside a rim
@@ -98,30 +105,30 @@ export const BEFORE: Record<string, string> = {
   // (`BANKS.smooth`): the ball rests and runs on other ground. The Fells and the minigolf courses did not move.
   'The Heath/3': '8c464401',
   'The Heath/11': '8e2b5acc',
-  'The Woods/3': '47107836',
-  'The Woods/11': '43d7f46e',
+  'The Woods/3': '5eda4c25',
+  'The Woods/11': 'e306fa7f',
   'The Old Course/3': '9e08d130',
-  'The Old Course/11': '0d1e0070',
+  'The Old Course/11': '14cc8340',
   // the nine courses of the biomes, hashed as they landed in the game on 31 October 2026 (Part 12 of the biomes plan): a game with
   // no kit plays each as it does now, which is all these hold
-  'The Saltpan/3': 'c8d7c338',
-  'The Saltpan/11': 'c3d6535e',
-  'The Mesa/3': '0ee1b75b',
+  'The Saltpan/3': '53c3e617',
+  'The Saltpan/11': '2db4177d',
+  'The Mesa/3': 'e46c9eb3',
   'The Mesa/11': '3c3d3d5c',
   'The Badlands/3': '63ebfa8c',
   'The Badlands/11': '843c6efc',
   'Tranquility/3': '7e8b750c',
   'Tranquility/11': 'a121fd40',
-  'Copernicus/3': 'f46b5780',
-  'Copernicus/11': '2065316a',
+  'Copernicus/3': '980d0d17',
+  'Copernicus/11': 'd90cadc4',
   'The Far Side/3': '8a94debc',
-  'The Far Side/11': 'c72edb35',
-  'Neon Park/3': 'c1f4acef',
-  'Neon Park/11': '1865b9ff',
-  'Chrome Heights/3': 'ca9bab47',
+  'The Far Side/11': '2d15745d',
+  'Neon Park/3': 'd55b8e8f',
+  'Neon Park/11': '924bc4a3',
+  'Chrome Heights/3': '17c27248',
   'Chrome Heights/11': '5cd16cc7',
-  'The Singularity/3': '720a6ee5',
-  'The Singularity/11': 'a2a544ce',
+  'The Singularity/3': 'f656320a',
+  'The Singularity/11': '1a66cc85',
 };
 
 describe('a game with no kit is the game as it was', () => {
