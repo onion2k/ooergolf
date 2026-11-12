@@ -67,9 +67,21 @@ const tiers = (lit: V3, mid: V3, shade: V3): Tiers => [
  * than the pine's; and a rock in four tiers, so its facets read, on a warm grey.
  */
 export const TONES = {
-  leaf: tiers([2.0, 1.3, 1.6], [1.1, 0.95, 1.1], [0.26, 0.42, 0.6]),
+  leaf: [
+    { from: 0.85, mul: [2.3, 1.42, 1.4] },
+    { from: 0.6, mul: [1.9, 1.3, 1.5] },
+    { from: 0.32, mul: [1.35, 1.08, 1.25] },
+    { from: 0.02, mul: [0.85, 0.82, 1.0] },
+    { from: -9, mul: [0.3, 0.46, 0.62] },
+  ],
   crown: tiers([1.15, 1.2, 1.6], [0.85, 0.9, 1.0], [0.2, 0.34, 0.5]),
-  pine: tiers([6.7, 1.9, 0.75], [2.7, 0.95, 0.5], [0.55, 0.3, 0.37]),
+  pine: [
+    { from: 0.75, mul: [8.2, 2.15, 0.8] },
+    { from: 0.4, mul: [6.2, 1.8, 0.72] },
+    { from: 0.1, mul: [3.6, 1.2, 0.56] },
+    { from: -0.15, mul: [2.0, 0.78, 0.45] },
+    { from: -9, mul: [0.55, 0.3, 0.37] },
+  ],
   fern: tiers([4.6, 2.1, 1.75], [3.0, 1.4, 1.2], [1.6, 0.8, 0.8]),
   /** A desert's sage: a lit side a little brighter and bluer than its colour, and a cool shade, as the desert's shadows are (its theme's shade is violet). */
   cactus: tiers([1.3, 1.25, 1.2], [0.95, 0.95, 1.0], [0.42, 0.45, 0.62]),
@@ -131,12 +143,23 @@ function sliced(mesh: Mesh, keep: number[]): Mesh {
   };
 }
 
+/** How much the height of a face in its part counts toward its tier, as a share of the sun's own dot at the part's top and foot. */
+export const LIFT = 0.32;
+
 /** A part split into one part a tier that has a face, each in the part's colour times the tier's factor. */
 function split(part: Part, sun: readonly [number, number, number], tone: Tiers): Part[] {
   const { mesh } = part;
   const p = mesh.positions,
     n = mesh.normals;
   const kept: number[][] = tone.map(() => []);
+  let low = Infinity,
+    high = -Infinity;
+  for (let i = 2; i < p.length; i += 3) {
+    low = Math.min(low, p[i]);
+    high = Math.max(high, p[i]);
+  }
+  const mid = (low + high) / 2,
+    half = (high - low) / 2 || 1;
   for (let t = 0; t < mesh.indices.length / 3; t++) {
     const [a, b, c] = [mesh.indices[t * 3] * 3, mesh.indices[t * 3 + 1] * 3, mesh.indices[t * 3 + 2] * 3];
     const ux = p[b] - p[a],
@@ -157,7 +180,9 @@ function split(part: Part, sun: readonly [number, number, number], tone: Tiers):
     nx = (s * nx) / l;
     ny = (s * ny) / l;
     nz = (s * nz) / l;
-    const dot = nx * sun[0] + ny * sun[1] + nz * sun[2];
+    // the sky lights a crown's top and the ground shades its foot: a face is taken as that much more toward the sun for how
+    // high in the part it is, and that much less for how low
+    const dot = nx * sun[0] + ny * sun[1] + nz * sun[2] + (LIFT * ((p[a + 2] + p[b + 2] + p[c + 2]) / 3 - mid)) / half;
     const k = tone.findIndex((tier) => dot >= tier.from);
     kept[k < 0 ? tone.length - 1 : k].push(t);
   }
@@ -192,6 +217,19 @@ export function toned(model: Model, sun: readonly [number, number, number], rule
 }
 
 /**
+ * What each turn's model is tinted by, over its toned parts: a little warmer and brighter, a little cooler and deeper,
+ * within a quarter, so trees side by side differ as trees do and none leaves the palette.
+ */
+export const TURN_TINTS: readonly (readonly [number, number, number])[] = [
+  [1, 1, 1],
+  [1.16, 1.04, 0.8],
+  [0.8, 0.93, 1.12],
+  [1.06, 1, 0.9],
+  [0.74, 0.88, 1.0],
+  [1.22, 1.08, 0.78],
+];
+
+/**
  * One toned model for each bucket of yaw: the one at `k` is lit so that, placed turned `bucketYaw(k)`, its bright side
  * faces `sun` in the world. `make` is called once for each, so no mesh is shared between buckets.
  */
@@ -203,6 +241,21 @@ export function bucketed(
 ): Model[] {
   return Array.from({ length: n }, (_, k) => {
     const model = make();
-    return toned(model, turnedSun(sun, bucketYaw(k, n)), rule(model));
+    const lit = toned(model, turnedSun(sun, bucketYaw(k, n)), rule(model));
+    // no two turns of a model are quite one colour: a wood of one tree is a wood of six, for nothing more drawn
+    const [r, g, b] = TURN_TINTS[k % TURN_TINTS.length];
+    const partRule = rule(model);
+    return {
+      ...lit,
+      parts: lit.parts.map((part) => {
+        const from = model.parts.find((q) => part.name === q.name || part.name.startsWith(`${q.name} `));
+        if (!from || !partRule(from)) return part;
+        const [pr, pg, pb, rough] = part.material;
+        return {
+          ...part,
+          material: [Math.min(1, pr * r), Math.min(1, pg * g), Math.min(1, pb * b), rough] as typeof part.material,
+        };
+      }),
+    };
   });
 }

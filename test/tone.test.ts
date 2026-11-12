@@ -14,6 +14,8 @@ import {
   BUCKETS,
   TONE_SUN,
   TONES,
+  LIFT,
+  TURN_TINTS,
   bucketOf,
   bucketYaw,
   bucketed,
@@ -110,14 +112,40 @@ describe('toning a model', () => {
         expect(Number.isInteger(k), `${name} ${part.name}`).toBe(true);
         for (const [x, y, z] of normals(part)) {
           const dot = x * TONE_SUN[0] + y * TONE_SUN[1] + z * TONE_SUN[2];
-          expect(dot, `${name} ${part.name}: a face reached the tier`).toBeGreaterThanOrEqual(tiers[k].from - 1e-6);
+          // to within the lift: a face high in its part counts as that much more toward the sun, and one low as less
+          expect(dot, `${name} ${part.name}: a face reached the tier`).toBeGreaterThanOrEqual(
+            tiers[k].from - LIFT - 1e-6,
+          );
           if (k > 0)
             expect(dot, `${name} ${part.name}: a face the tier above would take`).toBeLessThan(
-              tiers[k - 1].from + 1e-6,
+              tiers[k - 1].from + LIFT + 1e-6,
             );
         }
       }
     }
+  });
+
+  it('lights a part from above: of two faces that look the same way, the one at the top is a tier brighter than the one at the foot', () => {
+    // two triangles facing along x, one at the foot of the part and one at its top, under a sun that gives both 0.3:
+    // between the tiers' edges, so the height alone says which each is in
+    const face = (z: number) => [0, 0, z, 0, 1, z, 0, 0, z + 0.1];
+    const part: Part = {
+      name: 'leaves',
+      mesh: {
+        positions: new Float32Array([...face(0), ...face(10)]),
+        normals: new Float32Array([1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0]),
+        uvs: new Float32Array(12),
+        indices: new Uint32Array([0, 1, 2, 3, 4, 5]),
+      },
+      material: [0.2, 0.4, 0.1, 0.8],
+    };
+    const sun: [number, number, number] = [0.3, 0, Math.sqrt(1 - 0.09)];
+    const model = toned({ name: 'two faces', parts: [part] } as Model, sun, () => tiers);
+    const tierOf = (z: number) =>
+      Number(model.parts.find((p) => Math.abs(p.mesh.positions[2] - z) < 1e-6)!.name.slice(-1));
+    expect(LIFT).toBeGreaterThan(0.2);
+    expect(tierOf(10), 'the top face, in the lit tier').toBe(0);
+    expect(tierOf(0), 'the foot, in the middle').toBe(1);
   });
 
   it('keeps every triangle: a toned model has as many as the one it was made from, and leaves a part with no tone alone', () => {
@@ -157,12 +185,17 @@ describe('toning a model', () => {
 
 describe('the scenery’s tones', () => {
   it('are the figures chosen from the mock: a lit leaf about twice itself and a shaded one about a third, a rock in four', () => {
+    // five tones a leaf and a pine since 11 November 2026 (three before), so more of a crown's facets read; the brightest
+    // is still about twice the leaf and the shade about a third
     expect(TONES.leaf.map((t) => t.mul)).toEqual([
-      [2.0, 1.3, 1.6],
-      [1.1, 0.95, 1.1],
-      [0.26, 0.42, 0.6],
+      [2.3, 1.42, 1.4],
+      [1.9, 1.3, 1.5],
+      [1.35, 1.08, 1.25],
+      [0.85, 0.82, 1.0],
+      [0.3, 0.46, 0.62],
     ]);
-    expect(TONES.pine.map((t) => t.mul)[2]).toEqual([0.55, 0.3, 0.37]);
+    expect(TONES.pine).toHaveLength(5);
+    expect(TONES.pine.map((t) => t.mul)[4]).toEqual([0.55, 0.3, 0.37]);
     expect(TONES.rock).toHaveLength(4);
     // a darker tier is never a brighter one, in any colour, so the shade side is the dark side
     for (const [name, tiers] of Object.entries(TONES))
@@ -232,6 +265,19 @@ describe('the scene’s toned models', () => {
     }
     // a check that found nothing to check passes in silence
     expect(checked).toBeGreaterThanOrEqual(10 * BUCKETS);
+  });
+
+  it('tints each turn of a model a little apart, over its toned parts alone, and none far from the model', () => {
+    const made = bucketed(() => broadleaf({ height: 7 }), TONE_SUN, sceneryRule);
+    const plain = broadleaf({ height: 7 });
+    const trunk = plain.parts.find((p) => !sceneryRule(plain)(p))!;
+    const first = (m: Model, name: string) => m.parts.find((p) => p.name.startsWith(name))!.material;
+    const leaves = new Set(made.map((m) => first(m, 'leaves').slice(0, 3).join()));
+    expect(leaves.size, 'no two turns one colour').toBe(BUCKETS);
+    for (const m of made) expect(first(m, trunk.name)).toEqual(trunk.material);
+    for (const tint of TURN_TINTS) for (const c of tint) expect(Math.abs(c - 1)).toBeLessThanOrEqual(0.27);
+    expect(TURN_TINTS[0]).toEqual([1, 1, 1]);
+    expect(TURN_TINTS).toHaveLength(BUCKETS);
   });
 
   it('are made again the same, bucket for bucket', () => {

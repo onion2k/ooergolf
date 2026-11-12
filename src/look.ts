@@ -25,7 +25,7 @@ const MM_PER_UNIT = 100;
  * gap the size of the ball. Toon light is flat, and without it a thing
  * standing on the grass seems pasted on it.
  */
-export const OCCLUSION = { strength: 2, radius: 2.5, direct: 0.3 } as const;
+export const OCCLUSION = { strength: 3, radius: 3.5, direct: 0.45 } as const;
 
 /**
  * A thin haze, the sky's own blue, even at every height: the far rough goes
@@ -60,7 +60,7 @@ export const SKY = {
  * is small, and its map is the whole box, as it always was. Chosen so every thing casts and every surface catches,
  * water too, at one softness (8 October 2026).
  */
-export const SHADOW = { margin: 4, top: 38, reach: 420, fade: 0.15, softness: 1.5 } as const;
+export const SHADOW = { margin: 4, top: 38, reach: 420, fade: 0.15, softness: 2.5 } as const;
 
 /**
  * The clean toy of `LOOK.md`: edges drawn at four samples a pixel, the toon
@@ -83,9 +83,9 @@ export const TOY = {
   antialias: 'msaa',
   bandSoftness: 0.06,
   shadeColour: [0.3, 0.55, 0.62] as [number, number, number],
-  rim: 0.25,
+  rim: 0.42,
   rimColour: [1, 0.95, 0.85] as [number, number, number],
-  rimWidth: 0.18,
+  rimWidth: 0.24,
   skyLight: [0.5, 0.66, 0.9] as [number, number, number],
   groundLight: [0.42, 0.42, 0.18] as [number, number, number],
   form: 5,
@@ -102,7 +102,7 @@ export const TOY = {
  * step or two apart across its stripes, which a player saw on a phone on The Straight Mile (16 October 2026). It is the same
  * at a pixel every frame, so a picture is the same every run and a still frame does not shimmer.
  */
-export const POST = { vignette: 0, grain: 0, tone: 'soft', dither: 1 } as const;
+export const POST = { vignette: 0, grain: 0, tone: 'soft', dither: 1, bloom: 0.55, threshold: 0.92 } as const;
 
 /**
  * Has the renderer compile the build that draws a surface that flows, now, and not the first time a hole with water is

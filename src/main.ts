@@ -97,7 +97,9 @@ import { menuMayOpen, menuWords, type MenuFacts } from './menu';
 import { featOf } from './feats';
 import { trophyView } from './trophywords';
 import { retakeShown, type RetakeState } from './retake';
-import { HeldView } from './shot';
+import { HeldView, projectInto } from './shot';
+import { LENS, lensMask, lensShown, lensTop } from './lens';
+import { safeBox } from './aimview';
 import { between } from './frames';
 import { Effects } from './effects';
 
@@ -1584,6 +1586,37 @@ async function main() {
   }
   /** The state `retakeShown` is asked about, written into each frame and never made again. */
   const retake: RetakeState = { held: false, strokes: 0, used: false, phase: '', choosing: false, event: false };
+  /**
+   * The lens: the screen's edges out of focus, as an element over the canvas whose backdrop the browser blurs (`lens.ts`
+   * says where and when). Its band is kept above the cup as the camera draws it, and gone while a shot reaches past the
+   * safe box's top with the camera as far back as it goes; the page is written to only when the answer changes.
+   */
+  const lens = document.getElementById('lens')!;
+  lens.style.backdropFilter = `blur(${LENS.blur}px)`;
+  const lensAt = [0, 0];
+  let lensUp = false;
+  let lensBand = -1;
+  // the safe box's top for the screen as it is, worked out again when the screen's shape changes and not each frame
+  let lensBox = 0;
+  let lensFor = 0;
+  function placeLens() {
+    const up = lensShown(governor.rung, rig.overhead, innerWidth, titled !== null);
+    if (up !== lensUp) {
+      lensUp = up;
+      lens.hidden = !up;
+    }
+    if (!up) return;
+    if (lensFor !== aspect) {
+      lensFor = aspect;
+      lensBox = safeBox(aspect).top;
+    }
+    const cup = game.layout.cup;
+    const seen = projectInto(cam.viewProjection, cup.x, cup.y, heightAt(game.layout, cup.x, cup.y), lensAt) > 0;
+    const band = lensTop(lensBox, seen ? lensAt[1] : null, rig.atLimit ? 1 : null);
+    if (band === lensBand) return;
+    lensBand = band;
+    lens.style.maskImage = lensMask(band);
+  }
   /** The frame drawn, and when it was begun, for the governor to measure the drawing against. */
   function draw(dt: number): number {
     // nothing is drawn once the page is stopped on the boot screen: the scene is left as the build that failed left it
@@ -1603,6 +1636,7 @@ async function main() {
     rig.place(cam, game.t);
     if (titled) titleCamera(titled);
     cam.update();
+    placeLens();
     upload();
     const t = performance.now();
     renderer.frame(ctx.context.getCurrentTexture().createView(), 'redraw', dt);

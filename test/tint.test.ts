@@ -409,7 +409,8 @@ describe('the scene paints the rough and out of bounds a mesh to each step, and 
       ),
     );
     expect(painted.length).toBeGreaterThanOrEqual(10);
-    for (const g of painted) expect(g.texture, 'a plain colour, not a texture').toBeUndefined();
+    // a plain colour until 12 November 2026; earth's open ground now wears the meadow's soft patches over it, in colour alone
+    for (const g of painted) expect(g.texture?.[0], 'the meadow layer, and no other').toBe(6);
   });
   it('leaves the plain plane beyond the hole as it was: one mesh in the colour of out of bounds, far wider than the hole', () => {
     const { layout, h } = links1;

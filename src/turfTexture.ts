@@ -14,10 +14,10 @@ export const TURF_SIDE = 256;
  * metal, and a cracked clay (a dried lake bed's, which Part 6 of the biomes plan lays on the pan). Each is tileable and neutral
  * about mid-grey, as the mown is, and calm: the strengths are the swings below, and what shows of them is the theme's.
  */
-export type TurfKind = 'mown' | 'tuft' | 'regolith' | 'plate' | 'crack';
+export type TurfKind = 'mown' | 'tuft' | 'regolith' | 'plate' | 'crack' | 'meadow';
 
 /** Every kind, in the order the page uploads them: the layer of a kind is its place here, counted from one. */
-export const TURF_KINDS: readonly TurfKind[] = ['mown', 'tuft', 'regolith', 'plate', 'crack'];
+export const TURF_KINDS: readonly TurfKind[] = ['mown', 'tuft', 'regolith', 'plate', 'crack', 'meadow'];
 
 /** The most the colour swings from mid-grey, in levels: a few per cent, since the shader doubles it. */
 const COLOUR_SWING = 22;
@@ -30,6 +30,7 @@ const SWING: Record<TurfKind, { colour: number; height: number }> = {
   regolith: { colour: 20, height: 36 },
   plate: { colour: 24, height: 36 },
   crack: { colour: 30, height: 60 },
+  meadow: { colour: 34, height: 8 },
 };
 
 /** A lattice of random values, `cells` across and wrapping at the edge, read smoothly between its points. */
@@ -142,6 +143,18 @@ function makerOf(kind: TurfKind, side: number, random: () => number): Maker {
           0.35 * slab + 0.3 * brushed + 0.25 * bevel - 1.1 * line + 0.45 * rivet,
           0.35 * bevel - 1.2 * line + 0.6 * rivet,
         ];
+      };
+    }
+    case 'meadow': {
+      // open grass seen from far: soft patches a few to the side, lighter and darker, and nothing fine, since it is laid
+      // large and the blades are what is fine
+      const wide = lattice(3, random);
+      const mid = lattice(6, random);
+      const small = lattice(13, random);
+      return (x, y) => {
+        const u = x / side,
+          v = y / side;
+        return [0.6 * wide(u, v) + 0.4 * mid(u, v) + 0.22 * small(u, v), 0.5 * mid(u, v)];
       };
     }
     case 'crack': {

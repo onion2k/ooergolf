@@ -234,8 +234,8 @@ export const EARTH_GRASS = {
 /** Earth's look, as `daylight` always lit it. */
 const EARTH_LOOK: LookFigures = {
   sunDir: SUN,
-  sunColour: [2.75, 2.55, 2.2],
-  ambient: 1,
+  sunColour: [3.0, 2.66, 2.1],
+  ambient: 0.8,
   shadeColour: TOY.shadeColour,
   rim: TOY.rim,
   rimColour: TOY.rimColour,
@@ -279,7 +279,7 @@ const earth: Theme = {
     earth: false,
   },
   grass: EARTH_GRASS,
-  layers: { fairway: null, rough: null, pan: null },
+  layers: { fairway: null, rough: { layer: 6, repeat: 1 / 55, albedo: 0.5, shade: 0 }, pan: null },
   look: EARTH_LOOK,
   scenery: earthScenery(),
   puff: PUFF,

@@ -93,7 +93,7 @@ describe('the turf on the ground', () => {
     expect(TURF).toEqual({ layer: 1, repeat: 1 / 1.4, albedo: 0.3, shade: 0.22 });
   });
 
-  it('is on the mown grounds of a golf hole and not on its rough or its out of bounds', () => {
+  it("is on the mown grounds of a golf hole, and its rough and its out of bounds wear the meadow's patches", () => {
     const hole = golfHole(LINKS_SPECS[1]);
     const groups = new Scene().static(layoutOf(hole.map, hole.terrain), hole.name);
     // calmer than minigolf's (0.13 and 0.09), and on the mown colours as the checker's contrast leaves them on golf
@@ -119,12 +119,19 @@ describe('the turf on the ground', () => {
         (x) => JSON.stringify((x as { albedo?: number[] }).albedo) === JSON.stringify(c.slice(0, 3)),
       );
       expect(same.length, String(c)).toBeGreaterThan(0);
-      for (const g of same) expect(g.texture, String(c)).toBeUndefined();
+      // the open ground's own layer, laid large: one flat green from far until 11 November 2026
+      // (a piece of the ground beyond that the scene leaves plain is plain still)
+      for (const g of same) if (g.texture) expect(g.texture[0], String(c)).toBe(6);
+      if (c === PALETTE.playRough)
+        expect(
+          same.some((g) => g.texture?.[0] === 6),
+          'the rough in its patches',
+        ).toBe(true);
     }
   });
 });
 
-describe.each(['tuft', 'regolith', 'plate', 'crack'] as const)('the %s texture', (kind) => {
+describe.each(['tuft', 'regolith', 'plate', 'crack', 'meadow'] as const)('the %s texture', (kind) => {
   const t = turfTexels(SIDE, 1, kind);
 
   it('is the same bytes for the same arguments, and tiles: an edge runs on into the other as a texel into the next', () => {
@@ -173,7 +180,7 @@ describe('the ground of a biome', () => {
     gs.filter((x) => JSON.stringify((x as { albedo?: number[] }).albedo) === JSON.stringify(c.slice(0, 3)));
   const layerOf = (g: { texture?: Float32Array }) => g.texture && g.texture[0];
 
-  it('wears its dust on the rough and out of bounds where its theme has one, and earth wears none', () => {
+  it('wears its dust on the rough and out of bounds where its theme has one, and earth its meadow', () => {
     for (const [biome, layer] of [
       ['desert', 2],
       ['moon', 3],
@@ -184,7 +191,13 @@ describe('the ground of a biome', () => {
       expect(rough.length, `${biome}: the rough in its dust`).toBeGreaterThan(0);
       expect(THEMES[biome].layers.rough!.layer).toBe(layer);
     }
-    for (const g of groups()) if (g.texture) expect(layerOf(g)).toBe(1);
+    // earth's mown ground is the turf's and its open ground the meadow's, and nothing wears another biome's
+    for (const g of groups()) if (g.texture) expect([1, 6]).toContain(layerOf(g));
+    expect(
+      groups().some((g) => layerOf(g) === 6),
+      'earth: the rough in its patches',
+    ).toBe(true);
+    expect(THEMES.earth.layers.rough!.layer).toBe(6);
   });
 
   it('puts the future’s plate on its mown ground as well, and leaves the sand bare', () => {

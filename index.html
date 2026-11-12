@@ -152,6 +152,14 @@
     position: fixed;
     inset: 0;
   }
+  /* the lens: the screen's edges a little out of focus (`src/lens.ts` says where, and whether it is up); the canvas under it
+     is what is blurred, and the words over the course are above both */
+  #lens {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    mask-composite: add;
+  }
   canvas {
     display: block;
     width: 100%;
@@ -2918,7 +2926,10 @@
     }
   }
 </style>
-<div id="stage"><canvas id="view"></canvas></div>
+<div id="stage">
+  <canvas id="view"></canvas>
+  <div id="lens" hidden></div>
+</div>
 <div id="drawerScrim" hidden></div>
 <div id="top">
   <div class="panel" id="holeChip" hidden>

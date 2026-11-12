@@ -565,6 +565,32 @@ with a gold rim; Null Pointer's, the largest, is a grey-brown patch at the top o
 curve strays onto the ground beside it. How the Moon's grey reads at a distance on a phone, the Earth's low-poly look, and the Future's tee on a hole
 with sand, where the caddie's tip card hides the ball on a phone's fly-in. No person had looked at a biome in play before it landed.
 
+## After the stages: the polish of 11 November 2026
+
+Asked for by the user: the low-poly scenery kept, taken to the finish of a Switch-era Nintendo game, with the Link's
+Awakening remake as the level to aim at; the screen's edges blurred and never the game area; and, after the first
+pictures, better trees and grass. Built over seven rounds of pictures of the real game, each across eleven scenes.
+
+- **The light:** a warmer sun (3.0, 2.66, 2.1) and less fill from the sky (0.8), softer shadow edges (2.5 texels), more
+  shade where things meet (3, over a radius of 3.5), a stronger rim (0.42) and more bloom (0.55, from 0.92). The sun's
+  direction is the title pass's still: lower, it threw the trees' shadows across the fairways.
+- **No vignette,** as before: darkened corners read as a grey haze against the sky.
+- **The lens** (`src/lens.ts`): a soft border, about a twentieth of the screen deep, and a band above the cup. It is
+  what "never the game area" leaves, since the camera keeps the ball and the landing in a box nine tenths of the screen
+  each way. It is an element over the canvas whose backdrop the browser blurs, so the renderer is as it was; it is up
+  on the top rung of a screen 900 wide or more, and not from above nor under the title. The perf gate cannot time the
+  browser's blur, which is why a phone has none.
+- **The trees** (`src/models/tone.ts`): five tones a leaf and a pine where there were three, a face counted as more
+  toward the sun for how high in its part it is, and each of a model's six turns tinted a little apart, so a wood is
+  not one green and nothing more is drawn.
+- **The open ground:** earth's rough and out of bounds wear a sixth texture, soft patches laid 55 units to the repeat,
+  in colour alone. With their height as shade too, a frame of the biggest water hole cost 5.41 ms against 4.14; in
+  colour alone it is 4.84 to 4.86 over three runs, inside the gate's tolerance, and no baseline was written.
+
+Not done, and why: the blades of the lawn are coloured by the renderer, whose one patchiness was turned down on
+9 October 2026 to keep the lawn calm, and large soft patches in the blades are a renderer release; the trees' shapes are
+as they were.
+
 ## Across every stage
 
 - **The frame:** measured before and after at the standard view and the

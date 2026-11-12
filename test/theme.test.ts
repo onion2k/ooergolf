@@ -63,7 +63,13 @@ describe('earth’s theme', () => {
     expect(earth.backdrop.hill).toBe(COLOURS.hill);
     expect(earth.backdrop.mountain).toBe(COLOURS.mountain);
     expect(earth.backdrop.clouds).toBe(true);
-    expect(earth.layers).toEqual({ fairway: null, rough: null, pan: null });
+    // the rough wore no texture until 11 November 2026: open ground seen from far was one flat green, and now wears soft
+    // patches, laid large; in colour alone, since the height of them as shade cost a frame of the biggest hole 0.6 ms
+    expect(earth.layers).toEqual({
+      fairway: null,
+      rough: { layer: 6, repeat: 1 / 55, albedo: 0.5, shade: 0 },
+      pan: null,
+    });
     expect(earth.map.water).toBe(COLOURS.waterMid);
     expect(earth.map.sand).toBe(COLOURS.sand);
   });
@@ -90,8 +96,10 @@ describe('earth’s theme', () => {
   it('lights as daylight always lit it', () => {
     const { look, fog } = lookFor(earth);
     expect(look.sunDir).toBe(SUN);
-    expect(look.sunColour).toEqual([2.75, 2.55, 2.2]);
-    expect(look.ambient).toBe(1);
+    // a warmer sun and less of the sky's fill since the polish of 11 November 2026 (2.75, 2.55, 2.2 and 1 before): the
+    // shade under a tree and behind a rail is deeper, and the lit side warmer against it
+    expect(look.sunColour).toEqual([3.0, 2.66, 2.1]);
+    expect(look.ambient).toBe(0.8);
     expect(look.exposure).toBe(1);
     expect(look.background).toBe(SKY.horizon);
     expect(look.shading).toBe('toon');
@@ -180,7 +188,9 @@ describe('every theme', () => {
         expect(Number.isInteger(layer.layer)).toBe(true);
         expect(layer.layer).toBeGreaterThan(1);
         expect(layer.layer).toBeLessThanOrEqual(TURF_KINDS.length);
-        for (const v of [layer.repeat, layer.albedo, layer.shade]) expect(v).toBeGreaterThan(0);
+        for (const v of [layer.repeat, layer.albedo]) expect(v).toBeGreaterThan(0);
+        // nought is a texture in colour alone, as earth's open ground is, which pays nothing for its height
+        expect(layer.shade).toBeGreaterThanOrEqual(0);
         expect(layer.albedo).toBeLessThanOrEqual(1);
       }
     expect(TURF_KINDS[THEMES.desert.layers.rough!.layer - 1]).toBe('tuft');
@@ -348,7 +358,7 @@ describe('the caches of the picture', () => {
 
 describe('a theme’s textures', () => {
   it('are named for the layers the page makes', () => {
-    expect(TURF_KINDS).toEqual(['mown', 'tuft', 'regolith', 'plate', 'crack']);
+    expect(TURF_KINDS).toEqual(['mown', 'tuft', 'regolith', 'plate', 'crack', 'meadow']);
     expect(TURF_KINDS.length).toBeLessThanOrEqual(8);
   });
 });

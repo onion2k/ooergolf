@@ -73,12 +73,16 @@ function drawn(course: string, hole: number) {
 }
 
 /** The hashes of what a golf hole's static groups hold, written from a3c39d3; the meshes' written again on 10 October 2026 from d918912 unchanged, when they came to be taken over steadied bytes (`steady.ts`), since the raw bytes, written on a Mac, differed on Linux in a last bit of the minigolf ponds' stones. The two golf holes' were written again the same day when the golf hole's two rail groups, which have no triangles, stopped being made (the GPU warned of a draw of nothing): a group of no triangles is left out of the hash. The two golf holes' meshes written again on 16 October 2026 when the banks came to be smoothed along their run (`BANKS.smooth`), which moves the ground every group stands on; their colours did not move. The colours written again on 18 October 2026 when they came to be taken over steadied bytes too, since Node 24 gave one a last bit Node 23 did not; the old hashes passed under Node 23 on the same code just before, and these under 23 and 24. */
+// The meshes' and the looks' were written again on 12 November 2026, for the scenery alone: its trees are toned in five
+// tiers and lit from above, and each turn of a model is tinted (`models/tone.ts`), which cuts their meshes and colours
+// anew. With the old toning and everything else as it is now, every hash here was what it had been, so the ground, the
+// rail and the rest are the bytes they were. The tinted meshes' did not move.
 const AT_MAIN = {
-  'The Meadow/0': { meshes: 2351288662, looks: 1662367848 },
-  'The Pinball Shed/0': { meshes: 3193777536, looks: 1995808509 },
-  'The Waterworks/0': { meshes: 1616752155, looks: 4277377434 },
-  'The Links/0': { meshes: 307897204, looks: 1729823911, tintedMeshes: 3463851149 },
-  'The Isles/1': { meshes: 570720841, looks: 572058714, tintedMeshes: 3505977887 },
+  'The Meadow/0': { meshes: 272064413, looks: 2574882060 },
+  'The Pinball Shed/0': { meshes: 1173601110, looks: 1516130374 },
+  'The Waterworks/0': { meshes: 1045488368, looks: 2644078423 },
+  'The Links/0': { meshes: 4231277400, looks: 2721146556, tintedMeshes: 3463851149 },
+  'The Isles/1': { meshes: 276568211, looks: 4151305781, tintedMeshes: 3505977887 },
 } as Record<string, { meshes: number; looks: number; tintedMeshes?: number }>;
 
 describe('what the banks tint leaves as it was', () => {
