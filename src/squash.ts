@@ -33,6 +33,25 @@ export function squash(since: number, hard: number): number {
 }
 
 /**
+ * A hard shot leaving: how long the ball is drawn long for, in seconds; the most it is stretched, as a share of its size
+ * along the shot; and the power, of the hardest shot, under which it is not stretched at all, so a putt and a chip leave
+ * round. A drive's power shown in the ball itself for a moment (12 November 2026).
+ */
+export const STRETCH = { lasts: 0.14, most: 0.22, from: 0.5 } as const;
+
+/**
+ * How stretched the ball is `since` seconds after it was struck at `power` of the hardest shot: nought or under, as a
+ * squash that is under nought is long, longest as it leaves and round again from `lasts` on, exactly.
+ */
+export function stretch(since: number, power: number): number {
+  if (!(since >= 0) || since >= STRETCH.lasts) return 0;
+  const far = STRETCH.most * Math.max(0, Math.min(1, (power - STRETCH.from) / (1 - STRETCH.from)));
+  if (far === 0) return 0;
+  const tau = since / STRETCH.lasts;
+  return -far * (1 - tau) ** 2;
+}
+
+/**
  * Placement `i` of `out`, a ball of radius `r` already placed there,
  * squashed by `s` along the unit (nx, ny, nz), the way the knock pushed it:
  * flattened against what it met, whose side of it stays where it is, and as
@@ -80,6 +99,8 @@ export function squashOf(out: Float32Array, i: number, nx: number, ny: number, n
 export class Squash {
   private at = -Infinity;
   private hard = 0;
+  /** Whether the last was a strike, which stretches, and not a knock, which squashes: `hard` is then the shot's power. */
+  private struck = false;
   /** Which way the last knock pushed the ball. */
   readonly along = new Float32Array([0, 0, 1]);
 
@@ -87,6 +108,20 @@ export class Squash {
   knock(t: number, hard: number, dx: number, dy: number, dz: number) {
     this.at = t;
     this.hard = hard;
+    this.struck = false;
+    this.along[0] = dx;
+    this.along[1] = dy;
+    this.along[2] = dz;
+  }
+
+  /**
+   * A stroke at game time `t`, at `power` of the hardest shot, sending the ball along the unit (dx, dy, dz): in place of
+   * the last knock, as a knock is in place of it, so a ball struck into the rail at once is squashed by the rail.
+   */
+  strike(t: number, power: number, dx: number, dy: number, dz: number) {
+    this.at = t;
+    this.hard = power;
+    this.struck = true;
     this.along[0] = dx;
     this.along[1] = dy;
     this.along[2] = dz;
@@ -99,6 +134,6 @@ export class Squash {
 
   /** How squashed the ball is at game time `t`. */
   amount(t: number): number {
-    return squash(t - this.at, this.hard);
+    return this.struck ? stretch(t - this.at, this.hard) : squash(t - this.at, this.hard);
   }
 }

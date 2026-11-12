@@ -23,7 +23,7 @@ import {
 import { bendRate } from './shaping';
 import { BAG, carryOf } from './bag';
 import { AimReadout } from './aimreadout';
-import { CLIP, CameraRig, LEAD, TILT, overheadFit } from './camera';
+import { CLIP, CameraRig, LEAD, TILT, overheadFit, VIEW } from './camera';
 import { Director } from './director';
 import { ITEMS, itemById } from './items';
 import { createApi } from './debug';
@@ -88,7 +88,18 @@ import { STILL } from 'artshape-render/game/grass';
 import { carryFrom } from './flight';
 import { CADDIE, CaddieTalk } from './caddie';
 import { clearings } from './scenery';
-import { craterDust, cupBurst, splash, strikePuff } from './bursts';
+import {
+  craterDust,
+  cupBurst,
+  cupScore,
+  divot,
+  farScale,
+  knockSparks,
+  landRing,
+  splash,
+  strikePuff,
+  takesDivot,
+} from './bursts';
 import { CRATER } from './waterdraw';
 import { Input } from './input';
 import { Squash, squashInto, squashOf } from './squash';
@@ -708,6 +719,10 @@ async function main() {
     // the glow ball's sprites the last frame drew, and the particles the last holing threw up from the cup
     trail: 0,
     confetti: 0,
+    // what the last landing's ring, the last knock's sparks and the last stroke's divot threw
+    ring: 0,
+    sparks: 0,
+    divot: 0,
     puff: null as 'sand' | 'grass' | null,
     // and the colour of it, which is the biome's: the test API reads it back
     dust: null as number[] | null,
@@ -934,6 +949,10 @@ async function main() {
       director.struck();
       holedFrom = 0;
       hud.setStrokes(game.strokes);
+      // a hard shot leaves long for a moment, along the way it was sent
+      const { vx, vy, vz } = game.world;
+      const going = Math.hypot(vx[game.ball], vy[game.ball], vz[game.ball]);
+      if (going > 0) squash.strike(game.t, power, vx[game.ball] / going, vy[game.ball] / going, vz[game.ball] / going);
       // a stroke that took the caddie's tip for it is counted, so it goes quiet on that kind once it has been taken enough
       const took = talk.struck(game.inHand.id, game.struckShape, game.struckSpin);
       if (took) progress.tookTip(took, CADDIE.taken);
@@ -948,7 +967,30 @@ async function main() {
       sound.struck(kind, power, ground === 'sand');
       log(`sound struck ${kind} ${power.toFixed(2)}${ground === 'sand' ? ' sand' : ''}`);
       const puffs = themeOf(game.layout).puff;
-      for (const e of strikePuff(x, y, power, ground, puffs)) renderer.emit(e);
+      // thrown from the ground where it is: a golf hole's hills are not at nought
+      const under = heightAt(game.layout, x, y);
+      for (const e of strikePuff(x, y, power, ground, puffs, under)) renderer.emit(e);
+      // an iron or a wedge off the grass takes a divot, thrown the way the shot goes
+      const along = Math.hypot(vx[game.ball], vy[game.ball]);
+      drawn.divot = 0;
+      if (
+        game.layout.golf &&
+        along > 0 &&
+        takesDivot(kind, ground, game.strokes === 1, themeOf(game.layout).grass !== null)
+      )
+        for (const e of divot(
+          x,
+          y,
+          vx[game.ball] / along,
+          vy[game.ball] / along,
+          power,
+          puffs,
+          farScale(rig.distance, VIEW.home),
+          under,
+        )) {
+          renderer.emit(e);
+          drawn.divot += e.count;
+        }
       drawn.dust = [...puffs[ground]];
     },
     // a lofted ball come down: the first landing is marked, and throws up the ground it came down on
@@ -961,7 +1003,14 @@ async function main() {
       sound.landed(fall, ground === 'sand');
       log(`sound landed ${fall.toFixed(2)}${ground === 'sand' ? ' sand' : ''}`);
       const puffs = themeOf(game.layout).puff;
-      for (const e of strikePuff(x, y, Math.min(1, speed / 60), ground, puffs)) renderer.emit(e);
+      const under = heightAt(game.layout, x, y);
+      for (const e of strikePuff(x, y, fall, ground, puffs, under)) renderer.emit(e);
+      // and a ring of it thrown outward along the ground, as hard as it came down
+      drawn.ring = 0;
+      for (const e of landRing(x, y, fall, ground, puffs, farScale(rig.distance, VIEW.home), under)) {
+        renderer.emit(e);
+        drawn.ring += e.count;
+      }
       drawn.dust = [...puffs[ground]];
     },
     // through a hologram: a burst of light from where it went in, and that tree flares
@@ -973,6 +1022,24 @@ async function main() {
     // knocked off the rail, a post or the ground it dropped onto: squashed along it, and sprung back
     knocked(hard, x, y, dx, dy, dz) {
       squash.knock(game.t, hard, dx, dy, dz);
+      // a hard one off a side throws sparks, the way it sent the ball
+      drawn.sparks = 0;
+      const { cup } = game.layout;
+      const inCup = Math.hypot(x - cup.x, y - cup.y) < game.cup.radius + KIND_RADIUS[BALL];
+      for (const e of knockSparks(
+        x,
+        y,
+        game.world.z[game.ball],
+        hard,
+        dx,
+        dy,
+        dz,
+        farScale(rig.distance, VIEW.home),
+        inCup,
+      )) {
+        renderer.emit(e);
+        drawn.sparks += e.count;
+      }
       // a kicker that was hit lights up, and a hit on it again lights it anew
       const k = kickerAt(game.layout, x, y, KIND_RADIUS[BALL] + 0.25);
       if (k >= 0) effects.kicked(k, game.t);
@@ -1066,7 +1133,7 @@ async function main() {
       for (const e of cupBurst(
         game.layout.cup.x,
         game.layout.cup.y,
-        strokes === 1,
+        cupScore(strokes, par),
         game.kit.streamers ? 'streamers' : 'plain',
       )) {
         renderer.emit(e);

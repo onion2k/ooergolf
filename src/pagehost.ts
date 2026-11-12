@@ -58,6 +58,10 @@ export interface HostDrawn {
   kicks: number;
   trail: number;
   confetti: number;
+  /** What the last landing's ring, the last hard knock's sparks and the last stroke's divot threw, in particles: nought for none. */
+  ring: number;
+  sparks: number;
+  divot: number;
   puff: 'sand' | 'grass' | null;
   press: { x: number; y: number; radius: number } | null;
   took: boolean;
@@ -223,6 +227,9 @@ export class PageHost {
       ...(drawn.kicks ? { kicks: drawn.kicks } : {}),
       trail: drawn.trail,
       confetti: drawn.confetti,
+      ring: drawn.ring,
+      sparks: drawn.sparks,
+      divot: drawn.divot,
       strips: scene.flagStrips(),
       retake: hud.retakeDrawn(),
       sky: scene.skyDrawn(),

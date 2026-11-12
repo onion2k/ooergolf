@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { KNOCK } from '../src/arena';
 import { placeRolling } from '../src/roll';
-import { SQUASH, Squash, squash, squashInto, squashOf } from '../src/squash';
+import { Squash, squash, SQUASH, squashInto, squashOf, stretch, STRETCH } from '../src/squash';
 
 /** Where the point `p` of the ball, from its middle, is put by placement 0 of `m`. */
 function at(m: Float32Array, p: [number, number, number]): [number, number, number] {
@@ -136,5 +136,54 @@ describe('the squash', () => {
     s.knock(2, 30, 0, 0, 1);
     s.clear();
     expect(s.amount(2), 'forgotten').toBe(0);
+  });
+
+  it('stretches a ball leaving a hard shot along the way it goes, and not one struck softly', () => {
+    expect(stretch(0, 1)).toBeCloseTo(-STRETCH.most, 9);
+    expect(stretch(0, STRETCH.from)).toBe(0);
+    expect(stretch(0, 0.2)).toBe(0);
+    // longer the harder, and never a squash: nought or under
+    expect(stretch(0, 0.9)).toBeLessThan(stretch(0, 0.7));
+    for (const p of [0.6, 0.8, 1]) for (const t of [0, 0.03, 0.1]) expect(stretch(t, p)).toBeLessThanOrEqual(0);
+  });
+
+  it('is longest as it leaves, round again from its end on exactly, and nothing before the stroke', () => {
+    expect(stretch(-0.01, 1)).toBe(0);
+    expect(stretch(STRETCH.lasts, 1)).toBe(0);
+    expect(stretch(1, 1)).toBe(0);
+    let last = stretch(0, 1);
+    for (let t = 0.01; t < STRETCH.lasts; t += 0.01) {
+      const now = stretch(t, 1);
+      expect(now).toBeGreaterThan(last);
+      last = now;
+    }
+  });
+
+  it('draws the struck ball long along the shot and narrower across it, its back where it was', () => {
+    const r = 1;
+    const out = new Float32Array(16);
+    out.set([r, 0, 0, 0, 0, r, 0, 0, 0, 0, r, 0, 5, 6, 7, 1]);
+    squashInto(out, 0, stretch(0, 1), 1, 0, 0, r);
+    expect(out[0]).toBeCloseTo(1 + STRETCH.most, 6);
+    expect(out[5]).toBeLessThan(1);
+    // the back of it, the middle less its length that way, has not moved: it leaves from where it lay
+    expect(out[12] - out[0]).toBeCloseTo(5 - r, 6);
+    expect(squashOf(out, 0, 1, 0, 0)).toBeCloseTo(-STRETCH.most, 5);
+  });
+
+  it('keeps a strike as it keeps a knock: one at a time, a knock after it in its place, and none once cleared', () => {
+    const s = new Squash();
+    s.strike(10, 1, 0, 1, 0);
+    expect(s.amount(10)).toBeCloseTo(-STRETCH.most, 9);
+    expect(Array.from(s.along)).toEqual([0, 1, 0]);
+    expect(s.amount(10 + STRETCH.lasts)).toBe(0);
+    s.strike(20, 0.3, 1, 0, 0);
+    expect(s.amount(20), 'a soft shot').toBe(0);
+    s.strike(30, 1, 1, 0, 0);
+    s.knock(30.02, 40, -1, 0, 0);
+    expect(s.amount(30.02), 'the rail it met at once squashes it').toBeGreaterThan(0);
+    s.strike(40, 1, 1, 0, 0);
+    s.clear();
+    expect(s.amount(40)).toBe(0);
   });
 });

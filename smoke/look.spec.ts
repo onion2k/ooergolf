@@ -650,6 +650,39 @@ test.describe('what it looks like', () => {
     expect(problems).toEqual([]);
   });
 
+  test('a hard putt off the rail: sparks thrown back from where it met it, and the ball squashed', async ({ page }) => {
+    const problems = watch(page);
+    await start(page, { seed: 1, paused: true });
+    await page.evaluate(() => {
+      const g = window.game!;
+      g.shoot(0, 1);
+      // to the knock, and four frames on, a frame at a time since the particles move only as they are drawn
+      for (let f = 0; f < 120 && g.motions().sparks === 0; f++) g.step(1);
+      for (let f = 0; f < 4; f++) g.step(1);
+    });
+    expect(await page.evaluate(() => window.game!.motions().sparks), 'sparks were thrown').toBeGreaterThan(0);
+    await hideStats(page);
+    await expect(page).toHaveScreenshot('knock-sparks.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
+  test('a drive come down on The Links: a ring of the ground thrown out round its mark', async ({ page }) => {
+    const problems = watch(page);
+    await start(page, { seed: 1, paused: true });
+    await page.evaluate(() => {
+      const g = window.game!;
+      g.chooseCourse('The Links');
+      g.step(2);
+      g.shoot(Math.PI / 2, 1, 'driver');
+      for (let f = 0; f < 900 && g.motions().ring === 0; f++) g.step(1);
+      for (let f = 0; f < 8; f++) g.step(1);
+    });
+    expect(await page.evaluate(() => window.game!.motions().ring), 'a ring was thrown').toBeGreaterThan(0);
+    await hideStats(page);
+    await expect(page).toHaveScreenshot('land-ring.png', TOLERANCE);
+    expect(problems).toEqual([]);
+  });
+
   test('a hole done: its score over the course', async ({ page }) => {
     const problems = watch(page);
     await start(page, { seed: 11, paused: true });

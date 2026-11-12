@@ -491,6 +491,12 @@ export interface Motions {
   trail: number;
   /** The particles the last holing threw up from the cup: nought before one, kept as it was at a new hole until the next holing, and more with the confetti cup. */
   confetti: number;
+  /** The particles the last first landing's ring threw outward: nought before one, and more for a harder fall. */
+  ring: number;
+  /** The sparks the last knock threw: nought for a soft one, and for the ground a ball drops onto. */
+  sparks: number;
+  /** The clods the last stroke's divot threw: nought for a putt, a wood, a shot from the tee or from sand, and where no grass grows. */
+  divot: number;
   /** How many strips the flag's cloth is drawn in on this hole: one, or six on a hole begun with the rainbow flag. */
   strips: number;
   /** The Retake button as drawn: whether it is up on the course, and whether it can be pressed. */

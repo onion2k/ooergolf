@@ -32,18 +32,23 @@ export interface Puffs {
   readonly splash?: readonly number[];
 }
 
-/** A puff from under the ball at (x, y), struck at `power` of the hardest shot: grass, or sand from a bunker. */
+/**
+ * A puff from under the ball at (x, y), struck at `power` of the hardest shot: grass, or sand from a bunker. `z` is how
+ * high the ground is there: on a golf hole's hills a puff thrown from nought was under the ground or far over it, and was
+ * not seen (found on 12 November 2026, when the divot beside it was not).
+ */
 export function strikePuff(
   x: number,
   y: number,
   power: number,
   ground: 'grass' | 'sand' = 'grass',
   puffs: Puffs = PUFF,
+  z = 0,
 ): Emit[] {
   const deep = puffs.deep ?? 1;
   return [
     {
-      position: [x, y, 0.1],
+      position: [x, y, z + 0.1],
       velocity: [0, 0, (2 + power * 3) * deep],
       spread: 1.5 + power * 2,
       count: Math.round((6 + power * 18) * deep),
@@ -54,7 +59,139 @@ export function strikePuff(
       colour: [puffs[ground][0], puffs[ground][1], puffs[ground][2]],
       alpha: 0.9,
       gravity: puffs.gravity ?? 1,
-      floor: 0,
+      floor: z,
+    },
+  ];
+}
+
+/**
+ * A ring of the ground thrown outward where a lofted ball comes down at (x, y), going `fall` of the hardest a ball lands
+ * (nought to one): low and along the ground, eight ways round, more of it and faster the harder the fall, in the colour
+ * of what it came down on. None for no fall. It is thrown with the puff a landing always had, and in a world of little
+ * gravity it hangs as that puff does (`Puffs.gravity`, `Puffs.life`). `scale` is how much bigger it is thrown for a camera
+ * standing far back, by how many times further than at home (`farScale`): a ring a yard across is not seen from a
+ * drive's view, where the ball itself is a few pixels. The same for the sparks and the divot below.
+ */
+export const LAND_RING = { ways: 8, most: 4, speed: [3, 9], lift: 0.8 } as const;
+
+export function landRing(
+  x: number,
+  y: number,
+  fall: number,
+  ground: 'grass' | 'sand' = 'grass',
+  puffs: Puffs = PUFF,
+  scale = 1,
+  z = 0,
+): Emit[] {
+  if (!(fall > 0)) return [];
+  const f = Math.min(1, fall);
+  const speed = (LAND_RING.speed[0] + (LAND_RING.speed[1] - LAND_RING.speed[0]) * f) * scale;
+  const colour: [number, number, number] = [puffs[ground][0], puffs[ground][1], puffs[ground][2]];
+  return Array.from({ length: LAND_RING.ways }, (_, k): Emit => {
+    const a = (k / LAND_RING.ways) * Math.PI * 2;
+    return {
+      position: [x + Math.cos(a) * 0.4 * scale, y + Math.sin(a) * 0.4 * scale, z + 0.1],
+      velocity: [Math.cos(a) * speed, Math.sin(a) * speed, LAND_RING.lift * (0.5 + f) * scale],
+      spread: 0.8 * scale,
+      count: Math.max(1, Math.round(LAND_RING.most * f)),
+      life: (puffs.life ?? 0.45) * 1.2,
+      lifeSpread: 0.2,
+      size: 0.2 * scale,
+      growth: 0.5 * scale,
+      colour,
+      alpha: 0.8,
+      gravity: puffs.gravity ?? 1,
+      floor: z,
+    };
+  });
+}
+
+/** How much bigger a burst on the ground is thrown for a camera `distance` back, whose home is `home`: as many times as it is further, and never smaller than at home. */
+export const farScale = (distance: number, home: number): number => Math.max(1, distance / home);
+
+/**
+ * Sparks where the ball is knocked hard by the rail, a post or a bumper: none under `from` units a second (a soft bank is
+ * no flash), more the harder to `most`, bright and gone in a blink, thrown the way the knock pushed the ball. Not for the
+ * ground a ball drops onto, whose knock points up and which has its dust: `flat` is how far up a knock may point and still
+ * be off a side. And not for a ball rattling down the cup (`inCup`), which knocks on its wall and has its confetti.
+ */
+export const SPARKS = { from: 14, full: 40, least: 8, most: 22, flat: 0.6 } as const;
+
+export function knockSparks(
+  x: number,
+  y: number,
+  z: number,
+  hard: number,
+  dx: number,
+  dy: number,
+  dz: number,
+  scale = 1,
+  inCup = false,
+): Emit[] {
+  if (inCup || !(hard >= SPARKS.from) || Math.abs(dz) > SPARKS.flat) return [];
+  const f = Math.min(1, (hard - SPARKS.from) / (SPARKS.full - SPARKS.from));
+  return [
+    {
+      position: [x, y, Math.max(0.2, z)],
+      velocity: [dx * (5 + 7 * f) * scale, dy * (5 + 7 * f) * scale, (3 + 3 * f) * scale],
+      spread: (4 + 4 * f) * scale,
+      count: Math.round(SPARKS.least + (SPARKS.most - SPARKS.least) * f),
+      life: 0.4,
+      lifeSpread: 0.4,
+      size: 0.26 * scale,
+      growth: 0,
+      // drawn as pieces and not as light: light added to a lawn in daylight is not seen
+      colour: [1, 0.96, 0.62],
+      alpha: 1,
+      gravity: 0.6,
+      floor: Math.max(0.2, z) - 2,
+    },
+  ];
+}
+
+/**
+ * Whether a stroke takes a divot: an iron or a wedge, from grass and not sand (which is thrown already), not from the tee,
+ * where the ball is teed up, and only in a world that grows grass.
+ */
+export function takesDivot(strike: string, ground: 'grass' | 'sand', fromTee: boolean, grassy: boolean): boolean {
+  return grassy && !fromTee && ground === 'grass' && (strike === 'iron' || strike === 'wedge');
+}
+
+/**
+ * A divot from under a ball struck at (x, y) along the unit (dx, dy) on the ground, at `power` of the hardest shot: a few
+ * clods of turf thrown forward and low, the way the shot goes, in the brown of the earth under it, falling back and gone
+ * in under a second. Fewer for a soft one, and never behind the ball.
+ */
+export const DIVOT = { least: 3, most: 9, dark: 0.45 } as const;
+
+export function divot(
+  x: number,
+  y: number,
+  dx: number,
+  dy: number,
+  power: number,
+  puffs: Puffs = PUFF,
+  scale = 1,
+  z = 0,
+): Emit[] {
+  const p = Math.max(0, Math.min(1, power));
+  const g = puffs.grass;
+  return [
+    {
+      position: [x + dx * 0.6 * scale, y + dy * 0.6 * scale, z + 0.1],
+      velocity: [dx * (5 + 6 * p) * scale, dy * (5 + 6 * p) * scale, (3 + 3 * p) * scale],
+      spread: 3 * scale,
+      count: Math.round(DIVOT.least + (DIVOT.most - DIVOT.least) * p),
+      life: 0.7,
+      lifeSpread: 0.3,
+      size: 0.24 * scale,
+      growth: 0,
+      // the earth under the turf, with a little of the grass's own colour in it, so it is seen against the grass it flies over
+      colour: [0.42 + g[0] * DIVOT.dark * 0.3, 0.27 + g[1] * DIVOT.dark * 0.2, 0.12 + g[2] * DIVOT.dark * 0.2],
+      alpha: 1,
+      gravity: 1.4,
+      // a little under where it was thrown from, since the ground ahead may fall away
+      floor: z - 1,
     },
   ];
 }
@@ -76,8 +213,8 @@ const RAINBOW_CONFETTI: [number, number, number][] = [
  * What each style of cup burst is made of. The plain burst is what the course has always thrown; the confetti cup throws two
  * and a half times the pieces, living 2.6 seconds and not 1.8, over eight units and not five, in the rainbow; the party cup's
  * streamers are three times the pieces, thrown higher and wider and drifting down slowly (a light gravity, a long life), so they
- * hang in the air as streamers do. The most a hole in one throws is 770 pieces, which with a puff or a splash is well inside
- * the renderer's ring of 1024.
+ * hang in the air as streamers do. The most a hole in one throws is 770 pieces, and an eagle's with its gold fewer, which
+ * with a puff, a landing's ring or a splash is well inside the renderer's ring of 1024.
  */
 const STYLES = {
   plain: {
@@ -115,19 +252,62 @@ const STYLES = {
   },
 } as const;
 
+/** How a hole was holed, for what the cup throws: over par, par, a birdie, an eagle or better, or a hole in one. */
+export type CupScore = 'over' | 'par' | 'birdie' | 'eagle' | 'ace';
+
+/** The score a hole holed in `strokes` on a par of `par` is, for the cup's burst: a hole in one is an ace whatever the par. */
+export function cupScore(strokes: number, par: number): CupScore {
+  if (strokes === 1) return 'ace';
+  const over = strokes - par;
+  return over <= -2 ? 'eagle' : over === -1 ? 'birdie' : over === 0 ? 'par' : 'over';
+}
+
 /**
- * Confetti up out of the cup at (x, y), and sparkles with it: more of both for a hole in one. The `confetti` style is the
- * confetti cup's, bigger and longer, and `streamers` the party cup's; the plain call, and the plain style, are what they always were.
+ * How many times par's burst each score throws: a small puff of it over par, half as much again for a birdie, twice for an
+ * eagle, and the two and a half a hole in one always had. Par's, and an ace's, are to the piece what they were when the burst
+ * knew only "a hole in one or not" (until 12 November 2026).
+ */
+export const CUP_MORE: Record<CupScore, number> = { over: 0.4, par: 1, birdie: 1.5, eagle: 2, ace: 2.5 };
+
+/** The gold among an eagle's confetti. */
+const GOLD: [number, number, number] = [1.2, 0.95, 0.3];
+
+/**
+ * Confetti up out of the cup at (x, y), and sparkles with it: as much as the score is good (`CUP_MORE`), with gold among
+ * it for an eagle. The `confetti` style is the confetti cup's, bigger and longer, and `streamers` the party cup's, each
+ * multiplying what the score gives; the plain call, and the plain style, are what they always were. `score` may be said
+ * as it was, `true` for a hole in one and `false` for any other, which is par's.
  */
 export function cupBurst(
   x: number,
   y: number,
-  holeInOne: boolean,
+  score: CupScore | boolean,
   style: 'plain' | 'confetti' | 'streamers' = 'plain',
 ): Emit[] {
   const v = STYLES[style];
-  const more = (holeInOne ? 2.5 : 1) * v.more;
+  const how: CupScore = score === true ? 'ace' : score === false ? 'par' : score;
+  const more = CUP_MORE[how] * v.more;
+  const gold: Emit[] =
+    how === 'eagle'
+      ? [
+          {
+            position: [x, y, 0.3],
+            velocity: [0, 0, v.lift * 1.15],
+            spread: v.spread * 0.7,
+            count: Math.round(10 * more),
+            life: v.life,
+            lifeSpread: 0.5,
+            size: v.size * 1.15,
+            growth: 0,
+            colour: GOLD,
+            alpha: 1,
+            gravity: v.fall,
+            floor: 0,
+          },
+        ]
+      : [];
   return [
+    ...gold,
     ...v.colours.map((colour): Emit => ({
       position: [x, y, 0.3],
       velocity: [0, 0, v.lift],

@@ -1288,11 +1288,18 @@ test('the round finished to the card, and begun again from its button', async ({
     sky: 0,
     // the items' own: no glow trail without the item, one strip of cloth without the rainbow, no Retake without the
     // Mulligan, and the particles the last holing threw, which are kept to be read until the next holing (not put to nought
-    // at a new hole): 84 is the plain cup's, 14 for each of five confetti colours and the sparkle, off a hole not in one
+    // at a new hole): 188 is the plain cup's for an eagle, which the last hole here was holed in, twice par's 14 for each of
+    // five confetti colours and the sparkle, and 20 of gold (84, par's, until the burst came to know the score on 12
+    // November 2026)
     trail: 0,
     strips: 1,
     retake: { shown: false, enabled: false },
-    confetti: 84,
+    confetti: 188,
+    // and what the last stroke threw: no divot on minigolf, no ring from a putt that never left the ground, and the sparks of
+    // the last hard knock, which was off the rail on the way to the cup (the cup's own wall throws none)
+    divot: 0,
+    ring: 0,
+    sparks: 11,
   });
   expect(card.glints).toBeLessThanOrEqual(1);
   await page.locator('#again').click();
